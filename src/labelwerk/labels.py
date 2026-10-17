@@ -9,6 +9,8 @@ from brother_ql.labels import Color, FormFactor, LabelsManager
 MAX_TAPE_MM = {"QL-600": 62}
 TWO_COLOR_MODELS = {"QL-800", "QL-810W", "QL-820NWB"}
 
+DPI = 300  # Druckauflösung der QL-Drucker
+
 
 @dataclass(frozen=True)
 class Label:
