@@ -115,6 +115,9 @@ class TextPanel(Panel):
         for button, attr in ((self.bold, "bold"), (self.italic, "italic"),
                              (self.underline, "underline")):
             button.setProperty("style", attr)
+            font = button.font()                 # wirkt auch im klassischen Design ohne Stylesheet
+            getattr(font, "set" + attr.capitalize())(True)
+            button.setFont(font)
             row.addWidget(button)
         self.layout_.addLayout(row)
 

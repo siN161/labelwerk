@@ -314,3 +314,14 @@ def test_align_buttons_have_line_icons(window):
         assert button.toolTip() and button.accessibleName() == button.toolTip()
         for color in ("black", "white"):
             assert (resources.files("labelwerk.gui") / "icons" / f"align-{key}-{color}.svg").is_file()
+
+
+def test_style_buttons_show_their_style_without_stylesheet(qtbot):
+    from labelwerk.document import Document
+    from labelwerk.gui.panels.text import TextPanel
+    panel = TextPanel(Document())
+    qtbot.addWidget(panel)
+    # klassisches Design (ohne Stylesheet): die Knopfschrift zeigt den Stil selbst
+    assert panel.bold.font().bold()
+    assert panel.italic.font().italic()
+    assert panel.underline.font().underline()
