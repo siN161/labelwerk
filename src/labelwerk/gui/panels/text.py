@@ -7,8 +7,6 @@ und (mit fester Rahmengröße) Größe des Rahmens in mm.
 from __future__ import annotations
 
 import math
-from importlib import resources
-
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import (QFont, QIcon, QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
@@ -19,6 +17,7 @@ from ...document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
 from ...fonts import DEFAULT_FAMILY
 from ...layout import Rect
 from ...render import REF_PT
+from ..symbols import line_icon
 from ..widgets import DoubleSpinBox
 from . import Panel
 
@@ -68,14 +67,8 @@ def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
 
 
 def _align_icon(key: str, dark_checked: bool = True) -> QIcon:
-    """Liniensymbol: schwarz im Normalzustand, weiß auf dem schwarzen Hintergrund gewählter Knöpfe
-    (RawBlock); im klassischen Design bleibt der gewählte Knopf hell, also auch schwarz."""
-    folder = resources.files("labelwerk.gui") / "icons"
-    icon = QIcon()
-    for color, state in (("black", QIcon.State.Off), ("white" if dark_checked else "black", QIcon.State.On)):
-        path = str(folder / f"align-{key}-{color}.svg")
-        icon.addFile(path, QSize(), QIcon.Mode.Normal, state)
-    return icon
+    """Liniensymbol der Textposition; gewählt weiß auf schwarz nur bei RawBlock."""
+    return line_icon(f"align-{key}", dark_checked)
 
 
 class TextPanel(Panel):

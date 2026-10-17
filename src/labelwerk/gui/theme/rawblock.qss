@@ -107,10 +107,14 @@ QPushButton#formatButton { padding: 4px 8px; min-width: 22px; }
 QPushButton#formatButton:checked { background: #000000; color: #FFFFFF; }
 QPushButton#formatButton[style="italic"] { font-style: italic; }
 QPushButton#formatButton[style="underline"] { text-decoration: underline; }
-QTextEdit { background: #F0F0F0; border: 3px solid #000000; border-radius: 0; padding: 4px; }
+QTextEdit { background: #F0F0F0; border: 3px solid #000000; border-radius: 0; padding: 6px; }
 QTextEdit:focus { border-width: 5px; }
 QTextEdit:disabled { border-color: #CCCCCC; background: #F5F5F5; }
 QFontComboBox { min-width: 0; }
+/* Reiter Layout: Symbolknöpfe; beim Darüberfahren schwarz, das Symbol wird dann weiß */
+QToolButton#layoutButton { background: #FFFFFF; border: 3px solid #000000; border-radius: 0; padding: 6px; }
+QToolButton#layoutButton:hover { background: #000000; }
+QToolButton#layoutButton:disabled { background: #F0F0F0; border-color: #CCCCCC; }
 
 QStatusBar { border-top: 3px solid #000000; }
 QStatusBar QLabel[state="ok"] { color: #008000; font-weight: 700; }

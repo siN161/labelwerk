@@ -301,3 +301,96 @@ def objects_outside(doc: Document, model: str = "QL-600") -> list[int]:
         if r.x < 0 or r.y < 0 or r.x + r.w > width or r.y + r.h > height:
             outside.append(i)
     return outside
+
+
+# --- Reiter „Layout“ ----------------------------------------------------------------
+def align_objects(objs: list[TextObject], rendered: list[RenderedObject], mode: str,
+                  area: Rect | None = None) -> list[TextObject]:
+    """Kopien der Objekte, ausgerichtet wie ``align`` – mit ``area`` am Papier, sonst aneinander.
+
+    Gerechnet wird mit den Rahmen, wie sie im Modell stehen (``exact_rect``); ein Objekt ohne
+    Position bekommt seine Lage und wirksame Schriftgröße fest.
+    """
+    rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
+    return [set_frame(o, _rounded(rect), r)
+            for o, r, rect in zip(objs, rendered, align(rects, mode, area))]
+
+
+def match_objects(objs: list[TextObject], rendered: list[RenderedObject],
+                  mode: str) -> list[TextObject]:
+    """Kopien mit der Größe des ersten Objekts (``same``, ``width``, ``height``); Ecke bleibt.
+
+    Mit fester Rahmengröße wird der Rahmen gesetzt. Text ohne feste Rahmengröße wird
+    skaliert (Seitenverhältnis bleibt): bei „gleicher Größe“ mit dem Mittel aus Breiten-
+    und Höhenverhältnis, sonst nach dem angeglichenen Maß.
+    """
+    rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
+    result = [copy.deepcopy(objs[0])] if objs else []
+    for obj, r, old, new in zip(objs[1:], rendered[1:], rects[1:], match_size(rects, mode)[1:]):
+        if obj.fit:
+            result.append(set_frame(obj, _rounded(new), r))
+            continue
+        fx = new.w / old.w if old.w else 1.0
+        fy = new.h / old.h if old.h else 1.0
+        factor = {"same": (fx * fy) ** 0.5, "width": fx, "height": fy}[mode]
+        result.append(place(scale_text(obj, factor, base_pt=r.base_pt), _rounded(old)))
+    return result
+
+
+def maximize_object(obj: TextObject, rendered: RenderedObject, area: Rect, doc: Document,
+                    model: str = "QL-600") -> TextObject:
+    """Kopie, so groß wie möglich mittig in ``area`` (Seitenverhältnis bleibt).
+
+    Mit fester Rahmengröße wird der Rahmen gesetzt; sonst wird die Schrift skaliert und
+    das Ergebnis gerendert, damit es sicher hineinpasst und genau mittig steht.
+    """
+    if obj.fit:
+        return set_frame(obj, _rounded(maximize(exact_rect(obj, rendered), area)), rendered)
+    shown = object_rect(rendered)
+    factor = maximize(shown, area).w / shown.w if shown.w else 1.0
+    scaled = scale_text(obj, factor, base_pt=rendered.base_pt)
+    for _ in range(5):                       # Schrift wächst nicht ganz linear: nachregeln
+        scaled.x_mm, scaled.y_mm = area.x, area.y
+        size = object_rect(render_object(scaled, doc, model))
+        over = min(area.w / size.w, area.h / size.h) if size.w and size.h else 1.0
+        if over >= 1 or scaled.size_pt <= MIN_PT:
+            break
+        scaled = scale_text(scaled, over * 0.995)
+    return place(scaled, _rounded(Rect(area.cx - size.w / 2, area.cy - size.h / 2,
+                                       size.w, size.h)))
+
+
+def rotate(obj: TextObject, rendered: RenderedObject, degrees: int) -> TextObject:
+    """Kopie, um ``degrees`` (±90, im Uhrzeigersinn) gedreht; die Mitte des Rahmens bleibt.
+
+    Ein Objekt ohne Position bekommt seine Lage und wirksame Schriftgröße fest.
+    """
+    old = exact_rect(obj, rendered)
+    if not obj.fit and obj.size_pt is None:
+        obj = fix_size(obj, rendered.base_pt)
+    turned = copy.deepcopy(obj)
+    turned.rotation = (obj.rotation + degrees) % 360
+    w, h = (old.h, old.w) if degrees % 180 else (old.w, old.h)
+    return place(turned, _rounded(Rect(old.cx - w / 2, old.cy - h / 2, w, h)))
+
+
+def reorder(items: list, indices: list[int], step: int) -> tuple[list, list[int]]:
+    """Ausgewählte Einträge um einen Platz nach vorne (``step`` 1) bzw. hinten (−1) schieben.
+
+    Liste = Zeichenreihenfolge (hinten → vorne). Ein Eintrag rückt nur an einem nicht
+    ausgewählten vorbei; Ausgewählte am Ende bleiben stehen. Liefert die neue Liste und die
+    neuen Plätze von ``indices`` (in derselben Reihenfolge).
+    """
+    order = list(range(len(items)))
+    chosen = set(indices)
+    positions = range(len(order) - 2, -1, -1) if step > 0 else range(1, len(order))
+    for pos in positions:
+        other = pos + (1 if step > 0 else -1)
+        if order[pos] in chosen and order[other] not in chosen:
+            order[pos], order[other] = order[other], order[pos]
+    return [items[i] for i in order], [order.index(i) for i in indices]
+
+
+def _rounded(rect: Rect) -> Rect:
+    """Rahmen fürs Modell: auf 1/1000 mm gerundet."""
+    return Rect(*(round(v, _DECIMALS) for v in (rect.x, rect.y, rect.w, rect.h)))

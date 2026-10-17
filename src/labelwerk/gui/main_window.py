@@ -16,8 +16,9 @@ from ..detect import brother_busy, find_brother_lp
 from ..document import Document, TextObject
 from ..fonts import DEFAULT_FAMILY
 from ..labels import get_label
-from ..layout import (Rect, exact_rect, move, object_rect, objects_outside, printable_area,
-                      resize, set_frame)
+from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, match_objects,
+                      maximize_object, move, object_rect, objects_outside, printable_area,
+                      reorder, resize, rotate, set_frame)
 from ..printer import DEFAULT_MODEL
 from ..render import RenderedObject, compose, font_warnings, label_size, render_object
 from ..settings import Settings, load_settings, new_document
@@ -45,6 +46,7 @@ EDIT_BAR = (("tool.select", "edit-select", "↖"), ("tool.text", None, "A"), Non
             ("edit.paste", "edit-paste", "EINFÜGEN"), None,
             ("edit.undo", "edit-undo", "↶"), ("edit.redo", "edit-redo", "↷"))
 _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
+SELECTION_PANELS = ("text", "layout")   # arbeiten mit der Auswahl: Wählen wechselt nicht weg
 
 
 @dataclass
@@ -117,7 +119,6 @@ class MainWindow(QMainWindow):
         # Arbeitsfläche
         self.canvas = Canvas(model)
         self.canvas.set_zoom(self.settings.start_zoom)
-        self.apply_theme_icons()
         self.canvas.length_changed.connect(self._on_length_dragged)
         self.canvas.drag_finished.connect(self._length_drag_finished)
         self.canvas.objects_moved.connect(self._move_objects)
@@ -129,7 +130,11 @@ class MainWindow(QMainWindow):
         self.history.changed.connect(self._update_edit_actions)
         self.actions = build_actions(self, effective(self.settings.shortcuts))
         self._connect_canvas_actions()
+        self._connect_layout_actions()
         self._build_edit_bar()
+        for panel in self._panel_by_key.values():
+            panel.use_actions(self.actions)
+        self.apply_theme_icons()
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -211,6 +216,22 @@ class MainWindow(QMainWindow):
         self.actions["edit.redo"].triggered.connect(self.redo)
         self.addActions([self.actions["edit.undo"], self.actions["edit.redo"]])
 
+    def _connect_layout_actions(self) -> None:
+        """Reiter „Layout“: Ausrichten, Größe angleichen, Drehen, Reihenfolge (auch per Kürzel)."""
+        handlers = {"size.maximize": self.maximize_selected,
+                    "object.rotate_left": lambda: self.rotate_selected(-90),
+                    "object.rotate_right": lambda: self.rotate_selected(90),
+                    "object.bring_forward": lambda: self.reorder_selected(1),
+                    "object.send_backward": lambda: self.reorder_selected(-1)}
+        for mode in ALIGN_MODES:
+            handlers[f"align.{mode}"] = lambda m=mode: self.align_selected(m)
+            handlers[f"align.paper_{mode}"] = lambda m=mode: self.align_selected(m, paper=True)
+        for mode in SIZE_MODES:
+            handlers[f"size.{mode}"] = lambda m=mode: self.match_selected(m)
+        for key, handler in handlers.items():
+            self.actions[key].triggered.connect(lambda _=False, h=handler: h())
+            self.canvas.addAction(self.actions[key])
+
     def _build_edit_bar(self) -> None:
         """Bearbeitungsleiste unter der Werkzeugleiste: Werkzeug, Zwischenablage, Rückgängig."""
         bar = QToolBar("Bearbeiten")
@@ -255,13 +276,20 @@ class MainWindow(QMainWindow):
             self.canvas.set_tool("text")
 
     def _on_selection(self, indices: list[int]) -> None:
-        """Auswahl auf der Arbeitsfläche: Panel des Objekts zeigen (Papier-Reiter behält sie)."""
+        """Auswahl auf der Arbeitsfläche: Panel des Objekts zeigen – außer ein Panel, das mit
+        der Auswahl arbeitet (Text, Layout), ist schon zu sehen."""
         self._follow_selection(indices)
         if indices:
+            self._show_object_panel()
+
+    def _show_object_panel(self) -> None:
+        if not any(self.panels.currentWidget() is self.panel(key) for key in SELECTION_PANELS):
             self._show_tool("text")
 
     def _follow_selection(self, indices: list[int]) -> None:
-        """Text-Panel bearbeitet das zuletzt gewählte Objekt."""
+        """Panels erfahren die Auswahl; das Text-Panel bearbeitet das zuletzt gewählte Objekt."""
+        for panel in self._panel_by_key.values():
+            panel.set_selection(indices)
         self.panel("text").set_object(indices[-1] if indices else None)
         self._update_frame()
 
@@ -435,6 +463,52 @@ class MainWindow(QMainWindow):
         self._objects_changed([index])
         self._commit()
 
+    # --- Reiter „Layout“ ---------------------------------------------------
+    def align_selected(self, mode: str, paper: bool = False) -> None:
+        """Auswahl aneinander bzw. am bedruckbaren Bereich ausrichten."""
+        area = printable_area(self.doc, self.model) if paper else None
+        self._change_selected(lambda objs, rendered: align_objects(objs, rendered, mode, area))
+
+    def match_selected(self, mode: str) -> None:
+        """Größe, Breite oder Höhe an das zuerst gewählte Objekt angleichen."""
+        self._change_selected(lambda objs, rendered: match_objects(objs, rendered, mode))
+
+    def maximize_selected(self) -> None:
+        """Jedes gewählte Objekt so groß wie möglich mittig in den bedruckbaren Bereich."""
+        area = printable_area(self.doc, self.model)
+        self._change_selected(lambda objs, rendered: [
+            maximize_object(obj, r, area, self.doc, self.model) for obj, r in zip(objs, rendered)])
+
+    def rotate_selected(self, degrees: int) -> None:
+        """Auswahl um 90° drehen (−90 = links); die Mitte jedes Objekts bleibt."""
+        self._change_selected(lambda objs, rendered: [
+            rotate(obj, r, degrees) for obj, r in zip(objs, rendered)])
+
+    def _change_selected(self, change) -> None:
+        """Gewählte Objekte durch ``change(objekte, gerendert)`` ersetzen – ein Schritt."""
+        if self._timer.isActive():
+            self.render_now()                   # z. B. eben Getipptes: aktuelle Rahmen
+        indices = [i for i in self.canvas.selection() if i < len(self.rendered)]
+        if not indices:
+            return
+        self._commit()
+        changed = change([self.doc.objects[i] for i in indices], [self.rendered[i] for i in indices])
+        for index, obj in zip(indices, changed):
+            self.doc.objects[index] = obj
+        self._objects_changed(indices)
+        self._commit()
+
+    def reorder_selected(self, step: int) -> None:
+        """Auswahl einen Platz nach vorne (1) bzw. hinten (−1); die Auswahl wandert mit."""
+        indices = self.canvas.selection()
+        if not indices:
+            return
+        self._commit()
+        self.doc.objects[:], moved = reorder(self.doc.objects, indices, step)
+        self.render_now()
+        self.canvas.set_selection(moved)
+        self._commit()
+
     # --- Zwischenablage ---------------------------------------------------
     def copy_selected(self) -> None:
         """Ausgewählte Objekte (in Zeichenreihenfolge) in die interne Zwischenablage kopieren."""
@@ -543,7 +617,9 @@ class MainWindow(QMainWindow):
     # --- Einstellungen ----------------------------------------------------
     def apply_theme_icons(self) -> None:
         """Symbole, die vom Design abhängen (weiß auf schwarz nur bei RawBlock)."""
-        self.panel("text").set_icon_style(self.settings.theme == "rawblock")
+        dark = self.settings.theme == "rawblock"
+        for panel in self._panel_by_key.values():
+            panel.set_icon_style(dark)
 
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, model=self.model, parent=self)

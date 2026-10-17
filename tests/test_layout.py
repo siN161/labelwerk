@@ -485,3 +485,134 @@ def test_set_frame_stores_rotated_frame_unrotated():
     obj = TextObject("A", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=20, h_mm=8, rotation=90)
     placed = layout.set_frame(obj, Rect(1, 1, 10, 30), _rendered(1, 1, 8, 20))
     assert (placed.w_mm, placed.h_mm) == (30, 10)
+
+
+# --- Reiter „Layout“: Objekte ausrichten, angleichen, drehen, Reihenfolge -----------
+def _frame(obj, doc=None):
+    rendered = render_object(obj, doc or Document("62", length_mm=40, objects=[obj]))
+    return layout.exact_rect(obj, rendered), rendered
+
+
+def _three():
+    return [TextObject("A", size_pt=12, x_mm=4, y_mm=4),
+            TextObject("Breiter", size_pt=12, x_mm=10, y_mm=15),
+            TextObject("B", size_pt=12, fit=True, x_mm=7, y_mm=25, w_mm=20, h_mm=6)]
+
+
+def _rendered_of(objs):
+    doc = Document("62", length_mm=40, objects=objs)
+    return [render_object(obj, doc) for obj in objs]
+
+
+@pytest.mark.parametrize("mode, attr", [("left", "x"), ("right", "right"), ("hcenter", "cx"),
+                                        ("top", "y"), ("bottom", "bottom"), ("vcenter", "cy")])
+def test_align_objects_to_each_other(mode, attr):
+    objs = _three()
+    rendered = _rendered_of(objs)
+    before = [layout.exact_rect(o, r) for o, r in zip(objs, rendered)]
+    aligned = layout.align_objects(objs, rendered, mode)
+    expected = getattr(layout.align(before, mode)[0], attr)
+    after = [layout.exact_rect(o, r) for o, r in zip(aligned, _rendered_of(aligned))]
+    assert [getattr(r, attr) for r in after] == pytest.approx([expected] * 3, abs=0.001)
+    other = "y" if attr in ("x", "right", "cx") else "x"     # andere Achse bleibt
+    assert [getattr(r, other) for r in after] == pytest.approx([getattr(r, other) for r in before])
+    assert (objs[0].x_mm, objs[0].y_mm) == (4, 4)            # Eingabe bleibt unverändert
+
+
+def test_align_objects_to_paper_uses_area():
+    objs = _three()
+    area = Rect(1, 1.5, 38, 59)
+    aligned = layout.align_objects(objs, _rendered_of(objs), "right", area)
+    after = [layout.exact_rect(o, r) for o, r in zip(aligned, _rendered_of(aligned))]
+    assert [r.right for r in after] == pytest.approx([39] * 3, abs=0.001)
+
+
+def test_align_objects_positions_centered_object_with_its_size():
+    obj = TextObject("Mitte")
+    doc = Document("62", length_mm=40, objects=[obj])
+    rendered = render_object(obj, doc)
+    [aligned] = layout.align_objects([obj], [rendered], "top", Rect(1, 1.5, 38, 59))
+    assert aligned.positioned and aligned.y_mm == pytest.approx(1.5)
+    assert aligned.size_pt == pytest.approx(rendered.base_pt, abs=0.05)
+
+
+def test_match_objects_sets_fixed_frame_to_reference():
+    objs = [TextObject("A", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=30, h_mm=10),
+            TextObject("B", size_pt=12, fit=True, x_mm=5, y_mm=20, w_mm=10, h_mm=4)]
+    rendered = _rendered_of(objs)
+    for mode, size in (("same", (30, 10)), ("width", (30, 4)), ("height", (10, 10))):
+        ref, other = layout.match_objects(objs, rendered, mode)
+        assert ref == objs[0]
+        assert (other.w_mm, other.h_mm, other.x_mm, other.y_mm) == (*size, 5, 20)
+
+
+@pytest.mark.parametrize("mode", ["same", "width", "height"])
+def test_match_objects_scales_text_without_fixed_frame(mode):
+    objs = [TextObject("Wort", size_pt=24, x_mm=1, y_mm=1),
+            TextObject("Wort", size_pt=12, x_mm=5, y_mm=30)]
+    ref, other = layout.match_objects(objs, _rendered_of(objs), mode)
+    assert other.size_pt == pytest.approx(24, abs=0.5) and not other.fit
+    assert (other.x_mm, other.y_mm) == (5, 30)                # Ecke bleibt
+
+
+def test_match_objects_keeps_aspect_for_width():
+    objs = [TextObject("Langer Text", size_pt=12, x_mm=1, y_mm=1),
+            TextObject("Kurz", size_pt=12, x_mm=1, y_mm=20)]
+    rendered = _rendered_of(objs)
+    _, other = layout.match_objects(objs, rendered, "width")
+    after = layout.object_rect(_rendered_of([objs[0], other])[1])
+    assert after.w == pytest.approx(layout.object_rect(rendered[0]).w, rel=0.05)
+    assert other.size_pt > 12
+
+
+@pytest.mark.parametrize("fit", [False, True])
+def test_maximize_object_fills_area_centered(fit):
+    obj = TextObject("Wort", size_pt=12, fit=fit, x_mm=2, y_mm=2,
+                     w_mm=10 if fit else None, h_mm=4 if fit else None)
+    doc = Document("62", length_mm=40, objects=[obj])
+    area = layout.printable_area(doc)
+    big = layout.maximize_object(obj, render_object(obj, doc), area, doc)
+    r = layout.object_rect(render_object(big, doc))
+    assert r.x >= area.x - 0.1 and r.right <= area.right + 0.1
+    assert r.y >= area.y - 0.1 and r.bottom <= area.bottom + 0.1
+    assert max(r.w / area.w, r.h / area.h) == pytest.approx(1, abs=0.06)
+    assert (r.cx, r.cy) == pytest.approx((area.cx, area.cy), abs=0.2)
+
+
+@pytest.mark.parametrize("fit", [False, True])
+@pytest.mark.parametrize("start, degrees, end", [(0, 90, 90), (0, -90, 270), (270, 90, 0),
+                                                 (90, -90, 0), (180, 90, 270)])
+def test_rotate_keeps_center(fit, start, degrees, end):
+    obj = TextObject("Drehen", size_pt=12, fit=fit, x_mm=10, y_mm=10, rotation=start,
+                     w_mm=20 if fit else None, h_mm=6 if fit else None)
+    before, rendered = _frame(obj)
+    turned = layout.rotate(obj, rendered, degrees)
+    after, _ = _frame(turned)
+    assert turned.rotation == end
+    assert (after.w, after.h) == pytest.approx((before.h, before.w), abs=0.1)
+    assert (after.cx, after.cy) == pytest.approx((before.cx, before.cy), abs=0.1)
+    if fit:
+        assert (turned.w_mm, turned.h_mm) == pytest.approx((20, 6))
+
+
+def test_rotate_positions_centered_object():
+    obj = TextObject("Mitte")
+    before, rendered = _frame(obj)
+    turned = layout.rotate(obj, rendered, 90)
+    after, _ = _frame(turned)
+    assert turned.positioned and turned.size_pt is not None
+    assert (after.cx, after.cy) == pytest.approx((before.cx, before.cy), abs=0.1)
+
+
+@pytest.mark.parametrize("indices, step, order, moved", [
+    ([0], 1, "BACD", [1]),
+    ([3], 1, "ABCD", [3]),                  # ganz vorne bleibt vorne
+    ([1, 2], 1, "ADBC", [2, 3]),
+    ([2, 3], 1, "ABCD", [2, 3]),            # blockiert vom vordersten
+    ([2, 0], -1, "ACBD", [1, 0]),           # Indizes in der Reihenfolge der Wahl
+    ([1], -1, "BACD", [0]),
+    ([], 1, "ABCD", []),
+])
+def test_reorder(indices, step, order, moved):
+    items, new = layout.reorder(list("ABCD"), indices, step)
+    assert "".join(items) == order and new == moved
