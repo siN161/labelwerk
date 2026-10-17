@@ -35,7 +35,7 @@ Erkennungsregel für ein Eckkreuz: Im Eckfenster (ca. 10 × 10 mm) gibt es genau
 
 Ergebnis hat genau das Format, das `build_instructions` erwartet (Breite = bedruckbare Breite des Etiketts; bei gestanzt auch exakte Höhe).
 
-- **Drehen:** Ist das Motiv breiter als die bedruckbare Breite, gedreht aber nicht, um 90° drehen (Leserichtung: Oberkante des Motivs zeigt zum Etikettanfang – im Druck also gegen den Uhrzeigersinn gedreht). Passt es in beiden Lagen, nicht drehen – außer bei Endlosband, wenn gedreht weniger Band verbraucht wird **und** ungedreht das Motiv nicht mehr als die halbe Breite füllt (vermeidet absurd lange Streifen).
+- **Drehen nur wenn nötig:** Passt das Motiv ungedreht, bleibt es so. Passt es nur gedreht, wird es um 90° gegen den Uhrzeigersinn gedreht (`Image.rotate(90, expand=True)`).
 - **Endlosband:** Motiv waagrecht mittig auf volle Druckbreite; Länge = Motivhöhe + 2 × Rand (Rand wie `render.MARGIN`), mindestens die Modellgrenze (QL-600: 150 Punkte = 12,7 mm), höchstens 11811 Punkte (1000 mm).
 - **Gestanzt / rund:** Motiv muss in den bedruckbaren Bereich passen (ggf. gedreht); mittig setzen.
 - **Zu groß:** Ohne `fit` → `ValueError` mit Maßen in mm, z. B. „Motiv ist 120,0 × 70,0 mm, Etikett '62' ist höchstens 58,9 mm breit – mit --fit verkleinern (Codes evtl. nicht mehr lesbar)“. Mit `fit` → proportional (Lanczos) auf die größte passende Größe verkleinern, Lage wie oben.
