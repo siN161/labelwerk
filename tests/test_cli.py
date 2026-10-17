@@ -18,6 +18,7 @@ def test_missing_printer_gives_friendly_error(capsys):
 
 def test_auto_printer_without_device_gives_friendly_error(monkeypatch, capsys):
     monkeypatch.setattr("labelwerk.cli.find_brother_lp", lambda: None)
+    monkeypatch.setattr("labelwerk.cli.brother_busy", lambda: False)
     rc = main(["print", "Hallo", "-l", "62"])
     assert rc == 2
     assert "nicht gefunden" in capsys.readouterr().err
@@ -134,3 +135,11 @@ def test_print_file_rotate_0_with_fit(tmp_path, capsys):
                "--preview", str(out)])
     assert rc == 0
     assert "58,9 × 32,8 mm" in capsys.readouterr().out
+
+
+def test_busy_printer_gives_specific_hint(monkeypatch, capsys):
+    monkeypatch.setattr("labelwerk.cli.find_brother_lp", lambda: None)
+    monkeypatch.setattr("labelwerk.cli.brother_busy", lambda: True)
+    rc = main(["print", "Hallo", "-l", "62"])
+    assert rc == 2
+    assert "von einem anderen Programm belegt" in capsys.readouterr().err
