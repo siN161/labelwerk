@@ -1,3 +1,5 @@
+from PIL import Image
+
 from labelwerk.cli import main
 
 
@@ -61,9 +63,6 @@ def test_font_size_too_large_gives_friendly_error(capsys):
     assert "passt nicht" in capsys.readouterr().err
 
 
-from PIL import Image
-
-
 def _png(tmp_path, w_mm=40, h_mm=20):
     path = tmp_path / "motiv.png"
     Image.new("L", (round(w_mm * 300 / 25.4), round(h_mm * 300 / 25.4)), 0).save(path)
@@ -107,3 +106,23 @@ def test_print_file_too_large_suggests_fit(tmp_path, capsys):
     rc = main(["print-file", str(_png(tmp_path, 120, 70)), "--preview", str(tmp_path / "x.png")])
     assert rc == 2
     assert "--fit" in capsys.readouterr().err
+
+
+def test_corrupt_file_gives_friendly_error(tmp_path, capsys):
+    path = tmp_path / "kaputt.pdf"
+    path.write_bytes(b"kein pdf")
+    rc = main(["print-file", str(path), "--preview", str(tmp_path / "o.png")])
+    assert rc == 2
+    assert "kann nicht gelesen werden" in capsys.readouterr().err
+
+
+def test_preview_into_missing_directory_gives_friendly_error(tmp_path, capsys):
+    rc = main(["print", "Hallo", "--preview", str(tmp_path / "nodir" / "o.png")])
+    assert rc == 2
+    assert "Vorschau kann nicht gespeichert werden" in capsys.readouterr().err
+
+
+def test_preview_with_unknown_extension_gives_friendly_error(tmp_path, capsys):
+    rc = main(["print-file", str(_png(tmp_path)), "--preview", str(tmp_path / "o.txt")])
+    assert rc == 2
+    assert "Vorschau kann nicht gespeichert werden" in capsys.readouterr().err

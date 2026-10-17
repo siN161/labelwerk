@@ -108,7 +108,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.preview:
-        img.save(args.preview)
+        try:
+            img.save(args.preview)
+        except (OSError, ValueError) as e:
+            print(f"Vorschau kann nicht gespeichert werden: {args.preview} ({e})", file=sys.stderr)
+            return 2
         print(f"Vorschau: {args.preview} ({format_mm(img.width)} × {format_mm(img.height)} mm)")
         return 0
 

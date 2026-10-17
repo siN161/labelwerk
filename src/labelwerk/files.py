@@ -22,7 +22,14 @@ def load_file(path: str | Path, page: int = 1) -> Image.Image:
         raise ValueError(f"Dateityp nicht unterstützt: {suffix or path.name} – möglich: PDF, PNG, JPG")
     if not path.exists():
         raise FileNotFoundError(f"Datei nicht gefunden: {path}")
-    return _load_pdf(path, page) if suffix == ".pdf" else _load_image(path)
+    if suffix == ".pdf" and page < 1:
+        raise ValueError("Seite muss mindestens 1 sein.")
+    try:
+        return _load_pdf(path, page) if suffix == ".pdf" else _load_image(path)
+    except FileNotFoundError:
+        raise
+    except (OSError, RuntimeError, Image.DecompressionBombError) as e:
+        raise ValueError(f"Datei kann nicht gelesen werden: {path.name} ({e})") from e
 
 
 def _load_pdf(path: Path, page: int) -> Image.Image:

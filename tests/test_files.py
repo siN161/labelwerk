@@ -1,5 +1,5 @@
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from labelwerk.files import crop, fit_to_label, load_file
 
@@ -52,8 +52,6 @@ def test_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError, match="nicht gefunden"):
         load_file(tmp_path / "fehlt.pdf")
 
-
-from PIL import ImageDraw
 
 RECT = (100, 80, 1163, 635)   # Kreuzungspunkte der Marken (90 × 47 mm)
 
@@ -158,3 +156,24 @@ def test_result_is_accepted_by_printer_driver():
     from labelwerk.printer import build_instructions
     data = build_instructions(fit_to_label(_motif(90, 47), "62"), "62")
     assert data.endswith(b"\x1a")
+
+
+def test_corrupt_pdf_gives_clear_error(tmp_path):
+    path = tmp_path / "kaputt.pdf"
+    path.write_bytes(b"kein pdf")
+    with pytest.raises(ValueError, match="kann nicht gelesen werden"):
+        load_file(path)
+
+
+def test_corrupt_png_gives_clear_error(tmp_path):
+    path = tmp_path / "kaputt.png"
+    path.write_bytes(b"kein png")
+    with pytest.raises(ValueError, match="kann nicht gelesen werden"):
+        load_file(path)
+
+
+def test_page_below_one_has_own_message(tmp_path):
+    path = tmp_path / "seite.pdf"
+    _page().save(path, "PDF", resolution=300)
+    with pytest.raises(ValueError, match="mindestens 1"):
+        load_file(path, page=0)
