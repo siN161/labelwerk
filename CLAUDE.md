@@ -30,7 +30,7 @@ src/labelwerk/
               print_image(...) -> status-dict von brother_ql.backends.helpers.send
   detect.py   find_brother_lp() -> "file:///dev/usb/lpN" | None
   document.py Etikett-Dokument (Etikett, Länge, Objekte), UI-unabhängig; Span/Paragraph/TextObject (zeichenweise Formatierung, fit)
-  settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings)
+  settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings); Feld `theme` (rawblock/classic)
   media.py    Medium prüfen: Statusabfrage ESC i S (nicht blockierend, 2 s), Media, label_for_media
   desktop.py  .desktop-Eintrag + Icon installieren/entfernen (XDG_DATA_HOME), APP_ID
   gui/        PySide6-Oberfläche, nur Anzeige/Bearbeitung:
@@ -40,7 +40,7 @@ src/labelwerk/
     canvas.py       Etikett in echter Größe, Lineale, Zug-Anfasser, Zoom
     print_worker.py Drucken im Hintergrund-Thread
     media_worker.py  Medium prüfen im Hintergrund
-    settings_dialog.py Einstellungen
+    settings_dialog.py Einstellungen (inkl. Design: RawBlock/Klassisch, sofort wirksam über app.apply_theme)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (Platzhalter; eigenes Logo: SVG Tiny, quadratisch, Text als Pfade, ab 16 px erkennbar)
   cli.py      labelwerk labels | labelwerk media | labelwerk fonts | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] [--orientation horizontal|vertical] [--margin MM] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]

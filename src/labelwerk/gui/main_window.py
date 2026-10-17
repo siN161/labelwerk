@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         # Arbeitsfläche
         self.canvas = Canvas(model)
         self.canvas.set_zoom(self.settings.start_zoom)
+        self.apply_theme_icons()
         self.canvas.length_changed.connect(self._on_length_dragged)
         self.canvas.drag_finished.connect(self.render_now)
         central = QWidget()
@@ -214,10 +215,18 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     # --- Einstellungen ----------------------------------------------------
+    def apply_theme_icons(self) -> None:
+        """Symbole, die vom Design abhängen (weiß auf schwarz nur bei RawBlock)."""
+        self.panel("text").set_icon_style(self.settings.theme == "rawblock")
+
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, model=self.model, parent=self)
         if dialog.exec() == SettingsDialog.DialogCode.Accepted and dialog.saved is not None:
             self.settings = dialog.saved
+            from PySide6.QtWidgets import QApplication
+            from .app import apply_theme
+            apply_theme(QApplication.instance(), self.settings.theme)
+            self.apply_theme_icons()
             self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
 
     # --- Medium prüfen ----------------------------------------------------

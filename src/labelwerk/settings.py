@@ -14,6 +14,8 @@ from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, Tex
 from .fonts import DEFAULT_FAMILY
 from .labels import labels_for_model
 
+THEMES = ("rawblock", "classic")
+
 
 @dataclass
 class Settings:
@@ -24,6 +26,7 @@ class Settings:
     font_family: str = DEFAULT_FAMILY
     check_media_on_start: bool = True
     start_zoom: int = 200
+    theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
 
@@ -42,6 +45,7 @@ def _rules(model: str) -> dict:
         "font_family": lambda v: isinstance(v, str) and bool(v.strip()),
         "check_media_on_start": lambda v: isinstance(v, bool),
         "start_zoom": lambda v: _is_int(v) and 25 <= v <= 400,
+        "theme": lambda v: v in THEMES,
     }
 
 

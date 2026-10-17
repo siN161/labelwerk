@@ -79,6 +79,11 @@ class SettingsDialog(QDialog):
         self.zoom.setSingleStep(10)
         self.zoom.setValue(settings.start_zoom)
         form.addRow("Startzoom", self.zoom)
+        self.theme = QComboBox()
+        self.theme.addItem("RawBlock", "rawblock")
+        self.theme.addItem("Klassisch", "classic")
+        self.theme.setCurrentIndex(max(0, self.theme.findData(settings.theme)))
+        form.addRow("Design", self.theme)
 
         hint = QLabel("Gilt für neue Etiketten bzw. ab dem nächsten Start.")
         hint.setWordWrap(True)
@@ -113,6 +118,7 @@ class SettingsDialog(QDialog):
                          else self._orig_family),
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
+            theme=self.theme.currentData(),
         )
 
     def accept(self) -> None:

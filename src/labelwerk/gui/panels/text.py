@@ -54,19 +54,27 @@ def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
     return button
 
 
-def _align_icon(key: str) -> QIcon:
-    """Liniensymbol: schwarz im Normalzustand, weiß auf dem schwarzen Hintergrund gewählter Knöpfe."""
+def _align_icon(key: str, dark_checked: bool = True) -> QIcon:
+    """Liniensymbol: schwarz im Normalzustand, weiß auf dem schwarzen Hintergrund gewählter Knöpfe
+    (RawBlock); im klassischen Design bleibt der gewählte Knopf hell, also auch schwarz."""
     folder = resources.files("labelwerk.gui") / "icons"
     icon = QIcon()
-    for color, state in (("black", QIcon.State.Off), ("white", QIcon.State.On)):
+    for color, state in (("black", QIcon.State.Off), ("white" if dark_checked else "black", QIcon.State.On)):
         path = str(folder / f"align-{key}-{color}.svg")
         icon.addFile(path, QSize(), QIcon.Mode.Normal, state)
     return icon
 
 
 class TextPanel(Panel):
+    def set_icon_style(self, dark_checked: bool) -> None:
+        """Ausrichtungssymbole an das Design anpassen (weiß auf schwarz nur bei RawBlock)."""
+        self.dark_checked_icons = dark_checked
+        for key, button in self.align_buttons.items():
+            button.setIcon(_align_icon(key, dark_checked))
+
     def __init__(self, doc: Document):
         super().__init__(doc, "Text")
+        self.dark_checked_icons = True
         if not doc.objects:
             doc.objects.append(TextObject(""))
         self._updating = False
