@@ -31,7 +31,7 @@ labelwerk print-file internetmarke.pdf -l 62       # PDF/PNG/JPG 1:1 drucken
 labelwerk media                                            # eingelegte Rolle anzeigen (druckt nichts)
 labelwerk fonts                                            # installierte Schriften
 labelwerk print "Max Mustermann\nMusterstr. 5" --align left --font-family "Liberation Sans" -s 14
-labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation horizontal -s 80
+labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation horizontal -s 19
 ```
 
 Optionen: `-s` Schriftgröße (`auto` oder 8–400), `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
