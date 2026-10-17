@@ -10,10 +10,11 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox, QS
 
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
-from ..document import Document, TextObject
+from ..document import Document
 from ..labels import get_label
 from ..printer import DEFAULT_MODEL
 from ..render import render_document
+from ..settings import Settings, load_settings, new_document
 from .canvas import Canvas
 from .print_worker import PrintWorker
 from .tools import TOOLS, Tool
@@ -23,11 +24,12 @@ RENDER_DELAY_MS = 150
 
 class MainWindow(QMainWindow):
     def __init__(self, doc: Document | None = None, tools: list[Tool] = TOOLS,
-                 model: str = DEFAULT_MODEL):
+                 model: str = DEFAULT_MODEL, settings: Settings | None = None):
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.resize(1100, 700)
-        self.doc = doc if doc is not None else Document(objects=[TextObject()])
+        self.settings = settings if settings is not None else load_settings()
+        self.doc = doc if doc is not None else new_document(self.settings)
         self.model = model
         self.image = None
         self._render_error: str | None = None
@@ -66,6 +68,7 @@ class MainWindow(QMainWindow):
 
         # Arbeitsfläche
         self.canvas = Canvas(model)
+        self.canvas.set_zoom(self.settings.start_zoom)
         self.canvas.length_changed.connect(self._on_length_dragged)
         self.canvas.drag_finished.connect(self.render_now)
         central = QWidget()
@@ -98,6 +101,8 @@ class MainWindow(QMainWindow):
         self._timer.timeout.connect(self.render_now)
         self.render_now()
         self.refresh_printer()
+        if self.settings.warnings:
+            self._set_result(" · ".join(self.settings.warnings), "error")
 
     def panel(self, key: str):
         return self._panel_by_key[key]
@@ -121,7 +126,7 @@ class MainWindow(QMainWindow):
         self._render_error = None
         self.panel("text").show_error(None)
         self.image = image
-        self.canvas.set_document(get_label(self.doc.label_id), image)
+        self.canvas.set_document(get_label(self.doc.label_id), image, self.doc.orientation)
 
     def _on_length_dragged(self, length_mm) -> None:
         self.doc.length_mm = length_mm

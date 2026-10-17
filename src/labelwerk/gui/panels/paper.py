@@ -1,9 +1,10 @@
-"""Panel „Papier“: Etikett wählen, Länge bei Endlosband."""
+"""Panel „Papier“: Etikett, Länge (Endlosband), Ränder und Ausrichtung – wie im P-touch Editor."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout,
+                               QLabel, QRadioButton, QWidget)
 
-from ...document import Document
+from ...document import MAX_MARGIN_MM, Document
 from ...labels import DPI, get_label, labels_for_model, length_limits
 from ...printer import DEFAULT_MODEL
 from . import Panel
@@ -47,27 +48,55 @@ class PaperPanel(Panel):
         self.fixed_size = QLabel()
         self.fixed_size.setObjectName("fixedSize")
         self.layout_.addWidget(self.fixed_size)
+
+        self.section("Ränder")
+        self.margin = QDoubleSpinBox()
+        self.margin.setSuffix(" mm")
+        self.margin.setDecimals(1)
+        self.margin.setSingleStep(0.5)
+        self.margin.setRange(0.0, MAX_MARGIN_MM)
+        self.margin.setToolTip("Abstand vorne/hinten in Bandlaufrichtung")
+        self.layout_.addWidget(self.margin)
+
+        self.section("Ausrichtung")
+        self.horizontal = QRadioButton("Horizontal")
+        self.horizontal.setToolTip("Text längs zum Band – z. B. Versandetikett")
+        self.vertical = QRadioButton("Vertikal")
+        self.vertical.setToolTip("Text quer zum Band")
+        self.orientation_group = QButtonGroup(self)
+        for button in (self.horizontal, self.vertical):
+            self.orientation_group.addButton(button)
+            self.layout_.addWidget(button)
         self.layout_.addStretch()
 
         self.refresh()
         self.combo.currentIndexChanged.connect(self._apply)
         self.length_auto.toggled.connect(self._apply)
         self.length.valueChanged.connect(self._apply)
+        self.margin.valueChanged.connect(self._apply)
+        self.horizontal.toggled.connect(self._apply)
+
+    def _widgets(self):
+        return (self.combo, self.length_auto, self.length, self.margin, self.horizontal, self.vertical)
 
     def _apply(self) -> None:
         self.doc.label_id = self.combo.currentData()
         self.doc.length_mm = None if self.length_auto.isChecked() else self.length.value()
+        self.doc.margin_mm = self.margin.value()
+        self.doc.orientation = "horizontal" if self.horizontal.isChecked() else "vertical"
         self._update_visibility()
         self.changed.emit()
 
     def refresh(self) -> None:
-        for w in (self.combo, self.length_auto, self.length):
+        for w in self._widgets():
             w.blockSignals(True)
         self.combo.setCurrentIndex(self.combo.findData(self.doc.label_id))
         self.length_auto.setChecked(self.doc.length_mm is None)
         if self.doc.length_mm is not None:
             self.length.setValue(self.doc.length_mm)
-        for w in (self.combo, self.length_auto, self.length):
+        self.margin.setValue(self.doc.margin_mm)
+        (self.horizontal if self.doc.orientation == "horizontal" else self.vertical).setChecked(True)
+        for w in self._widgets():
             w.blockSignals(False)
         self._update_visibility()
 
