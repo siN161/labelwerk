@@ -7,6 +7,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 
 ## Stand (funktioniert)
 - CLI druckt erfolgreich auf dem QL-600 (verifiziert mit `-l 62`).
+- `labelwerk print-file` druckt PDF/PNG/JPG 1:1 (z. B. Internetmarke auf `-l 62`).
 - Druckererkennung automatisch über `/sys/class/usbmisc/lp*` (Vendor-ID `04f9`), Gerät liegt aktuell auf `/dev/usb/lp1`.
 - 17 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
@@ -17,6 +18,8 @@ src/labelwerk/
               filtert für QL-600: >62 mm, PT-Bänder, Rot/Schwarz-Etiketten
   render.py   render_text(text, label_id, font_size, font_path) -> PIL.Image
               exakte Druckbreite @300 dpi, Schrift schrumpft automatisch, mehrzeilig zentriert
+  files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi)
+              crop(img) -> auf Schnittmarken bzw. Inhalt; fit_to_label(img, label_id, fit) -> 1:1, ggf. gedreht
   printer.py  build_instructions(image, label_id, model) -> bytes (Brother-Raster)
               print_image(...) -> status-dict von brother_ql.backends.helpers.send
   detect.py   find_brother_lp() -> "file:///dev/usb/lpN" | None
@@ -24,7 +27,7 @@ src/labelwerk/
 ```
 Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `labels`, `printer`, `detect` auf – keine Drucklogik in der UI.
 
-Abhängigkeiten: `brother_ql-inventree>=1.3` (GPLv3+, Import als `brother_ql`), `pillow>=10`. Build: hatchling, src-Layout.
+Abhängigkeiten: `brother_ql-inventree>=1.3` (GPLv3+, Import als `brother_ql`), `pillow>=10`, `pypdfium2>=4`. Build: hatchling, src-Layout.
 
 ## Konventionen
 - **TDD**: erst fehlschlagenden Test schreiben, dann implementieren. Tests laufen **ohne Drucker** (Rasterdaten prüfen, sysfs per `tmp_path` faken, Druckfunktionen per `monkeypatch` ersetzen). Kein Test darf echte Hardware ansprechen.

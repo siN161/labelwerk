@@ -27,14 +27,17 @@ Beim QL-600 muss die **Editor-Lite-LED aus** sein, sonst meldet er sich als USB-
 labelwerk labels                                   # verfügbare Etiketten
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29 --preview vorschau.png
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29      # drucken (Drucker wird automatisch erkannt)
+labelwerk print-file internetmarke.pdf -l 62       # PDF/PNG/JPG 1:1 drucken
 ```
 
 Optionen: `-s` Schriftgröße, `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
+`print-file` schneidet auf Schnittmarken (z. B. Internetmarke) bzw. den Inhalt zu, dreht bei Bedarf und druckt 1:1; `--fit` verkleinert zu große Motive, `--page N` wählt die PDF-Seite.
 
 ## Architektur
 
 ```
 render.py   Inhalt → Bild in exakter Druckbreite (300 dpi)
+files.py    PDF/Bild → zugeschnitten, 1:1 aufs Etikett gesetzt
 labels.py   Etikettentypen je Modell
 printer.py  Bild → Brother-Rasterdaten → Drucker (via brother_ql)
 cli.py      Kommandozeile
