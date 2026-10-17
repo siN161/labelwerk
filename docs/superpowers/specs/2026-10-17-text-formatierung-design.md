@@ -34,18 +34,21 @@ class Paragraph:
 @dataclass
 class TextObject:
     paragraphs: list[Paragraph]
-    size_pt: float | None = None   # Grundgröße; None = automatisch („Feste Rahmengröße“)
+    size_pt: float | None = None   # Grundgröße; None = automatisch
     font_path: str | None = None   # wie bisher: feste TTF-Datei für Spans ohne family (CLI --font)
+    fit: bool = False              # „Feste Rahmengröße“: Grundgröße bleibt Bezug, alles wird gemeinsam skaliert
 ```
 
-- Abwärtskompatibel: `TextObject("Hallo\nWelt", font_size_pt=…)`-artige Erzeugung über eine Fabrik `TextObject.plain(text, size_pt=None, align="center", family=None, bold=True, italic=False, underline=False, font_path=None)`; `TextObject.text` (Property) liefert den reinen Text (Absätze mit `\n` verbunden) für `is_empty()` und Tests. Bestehende Aufrufer werden auf `plain(...)` umgestellt.
+`TextObject.auto` = `size_pt is None or fit`. Mit `fit` bleiben die Verhältnisse zur Grundgröße erhalten (z. B. Absender 8 pt zu Empfänger 19 pt), auch wenn der Text automatisch passend skaliert wird. Ohne Grundgröße gilt 12 pt als Bezug.
+
+- Abwärtskompatibel: `TextObject("Hallo\nWelt")` (reiner Text als erstes Argument wird zu Absätzen mit je einem Span) sowie eine Fabrik `TextObject.plain(text, size_pt=None, align="center", family=None, bold=True, italic=False, underline=False, font_path=None)`; `TextObject.text` (Property) liefert den reinen Text (Absätze mit `\n` verbunden) für `is_empty()` und Tests. Bestehende Aufrufer werden auf `plain(...)` umgestellt.
 - `ALIGNMENTS = ("left", "center", "right", "justify")`; unbekannte Ausrichtung → `ValueError` beim Rendern.
 - Größen: `PT = 300 / 72` Druckpunkte pro pt. Erlaubt 4–100 pt.
 
 ### Schriften (`fonts.py`, neu, Qt-frei)
 
 - `families() -> list[str]`: installierte Familien über `fc-list : family` (erste Bezeichnung je Zeile, sortiert, eindeutig), gecacht. Ohne fontconfig → `["DejaVu Sans"]`.
-- `resolve(family, bold, italic) -> FontMatch(path, family, exact)`: über `fc-match -f "%{file}|%{family}" "<family>:weight=<bold?200:80>:slant=<italic?100:0>"`; `exact = False`, wenn fontconfig eine andere Familie liefert. Ohne fontconfig → bisherige DejaVu-Kandidaten (Bold/Oblique-Varianten). Gecacht (`functools.lru_cache`).
+- `resolve(family, bold, italic) -> FontMatch(path, family, bold, italic)`: über `fc-match -f "%{file}|%{family}|%{style}" "<family>:bold|:weight=regular:italic|:roman"`; `bold`/`italic` sagen, ob die Datei diese Variante wirklich ist (aus dem Stilnamen). Beispiel: DejaVu Sans hat bei `fonts-dejavu-core` keine Kursive. Ohne fontconfig → bisherige DejaVu-Kandidaten (Bold/Oblique-Varianten). Gecacht (`functools.lru_cache`).
 - `load(path, size_dots) -> ImageFont` gecacht.
 - Standardfamilie: `"DejaVu Sans"`.
 
@@ -54,6 +57,7 @@ class TextObject:
 - Für jeden Absatz: jedes Span mit seiner Schrift messen (`font.getlength`, `font.getmetrics`); Zeile = Spans hintereinander auf **gemeinsamer Grundlinie**; Zeilenhöhe = max(Ascent) + max(Descent) + Zeilenabstand. Leerer Absatz → Höhe der Grundschrift.
 - **Kompatibilität:** Reiner Text mit Standardwerten (DejaVu Sans Bold, zentriert, automatisch) ergibt **pixelgleich** dasselbe Bild wie vor 3a (Zeilenabstand wie Pillows `multiline_text`, Test vergleicht Bytes mit einem vorher gespeicherten Referenzbild, das im Test mit dem alten Algorithmus erzeugt wird – siehe Plan).
 - Ausrichtung je Absatz innerhalb des Textblocks; Blocksatz verteilt den Restplatz gleichmäßig auf die Wortzwischenräume der Zeile (ein Wort → linksbündig). Der Textblock steht als Ganzes mittig auf dem Etikett (wie bisher).
+- **Ersatzkursive:** Hat die Schrift keine echte Kursive, wird das Stück einzeln gezeichnet und um 0,2 geschert (wie Textverarbeitungen) – Kursiv wirkt immer.
 - Unterstreichung: Linie unter der Grundlinie (Abstand ≈ 10 % der Schriftgröße, Stärke ≈ 6 %, mind. 1 Punkt), über die Breite des Spans.
 - **Automatisch** (`size_pt is None`): effektive Größe = (`span.size_pt` oder Referenz 12 pt) × Faktor f; f per Halbierung so groß wie möglich, sodass der Block passt; Obergrenze: Referenzgröße × f ≤ 1/5 der Bandbreite (wie bisher).
 - **Fest**: Spans ohne Größe nutzen `size_pt` des Objekts; passt es nicht → `TextTooLarge` mit größter passender Grundgröße in pt („höchstens 14 pt“).
@@ -81,7 +85,11 @@ class TextObject:
 - **Feste Rahmengröße:** Umschaltknopf (ersetzt „Automatisch“); an = automatische Größe.
 - Fehlerhinweis (TextTooLarge) wie bisher im Panel.
 
+- **Regel wie ein ausgewählter Textrahmen in P-touch:** Ist nichts markiert, wirkt jede Formatierung (Schrift, Größe, B/I/U, A⁺/A⁻, Textposition) auf den ganzen Text und ändert das Grundformat; sonst nur auf die Markierung.
+
 ### Übersetzung Editor → Kern
+
+- Das Panel führt ein eigenes **Grundformat** (Familie, pt, fett, kursiv, unterstrichen) und ergänzt jedes Textstück um fehlende Eigenschaften daraus. Gelesen wird nur ausdrücklich Gesetztes (`hasProperty`) – nie Qts Ersatzwerte (Widget-Schrift aus dem Stylesheet, Größe −1). Absätze ohne gesetzte Ausrichtung gelten als zentriert.
 
 - `QTextDocument`-Blöcke → `Paragraph` (Ausrichtung aus dem Blockformat), Fragmente → `Span` (Familie, Punktgröße, fett = Gewicht ≥ Bold, kursiv, unterstrichen). Familie gleich Standard → `family=None`; Punktgröße gleich Grundgröße → `size_pt=None`.
 - Umgekehrt `refresh()`: Dokument aus dem Modell aufbauen (für Start mit Einstellungen und später „Öffnen“).
