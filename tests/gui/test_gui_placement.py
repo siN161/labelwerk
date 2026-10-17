@@ -77,11 +77,14 @@ def test_canvas_shows_one_item_per_object(window):
 def test_canvas_shows_the_object_images_that_are_printed(qtbot, orientation):
     doc = _doc(orientation)
     doc.objects.append(TextObject("Mitte"))
+    doc.objects.append(TextObject.plain("Jahr", size_pt=12, underline=True))   # Tinte über den Rahmen
+    doc.objects[-1].x_mm, doc.objects[-1].y_mm = 30, 10
     win = _window(qtbot, doc)
     for obj, item in zip(doc.objects, win.canvas.objects):
         rendered = render_object(obj, doc)
         assert item.rendered.image.tobytes() == rendered.image.tobytes()
         assert (item.pos().x(), item.pos().y()) == (rendered.x, rendered.y)
+        assert (item.offset().x(), item.offset().y()) == (rendered.image_dx, rendered.image_dy)
         shown = item.pixmap().toImage().convertToFormat(QImage.Format.Format_RGBA8888)
         assert shown == to_qimage(rendered.image)
     assert win.image.tobytes() == render_document(doc).tobytes()

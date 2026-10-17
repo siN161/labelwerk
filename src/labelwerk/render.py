@@ -68,8 +68,12 @@ def font_warnings(doc: Document) -> list[str]:
 class RenderedObject:
     """Einzeln gerendertes Objekt in Druckpunkten, in Leserichtung.
 
-    ``image``: Graustufen (L), weißer Grund, Tinte schwarz, Größe ``w`` × ``h``;
-    ``x``/``y``: linke obere Ecke des Rahmens auf dem Etikett; ``base_pt``: wirksame Grundgröße.
+    ``x``/``y``/``w``/``h``: Rahmen auf dem Etikett (Auswahl, Einrasten, Layout);
+    ``base_pt``: wirksame Grundgröße.
+    ``image``: Graustufen (L), weißer Grund, Tinte schwarz – deckt den Rahmen und die ganze
+    Tinte ab (Anschnitt: Kantenglättung, Unterstreichung, Glyphen wie „J“ reichen etwas über
+    den Rahmen); seine linke obere Ecke liegt bei ``x + image_dx``, ``y + image_dy``
+    (``image_dx``/``image_dy`` ≤ 0).
     """
     image: Image.Image
     x: int
@@ -77,6 +81,8 @@ class RenderedObject:
     w: int
     h: int
     base_pt: float
+    image_dx: int = 0
+    image_dy: int = 0
 
 
 def render_object(obj: TextObject, doc: Document, model: str = "QL-600") -> RenderedObject:
@@ -114,7 +120,8 @@ def compose(rendered: list[RenderedObject], size: tuple[int, int],
     """
     img = Image.new("RGB", size, "white")
     for obj in rendered:
-        img.paste((0, 0, 0), (obj.x, obj.y), ImageOps.invert(obj.image))
+        img.paste((0, 0, 0), (obj.x + obj.image_dx, obj.y + obj.image_dy),
+                  ImageOps.invert(obj.image))
     return img.rotate(-90, expand=True) if orientation == "horizontal" else img
 
 
@@ -195,19 +202,27 @@ def _prepare(obj: TextObject, sheet: _Sheet) -> _Prepared:
     if obj.rotation in (90, 270):
         max_w, max_h = max_h, max_w
     auto_start = max(10, sheet.across // 5)
-    frame = None
     if obj.positioned and obj.fit:
-        frame = (_dots(obj.w_mm) if obj.w_mm is not None else max_w,
-                 _dots(obj.h_mm) if obj.h_mm is not None else max_h)
+        # Endlosband mit automatischer Länge: ohne eigenes Maß ist der Rahmen in
+        # Bandlaufrichtung unbegrenzt – der Text wird nur quer eingepasst
+        along = sheet.horizontal != (obj.rotation in (90, 270))   # Objektbreite längs zum Band
+        open_w, open_h = (sheet.feed is None and along), (sheet.feed is None and not along)
+        frame_w = _dots(obj.w_mm) if obj.w_mm is not None else None if open_w else max_w
+        frame_h = _dots(obj.h_mm) if obj.h_mm is not None else None if open_h else max_h
         if obj.w_mm is not None or obj.h_mm is not None:
             auto_start = round(MAX_PT * PT)    # eigener Rahmen: Text füllt ihn aus
-        base = _fit(obj, auto_start, *frame, sheet.label_id)
-    elif obj.positioned and not obj.auto:
+        base = _fit(obj, auto_start, _UNBOUNDED if frame_w is None else frame_w,
+                    _UNBOUNDED if frame_h is None else frame_h, sheet.label_id)
+        lines = _shape(obj, base)
+        l, t, r, b = box = _block_box(lines)
+        frame = (r - l if frame_w is None else frame_w, b - t if frame_h is None else frame_h)
+        return _Prepared(obj, base, lines, box, frame)
+    if obj.positioned and not obj.auto:
         base = round(obj.size_pt * PT)         # darf hinausragen – kein TextTooLarge
     else:
         base = _fit(obj, auto_start, max_w, max_h, sheet.label_id)
     lines = _shape(obj, base)
-    return _Prepared(obj, base, lines, _block_box(lines), frame)
+    return _Prepared(obj, base, lines, _block_box(lines), None)
 
 
 def _label_size(sheet: _Sheet, preps: list[_Prepared]) -> tuple[int, int]:
@@ -228,34 +243,62 @@ def _label_size(sheet: _Sheet, preps: list[_Prepared]) -> tuple[int, int]:
 
 
 def _finish(prep: _Prepared, sheet: _Sheet, width: int, height: int) -> RenderedObject:
-    """Objektbild zeichnen und auf dem Etikett (``width`` × ``height``) platzieren."""
+    """Objektbild zeichnen und auf dem Etikett (``width`` × ``height``) platzieren.
+
+    Gerechnet wird ungedreht in einer Fläche ``area`` (positioniert: der eigene Rahmen,
+    sonst das Etikett – bei 90/270 mit getauschten Seiten); danach werden Bild, Rahmen und
+    Bildlage mit der Fläche gedreht.
+    """
     obj = prep.obj
     lines, (l, t, r, b) = prep.lines, prep.box
+    turned = obj.rotation in (90, 270)
     if obj.positioned:
         if prep.frame is None:                 # Rahmen = Tintenbox des Textes
-            w, h = r - l, b - t
-            image = _paint(lines, -l, -t, w, h)
+            frame = (0, 0, r - l, b - t)
+            x0, y0 = -l, -t
         else:                                  # Text im festen Rahmen ausgerichtet
-            w, h = prep.frame
-            x0, y0, lines = _align(obj, prep.base, lines, prep.box, 0, w, h)
-            image = _paint(lines, x0, y0, w, h)
-        x, y = _dots(obj.x_mm or 0), _dots(obj.y_mm or 0)
+            frame = (0, 0, *prep.frame)
+            x0, y0, lines = _align(obj, prep.base, lines, prep.box, 0, *prep.frame)
+        area = frame[2:]
+        origin = (_dots(obj.x_mm or 0), _dots(obj.y_mm or 0))
     else:                                      # mittig auf dem Etikett wie bisher
-        start = sheet.margin if sheet.horizontal else MARGIN
-        x0, y0, lines = _align(obj, prep.base, lines, prep.box, start, width, height)
+        area = (height, width) if turned else (width, height)
+        # Innenrand der Textzeilen: Rand in Bandlaufrichtung, wenn sie längs zum Band laufen
+        start = sheet.margin if sheet.horizontal != turned else MARGIN
+        x0, y0, lines = _align(obj, prep.base, lines, prep.box, start, *area)
         fl, ft, fr, fb = _block_box(lines)
-        x, y = x0 + fl, y0 + ft
-        image = _paint(lines, -fl, -ft, fr - fl, fb - ft)
+        frame = (x0 + fl, y0 + ft, fr - fl, fb - ft)
+        origin = (0, 0)
+    image, (ix, iy) = _paint(lines, x0 - frame[0], y0 - frame[1], *frame[2:],
+                             at=(origin[0] + frame[0], origin[1] + frame[1]))
+    picture = (frame[0] + ix, frame[1] + iy, image.width, image.height)
     if obj.rotation:
         image = image.transpose(_TRANSPOSE[obj.rotation])
-        if not obj.positioned:
-            x, y = (width - image.width) // 2, (height - image.height) // 2
+        frame = _turn(frame, area, obj.rotation)
+        picture = _turn(picture, area, obj.rotation)
     base_pt = obj.size_pt if not obj.auto else prep.base / PT
-    return RenderedObject(image, x, y, image.width, image.height, base_pt)
+    return RenderedObject(image, origin[0] + frame[0], origin[1] + frame[1], frame[2], frame[3],
+                          base_pt, picture[0] - frame[0], picture[1] - frame[1])
 
 
 _TRANSPOSE = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180,
               270: Image.Transpose.ROTATE_90}     # im Uhrzeigersinn
+_UNBOUNDED = 1 << 30       # „unbegrenzt“ beim Einpassen
+
+
+def _turn(rect: tuple[int, int, int, int], area: tuple[int, int],
+          rotation: int) -> tuple[int, int, int, int]:
+    """Rechteck (x, y, w, h) in einer Fläche ``area`` (Breite, Höhe) mit ihr im Uhrzeigersinn
+    drehen – wie ``_TRANSPOSE`` die Pixel."""
+    x, y, w, h = rect
+    aw, ah = area
+    if rotation == 90:
+        return (ah - y - h, x, h, w)
+    if rotation == 180:
+        return (aw - x - w, ah - y - h, w, h)
+    if rotation == 270:
+        return (y, aw - x - w, h, w)
+    return rect
 
 
 def _align(obj: TextObject, base: int, lines: list, box: tuple[int, int, int, int],
@@ -271,14 +314,30 @@ def _align(obj: TextObject, base: int, lines: list, box: tuple[int, int, int, in
     return x0, (height - (b - t)) // 2 - t, lines
 
 
-def _paint(lines: list, x0: int, y0: int, width: int, height: int) -> Image.Image:
-    """Zeilen in ein Graustufenbild zeichnen, Blockursprung bei (x0, y0)."""
-    # Rand, damit keine Zeichenkoordinate negativ wird (Pillow rundet dort anders)
+def _paint(lines: list, x0: int, y0: int, width: int, height: int,
+           at: tuple[int, int] = (0, 0)) -> tuple[Image.Image, tuple[int, int]]:
+    """Zeilen in ein Graustufenbild zeichnen, Blockursprung bei (x0, y0) im Rahmen
+    ``width`` × ``height``; ``at``: Lage des Rahmens auf dem Etikett.
+
+    Das Bild deckt den Rahmen und die ganze Tinte ab (Anschnitt); zurück kommen das Bild
+    und die Lage seiner linken oberen Ecke relativ zum Rahmen.
+    """
+    # Rand für Tinte außerhalb der Tintenbox; zugleich wird keine Zeichenkoordinate
+    # negativ (Pillow rundet dort anders)
     pad = max((p.dots for pieces in lines for p in pieces), default=0)
     px, py = pad + max(0, -x0), pad + max(0, -y0)
-    canvas = Image.new("L", (px + max(width, 1), py + max(height, 1)), 255)
+    # round() rundet .5 zur geraden Zahl: Versatz zum Etikett gerade halten, damit
+    # Unterstreichung und Ersatzkursive genau wie direkt auf dem Etikett gezeichnet landen
+    px, py = px + (px - at[0]) % 2, py + (py - at[1]) % 2
+    canvas = Image.new("L", (px + max(width, x0 + 1, 1) + pad, py + max(height, y0 + 1, 1) + pad),
+                       255)
     _draw(canvas, lines, x0 + px, y0 + py)
-    return canvas.crop((px, py, px + width, py + height))
+    left, top, right, bottom = px, py, px + width, py + height
+    ink = ImageOps.invert(canvas).getbbox()
+    if ink is not None:
+        left, top = min(left, ink[0]), min(top, ink[1])
+        right, bottom = max(right, ink[2]), max(bottom, ink[3])
+    return canvas.crop((left, top, right, bottom)), (left - px, top - py)
 
 
 # --- Schriftgrößen ----------------------------------------------------------

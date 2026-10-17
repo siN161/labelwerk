@@ -4,7 +4,7 @@ from PIL import Image
 
 import _render_before_3d as before
 from labelwerk.document import ROTATIONS, Document, Paragraph, Span, TextObject
-from labelwerk.labels import DPI
+from labelwerk.labels import DPI, length_limits
 from labelwerk.render import RenderedObject, render_document, render_object
 
 
@@ -199,3 +199,110 @@ def test_compose_from_object_images_equals_render_document(orientation):
     rendered = [render_object(obj, doc) for obj in doc.objects]
     image = compose(rendered, label_size(doc), orientation)
     assert image.tobytes() == render_document(doc).tobytes()
+
+
+# --- Anschnitt: Tinte außerhalb der Tintenbox (Kantenglättung, Unterstreichung, „J“) ------
+def _ink_cases():
+    texts = {"Hallo unterstrichen": lambda: [Paragraph([Span("Hallo", underline=True)])],
+             "Jahr": lambda: [Paragraph([Span("Jahr", bold=False)])],
+             "Jahr fett": lambda: [Paragraph([Span("Jahr")])],
+             "jung links": lambda: [Paragraph([Span("jung")], "left")]}
+    for name, paras in texts.items():
+        for orientation in ("vertical", "horizontal"):
+            for size in (12, None):
+                yield pytest.param(Document("62", orientation=orientation,
+                                            objects=[TextObject(paras(), size_pt=size)]),
+                                   id=f"{name}-{orientation}-{size or 'auto'}")
+
+
+@pytest.mark.parametrize("doc", list(_ink_cases()))
+def test_ink_beyond_box_is_pixel_identical_to_before(doc):
+    new, old = render_document(doc), before.render_document(doc)
+    assert new.size == old.size and new.tobytes() == old.tobytes()
+
+
+def test_random_unpositioned_objects_are_pixel_identical_to_before():
+    import random
+    rng = random.Random(3)
+    chars = "JjfgQyAa W_"
+    mismatches = []
+    for i in range(200):
+        paras = []
+        for _ in range(rng.randint(1, 2)):
+            spans = [Span("".join(rng.choice(chars) for _ in range(rng.randint(1, 5))),
+                          bold=rng.random() < 0.5, italic=rng.random() < 0.3,
+                          underline=rng.random() < 0.4,
+                          size_pt=rng.choice([None, None, 8, 20]))
+                     for _ in range(rng.randint(1, 2))]
+            paras.append(Paragraph(spans, rng.choice(["left", "center", "right", "justify"])))
+        doc = Document(rng.choice(["62", "29", "12", "62x29"]),
+                       orientation=rng.choice(["vertical", "horizontal"]),
+                       objects=[TextObject(paras, size_pt=rng.choice([None, 10, 12, 24]))])
+        try:
+            old = before.render_document(doc)
+        except ValueError:
+            continue
+        new = render_document(doc)
+        if new.size != old.size or new.tobytes() != old.tobytes():
+            mismatches.append((i, doc))
+    assert mismatches == []
+
+
+def test_object_image_covers_frame_and_ink():
+    obj = TextObject([Paragraph([Span("Hallo", underline=True)])], size_pt=12, x_mm=5, y_mm=5)
+    ro = render_object(obj, Document("62", length_mm=40, objects=[obj]))
+    assert ro.image_dx <= 0 and ro.image_dy <= 0
+    assert ro.image_dx + ro.image.width >= ro.w and ro.image_dy + ro.image.height >= ro.h
+
+
+# --- Feste Rahmengröße auf Endlosband mit automatischer Länge ---------------------------
+@pytest.mark.parametrize("orientation, frame", [("vertical", dict(w_mm=30)),
+                                                ("horizontal", dict(h_mm=10)),
+                                                ("vertical", {}), ("horizontal", {})])
+def test_fit_without_feed_size_uses_text_extent_on_auto_length(orientation, frame):
+    obj = TextObject("Hallo", fit=True, x_mm=2, y_mm=3, **frame)
+    doc = Document("62", orientation=orientation, objects=[obj])
+    ro = render_object(obj, doc)
+    length = render_document(doc).height
+    start, extent = (ro.y, ro.h) if orientation == "vertical" else (ro.x, ro.w)
+    assert length == max(start + extent + _dots(doc.margin_mm), length_limits("QL-600")[0])
+    assert length < _dots(60)                       # nicht die Höchstlänge
+    ink = _ink_box(ro.image)
+    assert ink[3] - ink[1] > 0.8 * ro.h or ink[2] - ink[0] > 0.8 * ro.w   # Text füllt den Rahmen
+
+
+def test_fit_with_given_across_size_fills_it_on_auto_length():
+    narrow = render_object(TextObject("Hallo", fit=True, x_mm=2, y_mm=3, w_mm=20),
+                           Document("62"))
+    wide = render_object(TextObject("Hallo", fit=True, x_mm=2, y_mm=3, w_mm=40),
+                         Document("62"))
+    assert narrow.w == _dots(20) and wide.w == _dots(40)
+    assert wide.base_pt > narrow.base_pt
+
+
+# --- Gedrehtes Objekt ohne Position -------------------------------------------------
+@pytest.mark.parametrize("rotation", [90, 270])
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+def test_rotated_unpositioned_object_is_not_clipped(rotation, orientation):
+    paras = [Paragraph([Span("kurz")], "left"), Paragraph([Span("viel längere Zeile")], "center")]
+    obj = TextObject(paras, size_pt=12, rotation=rotation)
+    doc = Document("62", orientation=orientation, objects=[obj])
+    ro = render_object(obj, doc)
+    width, height = _reading(render_document(doc), doc).size
+    assert 0 <= ro.x and ro.x + ro.w <= width and 0 <= ro.y and ro.y + ro.h <= height
+    left, top, right, bottom = _ink_box(ro.image)
+    assert ro.x + ro.image_dx + left >= 0 and ro.y + ro.image_dy + top >= 0
+    assert ro.x + ro.image_dx + right <= width and ro.y + ro.image_dy + bottom <= height
+    unturned = render_object(TextObject(paras, size_pt=12), doc)
+    assert ro.h == pytest.approx(unturned.w, abs=3) or ro.w == pytest.approx(unturned.h, abs=3)
+
+
+def test_upside_down_unpositioned_left_text_starts_at_right_edge():
+    obj = TextObject.plain("links", align="left", size_pt=12)
+    obj.rotation = 180
+    doc = Document("62", objects=[obj])
+    upright = render_object(TextObject.plain("links", align="left", size_pt=12), doc)
+    ro = render_object(obj, doc)
+    width = render_document(doc).width
+    assert (ro.w, ro.h) == (upright.w, upright.h)
+    assert ro.x + ro.w == width - upright.x           # Textanfang am anderen Rand

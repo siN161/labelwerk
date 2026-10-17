@@ -27,22 +27,22 @@ Platzier-Logik (Einrasten, Ausrichten, Skalieren, „ragt hinaus“) und Kürzel
 ```python
 x_mm: float | None = None      # linke obere Ecke des Rahmens in Leserichtung; None = mittig (wie bisher)
 y_mm: float | None = None
-w_mm: float | None = None      # Rahmengröße nur bei fit („Feste Rahmengröße“); None = bedruckbarer Bereich
+w_mm: float | None = None      # Rahmengröße nur bei fit („Feste Rahmengröße“); None = bedruckbarer Bereich (s. u.)
 h_mm: float | None = None
 rotation: int = 0              # 0 | 90 | 180 | 270, Grad im Uhrzeigersinn
 ```
 
 - **Koordinaten** in mm in Leserichtung, Ursprung = linke obere Ecke des Etiketts (inkl. Rand). Bei „horizontal“ ist x die Bandlaufrichtung (wie die gedrehte Arbeitsfläche).
-- **Ohne Position** (`x_mm is None`): Objekt mittig auf dem Etikett – genau wie heute (CLI, Altbestand). Ein einzelnes Objekt ohne Position ergibt **pixelgleich** das heutige Bild.
+- **Ohne Position** (`x_mm is None`): Objekt mittig auf dem Etikett – genau wie heute (CLI, Altbestand). Ein einzelnes Objekt ohne Position ergibt **pixelgleich** das heutige Bild (geprüft gegen den eingefrorenen Renderer `tests/_render_before_3d.py`, auch per Zufallstest). Einzige bekannte Abweichung: Text, der schon in der kleinsten Schriftgröße links/oben über das Etikett ragt – Pillow zeichnet an negativen Koordinaten um einen Punkt verschoben; der Teil ist ohnehin abgeschnitten.
 - **Ohne feste Rahmengröße:** Rahmen = Größe des Textes. Ein positioniertes Objekt hat immer eine feste Schriftgröße (`size_pt` gesetzt); beim ersten Verschieben eines automatisch großen Objekts setzt die GUI die aktuell wirksame Größe als `size_pt` (Kern liefert sie, siehe `RenderedObject.base_pt`).
-- **Mit fester Rahmengröße** (`fit`): Text wird in den Rahmen `w_mm × h_mm` eingepasst (Verhältnisse bleiben, wie heute); Textposition wirkt innerhalb des Rahmens. `w_mm/h_mm = None` = bedruckbarer Bereich (heutiges Verhalten).
-- **Drehen:** Das Objektbild wird gedreht; Rahmenbreite und -höhe tauschen bei 90/270. Die Position bleibt die linke obere Ecke des gedrehten Rahmens.
+- **Mit fester Rahmengröße** (`fit`): Text wird in den Rahmen `w_mm × h_mm` eingepasst (Verhältnisse bleiben, wie heute); Textposition wirkt innerhalb des Rahmens. `w_mm/h_mm = None` = bedruckbarer Bereich (heutiges Verhalten) – außer auf Endlosband mit automatischer Länge in Bandlaufrichtung: Dort ist das fehlende Maß unbegrenzt, der Text wird nur quer eingepasst und der Rahmen ist in Bandlaufrichtung so lang wie der Text (sonst würde das Etikett die Höchstlänge).
+- **Drehen:** Das Objektbild wird gedreht; Rahmenbreite und -höhe tauschen bei 90/270. Die Position bleibt die linke obere Ecke des gedrehten Rahmens. Ein Objekt ohne Position wird ungedreht in der Etikettfläche ausgerichtet – bei 90/270 mit getauschter Breite/Höhe und getauschtem Innenrand – und dann mitsamt dieser Fläche gedreht (bei 180 steht linksbündiger Text also am anderen Rand); die automatische Länge rechnet mit derselben Box (nichts wird abgeschnitten).
 - **Reihenfolge:** Listenreihenfolge in `doc.objects` = Zeichenreihenfolge (hinten → vorne).
 - `Document.objects` bleibt `list[TextObject]` (3d-2 ergänzt `ImageObject`).
 
 ### Rendern (`render.py`)
 
-- `render_object(obj, doc, model) -> RenderedObject(image, x, y, w, h, base_pt)` – Bild in Druckpunkten (L/RGB, weißer Grund, wird beim Zusammensetzen mit „multiply“/Maske aufgeklebt, damit sich Objekte nicht gegenseitig weiß überdecken), Position in Druckpunkten in Leserichtung (bei Objekten ohne Position: mittig auf dem Etikett berechnet), `base_pt` = wirksame Grundgröße.
+- `render_object(obj, doc, model) -> RenderedObject(image, x, y, w, h, base_pt, image_dx, image_dy)` – `x/y/w/h` = Rahmen (Auswahl, Einrasten, Layout; aus der Tintenbox im Messmodus „1“). Das Bild hat **Anschnitt**: Es deckt Rahmen und gesamte Tinte ab (Kantenglättung, Unterstreichung bis einschließlich Endspalte, Glyphen wie „J“ links der Box) und liegt bei `x + image_dx`, `y + image_dy` (≤ 0); Zusammensetzen und Arbeitsfläche verwenden diesen Versatz. Bild in Druckpunkten (L/RGB, weißer Grund, wird beim Zusammensetzen mit „multiply“/Maske aufgeklebt, damit sich Objekte nicht gegenseitig weiß überdecken), Position in Druckpunkten in Leserichtung (bei Objekten ohne Position: mittig auf dem Etikett berechnet), `base_pt` = wirksame Grundgröße.
 - `render_document(doc, model)`: Etikettgröße bestimmen, Objektbilder in Listenreihenfolge aufkleben, bei „horizontal“ drehen (wie heute). Über das Etikett ragende Teile werden abgeschnitten.
 - **Automatische Länge (Endlosband):** Länge = max(fernste Kante positionierter Objekte in Bandlaufrichtung + Rand, Größe nicht positionierter Objekte + 2 × Rand), begrenzt auf die Modellgrenzen. Feste Länge wie heute.
 - `TextTooLarge` bei fester Größe nur noch für Objekte ohne Position (heutiges Verhalten); positionierte Objekte dürfen hinausragen (→ Hinweis statt Fehler).
