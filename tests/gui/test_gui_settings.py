@@ -95,3 +95,9 @@ def test_changed_font_family_is_taken_over(qtbot):
     dlg.font_family.setCurrentIndex(0)
     dlg.font_family.setCurrentIndex(1)
     assert dlg.values().font_family == dlg.font_family.currentFont().family() != "GibtsGarNicht 4711"
+
+
+def test_dialog_keeps_fractional_font_size(qtbot):
+    dialog = SettingsDialog(Settings(font_size_pt=10.5))
+    qtbot.addWidget(dialog)
+    assert dialog.values().font_size_pt == 10.5

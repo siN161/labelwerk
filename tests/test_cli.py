@@ -324,3 +324,13 @@ def test_align_invalid_is_argparse_error():
     with pytest.raises(SystemExit) as e:
         main(["print", "X", "--align", "mittig"])
     assert e.value.code == 2
+
+
+def test_unloadable_font_gives_friendly_error(tmp_path, capsys):
+    broken = tmp_path / "kaputt.ttf"
+    broken.write_text("keine Schrift")
+    rc = main(["print", "Hallo", "-l", "62", "--font", str(broken), "--preview",
+               str(tmp_path / "v.png")])
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "kann nicht geladen werden" in err and "Traceback" not in err

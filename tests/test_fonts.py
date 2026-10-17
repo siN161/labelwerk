@@ -71,3 +71,33 @@ def test_resolve_dejavu_ohne_kursivdatei_meldet_nicht_kursiv():
     if match.italic:
         pytest.skip("kursive DejaVu-Datei installiert")
     assert match.italic is False and match.bold is False
+
+
+def test_load_unloadable_font_raises_fontloaderror(monkeypatch):
+    from PIL import ImageFont
+
+    def broken(path, size):
+        raise OSError("unknown file format")
+    monkeypatch.setattr(ImageFont, "truetype", broken)
+    fonts.load.cache_clear()
+    with pytest.raises(fonts.FontLoadError) as e:
+        fonts.load("/etc/hostname", 20)
+    assert isinstance(e.value, ValueError)
+    assert "„/etc/hostname“ kann nicht geladen werden" in str(e.value)
+    assert "unknown file format" in str(e.value)
+    fonts.load.cache_clear()
+
+
+def test_render_document_with_unloadable_font_raises_valueerror(monkeypatch):
+    from PIL import ImageFont
+
+    from labelwerk.document import Document, TextObject
+    from labelwerk.render import render_document
+
+    def broken(path, size):
+        raise OSError("invalid pixel size")
+    monkeypatch.setattr(ImageFont, "truetype", broken)
+    fonts.load.cache_clear()
+    with pytest.raises(ValueError, match="kann nicht geladen werden"):
+        render_document(Document("62", objects=[TextObject.plain("Hallo")]))
+    fonts.load.cache_clear()

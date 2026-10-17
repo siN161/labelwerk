@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QHBoxLayo
 
 from ...document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
 from ...fonts import DEFAULT_FAMILY
+from ...render import REF_PT
 from . import Panel
 
 _P = QTextFormat.Property
@@ -27,6 +28,17 @@ _ALIGN_TO_QT = {"left": Qt.AlignmentFlag.AlignLeft, "center": Qt.AlignmentFlag.A
 
 class PlainPasteEdit(QTextEdit):
     """Rich-Text-Editor, der aus der Zwischenablage nur reinen Text übernimmt."""
+
+    def __init__(self):
+        super().__init__()
+        self.setTabChangesFocus(True)      # Tab springt weiter, statt "\t" einzufügen
+
+    def keyPressEvent(self, event) -> None:
+        if (event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+                and event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+            self.textCursor().insertBlock()   # Umschalt+Enter = normaler Absatz, kein U+2028
+            return
+        super().keyPressEvent(event)
 
     def insertFromMimeData(self, source) -> None:
         if source.hasText():
@@ -48,7 +60,7 @@ class TextPanel(Panel):
             doc.objects.append(TextObject(""))
         self._updating = False
         self._formatting = False        # während einer Formatierung: contentsChanged nicht doppelt anwenden
-        self._shown_pt = float(DEFAULT_PT)   # Größe, die das Feld zuletzt angezeigt hat
+        self._shown_pt: float | None = float(DEFAULT_PT)   # zuletzt angezeigte Größe; None = gemischt
         # Grundformat: gilt für alles, was nicht ausdrücklich formatiert ist (nicht Qts Widget-Schrift)
         self._base = {"family": DEFAULT_FAMILY, "pt": float(DEFAULT_PT), "bold": True,
                       "italic": False, "underline": False}
@@ -113,6 +125,7 @@ class TextPanel(Panel):
         self.edit.document().contentsChanged.connect(self._apply)
         self.edit.currentCharFormatChanged.connect(self._sync_buttons)
         self.edit.cursorPositionChanged.connect(self._sync_buttons)
+        self.edit.selectionChanged.connect(self._sync_buttons)
         self.family.currentFontChanged.connect(lambda font: self._format(family=font.family()))
         self.size.activated.connect(lambda _: self._size_entered())
         self.size.lineEdit().editingFinished.connect(self._size_entered)
@@ -188,7 +201,7 @@ class TextPanel(Panel):
             return
         # Fokusverlust mit unverändertem Wert darf nichts vereinheitlichen (Qt meldet ihn teils
         # auch als „activated“, daher gilt die Prüfung für beide Wege)
-        if abs(size - self._shown_pt) < 0.01:
+        if self._shown_pt is not None and abs(size - self._shown_pt) < 0.01:
             return
         self.set_size_pt(size)
 
@@ -292,15 +305,23 @@ class TextPanel(Panel):
         block = self.edit.document().begin()
         while block.isValid():
             spans = []
+            align = _block_align(block.blockFormat())
             it = block.begin()
             while not it.atEnd():
                 fragment = it.fragment()
                 if fragment.isValid():
-                    spans.append(_span(fragment.text(), self._props(fragment.charFormat()), base_pt))
+                    props = self._props(fragment.charFormat())
+                    # U+2028 (Zeilentrenner) und Tab sind im Modell nicht vorgesehen
+                    text = fragment.text().replace("\t", " ")
+                    for index, part in enumerate(text.split("\u2028")):
+                        if index:
+                            paragraphs.append(Paragraph(spans, align))
+                            spans = []
+                        spans.append(_span(part, props, base_pt))
                 it += 1
             if not spans:
                 spans.append(_span("", self._props(block.charFormat()), base_pt))
-            paragraphs.append(Paragraph(spans, _block_align(block.blockFormat())))
+            paragraphs.append(Paragraph(spans, align))
             block = block.next()
         return TextObject(paragraphs, size_pt=base_pt, font_path=self.obj.font_path,
                           fit=self.fit.isChecked())
@@ -323,8 +344,11 @@ class TextPanel(Panel):
         self._updating = True
         try:
             first = obj.paragraphs[0].spans[0] if obj.paragraphs and obj.paragraphs[0].spans else None
+            # Ohne feste Grundgröße rechnet der Renderer relativ zu REF_PT; Verhältnisse erhalten
+            ref = float(obj.size_pt or (REF_PT if any(sp.size_pt for pa in obj.paragraphs
+                                                       for sp in pa.spans) else DEFAULT_PT))
             self._base = {"family": (first.family if first else None) or DEFAULT_FAMILY,
-                          "pt": float(obj.size_pt or DEFAULT_PT),
+                          "pt": ref,
                           "bold": first.bold if first else True,
                           "italic": first.italic if first else False,
                           "underline": first.underline if first else False}
@@ -339,10 +363,10 @@ class TextPanel(Panel):
                 block_fmt.setAlignment(_ALIGN_TO_QT.get(para.align, Qt.AlignmentFlag.AlignHCenter))
                 cursor.setBlockFormat(block_fmt)
                 for span in para.spans:
-                    cursor.insertText(span.text, _char_format(span, obj.size_pt or DEFAULT_PT))
+                    cursor.insertText(span.text, _char_format(span, ref))
                 if not any(span.text for span in para.spans):
                     # leerer Absatz: insertText("") tut nichts, Format am Absatz selbst ablegen
-                    fmt = (_char_format(para.spans[0], obj.size_pt or DEFAULT_PT) if para.spans
+                    fmt = (_char_format(para.spans[0], ref) if para.spans
                            else _char_format_of(self._base))
                     cursor.setBlockCharFormat(fmt)
                     cursor.setCharFormat(fmt)
@@ -356,13 +380,14 @@ class TextPanel(Panel):
     def _sync_buttons(self) -> None:
         """Knöpfe zeigen die Formatierung an der Schreibmarke."""
         props = self._props(self.edit.currentCharFormat())
-        self._shown_pt = props["pt"]
+        mixed = self._selection_sizes()
+        self._shown_pt = None if len(mixed) > 1 else props["pt"]
         widgets = (self.family, self.size, self.bold, self.italic, self.underline,
                    *self.align_buttons.values())
         for w in widgets:
             w.blockSignals(True)
         self.family.setCurrentFont(QFont(props["family"]))
-        self.size.setEditText(f"{props['pt']:g}")
+        self.size.setEditText("" if len(mixed) > 1 else f"{props['pt']:g}")
         self.bold.setChecked(props["bold"])
         self.italic.setChecked(props["italic"])
         self.underline.setChecked(props["underline"])
@@ -370,6 +395,25 @@ class TextPanel(Panel):
         self.align_buttons[align].setChecked(True)
         for w in widgets:
             w.blockSignals(False)
+
+    def _selection_sizes(self) -> set[float]:
+        """Verschiedene Größen innerhalb der Markierung (leer ohne Markierung)."""
+        cursor = self.edit.textCursor()
+        if not cursor.hasSelection():
+            return set()
+        start, end = cursor.selectionStart(), cursor.selectionEnd()
+        sizes = set()
+        block = self.edit.document().findBlock(start)
+        while block.isValid() and block.position() < end:
+            it = block.begin()
+            while not it.atEnd():
+                fragment = it.fragment()
+                if (fragment.isValid() and fragment.position() < end
+                        and fragment.position() + fragment.length() > start):
+                    sizes.add(round(self._props(fragment.charFormat())["pt"], 2))
+                it += 1
+            block = block.next()
+        return sizes
 
     def show_error(self, message: str | None) -> None:
         self.error.setText(message or "")

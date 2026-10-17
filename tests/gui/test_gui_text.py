@@ -242,3 +242,64 @@ def test_grow_with_selection_steps_each_fragment(window):
     _select(panel, 0, 11)
     panel.grow.click()
     assert _sizes(window) == [11, 48]
+
+
+# --- Schlussrunde --------------------------------------------------------------
+def test_shift_enter_inserts_paragraph_not_line_separator(window, qtbot):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    panel = window.panel("text")
+    panel.edit.setPlainText("A")
+    panel.edit.moveCursor(QTextCursor.MoveOperation.End)
+    panel.edit.setFocus()
+    QTest.keyClick(panel.edit, Qt.Key.Key_Return, Qt.KeyboardModifier.ShiftModifier)
+    QTest.keyClicks(panel.edit, "B")
+    paras = window.doc.objects[0].paragraphs
+    assert ["".join(s.text for s in p.spans) for p in paras] == ["A", "B"]
+
+
+def test_line_separator_in_text_becomes_paragraphs(window):
+    panel = window.panel("text")
+    panel.edit.setPlainText("A B")
+    paras = window.doc.objects[0].paragraphs
+    assert ["".join(s.text for s in p.spans) for p in paras] == ["A", "B"]
+    assert all(" " not in s.text for p in paras for s in p.spans)
+
+
+def test_tab_does_not_insert_tab_character(window, qtbot):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    panel = window.panel("text")
+    panel.edit.setPlainText("A")
+    assert panel.edit.tabChangesFocus()
+    QTest.keyClick(panel.edit, Qt.Key.Key_Tab)
+    assert "\t" not in panel.edit.toPlainText()
+    panel.edit.setPlainText("A\tB")
+    spans = window.doc.objects[0].paragraphs[0].spans
+    assert "".join(s.text for s in spans) == "A B"
+
+
+def test_choosing_size_on_mixed_selection_applies_to_all(window):
+    panel = window.panel("text")
+    panel.edit.setPlainText("ABCD")
+    _select(panel, 0, 2)
+    panel.set_size_pt(24)
+    _select(panel, 2, 4)
+    panel.set_size_pt(12)
+    _select(panel, 0, 4)
+    assert panel.size.currentText() == ""
+    panel.size.setCurrentText("12")
+    panel.size.activated.emit(panel.size.findText("12"))
+    sizes = {s.size_pt for s in window.doc.objects[0].paragraphs[0].spans if s.text}
+    assert len(sizes) == 1
+    assert panel.size.currentText() == "12"
+
+
+def test_refresh_keeps_size_ratio_with_unset_base(window):
+    from labelwerk.document import Paragraph, Span, TextObject
+    panel = window.panel("text")
+    window.doc.objects[0] = TextObject([Paragraph([Span("a", size_pt=24), Span("b")])])
+    panel.refresh()
+    spans = panel.to_text_object().paragraphs[0].spans
+    sizes = {s.text: (s.size_pt or panel.to_text_object().size_pt) for s in spans}
+    assert sizes["a"] / sizes["b"] == 2.0

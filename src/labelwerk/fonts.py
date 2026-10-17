@@ -76,9 +76,16 @@ def _dejavu_fallback(bold: bool) -> FontMatch:
     return FontMatch("", DEFAULT_FAMILY, bold=False, italic=False)   # PIL-Standardschrift
 
 
+class FontLoadError(ValueError):
+    """Schriftdatei lässt sich nicht laden (kaputt, keine Schrift, unbrauchbare Größe)."""
+
+
 @lru_cache(maxsize=512)
 def load(path: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Schrift in Druckpunkten laden (gecacht)."""
+    """Schrift in Druckpunkten laden (gecacht; Fehler werden nicht gecacht)."""
     if path:
-        return ImageFont.truetype(path, size)
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError as e:
+            raise FontLoadError(f"Schrift „{path}“ kann nicht geladen werden ({e}).") from e
     return ImageFont.load_default(size=size)

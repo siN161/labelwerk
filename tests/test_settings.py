@@ -109,3 +109,9 @@ def test_new_document_uses_font_family():
     doc = new_document(Settings(font_family="Liberation Sans"))
     assert doc.objects[0].paragraphs[0].spans[0].family == "Liberation Sans"
     assert new_document(Settings()).objects[0].paragraphs[0].spans[0].family is None
+
+
+def test_font_family_is_stripped(tmp_path):
+    path = tmp_path / "s.json"
+    path.write_text('{"font_family": "  Liberation Sans "}', encoding="utf-8")
+    assert load_settings(path).font_family == "Liberation Sans"

@@ -331,3 +331,33 @@ def test_toolbar_buttons_have_equal_space_above_and_below(qtbot, qapp):
         assert top_gap == bottom_gap
     finally:
         qapp.setStyleSheet("")
+
+
+def test_unloadable_font_shows_error_in_panel_and_status(window, monkeypatch):
+    from PIL import ImageFont
+
+    from labelwerk import fonts
+
+    def broken(path, size):
+        raise OSError("invalid pixel size")
+    monkeypatch.setattr(ImageFont, "truetype", broken)
+    fonts.load.cache_clear()
+    try:
+        window.panel("text").edit.setPlainText("Hallo")
+        window.render_now()
+        assert "kann nicht geladen werden" in window.panel("text").error.text()
+        assert "kann nicht geladen werden" in window.result.text()
+    finally:
+        monkeypatch.undo()
+        fonts.load.cache_clear()
+
+
+def test_font_replacement_hint_in_status_bar(window):
+    from labelwerk.document import Paragraph, Span, TextObject
+    window.doc.objects[0] = TextObject([Paragraph([Span("Hallo", family="GibtsGarNicht 4711")])])
+    window.render_now()
+    assert "GibtsGarNicht 4711" in window.result.text()
+    assert window.result.property("state") == "error"
+    window.doc.objects[0] = TextObject([Paragraph([Span("Hallo")])])
+    window.render_now()
+    assert window.result.text() == ""

@@ -70,6 +70,8 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
         if key not in raw:
             continue
         value = raw[key]
+        if key == "font_family" and isinstance(value, str):
+            value = value.strip()
         if valid(value):
             setattr(settings, key, float(value) if key == "margin_mm" else value)
         else:
