@@ -140,10 +140,13 @@ def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str
         else:
             hi = mid - 1
     if not obj.auto:
-        max_pt = int(best / PT) if best else None
+        # Meldung in der größten eingestellten Größe – die sieht der Nutzer im Editor
+        largest = max((span.size_pt or obj.size_pt for para in obj.paragraphs
+                       for span in para.spans), default=obj.size_pt)
+        max_pt = int(best / PT * largest / obj.size_pt) if best else None
         if max_pt is not None and max_pt < MIN_PT:
             max_pt = None                      # kleiner als erlaubt: zählt als „passt nicht“
-        raise TextTooLarge(obj.size_pt, max_pt, label_id)
+        raise TextTooLarge(largest, max_pt, label_id)
     return best if best else MIN_DOTS          # passt nicht einmal klein – kleinste Größe zeigen
 
 

@@ -296,3 +296,15 @@ def test_aligned_ink_stays_inside_image():
     img = render_document(Document("62", objects=[obj]))
     l, _, r, _ = _bbox(img)
     assert l >= 0 and r <= img.width
+
+
+def test_too_large_message_names_largest_span_size():
+    # Grundgröße 19 pt, aber das ganze Wort steht auf 72 pt: die Meldung nennt 72 pt
+    obj = TextObject([Paragraph([Span("Test", size_pt=72)])], size_pt=19)
+    doc = Document(label_id="62", objects=[obj])
+    with pytest.raises(TextTooLarge, match=r"bei Schriftgröße 72 pt \(höchstens (\d+) pt\)") as exc:
+        render_document(doc)
+    assert 40 < exc.value.max_pt < 72
+    # die genannte Höchstgröße passt wirklich
+    obj.paragraphs[0].spans[0].size_pt = exc.value.max_pt
+    render_document(doc)
