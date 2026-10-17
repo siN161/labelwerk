@@ -8,6 +8,7 @@ Arbeitsfläche Schreibmarke, Treffer und Markierung.
 """
 from __future__ import annotations
 
+import copy
 import math
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -168,6 +169,83 @@ def finish_object(prep: Prepared, doc: Document, size: tuple[int, int],
     """Gemessenes Objekt auf dem Etikett ``size`` (wie ``label_size``) rendern – dasselbe
     Ergebnis wie ``render_object``."""
     return _finish(prep, _sheet(doc, model), *size)
+
+
+@dataclass
+class Rendered:
+    """Ergebnis von ``Renderer.render``: Etikettgröße (Druckpunkte in Leserichtung), die
+    einzelnen Objektbilder (je Objekt in ``doc.objects``) und das Druckbild daraus."""
+    size: tuple[int, int]
+    objects: list[RenderedObject]
+    image: Image.Image
+
+
+@dataclass
+class _Cached:
+    """Gemessenes und gerendertes Objekt samt Stand, aus dem es entstand."""
+    obj: TextObject            # hält das Objekt fest, damit seine id nicht neu vergeben wird
+    snapshot: TextObject
+    context: tuple
+    prepared: Prepared
+    size: tuple | None = None                  # Etikettgröße des Bilds (None = mit Position)
+    rendered: RenderedObject | None = None
+
+
+class Renderer:
+    """Rendert ein Dokument wiederholt und dabei nur, was sich geändert hat (Arbeitsfläche).
+
+    Gemessen wird ein Objekt nur, wenn es selbst oder sein Kontext (Modell, Etikett,
+    Ausrichtung, Rand, Länge) sich ändert; gezeichnet zusätzlich, wenn sich bei einem Objekt
+    ohne Position (steht mittig) die Etikettgröße ändert. Das Druckbild wird nur neu
+    zusammengesetzt, wenn sich ein Objektbild oder die Größe ändert. Ergebnis wie
+    ``render_document`` – Vorschau = Druck.
+    """
+
+    def __init__(self):
+        self._cache: dict[int, _Cached] = {}
+        self._composed: tuple = (None, [], None)   # Druckbild und woraus es entstand
+
+    def render(self, doc: Document, model: str = "QL-600") -> Rendered:
+        """Dokument rendern; ``ValueError`` (z. B. ``TextTooLarge``) lässt den Cache stehen."""
+        entries = self._prepare_all(doc, model)
+        size = label_size(doc, model, prepared=[e.prepared for e in entries])
+        objects = self._draw(entries, doc, model, size)
+        return Rendered(size, objects, self._compose(objects, size, doc.orientation))
+
+    def _prepare_all(self, doc: Document, model: str) -> list[_Cached]:
+        """Objekte messen; unveränderte kommen aus dem Cache."""
+        context = (model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm)
+        cache: dict[int, _Cached] = {}
+        for obj in doc.objects:
+            entry = self._cache.get(id(obj))
+            if (entry is None or entry.obj is not obj or entry.context != context
+                    or entry.snapshot != obj):
+                entry = _Cached(obj, copy.deepcopy(obj), context,
+                                prepare_object(obj, doc, model))
+            cache[id(obj)] = entry
+        self._cache = cache
+        return [cache[id(obj)] for obj in doc.objects]
+
+    @staticmethod
+    def _draw(entries: list[_Cached], doc: Document, model: str,
+              size: tuple[int, int]) -> list[RenderedObject]:
+        """Gemessene Objekte zeichnen; ein Objekt ohne Position steht mittig und wird deshalb
+        auch neu gezeichnet, wenn sich die Etikettgröße ändert."""
+        for entry in entries:
+            key = None if entry.obj.positioned else size
+            if entry.rendered is None or entry.size != key:
+                entry.rendered = finish_object(entry.prepared, doc, size, model)
+                entry.size = key
+        return [entry.rendered for entry in entries]
+
+    def _compose(self, objects: list[RenderedObject], size: tuple[int, int],
+                 orientation: str) -> Image.Image:
+        """Druckbild – unverändert, solange dieselben Objektbilder auf derselben Größe liegen."""
+        key = (size, orientation)
+        if (key != self._composed[0] or len(objects) != len(self._composed[1])
+                or any(a is not b for a, b in zip(objects, self._composed[1]))):
+            self._composed = (key, list(objects), compose(objects, size, orientation))
+        return self._composed[2]
 
 
 def label_margins(doc: Document, model: str = "QL-600") -> tuple[int, int]:

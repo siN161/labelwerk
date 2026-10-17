@@ -383,6 +383,17 @@ def test_edit_bar_cut_and_paste_work_on_text_in_edit_mode(qtbot):
     assert win.doc.objects[0].text == "Max Mustermann" and len(win.doc.objects) == 2
 
 
+@pytest.mark.parametrize("name", ["copy", "cut", "paste"])
+def test_clipboard_command_ending_edit_mode_does_not_fall_through_to_objects(qtbot, name):
+    """Endet der Schreibmodus während des Befehls, gilt der Befehl trotzdem als erledigt –
+    Ausschneiden nimmt dann nicht das ganze Objekt mit."""
+    win, editor = _editing(qtbot)
+    _double_click(win.canvas, _char_point(win, 0, 1))
+    setattr(editor, name, win.finish_editing)               # beendet den Schreibmodus sofort
+    assert getattr(_session(win), name)() is True
+    assert not _session(win).active and len(win.doc.objects) == 2
+
+
 def test_end_edit_is_a_fixed_action_of_edit_mode(window):
     action = window.shortcut_actions["text.end_edit"]
     assert action in window.panel("text").actions()

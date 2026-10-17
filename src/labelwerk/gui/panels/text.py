@@ -3,8 +3,8 @@
 Regel wie bei einem ausgewählten Textrahmen in P-touch: Ist nichts markiert, wirkt eine
 Formatierung auf den ganzen Text; sonst nur auf die Markierung. Im Schreibmodus wirkt sie
 ohne Markierung aufs Weitertippen (Textposition: auf den Absatz der Schreibmarke) – außer
-der Rahmen ist noch leer. Bereich „Position“: Lage und (mit fester Rahmengröße) Größe des
-Rahmens in mm.
+der Rahmen ist noch leer. Bereich „Position“ (``panels.position``): Lage und (mit fester
+Rahmengröße) Größe des Rahmens in mm.
 
 Geschrieben wird direkt auf dem Etikett (``gui.text_edit_mode``): Der Editor ``edit`` ist
 dafür ein unsichtbarer Eingabepuffer (Kind des Panels, Größe 0, nicht im Layout) – er behält
@@ -16,25 +16,22 @@ import math
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import (QAction, QFont, QIcon, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QGridLayout, QHBoxLayout,
-                               QLabel, QPushButton, QTextEdit)
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QHBoxLayout, QLabel,
+                               QPushButton, QTextEdit)
 
 from ...document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
 from ...fonts import DEFAULT_FAMILY
 from ...layout import Rect
 from ...render import REF_PT
 from ..symbols import line_icon
-from ..widgets import DoubleSpinBox
 from . import Panel
+from .position import PositionSection
 
 _P = QTextFormat.Property
 
 SIZES_PT = (6, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72)
 DEFAULT_PT = 19
 HINT = "Auf das Etikett klicken, um einen Textrahmen anzulegen"
-POSITION_MM = (-999.9, 999.9)    # Lage darf auch neben dem Etikett liegen (ragt hinaus)
-SIZE_MM = (1.0, 999.9)
-_FRAME_ONLY = "Nur mit fester Rahmengröße änderbar"
 _ALIGN_TO_QT = {"left": Qt.AlignmentFlag.AlignLeft, "center": Qt.AlignmentFlag.AlignHCenter,
                 "right": Qt.AlignmentFlag.AlignRight, "justify": Qt.AlignmentFlag.AlignJustify}
 
@@ -169,27 +166,10 @@ class TextPanel(Panel):
         self.layout_.addWidget(self.fit)
 
         self.section("Position (mm)")
-        grid = QGridLayout()
-        self.pos_x, self.pos_y, self.pos_w, self.pos_h = (DoubleSpinBox() for _ in range(4))
-        self._frame_spins = {"x": self.pos_x, "y": self.pos_y, "w": self.pos_w, "h": self.pos_h}
-        for i, (key, text, tip) in enumerate((("x", "X", "Abstand vom linken Etikettrand"),
-                                              ("y", "Y", "Abstand vom oberen Etikettrand"),
-                                              ("w", "B", "Breite des Rahmens"),
-                                              ("h", "H", "Höhe des Rahmens"))):
-            spin = self._frame_spins[key]
-            spin.setDecimals(1)
-            spin.setSingleStep(0.1)
-            spin.setRange(*(POSITION_MM if key in "xy" else SIZE_MM))
-            spin.setKeyboardTracking(False)        # erst nach Enter/Fokuswechsel/Pfeil übernehmen
-            spin.setToolTip(tip)
-            label = QLabel(text)
-            label.setToolTip(tip)
-            grid.addWidget(label, i // 2, (i % 2) * 2)
-            grid.addWidget(spin, i // 2, (i % 2) * 2 + 1)
-            spin.valueChanged.connect(lambda value, k=key: self._frame_changed(k, value))
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(3, 1)
-        self.layout_.addLayout(grid)
+        self.position = PositionSection()
+        self.pos_x, self.pos_y, self.pos_w, self.pos_h = (self.position.spins[k] for k in "xywh")
+        self.position.edited.connect(self._frame_changed)
+        self.layout_.addWidget(self.position)
 
         self.error = QLabel()
         self.error.setObjectName("error")
@@ -242,7 +222,7 @@ class TextPanel(Panel):
     def _editing_widgets(self):
         return (self.edit, self.family, self.size, self.grow, self.shrink, self.bold,
                 self.italic, self.underline, *self.align_buttons.values(), self.fit,
-                *self._frame_spins.values())
+                *self.position.spins.values())
 
     def set_editing(self, editing: bool) -> None:
         """Schreibmodus an/aus: Formatieren ohne Markierung wirkt dann aufs Weitertippen."""
@@ -549,26 +529,18 @@ class TextPanel(Panel):
     def show_frame(self, rect: Rect | None) -> None:
         """Rahmen des bearbeiteten Objekts in mm anzeigen (vom Hauptfenster nach dem Rendern)."""
         self._frame = rect
-        for key, spin in self._frame_spins.items():
-            spin.blockSignals(True)
-            spin.setValue(getattr(rect, key) if rect is not None else 0.0)
-            spin.blockSignals(False)
-        self._update_frame_editing()
+        self.position.show_frame(rect, self._fixed_frame())
 
     def _update_frame_editing(self) -> None:
         """Breite/Höhe nur mit fester Rahmengröße änderbar, sonst Anzeige der Größe."""
-        fixed = self.index is not None and self.obj.fit
-        for spin in (self.pos_w, self.pos_h):
-            if spin.isReadOnly() == fixed:
-                spin.setReadOnly(not fixed)          # Pfeile bleiben sichtbar, wirken aber nicht
-                spin.style().unpolish(spin)          # Stylesheet: [readOnly="true"] neu anwenden
-                spin.style().polish(spin)
-            spin.setToolTip(("Breite" if spin is self.pos_w else "Höhe") + " des Rahmens"
-                            + ("" if fixed else f" – {_FRAME_ONLY}"))
+        self.position.set_size_editable(self._fixed_frame())
+
+    def _fixed_frame(self) -> bool:
+        return self.index is not None and self.obj.fit
 
     def _frame_changed(self, key: str, value: float) -> None:
         if self.index is None or (key in "wh" and not self.obj.fit):
-            return
+            return                                  # Größe nur mit fester Rahmengröße
         self.frame_edited.emit(key, value)
 
     def _sync_buttons(self) -> None:

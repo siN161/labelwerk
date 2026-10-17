@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThreadPool, QTimer
@@ -21,8 +21,7 @@ from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, 
                       match_objects, maximize_object, move, object_rect, outside_indices,
                       printable_area, reorder, resize, rotate, set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
-from ..render import (Prepared, RenderedObject, compose, finish_object, font_warnings,
-                      label_size, prepare_object)
+from ..render import Renderer, RenderedObject, font_warnings
 from ..settings import Settings, load_settings, new_document
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
@@ -53,20 +52,6 @@ _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
 SELECTION_PANELS = ("text", "layout")   # arbeiten mit der Auswahl: Wählen wechselt nicht weg
 
 
-@dataclass
-class _Cached:
-    """Gemessenes und gerendertes Objekt samt Stand, aus dem es entstand.
-
-    Gemessen wird nur bei Änderung des Objekts bzw. des Etiketts; gezeichnet zusätzlich,
-    wenn sich bei einem Objekt ohne Position (steht mittig) die Etikettgröße ändert."""
-    obj: TextObject            # hält das Objekt fest, damit seine id nicht neu vergeben wird
-    snapshot: TextObject
-    context: tuple
-    prepared: Prepared
-    size: tuple | None = None                  # Etikettgröße des Bilds (None = mit Position)
-    rendered: RenderedObject | None = None
-
-
 class MainWindow(QMainWindow):
     def __init__(self, doc: Document | None = None, tools: list[Tool] = TOOLS,
                  model: str = DEFAULT_MODEL, settings: Settings | None = None):
@@ -80,7 +65,7 @@ class MainWindow(QMainWindow):
         self._shown_size = (0, 0)                   # Etikettgröße der letzten gültigen Anzeige
         self._structure_dirty = False               # Objektliste seit der letzten Anzeige umgebaut
         self.rendered: list[RenderedObject] = []    # Objektbilder auf der Arbeitsfläche = im Druck
-        self._cache: dict[int, _Cached] = {}
+        self.renderer = Renderer()                  # rendert nur geänderte Objekte neu
         self._render_error: str | None = None
         self._hint: str | None = None               # Hinweis (ragt hinaus, Schrift ersetzt)
         self._print_signals = None
@@ -94,7 +79,6 @@ class MainWindow(QMainWindow):
         self._arranging = False                     # Auswahl wird intern umgestellt (Anlegen …)
         self._outside: list[int] = []               # Objekte, die über das Etikett ragen
         self._area = Rect(0, 0, 0, 0)               # bedruckbarer Bereich (mm), mit dem Bild
-        self._composed: tuple = (None, [], None)    # Druckbild und woraus es entstand
         # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar;
         # doppelt belegte (von Hand bearbeitete Datei): die spätere Aktion bleibt ohne Kürzel
         keys, key_warnings = without_conflicts(effective(self.settings.shortcuts))
@@ -410,19 +394,7 @@ class MainWindow(QMainWindow):
             panel.show_frame(exact_rect(self.doc.objects[index], self.rendered[index]))
 
     def _update_edit_actions(self) -> None:
-        if self.edit_session.active:                # Knöpfe wirken auf den Text im Editor
-            editor = self.panel("text").edit
-            marked = editor.textCursor().hasSelection()
-            enabled = {"edit.cut": marked, "edit.copy": marked, "edit.paste": editor.canPaste(),
-                       "edit.duplicate": False, "edit.delete": False,
-                       "edit.undo": (editor.document().isUndoAvailable()
-                                     or self.history.can_undo(self.doc)),
-                       "edit.redo": (editor.document().isRedoAvailable()
-                                     or self.history.can_redo(self.doc)),
-                       "text.end_edit": True, "text.start_edit": False,
-                       "text.start_edit_enter": False}
-            for key, value in enabled.items():
-                self.shortcut_actions[key].setEnabled(value)
+        if self.edit_session.update_actions(self.shortcut_actions):   # wirken auf den Editor
             return
         self.shortcut_actions["text.end_edit"].setEnabled(False)
         single = len(self.canvas.selection()) == 1
@@ -445,12 +417,9 @@ class MainWindow(QMainWindow):
             self._timer.start()
             return
         try:
-            # jedes Objekt höchstens einmal messen und zeichnen; Größe, Fläche und
-            # „ragt hinaus“ folgen aus den gerenderten Objekten
-            entries = self._prepare_objects()
-            size = label_size(self.doc, self.model, prepared=[e.prepared for e in entries])
-            rendered = self._render_objects(entries, size)
-            image = self._compose(rendered, size)
+            # jedes Objekt höchstens einmal messen und zeichnen; Fläche und „ragt hinaus“
+            # folgen aus den gerenderten Objekten
+            result = self.renderer.render(self.doc, self.model)
         except ValueError as e:
             # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
             self._render_error = str(e)
@@ -464,6 +433,7 @@ class MainWindow(QMainWindow):
         if self._hint is not None and self.result.text() == self._hint:
             self._set_result("", "")   # alten Hinweis nur löschen, wenn er noch dasteht
         self._hint = None
+        size, rendered = result.size, result.objects
         area = printable_area(self.doc, self.model, size)
         outside = outside_indices(rendered, size, self.doc.objects)
         hints = ([OUTSIDE_HINT] if outside else []) + font_warnings(self.doc)
@@ -471,7 +441,7 @@ class MainWindow(QMainWindow):
             self._hint = " · ".join(hints)
             self._set_result(self._hint, "error")
         self.panel("text").show_error(None)
-        self.image = image
+        self.image = result.image
         self.rendered = rendered
         self._shown_size = size
         self._structure_dirty = False
@@ -497,40 +467,6 @@ class MainWindow(QMainWindow):
                                  self.doc.orientation,
                                  self._area, keep_ratio=[], grow=growing_axis(self.doc))
 
-    def _prepare_objects(self) -> list[_Cached]:
-        """Objekte messen; unveränderte kommen aus dem Cache."""
-        doc = self.doc
-        context = (self.model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm)
-        cache: dict[int, _Cached] = {}
-        for obj in doc.objects:
-            entry = self._cache.get(id(obj))
-            if (entry is None or entry.obj is not obj or entry.context != context
-                    or entry.snapshot != obj):
-                entry = _Cached(obj, copy.deepcopy(obj), context,
-                                prepare_object(obj, doc, self.model))
-            cache[id(obj)] = entry
-        self._cache = cache
-        return [cache[id(obj)] for obj in doc.objects]
-
-    def _render_objects(self, entries: list[_Cached], size: tuple[int, int]) -> list[RenderedObject]:
-        """Gemessene Objekte zeichnen; ein Objekt ohne Position steht mittig und wird deshalb
-        auch neu gezeichnet, wenn sich die Etikettgröße ändert."""
-        for entry in entries:
-            key = None if entry.obj.positioned else size
-            if entry.rendered is None or entry.size != key:
-                entry.rendered = finish_object(entry.prepared, self.doc, size, self.model)
-                entry.size = key
-        return [entry.rendered for entry in entries]
-
-    def _compose(self, rendered: list[RenderedObject], size: tuple[int, int]):
-        """Druckbild – unverändert, solange dieselben Objektbilder auf derselben Größe liegen."""
-        key = (size, self.doc.orientation)
-        if (self.image is None or key != self._composed[0]
-                or len(rendered) != len(self._composed[1])
-                or any(a is not b for a, b in zip(rendered, self._composed[1]))):
-            self._composed = (key, list(rendered), compose(rendered, size, self.doc.orientation))
-        return self._composed[2]
-
     # --- Rückgängig -------------------------------------------------------
     def _commit(self, merge=None) -> None:
         """Stand nach einer abgeschlossenen Aktion festhalten (ohne Änderung kein Schritt).
@@ -545,38 +481,15 @@ class MainWindow(QMainWindow):
         self._update_edit_actions()
 
     def undo(self) -> None:
-        """Rückgängig – im Schreibmodus innerhalb der Bearbeitung (Editor); ist dort nichts
-        mehr zurückzunehmen, endet der Schreibmodus und es geht im Dokument weiter (Knopf und
-        Strg+Z gleich). Ein leerer neuer Rahmen entfällt dabei – das ist dann der ganze
-        Schritt."""
-        if self.edit_session.active:
-            editor = self.panel("text").edit
-            if editor.document().isUndoAvailable():
-                editor.undo()
-                return
-            obj = self.doc.objects[self.edit_session.index]
-            if obj.positioned and obj.is_empty():
-                selection = self.history.selection  # Auswahl vor dem Anlegen
-                self.finish_editing()
-                self.canvas.set_selection(selection)
-                return
-            if not self.history.can_undo(self.doc):
-                return                              # nichts zurückzunehmen: weiter schreiben
-            self.finish_editing()
-        self._restore(self.history.undo(self.doc, self.canvas.selection()))
+        """Rückgängig – im Schreibmodus erst innerhalb der Bearbeitung (``TextEditSession.undo``),
+        dann im Dokument (Knopf und Strg+Z gleich)."""
+        if not self.edit_session.undo():
+            self._restore(self.history.undo(self.doc, self.canvas.selection()))
 
     def redo(self) -> None:
-        """Wiederherstellen – im Schreibmodus im Editor; hat er nichts mehr, endet der
-        Schreibmodus und es geht im Dokument weiter (wie bei ``undo``)."""
-        if self.edit_session.active:
-            editor = self.panel("text").edit
-            if editor.document().isRedoAvailable():
-                editor.redo()
-                return
-            if not self.history.can_redo(self.doc):
-                return                              # nichts zu wiederholen: weiter schreiben
-            self.finish_editing()
-        self._restore(self.history.redo(self.doc, self.canvas.selection()))
+        """Wiederherstellen – im Schreibmodus erst im Editor, dann im Dokument (wie ``undo``)."""
+        if not self.edit_session.redo():
+            self._restore(self.history.redo(self.doc, self.canvas.selection()))
 
     def _restore(self, snapshot: Document | None) -> None:
         """Stand zurückholen – samt der Auswahl, die zu ihm gehörte (dieselben Objekte)."""
@@ -787,8 +700,7 @@ class MainWindow(QMainWindow):
     def copy_selected(self) -> None:
         """Ausgewählte Objekte (in Zeichenreihenfolge) in die interne Zwischenablage kopieren –
         im Schreibmodus den markierten Text in die Zwischenablage des Systems."""
-        if self.edit_session.active:
-            self.panel("text").edit.copy()
+        if self.edit_session.copy():
             self._update_edit_actions()             # Einfügen ist jetzt möglich
             return
         indices = sorted(self.canvas.selection())
@@ -797,19 +709,14 @@ class MainWindow(QMainWindow):
             self._update_edit_actions()
 
     def cut_selected(self) -> None:
-        if self.edit_session.active:
-            self.panel("text").edit.cut()
-            return
-        self.copy_selected()
-        self.delete_selected()
+        if not self.edit_session.cut():
+            self.copy_selected()
+            self.delete_selected()
 
     def paste(self) -> None:
         """Zwischenablage einfügen – jedes Mal 2 mm weiter versetzt; Eingefügtes ist ausgewählt.
         Im Schreibmodus Text aus der Zwischenablage des Systems (als reiner Text)."""
-        if self.edit_session.active:
-            self.panel("text").edit.paste()
-            return
-        if self._clipboard:
+        if not self.edit_session.paste() and self._clipboard:
             self._clipboard = [_offset(obj) for obj in self._clipboard]
             self._insert(copy.deepcopy(self._clipboard))
 

@@ -14,7 +14,8 @@ gehen wie die Knöpfe im Dokument weiter, wenn im Editor nichts mehr zurück- bz
 wiederherzustellen ist. Ein Rahmen ohne feste Größe wächst an der Kante
 seiner Textposition (``layout.anchor_after_edit``). Start und Ende samt Rückgängig-Schritt
 (eine Bearbeitung = ein Schritt) steuert das Hauptfenster (``MainWindow.edit_text``,
-``finish_editing``).
+``finish_editing``); Rückgängig, Zwischenablage und die Freigabe ihrer Knöpfe gibt es im
+Schreibmodus an die Sitzung weiter (``undo``, ``copy`` … ``update_actions``).
 """
 from __future__ import annotations
 
@@ -130,6 +131,85 @@ class TextEditSession(QObject):
         finally:
             self._quiet = False
         self.update_marks()
+
+    # --- Befehle (Knöpfe, Kürzel) --------------------------------------------
+    # Rückgabe True = im Schreibmodus erledigt; False = das Hauptfenster führt den Befehl
+    # auf dem Dokument bzw. der Auswahl aus.
+    def undo(self) -> bool:
+        """Rückgängig im Editor; ist dort nichts mehr zurückzunehmen, endet der Schreibmodus
+        und es geht im Dokument weiter (False). Ein leerer neuer Rahmen entfällt dabei – das
+        ist dann der ganze Schritt. Hat auch das Dokument nichts: weiter schreiben."""
+        if not self.active:
+            return False
+        if self._editor.document().isUndoAvailable():
+            self._editor.undo()
+            return True
+        window = self._window
+        obj = window.doc.objects[self.index]
+        if obj.positioned and obj.is_empty():
+            selection = window.history.selection    # Auswahl vor dem Anlegen
+            window.finish_editing()
+            self._canvas.set_selection(selection)
+            return True
+        if not window.history.can_undo(window.doc):
+            return True                             # nichts zurückzunehmen: weiter schreiben
+        window.finish_editing()
+        return False
+
+    def redo(self) -> bool:
+        """Wiederherstellen im Editor; hat er nichts mehr, endet der Schreibmodus und es geht
+        im Dokument weiter (False) – wie bei ``undo``."""
+        if not self.active:
+            return False
+        if self._editor.document().isRedoAvailable():
+            self._editor.redo()
+            return True
+        window = self._window
+        if not window.history.can_redo(window.doc):
+            return True                             # nichts zu wiederholen: weiter schreiben
+        window.finish_editing()
+        return False
+
+    def copy(self) -> bool:
+        """Markierten Text in die Zwischenablage des Systems kopieren."""
+        active = self.active          # vorher merken: endet die Sitzung dabei, gilt er trotzdem
+        if active:
+            self._editor.copy()
+        return active
+
+    def cut(self) -> bool:
+        """Markierten Text ausschneiden (Zwischenablage des Systems)."""
+        active = self.active          # vorher merken: endet die Sitzung dabei, gilt er trotzdem
+        if active:
+            self._editor.cut()
+        return active
+
+    def paste(self) -> bool:
+        """Text aus der Zwischenablage des Systems einfügen (als reiner Text)."""
+        active = self.active          # vorher merken: endet die Sitzung dabei, gilt er trotzdem
+        if active:
+            self._editor.paste()
+        return active
+
+    def update_actions(self, actions: dict) -> bool:
+        """Im Schreibmodus wirken die Knöpfe auf den Text im Editor: Freigabe der Aktionen
+        (``gui.actions``) danach setzen; Rückgängig/Wiederherstellen auch, wenn erst das
+        Dokument wieder etwas hat."""
+        if not self.active:
+            return False
+        editor, window = self._editor, self._window
+        marked = editor.textCursor().hasSelection()
+        enabled = {"edit.cut": marked, "edit.copy": marked, "edit.paste": editor.canPaste(),
+                   "edit.duplicate": False, "edit.delete": False,
+                   "edit.undo": (editor.document().isUndoAvailable()
+                                 or window.history.can_undo(window.doc)),
+                   "edit.redo": (editor.document().isRedoAvailable()
+                                 or window.history.can_redo(window.doc)),
+                   "text.end_edit": True, "text.start_edit": False,
+                   "text.start_edit_enter": False}
+        for key, value in enabled.items():
+            actions[key].setEnabled(value)
+        return True
 
     # --- Anzeige ------------------------------------------------------------
     def update_marks(self) -> None:
