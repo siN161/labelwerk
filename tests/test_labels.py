@@ -44,3 +44,10 @@ def test_format_mm_uses_decimal_comma():
 
 def test_length_limits_for_ql600():
     assert length_limits("QL-600") == (150, 11811)
+
+
+def test_label_shape_and_physical_size():
+    endless, die_cut, round_ = get_label("62"), get_label("62x29"), get_label("d24")
+    assert (endless.shape, endless.total_width, endless.total_height) == ("endless", 732, None)
+    assert (die_cut.shape, die_cut.total_width, die_cut.total_height) == ("die_cut", 732, 341)
+    assert (round_.shape, round_.size_mm) == ("round", (24, 24))

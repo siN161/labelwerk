@@ -14,8 +14,8 @@ def test_die_cut_label_matches_exact_size():
 
 
 def test_multiline_text_makes_endless_label_longer():
-    one = render_text("A", "62", font_size=60)
-    two = render_text("A\nB", "62", font_size=60)
+    one = render_text("A", "62", font_size=120)
+    two = render_text("A\nB", "62", font_size=120)
     assert two.height > one.height
 
 
@@ -35,6 +35,6 @@ def test_fixed_font_size_too_large_raises_with_max_size():
 
 
 def test_fixed_font_size_is_not_shrunk():
-    small = render_text("A", "62", font_size=40)
-    large = render_text("A", "62", font_size=80)
+    small = render_text("A", "62", font_size=100)
+    large = render_text("A", "62", font_size=300)
     assert large.height > small.height
