@@ -21,7 +21,8 @@ START_ZOOM = 200         # Prozent; 100 % = echte Größe
 def to_qimage(img: Image.Image) -> QImage:
     """Druckbild als QImage; Weiß wird transparent, damit die Etikettform sichtbar bleibt."""
     gray = img.convert("L")
-    rgba = Image.merge("LA", (gray, ImageOps.invert(gray))).convert("RGBA")
+    # Immer schwarz, Alpha = 255 - L: über Weiß ergibt das exakt den Grauwert L (Vorschau = Druck)
+    rgba = Image.merge("RGBA", (*(Image.new("L", gray.size, 0),) * 3, ImageOps.invert(gray)))
     return QImage(rgba.tobytes(), rgba.width, rgba.height, 4 * rgba.width,
                   QImage.Format.Format_RGBA8888).copy()
 
@@ -44,6 +45,7 @@ class Canvas(QGraphicsView):
         self.outline = self.printable = self.handle = None
         self._caption = ""
         self._dragging = False
+        self._grab_offset = 0.0
         self._apply_zoom()
 
     # --- Inhalt -----------------------------------------------------------
@@ -116,12 +118,15 @@ class Canvas(QGraphicsView):
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self._on_handle(event):
             self._dragging = True
+            # Versatz zwischen Cursor und Schnittkante merken, damit der Anfasser nicht springt
+            self._grab_offset = self.mapToScene(event.position().toPoint()).y() - self.label_height()
             return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
         if self._dragging:
-            mm = self.snap_length(self.mapToScene(event.position().toPoint()).y())
+            mm = self.snap_length(
+                self.mapToScene(event.position().toPoint()).y() - self._grab_offset)
             self.handle.setY(mm * MM - self.label_height())
             self._caption = f"{self.label.size_mm[0]} × {format_mm(round(mm * MM))} mm"
             self.viewport().update()
