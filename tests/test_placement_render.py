@@ -306,3 +306,11 @@ def test_upside_down_unpositioned_left_text_starts_at_right_edge():
     width = render_document(doc).width
     assert (ro.w, ro.h) == (upright.w, upright.h)
     assert ro.x + ro.w == width - upright.x           # Textanfang am anderen Rand
+
+
+@pytest.mark.parametrize("kw, frame", [(dict(y_mm=10), (0, 10)), (dict(x_mm=7), (7, 0))])
+def test_one_coordinate_positions_object_other_is_zero(kw, frame):
+    obj = TextObject("A", size_pt=20, **kw)
+    assert obj.positioned
+    ro = render_object(obj, Document("62", length_mm=40, objects=[obj]))
+    assert (ro.x, ro.y) == (_dots(frame[0]), _dots(frame[1]))

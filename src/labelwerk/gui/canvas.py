@@ -61,7 +61,7 @@ class ObjectItem(QGraphicsPixmapItem):
         self.setShapeMode(QGraphicsPixmapItem.ShapeMode.BoundingRectShape)
         self.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
         self.setPos(rendered.x, rendered.y)
-        self.setOffset(rendered.image_dx, rendered.image_dy)   # Anschnitt: Bild ragt über den Rahmen
+        self.setOffset(rendered.image_dx, rendered.image_dy)   # Anschnitt: Bild ragt über Rahmen
         self.setCursor(Qt.CursorShape.SizeAllCursor)
 
     def is_empty(self) -> bool:

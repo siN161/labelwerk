@@ -9,8 +9,9 @@ import copy
 from dataclasses import dataclass, field, replace
 
 from .document import MAX_PT, MIN_PT, Document, TextObject
-from .labels import DPI
-from .render import REF_PT, RenderedObject, label_margins, label_size, render_object
+from .labels import DPI, get_label
+from .render import (PT, REF_PT, RenderedObject, _span_dots, label_margins, label_size,
+                     render_object)
 
 ALIGN_MODES = ("left", "hcenter", "right", "top", "vcenter", "bottom")
 SIZE_MODES = ("same", "width", "height")
@@ -73,6 +74,18 @@ def label_rect(doc: Document, model: str = "QL-600") -> Rect:
     return Rect(0.0, 0.0, _mm(w), _mm(h))
 
 
+def growing_axis(doc: Document) -> str | None:
+    """Achse in Leserichtung („x“/„y“), in der das Etikett mit den Objekten wächst
+    (Endlosband mit automatischer Länge), sonst None.
+
+    Kante und Mitte des Etiketts liegen in dieser Achse nicht fest – sie wandern mit dem
+    am weitesten außen liegenden Objekt.
+    """
+    if get_label(doc.label_id).height is not None or doc.length_mm is not None:
+        return None
+    return "x" if doc.orientation == "horizontal" else "y"
+
+
 def printable_area(doc: Document, model: str = "QL-600") -> Rect:
     """Bedruckbarer Bereich: Etikett minus Rand in Bandlaufrichtung bzw. quer dazu."""
     w, h = label_size(doc, model)
@@ -82,19 +95,24 @@ def printable_area(doc: Document, model: str = "QL-600") -> Rect:
 
 # --- Einrasten --------------------------------------------------------------------
 def snap(moving: Rect, targets: list[Rect], area: Rect, tolerance_mm: float,
-         label: Rect | None = None) -> Snap:
+         label: Rect | None = None, grow: str | None = None) -> Snap:
     """Kanten und Mitte von ``moving`` an nahe Linien einrasten lassen.
 
     Kandidaten: Kanten und Mitte des bedruckbaren Bereichs, des Etiketts (falls angegeben)
     und der anderen Objekte. Je Achse gewinnt der nächste Kandidat innerhalb der Toleranz
     (Grenze eingeschlossen); ``guides`` nennt alle Linien, die nach dem Einrasten getroffen
-    werden.
+    werden. ``grow`` (``growing_axis``): In dieser Achse bieten Etikett und Bereich nur
+    ihren Anfang an – Mitte und Ende wandern mit dem Objekt.
     """
-    frames = [area, *([label] if label else []), *targets]
+    sheets = [area, *([label] if label is not None else [])]
+    x_lines = [v for r in sheets for v in ((r.x,) if grow == "x" else (r.x, r.cx, r.right))]
+    y_lines = [v for r in sheets for v in ((r.y,) if grow == "y" else (r.y, r.cy, r.bottom))]
     dx, x_guides = _snap_axis((moving.x, moving.cx, moving.right),
-                              [v for r in frames for v in (r.x, r.cx, r.right)], tolerance_mm)
+                              x_lines + [v for r in targets for v in (r.x, r.cx, r.right)],
+                              tolerance_mm)
     dy, y_guides = _snap_axis((moving.y, moving.cy, moving.bottom),
-                              [v for r in frames for v in (r.y, r.cy, r.bottom)], tolerance_mm)
+                              y_lines + [v for r in targets for v in (r.y, r.cy, r.bottom)],
+                              tolerance_mm)
     return Snap(dx, dy, [("x", v) for v in x_guides] + [("y", v) for v in y_guides])
 
 
@@ -132,7 +150,7 @@ def align(rects: list[Rect], mode: str, area: Rect | None = None) -> list[Rect]:
         if len(rects) < 2:
             return list(rects)
         area = bounds(rects)
-    place = {
+    moved_to = {
         "left": lambda r: r.at(area.x, r.y),
         "hcenter": lambda r: r.at(area.cx - r.w / 2, r.y),
         "right": lambda r: r.at(area.right - r.w, r.y),
@@ -140,7 +158,7 @@ def align(rects: list[Rect], mode: str, area: Rect | None = None) -> list[Rect]:
         "vcenter": lambda r: r.at(r.x, area.cy - r.h / 2),
         "bottom": lambda r: r.at(r.x, area.bottom - r.h),
     }[mode]
-    return [place(r) for r in rects]
+    return [moved_to(r) for r in rects]
 
 
 def match_size(rects: list[Rect], mode: str) -> list[Rect]:
@@ -155,12 +173,21 @@ def match_size(rects: list[Rect], mode: str) -> list[Rect]:
     return [replace(r, w=ref.w if w else r.w, h=ref.h if h else r.h) for r in rects]
 
 
-def maximize(rect: Rect, area: Rect) -> Rect:
-    """Größtmöglich in ``area`` bei gleichem Seitenverhältnis, mittig darin."""
+def maximize(rect: Rect, area: Rect, grow: str | None = None) -> Rect:
+    """Größtmöglich in ``area`` bei gleichem Seitenverhältnis, mittig darin.
+
+    ``grow`` (``growing_axis``): In dieser Achse wächst das Etikett mit – dort begrenzt die
+    Fläche nicht, das Rechteck wird nur quer eingepasst und behält seinen Anfang.
+    Eine leere Fläche (Breite oder Höhe ≤ 0) lässt das Rechteck unverändert.
+    """
+    if area.w <= 0 or area.h <= 0:
+        return rect
     if rect.w > 0 and rect.h > 0:
-        factor = min(area.w / rect.w, area.h / rect.h)
+        factor = {"x": area.h / rect.h, "y": area.w / rect.w}.get(
+            grow, min(area.w / rect.w, area.h / rect.h))
         rect = replace(rect, w=rect.w * factor, h=rect.h * factor)
-    return rect.at(area.cx - rect.w / 2, area.cy - rect.h / 2)
+    return rect.at(rect.x if grow == "x" else area.cx - rect.w / 2,
+                   rect.y if grow == "y" else area.cy - rect.h / 2)
 
 
 # --- Objekte ----------------------------------------------------------------------
@@ -177,12 +204,21 @@ def place(obj: TextObject, rect: Rect) -> TextObject:
 def fix_size(obj: TextObject, base_pt: float) -> TextObject:
     """Kopie mit der wirksamen Grundgröße ``base_pt`` als fester Schriftgröße, ohne Rahmengröße.
 
-    Stücke mit eigener Größe behalten ihr Verhältnis; das Bild bleibt gleich.
+    Stücke mit eigener Größe behalten ihr Verhältnis; das Bild bleibt gleich: Jede Größe
+    bekommt die kürzeste Dezimalzahl (ab 0,1 pt), die dieselbe Druckgröße ergibt.
     """
-    base_pt = round(base_pt, 1)            # wie scale_text; Stücke rechnen mit derselben Größe
-    factor = 1.0 if obj.size_pt is None else base_pt / obj.size_pt
-    fixed = scale_text(obj, factor, base_pt=base_pt)
-    fixed.fit = False
+    base_dots = round(base_pt * PT)
+    fixed = copy.deepcopy(obj)
+    fixed.size_pt, fixed.fit = round(base_pt, 1), False   # ergibt wieder base_dots
+    for old, new in zip((s for p in obj.paragraphs for s in p.spans),
+                        (s for p in fixed.paragraphs for s in p.spans)):
+        if old.size_pt is None:
+            continue
+        dots = _span_dots(obj, old, base_dots)
+        exact = old.size_pt * fixed.size_pt / (obj.size_pt or REF_PT)
+        new.size_pt = next((value for value in (round(exact, d) for d in range(1, 7))
+                            if _span_dots(fixed, replace(new, size_pt=value), base_dots) == dots),
+                           exact)
     return fixed
 
 
@@ -273,16 +309,21 @@ def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> 
         if base_pt is None:
             raise ValueError("Text mit automatischer Schriftgröße braucht die wirksame "
                              "Grundgröße (base_pt) zum Skalieren.")
+        if base_pt <= 0:
+            raise ValueError(f"Schriftgröße muss größer als 0 sein, nicht {base_pt!r}.")
         for span in spans:                     # Bezug 12 pt → Bezug Grundgröße
             span.size_pt = span.size_pt * base_pt / REF_PT
         scaled.size_pt = base_pt
     sizes = [scaled.size_pt, *(span.size_pt for span in spans)]
+    if min(sizes) <= 0:
+        raise ValueError(f"Schriftgröße muss größer als 0 sein, nicht {min(sizes)!r}.")
     low, high = MIN_PT / min(sizes), MAX_PT / max(sizes)
-    if low <= high:
-        factor = min(max(factor, low), high)
+    if low <= high:                            # Grenze nur in Richtung des Faktors
+        factor = min(max(factor, min(low, 1.0)), max(high, 1.0))
 
     def resize(size: float) -> float:
-        return min(max(round(size * factor, 1), MIN_PT), MAX_PT)
+        # Größen außerhalb 4–100 pt werden nicht hineingezogen, nur nicht weiter hinaus
+        return min(max(round(size * factor, 1), min(MIN_PT, size)), max(MAX_PT, size))
 
     scaled.size_pt = resize(scaled.size_pt)
     for span in spans:
@@ -290,17 +331,33 @@ def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> 
     return scaled
 
 
-def objects_outside(doc: Document, model: str = "QL-600") -> list[int]:
-    """Indizes der Objekte, die über das Etikett ragen (leere Objekte zählen nicht)."""
-    width, height = label_size(doc, model)
+def outside_indices(rendered: list[RenderedObject], size: tuple[int, int],
+                    objects: list[TextObject] | None = None) -> list[int]:
+    """Indizes der schon gerenderten Objekte, deren Rahmen über das Etikett ``size``
+    (Druckpunkte in Leserichtung, wie ``render.label_size``) ragt – ohne neu zu rendern.
+
+    Leere Objekte zählen nicht: Rahmen ohne Fläche bzw. ``obj.is_empty()``, falls
+    ``objects`` angegeben ist.
+    """
+    width, height = size
     outside = []
-    for i, obj in enumerate(doc.objects):
-        if obj.is_empty():
+    for i, r in enumerate(rendered):
+        if r.w == 0 or r.h == 0 or (objects is not None and objects[i].is_empty()):
             continue
-        r = render_object(obj, doc, model)
         if r.x < 0 or r.y < 0 or r.x + r.w > width or r.y + r.h > height:
             outside.append(i)
     return outside
+
+
+def objects_outside(doc: Document, model: str = "QL-600") -> list[int]:
+    """Indizes der Objekte, die über das Etikett ragen (leere Objekte zählen nicht).
+
+    Wirft wie ``render_document`` ``TextTooLarge``, wenn ein Objekt ohne Position bei fester
+    Größe nicht passt – dann gibt es kein Druckbild, nach dem man fragen könnte.
+    """
+    size = label_size(doc, model)
+    rendered = [render_object(obj, doc, model) for obj in doc.objects]
+    return outside_indices(rendered, size, doc.objects)
 
 
 # --- Reiter „Layout“ ----------------------------------------------------------------
@@ -344,20 +401,40 @@ def maximize_object(obj: TextObject, rendered: RenderedObject, area: Rect, doc: 
     Mit fester Rahmengröße wird der Rahmen gesetzt; sonst wird die Schrift skaliert und
     das Ergebnis gerendert, damit es sicher hineinpasst und genau mittig steht.
     """
+    grow = growing_axis(doc)
     if obj.fit:
-        return set_frame(obj, _rounded(maximize(exact_rect(obj, rendered), area)), rendered)
+        return set_frame(obj, _rounded(maximize(exact_rect(obj, rendered), area, grow)),
+                         rendered)
     shown = object_rect(rendered)
-    factor = maximize(shown, area).w / shown.w if shown.w else 1.0
+    target = maximize(shown, area, grow)
+    factor = target.w / shown.w if shown.w else 1.0
     scaled = scale_text(obj, factor, base_pt=rendered.base_pt)
-    for _ in range(5):                       # Schrift wächst nicht ganz linear: nachregeln
+    best = None
+    for _ in range(6):                       # Schrift wächst nicht ganz linear: nachregeln
         scaled.x_mm, scaled.y_mm = area.x, area.y
         size = object_rect(render_object(scaled, doc, model))
-        over = min(area.w / size.w, area.h / size.h) if size.w and size.h else 1.0
-        if over >= 1 or scaled.size_pt <= MIN_PT:
+        if not (size.w and size.h):
+            over = 1.0
+        else:                                # in der mitwachsenden Achse begrenzt nichts
+            over = {"x": area.h / size.h, "y": area.w / size.w}.get(
+                grow, min(area.w / size.w, area.h / size.h))
+        if over >= 1:
+            best = (scaled, size)            # passt – weiter nur, wenn deutlich Platz bleibt
+        if 1 <= over <= 1.01 or over < 1 and scaled.size_pt <= MIN_PT:
             break
-        scaled = scale_text(scaled, over * 0.995)
-    return place(scaled, _rounded(Rect(area.cx - size.w / 2, area.cy - size.h / 2,
+        rescaled = scale_text(scaled, over * 0.995)
+        if _sizes_of(rescaled) == _sizes_of(scaled):
+            break                            # Grenze 4–100 pt erreicht
+        scaled = rescaled
+    scaled, size = best or (scaled, size)
+    start = exact_rect(obj, rendered)
+    return place(scaled, _rounded(Rect(start.x if grow == "x" else area.cx - size.w / 2,
+                                       start.y if grow == "y" else area.cy - size.h / 2,
                                        size.w, size.h)))
+
+
+def _sizes_of(obj: TextObject) -> list[float | None]:
+    return [obj.size_pt, *(span.size_pt for para in obj.paragraphs for span in para.spans)]
 
 
 def rotate(obj: TextObject, rendered: RenderedObject, degrees: int) -> TextObject:

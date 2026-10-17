@@ -33,7 +33,8 @@ rotation: int = 0              # 0 | 90 | 180 | 270, Grad im Uhrzeigersinn
 ```
 
 - **Koordinaten** in mm in Leserichtung, Ursprung = linke obere Ecke des Etiketts (inkl. Rand). Bei „horizontal“ ist x die Bandlaufrichtung (wie die gedrehte Arbeitsfläche).
-- **Ohne Position** (`x_mm is None`): Objekt mittig auf dem Etikett – genau wie heute (CLI, Altbestand). Ein einzelnes Objekt ohne Position ergibt **pixelgleich** das heutige Bild (geprüft gegen den eingefrorenen Renderer `tests/_render_before_3d.py`, auch per Zufallstest). Einzige bekannte Abweichung: Text, der schon in der kleinsten Schriftgröße links/oben über das Etikett ragt – Pillow zeichnet an negativen Koordinaten um einen Punkt verschoben; der Teil ist ohnehin abgeschnitten.
+- **Positioniert**, sobald `x_mm` **oder** `y_mm` gesetzt ist; die fehlende Koordinate zählt als 0.
+- **Ohne Position** (`x_mm` und `y_mm` None): Objekt mittig auf dem Etikett – genau wie heute (CLI, Altbestand). Ein einzelnes Objekt ohne Position ergibt **pixelgleich** das heutige Bild (geprüft gegen den eingefrorenen Renderer `tests/_render_before_3d.py`, auch per Zufallstest). Einzige bekannte Abweichung: Text, der schon in der kleinsten Schriftgröße links/oben über das Etikett ragt – Pillow zeichnet an negativen Koordinaten um einen Punkt verschoben; der Teil ist ohnehin abgeschnitten.
 - **Ohne feste Rahmengröße:** Rahmen = Größe des Textes. Ein positioniertes Objekt hat immer eine feste Schriftgröße (`size_pt` gesetzt); beim ersten Verschieben eines automatisch großen Objekts setzt die GUI die aktuell wirksame Größe als `size_pt` (Kern liefert sie, siehe `RenderedObject.base_pt`).
 - **Mit fester Rahmengröße** (`fit`): Text wird in den Rahmen `w_mm × h_mm` eingepasst (Verhältnisse bleiben, wie heute); Textposition wirkt innerhalb des Rahmens. `w_mm/h_mm = None` = bedruckbarer Bereich (heutiges Verhalten) – außer auf Endlosband mit automatischer Länge in Bandlaufrichtung: Dort ist das fehlende Maß unbegrenzt, der Text wird nur quer eingepasst und der Rahmen ist in Bandlaufrichtung so lang wie der Text (sonst würde das Etikett die Höchstlänge).
 - **Drehen:** Das Objektbild wird gedreht; Rahmenbreite und -höhe tauschen bei 90/270. Die Position bleibt die linke obere Ecke des gedrehten Rahmens. Ein Objekt ohne Position wird ungedreht in der Etikettfläche ausgerichtet – bei 90/270 mit getauschter Breite/Höhe und getauschtem Innenrand – und dann mitsamt dieser Fläche gedreht (bei 180 steht linksbündiger Text also am anderen Rand); die automatische Länge rechnet mit derselben Box (nichts wird abgeschnitten).
@@ -52,17 +53,20 @@ rotation: int = 0              # 0 | 90 | 180 | 270, Grad im Uhrzeigersinn
 Rechtecke als `Rect(x, y, w, h)` in mm.
 
 - `object_rect(rendered) -> Rect`, `printable_area(doc, model) -> Rect` (Etikett minus Ränder, quer `render.MARGIN`).
-- `snap(moving: Rect, targets: list[Rect], area: Rect, tolerance_mm) -> (dx, dy, guides)`: Kanten und Mitte des bewegten Rechtecks rasten an Etikettkanten/-mitte, bedruckbarem Bereich und Kanten/Mitten anderer Objekte ein; `guides` = Hilfslinien (senkrecht x / waagrecht y) zum Anzeigen. Toleranz kommt von der GUI (6 Bildschirmpixel → mm je nach Zoom).
+- `growing_axis(doc) -> "x" | "y" | None`: Achse, in der das Etikett mitwächst (Endlosband mit automatischer Länge; Bandlaufrichtung in Leserichtung). Dort wandern Etikettende und -mitte mit dem Objekt.
+- `snap(moving: Rect, targets: list[Rect], area: Rect, tolerance_mm, label=None, grow=None) -> (dx, dy, guides)`: Kanten und Mitte des bewegten Rechtecks rasten an Etikettkanten/-mitte, bedruckbarem Bereich und Kanten/Mitten anderer Objekte ein; `guides` = Hilfslinien (senkrecht x / waagrecht y) zum Anzeigen. Toleranz kommt von der GUI (6 Bildschirmpixel → mm je nach Zoom). Mit `grow` bieten Etikett und Bereich in dieser Achse nur ihren Anfang als Einrastziel an (Ende und Mitte wandern mit).
 - `align(rects, mode, area=None) -> list[Rect]`: `mode` ∈ left, hcenter, right, top, vcenter, bottom; mit `area` am Papier (bedruckbarer Bereich), sonst aneinander (Bezug: äußerste Kante bzw. Mitte der Auswahl).
-- `match_size(rects, mode) -> list[Rect]`: `mode` ∈ same (Größe), width, height – Bezug ist das zuerst gewählte Objekt; `maximize(rect, area) -> Rect` (auf bedruckbaren Bereich, Seitenverhältnis bleibt).
-- `scale_text(obj, factor) -> TextObject`: alle Größen (Grundgröße und Stücke) × factor, begrenzt auf 4–100 pt (Ecke ziehen, Größe angleichen bei Text ohne feste Rahmengröße).
-- `objects_outside(doc, model) -> list[int]`: Indizes der Objekte, die über das Etikett ragen.
+- `match_size(rects, mode) -> list[Rect]`: `mode` ∈ same (Größe), width, height – Bezug ist das zuerst gewählte Objekt; `maximize(rect, area, grow=None) -> Rect` (auf bedruckbaren Bereich, Seitenverhältnis bleibt; mit `grow` nur quer eingepasst, der Anfang in Bandlaufrichtung bleibt – das Etikett wächst mit; Fläche mit Breite/Höhe ≤ 0 → Rechteck unverändert). „Am Papier ausrichten“ nutzt in Bandlaufrichtung die aktuelle Etikettlänge.
+- `scale_text(obj, factor) -> TextObject`: alle Größen (Grundgröße und Stücke) × factor, begrenzt auf 4–100 pt (Ecke ziehen, Größe angleichen bei Text ohne feste Rahmengröße). Begrenzt wird nur in Richtung des Faktors: Größen außerhalb 4–100 pt werden nicht hineingezogen (Faktor 1 ändert nichts), nur nicht weiter hinausgeschoben. Größe ≤ 0 → `ValueError`.
+- `fix_size(obj, base_pt)`: wirksame Größe einfrieren – Stücke mit eigener Größe werden mitskaliert, jede Größe bekommt die kürzeste Dezimalzahl, die dieselbe Druckgröße ergibt (Bild bleibt pixelgleich).
+- `outside_indices(rendered, size, objects=None) -> list[int]`: Objekte, deren Rahmen über das Etikett ragt – aus schon gerenderten Objekten, ohne neu zu rendern (für die GUI je Render).
+- `objects_outside(doc, model) -> list[int]`: dasselbe für ein Dokument (rendert selbst). Wirft wie `render_document` `TextTooLarge`, wenn ein Objekt ohne Position bei fester Größe nicht passt.
 
 ### Tastenkürzel (`shortcuts.py`, neu, ohne Qt)
 
 - `ACTIONS`: Verzeichnis aller Aktionen – `Action(id, name, default, scope)`; `scope` ∈ global, canvas, text. Erfasst alle Kürzel der App: Drucken, Zoom, B/I/U, Auswahl/Text-Werkzeug, Ausschneiden/Kopieren/Einfügen/Duplizieren, Löschen, Rückgängig/Wiederherstellen, Pfeiltasten (fein/grob), Ausrichten, Drehen, Reihenfolge, Alles auswählen.
 - `effective(overrides) -> dict[id, str]`, `conflicts(mapping) -> list[(seq, [ids])]` (gleiches Kürzel im selben Bereich bzw. global gegen jeden Bereich), `validate(overrides) -> (clean, warnings)` (unbekannte IDs/ungültige Kürzel → Warnung, ignoriert).
-- Kürzel als Text im Qt-Format („Ctrl+Shift+Z“, „Del“); geprüft wird in der GUI mit `QKeySequence`, im Kern nur Form/Duplikate.
+- Kürzel als Text im Qt-Format („Ctrl+Shift+Z“, „Del“); geprüft wird in der GUI mit `QKeySequence`, im Kern nur Form/Duplikate. „++“ ist ungültig (nur „Ctrl++“ o. ä.); Nicht-Texte gelten als nicht wohlgeformt und werden übergangen.
 
 ### Einstellungen
 

@@ -295,9 +295,10 @@ def test_scale_text_at_limit_keeps_sizes():
 
 
 def test_scale_text_clamps_each_size_when_ratio_too_wide():
-    # Größen außerhalb 4–100 (z. B. von Hand bearbeitet): jede Größe für sich begrenzt
+    # Größen außerhalb 4–100 (z. B. von Hand bearbeitet): jede Größe für sich begrenzt,
+    # aber nicht in den Bereich hineingezogen
     obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=100)])], size_pt=2)
-    assert _sizes(layout.scale_text(obj, 1.5)) == (MIN_PT, [None, MAX_PT])
+    assert _sizes(layout.scale_text(obj, 1.5)) == (3, [None, MAX_PT])
 
 
 def test_scale_text_rounds_to_tenth():
@@ -616,3 +617,109 @@ def test_rotate_positions_centered_object():
 def test_reorder(indices, step, order, moved):
     items, new = layout.reorder(list("ABCD"), indices, step)
     assert "".join(items) == order and new == moved
+
+
+# --- Randfälle (Fix-Runde) ----------------------------------------------------------
+def test_fix_size_of_auto_object_with_span_sizes_keeps_image():
+    obj = TextObject([Paragraph([Span("klein", size_pt=10), Span("GROSS", size_pt=30)])])
+    doc = Document("62", objects=[obj])
+    before = render_document(doc)
+    fixed = layout.fix_size(obj, render_object(obj, doc).base_pt)
+    assert fixed.size_pt is not None and not fixed.fit
+    assert render_document(Document("62", objects=[fixed])).tobytes() == before.tobytes()
+
+
+@pytest.mark.parametrize("size", [8, 20, 33])
+def test_fix_size_of_fit_object_with_span_sizes_keeps_image(size):
+    obj = TextObject([Paragraph([Span("klein", size_pt=10), Span("GROSS", size_pt=30)])],
+                     size_pt=size, fit=True)
+    doc = Document("62", objects=[obj])
+    fixed = layout.fix_size(obj, render_object(obj, doc).base_pt)
+    assert render_document(Document("62", objects=[fixed])).tobytes() == \
+        render_document(doc).tobytes()
+
+
+@pytest.mark.parametrize("size", [0, -3])
+def test_scale_text_rejects_non_positive_sizes(size):
+    obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=size)])], size_pt=10)
+    with pytest.raises(ValueError, match="Schriftgröße"):
+        layout.scale_text(obj, 2)
+    with pytest.raises(ValueError, match="Schriftgröße"):
+        layout.scale_text(TextObject("A", size_pt=size), 2)
+    with pytest.raises(ValueError, match="Schriftgröße"):
+        layout.scale_text(TextObject("A"), 2, base_pt=size)
+
+
+def test_scale_text_factor_one_keeps_small_sizes():
+    obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=3)])], size_pt=10)
+    assert _sizes(layout.scale_text(obj, 1)) == (10, [None, 3])
+    assert _sizes(layout.scale_text(obj, 0.5)) == (10, [None, 3])   # kleiner geht nicht
+    assert _sizes(layout.scale_text(obj, 2)) == (20, [None, 6])
+
+
+def test_scale_text_never_pushes_size_outside_further():
+    obj = TextObject("A", size_pt=2)
+    assert layout.scale_text(obj, 1).size_pt == 2
+    assert layout.scale_text(obj, 1.5).size_pt == 3
+
+
+@pytest.mark.parametrize("area", [Rect(0, 0, 0, 10), Rect(0, 0, 10, -1)])
+def test_maximize_into_empty_area_keeps_rect(area):
+    assert layout.maximize(Rect(3, 4, 5, 6), area) == Rect(3, 4, 5, 6)
+
+
+def test_maximize_on_growing_axis_fits_across_only():
+    # Endlosband mit automatischer Länge („y“ wächst): nur die Breite begrenzt
+    r = layout.maximize(Rect(10, 30, 10, 10), _AREA, grow="y")
+    assert _t(r) == _approx(Rect(_AREA.x, 30, _AREA.w, _AREA.w))
+    r = layout.maximize(Rect(30, 10, 10, 10), _AREA, grow="x")
+    assert _t(r) == _approx(Rect(30, _AREA.y, _AREA.h, _AREA.h))
+
+
+@pytest.mark.parametrize("doc, axis", [
+    (Document("62"), "y"), (Document("62", orientation="horizontal"), "x"),
+    (Document("62", length_mm=40), None), (Document("62x29"), None)])
+def test_growing_axis(doc, axis):
+    assert layout.growing_axis(doc) == axis
+
+
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+def test_maximize_object_on_auto_length_fills_across(orientation):
+    obj = TextObject("AB\nCD", size_pt=6, x_mm=2, y_mm=2)
+    doc = Document("29", orientation=orientation, objects=[obj])
+    area = layout.printable_area(doc)
+    big = layout.maximize_object(obj, render_object(obj, doc), area, doc)
+    doc.objects = [big]
+    r = layout.object_rect(render_object(big, doc))
+    across, room = (r.w, area.w) if orientation == "vertical" else (r.h, area.h)
+    along, old_room = (r.h, area.h) if orientation == "vertical" else (r.w, area.w)
+    assert across == pytest.approx(room, rel=0.06) and across <= room + 0.1
+    assert along > old_room                         # Etikett wächst mit, statt zu begrenzen
+    assert (big.x_mm, big.y_mm)[orientation == "vertical"] == pytest.approx(2)  # Anfang bleibt
+
+
+def test_snap_on_growing_axis_ignores_moving_end_and_center():
+    area, label = Rect(1, 1, 60, 30), Rect(0, 0, 62, 32)
+    moving = Rect(10, 24.5, 10, 6)                 # Unterkante 30,5 nahe area.bottom (31)
+    assert layout.snap(moving, [], area, 2, label=label).dy != 0
+    s = layout.snap(moving, [], area, 2, label=label, grow="y")
+    assert s.dy == 0 and not [g for g in s.guides if g[0] == "y"]
+    near_center = Rect(10, 13.5, 10, 6)            # Mitte 16.5 nahe label.cy 16
+    assert layout.snap(near_center, [], area, 1, label=label, grow="y").dy == 0
+    top = Rect(10, 1.5, 10, 6)                      # Anfang bleibt Einrastziel
+    assert layout.snap(top, [], area, 1, label=label, grow="y").dy == pytest.approx(-0.5)
+
+
+def test_outside_indices_from_rendered_objects():
+    rendered = [RenderedObject(None, 10, 10, 20, 20, 12.0),
+                RenderedObject(None, 90, 10, 20, 20, 12.0),
+                RenderedObject(None, -1, 10, 20, 20, 12.0),
+                RenderedObject(None, 500, 500, 0, 0, 12.0)]       # leer
+    assert layout.outside_indices(rendered, (100, 50)) == [1, 2]
+
+
+def test_objects_outside_raises_text_too_large_like_rendering():
+    from labelwerk.render import TextTooLarge
+    doc = Document("29", objects=[TextObject("W" * 60, size_pt=40)])
+    with pytest.raises(TextTooLarge):
+        layout.objects_outside(doc)

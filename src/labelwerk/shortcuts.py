@@ -84,9 +84,13 @@ def action(action_id: str) -> Action:
 
 # --- Form ---------------------------------------------------------------------------
 def _split(seq: str) -> tuple[list[str], str]:
-    """Kürzel in Umschalttasten und Taste zerlegen („Ctrl++“ = Strg und Plus)."""
-    if seq.endswith("++") or seq == "+":
-        return (seq[:-2].split("+") if len(seq) > 2 else []), "+"
+    """Kürzel in Umschalttasten und Taste zerlegen („Ctrl++“ = Strg und Plus).
+
+    „++“ ergibt eine leere Umschalttaste und ist damit ungültig."""
+    if seq == "+":
+        return [], "+"
+    if seq.endswith("++"):
+        return seq[:-2].split("+"), "+"
     *mods, key = seq.split("+")
     return mods, key
 
@@ -104,8 +108,8 @@ def _parse(seq: str) -> tuple[frozenset[str], str] | None:
 
 
 def is_well_formed(seq: str) -> bool:
-    """True für ein Kürzel in Qt-Form oder „“ (kein Kürzel)."""
-    return seq == "" or _parse(seq) is not None
+    """True für ein Kürzel in Qt-Form oder „“ (kein Kürzel); kein Text = nicht wohlgeformt."""
+    return isinstance(seq, str) and (seq == "" or _parse(seq) is not None)
 
 
 def normalize(seq: str) -> str:
@@ -114,7 +118,7 @@ def normalize(seq: str) -> str:
     ``ValueError`` bei ungültiger Form."""
     if seq == "":
         return ""
-    parsed = _parse(seq)
+    parsed = _parse(seq) if isinstance(seq, str) else None
     if parsed is None:
         raise ValueError(f"Ungültiges Tastenkürzel {seq!r}")
     mods, key = parsed

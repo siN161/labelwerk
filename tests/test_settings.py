@@ -168,3 +168,11 @@ def test_settings_default_shortcuts_not_shared():
     a, b = Settings(), Settings()
     a.shortcuts["file.print"] = "F2"
     assert b.shortcuts == {}
+
+
+def test_shortcuts_null_keeps_defaults_with_warning(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"shortcuts": None, "label_id": "29"}))
+    s = load_settings(path)
+    assert s.shortcuts == {} and s.label_id == "29"
+    assert len(s.warnings) == 1 and "shortcuts" in s.warnings[0]

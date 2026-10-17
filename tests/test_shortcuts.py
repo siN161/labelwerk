@@ -101,7 +101,7 @@ def test_well_formed(seq):
 
 
 @pytest.mark.parametrize("seq", ["Ctrl+", "+B", "Ctrl++B", "Strg+B", "Ctrl+Ctrl+B", "Ctrl+Shift",
-                                 "Ctrl+B+C", " ", "Ctrl+ +B"])
+                                 "Ctrl+B+C", " ", "Ctrl+ +B", "++", "+++", "Ctrl+++"])
 def test_malformed(seq):
     assert not shortcuts.is_well_formed(seq)
 
@@ -176,3 +176,15 @@ def test_validate_rejects_non_dict():
 def test_action_is_immutable():
     with pytest.raises(AttributeError):
         Action("a.b", "A", "", "global").default = "X"
+
+
+@pytest.mark.parametrize("seq", [None, 5, ["Ctrl+B"], {"a": 1}])
+def test_non_strings_are_not_well_formed(seq):
+    assert not shortcuts.is_well_formed(seq)
+    with pytest.raises(ValueError, match="Ungültiges Tastenkürzel"):
+        shortcuts.normalize(seq)
+
+
+def test_conflicts_skip_non_strings():
+    mapping = shortcuts.effective({"edit.copy": None, "edit.cut": 5})
+    assert shortcuts.conflicts({**mapping, "edit.paste": ["Ctrl+V"]}) == []
