@@ -21,6 +21,11 @@ def load_theme(name: str = "rawblock") -> str:
     return qss.replace("url(@THEME@/", 'url("' + str(folder).replace("\\", "/") + "/").replace(".svg)", '.svg")')
 
 
+def apply_theme(app: QApplication, name: str) -> None:
+    """„rawblock“ = eigenes Stylesheet, „classic“ = reiner Qt-Systemstil (ohne Stylesheet)."""
+    app.setStyleSheet(load_theme() if name == "rawblock" else "")
+
+
 def apply_identity(app: QApplication) -> None:
     """Name, App-ID (Wayland: Zuordnung zum Starter-Eintrag) und Fenstersymbol setzen."""
     app.setApplicationName(APP_NAME)
@@ -43,8 +48,8 @@ def main() -> int:
     app = QApplication(sys.argv)
     apply_identity(app)
     install_translations(app)
-    app.setStyleSheet(load_theme())
     window = MainWindow()
+    apply_theme(app, window.settings.theme)
     window.show()
     return app.exec()
 

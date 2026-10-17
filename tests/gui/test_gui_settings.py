@@ -101,3 +101,42 @@ def test_dialog_keeps_fractional_font_size(qtbot):
     dialog = SettingsDialog(Settings(font_size_pt=10.5))
     qtbot.addWidget(dialog)
     assert dialog.values().font_size_pt == 10.5
+
+
+def test_dialog_theme_roundtrip(qtbot):
+    dialog = SettingsDialog(Settings(theme="classic"))
+    qtbot.addWidget(dialog)
+    assert dialog.theme.currentText() == "Klassisch"
+    assert dialog.values().theme == "classic"
+    dialog.theme.setCurrentIndex(dialog.theme.findData("rawblock"))
+    assert dialog.values().theme == "rawblock"
+
+
+def test_apply_theme_sets_and_clears_stylesheet(qapp):
+    from labelwerk.gui.app import apply_theme
+    try:
+        apply_theme(qapp, "rawblock")
+        assert qapp.styleSheet() != ""
+        apply_theme(qapp, "classic")
+        assert qapp.styleSheet() == ""
+    finally:
+        qapp.setStyleSheet("")
+
+
+def test_saving_dialog_applies_theme_and_icons(qtbot, qapp, monkeypatch):
+    win = MainWindow()
+    qtbot.addWidget(win)
+
+    def fake_exec(dialog):
+        dialog.theme.setCurrentIndex(dialog.theme.findData("classic"))
+        dialog.accept()
+        return QDialog.DialogCode.Accepted
+    monkeypatch.setattr(SettingsDialog, "exec", fake_exec)
+    try:
+        qapp.setStyleSheet("QWidget { color: red; }")
+        win.settings_action.trigger()
+        assert qapp.styleSheet() == ""
+        assert win.settings.theme == "classic"
+        assert win.panel("text").dark_checked_icons is False
+    finally:
+        qapp.setStyleSheet("")

@@ -115,3 +115,17 @@ def test_font_family_is_stripped(tmp_path):
     path = tmp_path / "s.json"
     path.write_text('{"font_family": "  Liberation Sans "}', encoding="utf-8")
     assert load_settings(path).font_family == "Liberation Sans"
+
+
+def test_theme_default_and_roundtrip(tmp_path):
+    assert Settings().theme == "rawblock"
+    path = tmp_path / "s.json"
+    save_settings(Settings(theme="classic"), path)
+    assert load_settings(path).theme == "classic"
+
+
+def test_invalid_theme_falls_back_with_warning(tmp_path):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"theme": "neon"}))
+    s = load_settings(path)
+    assert s.theme == "rawblock" and any("theme" in w for w in s.warnings)
