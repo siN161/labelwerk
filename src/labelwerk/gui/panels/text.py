@@ -536,13 +536,13 @@ class TextPanel(Panel):
             document.clear()
             document.setUndoRedoEnabled(True)
             self.fit.setChecked(False)
+            # keine Schrift anzeigen, die nicht gilt – ohne blockierte Signale, sonst hält
+            # QFontComboBox die alte Schrift intern fest und zeigt sie beim Wiederwählen nicht
+            for combo in (self.family, self.size):
+                combo.setCurrentIndex(-1)
+                combo.setEditText("")
         finally:
             self._updating = False
-        for combo in (self.family, self.size):         # keine Schrift anzeigen, die nicht gilt
-            combo.blockSignals(True)
-            combo.setCurrentIndex(-1)
-            combo.setEditText("")
-            combo.blockSignals(False)
         self.show_frame(None)
 
     # --- Position -----------------------------------------------------------

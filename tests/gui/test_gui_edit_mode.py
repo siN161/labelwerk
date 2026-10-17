@@ -750,3 +750,18 @@ def test_start_edit_shortcuts_are_in_the_directory():
     assert shortcuts.action("text.start_edit").scope == "canvas"
     enter = shortcuts.action("text.start_edit_enter")
     assert enter.fixed and enter.default == "Return"
+
+
+def test_font_is_shown_again_after_deselect_and_reselect(qtbot):
+    # Abwählen leert das Schriftfeld; erneutes Wählen muss die Schrift wieder zeigen
+    win = MainWindow(settings=Settings(check_media_on_start=False, font_family="DejaVu Sans"))
+    qtbot.addWidget(win)
+    win.show()
+    panel = win.panel("text")
+    win.canvas.text_requested.emit(5.0, 5.0)
+    QTest.keyClicks(panel.edit, "Test")
+    QTest.keyClick(panel.edit, Qt.Key.Key_Escape)
+    win.canvas.set_selection([])
+    assert panel.family.currentText() == ""
+    win.canvas.set_selection([0])
+    assert panel.family.currentText() == "DejaVu Sans"
