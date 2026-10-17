@@ -123,8 +123,13 @@ Umsetzung:
    - README: Kompatibilitätstabelle *geprüft* (QL-600 + DK-22205) / *sollte funktionieren* (62-mm-QL ohne Rot: QL-570/580N/700/710W/720NW …) / *nicht unterstützt*; nach Veröffentlichung Vorlage „Druckerbericht“ für Rückmeldungen.
    - Netzwerkdrucker (`tcp://IP`) in der GUI wählbar.
    - Später, nur mit Testgerät: breite QL-1050/1100 (102 mm), Zweifarbdruck QL-8xx (Objektfarbe), P-touch-Bandgeräte PT-… (TZe-Bänder).
-7. Paketierung: AppImage und/oder Flatpak (USB-Zugriff bei Flatpak beachten)
-8. Vor Veröffentlichung: README/Kommentare auf Englisch, LICENSE (GPLv3) prüfen, Repo öffentlich schalten.
+7. Übersetzungen (vor Veröffentlichung, mindestens **Englisch**):
+   - GUI: Qt-Übersetzungen (`self.tr(...)`/`QCoreApplication.translate`, `pyside6-lupdate` → `.ts`, `pyside6-lrelease` → `.qm`, `QTranslator` beim Start; Sprache aus dem System, wählbar in den Einstellungen).
+   - Kern und CLI: `gettext` (Meldungen wie `TextTooLarge`, Druckerfehler, CLI-Hilfe), gemeinsame Sprachwahl mit der GUI.
+   - Quellsprache festlegen (Deutsch beibehalten oder auf Englisch umstellen) – zusammen mit Punkt 9 (README/Kommentare auf Englisch) entscheiden.
+   - Tests: jede Meldung übersetzt (keine fehlenden Einträge), Layout hält längere Texte aus (Panels, Knöpfe).
+8. Paketierung: AppImage und/oder Flatpak (USB-Zugriff bei Flatpak beachten)
+9. Vor Veröffentlichung: README/Kommentare auf Englisch, LICENSE (GPLv3) prüfen, Repo öffentlich schalten.
    **Namen vorher festlegen** (danach teuer: PyPI-Name, Flatpak-ID `io.github.siN161.<name>`, Repo-Links). Kein „Brother“/„P-touch“/„QL“ im Produktnamen.
    Umbenennen – Checkliste:
    - Nur Anzeigename: `APP_NAME` in `src/labelwerk/desktop.py` (Fenster, Starter, CLI-Hilfe).
