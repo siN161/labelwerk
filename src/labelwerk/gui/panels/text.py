@@ -348,8 +348,10 @@ class TextPanel(Panel):
                 spans.append(_span("", self._props(block.charFormat()), base_pt))
             paragraphs.append(Paragraph(spans, align))
             block = block.next()
-        return TextObject(paragraphs, size_pt=base_pt, font_path=self.obj.font_path,
-                          fit=self.fit.isChecked())
+        obj = self.obj                 # Rahmen und Drehung bleiben beim Tippen erhalten
+        return TextObject(paragraphs, size_pt=base_pt, font_path=obj.font_path,
+                          fit=self.fit.isChecked(), x_mm=obj.x_mm, y_mm=obj.y_mm,
+                          w_mm=obj.w_mm, h_mm=obj.h_mm, rotation=obj.rotation)
 
     def _apply(self) -> None:
         if self._updating or self._formatting:

@@ -358,3 +358,99 @@ def test_objects_outside_auto_length_grows_instead():
 def test_objects_outside_ignores_empty_objects():
     doc = Document("62", length_mm=40, objects=[TextObject("", size_pt=12, x_mm=200, y_mm=200)])
     assert layout.objects_outside(doc) == []
+
+
+# --- Verschieben und Anfasser (Arbeitsfläche) ---------------------------------------
+def _rendered(x_mm, y_mm, w_mm, h_mm, base_pt=12.0):
+    """Gerendertes Objekt wie von render_object: Position und Größe auf Druckpunkte gerundet."""
+    dots = [round(v * DPI / 25.4) for v in (x_mm, y_mm, w_mm, h_mm)]
+    return RenderedObject(None, *dots, base_pt)
+
+
+def test_exact_rect_uses_model_position_and_fixed_frame():
+    obj = TextObject("A", size_pt=12, fit=True, x_mm=4, y_mm=5, w_mm=20, h_mm=8, rotation=90)
+    assert layout.exact_rect(obj, _rendered(4, 5, 8, 20)) == Rect(4, 5, 8, 20)   # gedreht
+    free = TextObject("A", size_pt=12, x_mm=4, y_mm=5)
+    rendered = _rendered(4, 5, 10, 3)
+    assert layout.exact_rect(free, rendered) == Rect(4, 5, _mm(rendered.w), _mm(rendered.h))
+    centered = TextObject("A")
+    assert _t(layout.exact_rect(centered, rendered)) == _t(layout.object_rect(rendered))
+
+
+def test_fix_size_freezes_effective_size_and_turns_fit_off():
+    obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=24)])], size_pt=12, fit=True)
+    fixed = layout.fix_size(obj, 18.04)
+    assert _sizes(fixed) == (18, [None, 36])               # Stück behält sein Verhältnis
+    assert not fixed.fit and obj.fit
+
+
+def test_move_shifts_model_position_by_exact_amount():
+    # Druckpunkte runden 4 mm auf 3,98 mm – die Verschiebung zählt, nicht der gerundete Wert
+    obj = TextObject("A", size_pt=12, x_mm=4, y_mm=5)
+    rendered = _rendered(4, 5, 10, 3)
+    moved = layout.move(obj, layout.object_rect(rendered).moved(-0.1, 1), rendered)
+    assert (moved.x_mm, moved.y_mm) == pytest.approx((3.9, 6))
+    assert (moved.size_pt, moved.fit, obj.x_mm) == (12, False, 4)
+
+
+@pytest.mark.parametrize("obj", [TextObject("Hallo"), TextObject("Hallo", size_pt=12, fit=True)],
+                         ids=["ohne Größe", "feste Rahmengröße"])
+def test_first_move_of_auto_object_keeps_its_image(obj):
+    doc = Document("62", objects=[obj])
+    before = render_object(obj, doc)
+    moved = layout.move(obj, layout.object_rect(before), before)
+    assert moved.positioned and not moved.auto
+    doc.objects = [moved]
+    after = render_object(moved, doc)
+    assert after.image.tobytes() == before.image.tobytes()
+    assert (after.x, after.y) == (before.x, before.y)
+
+
+def test_move_positioned_fit_object_keeps_frame():
+    obj = TextObject("A", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=20, h_mm=8)
+    rendered = _rendered(1, 1, 20, 8, base_pt=30)
+    moved = layout.move(obj, layout.object_rect(rendered).moved(3, 4), rendered)
+    assert (moved.x_mm, moved.y_mm, moved.w_mm, moved.h_mm, moved.fit) == \
+        pytest.approx((4, 5, 20, 8, True))
+    assert moved.size_pt == 12
+
+
+def test_resize_fit_object_changes_frame():
+    obj = TextObject("A", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=20, h_mm=8)
+    rendered = _rendered(1, 1, 20, 8, base_pt=30)
+    old = layout.object_rect(rendered)
+    for corner in (True, False):
+        new = Rect(old.x - 1, old.y, old.w + 5, old.h + 4)
+        resized = layout.resize(obj, new, rendered, corner=corner)
+        assert (resized.x_mm, resized.y_mm, resized.w_mm, resized.h_mm) == \
+            pytest.approx((0, 1, 25, 12))
+        assert resized.fit and resized.size_pt == 12
+
+
+def test_resize_corner_scales_text_without_frame():
+    obj = TextObject("A", size_pt=12, x_mm=1, y_mm=1)
+    rendered = _rendered(1, 1, 10, 5)
+    old = layout.object_rect(rendered)
+    bigger = Rect(old.x, old.y, old.w * 1.5, old.h * 1.5)
+    resized = layout.resize(obj, bigger, rendered, corner=True)
+    assert (resized.size_pt, resized.fit) == (18, False)
+    assert (resized.x_mm, resized.y_mm) == pytest.approx((1, 1))
+    assert resized.w_mm is None
+
+
+def test_resize_corner_of_auto_object_uses_effective_size():
+    rendered = _rendered(1, 1, 10, 5, base_pt=20)
+    old = layout.object_rect(rendered)
+    smaller = Rect(0, 0, old.w / 2, old.h / 2)
+    resized = layout.resize(TextObject("A"), smaller, rendered, corner=True)
+    assert (resized.size_pt, resized.x_mm, resized.y_mm) == (10, 0, 0)
+
+
+def test_resize_edge_turns_fixed_frame_on():
+    obj = TextObject("A", size_pt=12, x_mm=1, y_mm=1, rotation=90)
+    rendered = _rendered(1, 1, 5, 10)
+    old = layout.object_rect(rendered)
+    resized = layout.resize(obj, Rect(old.x, old.y, old.w, old.h + 8), rendered, corner=False)
+    assert resized.fit
+    assert (resized.x_mm, resized.y_mm, resized.w_mm, resized.h_mm) == \
+        pytest.approx((1, 1, old.h + 8, old.w), abs=0.001)             # ungedreht gespeichert

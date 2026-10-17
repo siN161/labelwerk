@@ -7,7 +7,7 @@ from labelwerk.document import Document, TextObject
 from labelwerk.gui.canvas import MM, Canvas
 from labelwerk.gui.main_window import MainWindow
 from labelwerk.labels import get_label
-from labelwerk.render import render_document
+from labelwerk.render import label_size, render_document, render_object
 from labelwerk.settings import Settings
 
 
@@ -55,7 +55,8 @@ def test_horizontal_caption_reads_length_first(qtbot):
     view = Canvas()
     qtbot.addWidget(view)
     doc = Document("62", length_mm=50, orientation="horizontal", objects=[TextObject("A")])
-    view.set_document(get_label("62"), render_document(doc), "horizontal")
+    view.set_document(get_label("62"), label_size(doc), [render_object(o, doc) for o in doc.objects],
+                      "horizontal")
     assert view._caption == "50,0 × 62 mm"
 
 

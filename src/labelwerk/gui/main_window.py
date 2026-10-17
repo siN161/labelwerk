@@ -1,6 +1,8 @@
 """Hauptfenster: Werkzeugleiste, Panel-Stapel, Arbeitsfläche, Statusleiste."""
 from __future__ import annotations
 
+import copy
+from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThreadPool, QTimer
@@ -10,11 +12,14 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox, QS
 
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
-from ..document import Document
+from ..document import Document, TextObject
 from ..labels import get_label
+from ..layout import Rect, move, objects_outside, printable_area, resize
 from ..printer import DEFAULT_MODEL
-from ..render import font_warnings, render_document
+from ..render import RenderedObject, compose, font_warnings, label_size, render_object
 from ..settings import Settings, load_settings, new_document
+from ..shortcuts import effective
+from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
 from .media_worker import MediaWorker
 from .print_worker import PrintWorker
@@ -24,6 +29,18 @@ from .tools import TOOLS, Tool
 RENDER_DELAY_MS = 150
 MEDIA_STATUS_MAX_PX = 360   # Rollen-Hinweis in der Fußzeile; Rest per „…“ und Tooltip
 PRINTER_POLL_MS = 2000     # Druckererkennung: nur Blick in /sys, kein USB-Zugriff
+NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit Umschalt
+_DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
+OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
+
+
+@dataclass
+class _Cached:
+    """Gerendertes Objekt samt Stand, aus dem es entstand (Neu-Rendern nur bei Änderung)."""
+    obj: TextObject            # hält das Objekt fest, damit seine id nicht neu vergeben wird
+    snapshot: TextObject
+    key: tuple
+    rendered: RenderedObject
 
 
 class MainWindow(QMainWindow):
@@ -36,8 +53,10 @@ class MainWindow(QMainWindow):
         self.doc = doc if doc is not None else new_document(self.settings)
         self.model = model
         self.image = None
+        self.rendered: list[RenderedObject] = []    # Objektbilder auf der Arbeitsfläche = im Druck
+        self._cache: dict[int, _Cached] = {}
         self._render_error: str | None = None
-        self._font_warning: str | None = None
+        self._hint: str | None = None               # Hinweis (ragt hinaus, Schrift ersetzt)
         self._print_signals = None
         self._media_signals = None
         self._printer_present = False
@@ -84,6 +103,10 @@ class MainWindow(QMainWindow):
         self.apply_theme_icons()
         self.canvas.length_changed.connect(self._on_length_dragged)
         self.canvas.drag_finished.connect(self.render_now)
+        self.canvas.objects_moved.connect(self._move_objects)
+        self.canvas.object_resized.connect(self._resize_object)
+        self.actions = build_actions(self, effective(self.settings.shortcuts))
+        self._connect_canvas_actions()
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -131,14 +154,33 @@ class MainWindow(QMainWindow):
     def panel(self, key: str):
         return self._panel_by_key[key]
 
+    def _connect_canvas_actions(self) -> None:
+        """Kürzel der Arbeitsfläche: Pfeiltasten, Löschen, Alles auswählen."""
+        for direction, (sx, sy) in _DIRECTIONS.items():
+            for suffix, step in NUDGE_MM.items():
+                action = self.actions[f"object.nudge_{direction}{suffix}"]
+                action.triggered.connect(
+                    lambda _=False, dx=sx * step, dy=sy * step: self.canvas.nudge(dx, dy))
+                self.canvas.addAction(action)
+        self.actions["edit.delete"].triggered.connect(self.delete_selected)
+        self.actions["edit.select_all"].triggered.connect(self.canvas.select_all)
+        self.canvas.addActions([self.actions["edit.delete"], self.actions["edit.select_all"]])
+
     # --- Rendern ----------------------------------------------------------
     def schedule_render(self) -> None:
         self._timer.start()
 
     def render_now(self) -> None:
         self._timer.stop()
+        if self.canvas.is_dragging():   # Ziehen nicht unterbrechen – nach dem Loslassen rendern
+            self._timer.start()
+            return
         try:
-            image = render_document(self.doc, self.model)
+            size = label_size(self.doc, self.model)
+            rendered = self._render_objects(size)
+            image = compose(rendered, size, self.doc.orientation)
+            area = printable_area(self.doc, self.model)
+            outside = objects_outside(self.doc, self.model)
         except ValueError as e:
             # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
             self._render_error = str(e)
@@ -148,16 +190,65 @@ class MainWindow(QMainWindow):
         if self._render_error is not None and self.result.text() == self._render_error:
             self._set_result("", "")   # nur den Renderfehler löschen, kein Druckergebnis
         self._render_error = None
-        if self._font_warning is not None and self.result.text() == self._font_warning:
-            self._set_result("", "")   # alten Schrifthinweis nur löschen, wenn er noch dasteht
-        self._font_warning = None
-        warnings = font_warnings(self.doc)
-        if warnings and not self.result.text():
-            self._font_warning = " · ".join(warnings)
-            self._set_result(self._font_warning, "error")
+        if self._hint is not None and self.result.text() == self._hint:
+            self._set_result("", "")   # alten Hinweis nur löschen, wenn er noch dasteht
+        self._hint = None
+        hints = ([OUTSIDE_HINT] if outside else []) + font_warnings(self.doc)
+        if hints and not self.result.text():
+            self._hint = " · ".join(hints)
+            self._set_result(self._hint, "error")
         self.panel("text").show_error(None)
         self.image = image
-        self.canvas.set_document(get_label(self.doc.label_id), image, self.doc.orientation)
+        self.rendered = rendered
+        self.canvas.set_document(get_label(self.doc.label_id), size, rendered, self.doc.orientation,
+                                 area, keep_ratio=[not obj.fit for obj in self.doc.objects])
+
+    def _render_objects(self, size: tuple[int, int]) -> list[RenderedObject]:
+        """Objekte einzeln rendern; unveränderte kommen aus dem Cache.
+
+        Ein Objekt ohne Position steht mittig und hängt deshalb auch von der Etikettgröße ab.
+        """
+        doc = self.doc
+        context = (self.model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm)
+        cache: dict[int, _Cached] = {}
+        for obj in doc.objects:
+            key = (context, None if obj.positioned else size)
+            entry = self._cache.get(id(obj))
+            if entry is None or entry.obj is not obj or entry.key != key or entry.snapshot != obj:
+                entry = _Cached(obj, copy.deepcopy(obj), key, render_object(obj, doc, self.model))
+            cache[id(obj)] = entry
+        self._cache = cache
+        return [cache[id(obj)].rendered for obj in doc.objects]
+
+    # --- Objekte auf der Arbeitsfläche ------------------------------------
+    def _move_objects(self, indices: list[int], rects: list[Rect]) -> None:
+        for index, rect in zip(indices, rects):
+            if index < len(self.rendered):
+                self.doc.objects[index] = move(self.doc.objects[index], rect, self.rendered[index])
+        self._objects_changed(indices)
+
+    def _resize_object(self, index: int, rect: Rect, handle: str) -> None:
+        if index < len(self.rendered):
+            self.doc.objects[index] = resize(self.doc.objects[index], rect, self.rendered[index],
+                                             corner=len(handle) == 2)
+        self._objects_changed([index])
+
+    def delete_selected(self) -> None:
+        """Ausgewählte Objekte löschen; ein leerer Text bleibt, damit das Text-Panel etwas hat."""
+        indices = self.canvas.selection()
+        if not indices:
+            return
+        self.canvas.set_selection([])
+        for index in sorted(indices, reverse=True):
+            del self.doc.objects[index]
+        if not self.doc.objects:
+            self.doc.objects.append(new_document(self.settings).objects[0])
+        self._objects_changed([0])
+
+    def _objects_changed(self, indices: list[int]) -> None:
+        if 0 in indices:
+            self.panel("text").refresh()   # Text-Panel bearbeitet (noch) das erste Objekt
+        self.render_now()
 
     def _on_length_dragged(self, length_mm) -> None:
         self.doc.length_mm = length_mm
@@ -227,6 +318,7 @@ class MainWindow(QMainWindow):
             from .app import apply_theme
             apply_theme(QApplication.instance(), self.settings.theme)
             self.apply_theme_icons()
+            apply_shortcuts(self.actions, effective(self.settings.shortcuts))
             self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
 
     # --- Medium prüfen ----------------------------------------------------

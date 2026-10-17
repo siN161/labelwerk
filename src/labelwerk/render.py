@@ -102,11 +102,20 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     sheet = _sheet(doc, model)
     preps = [_prepare(obj, sheet) for obj in doc.objects or [TextObject("")]]
     width, height = _label_size(sheet, preps)
-    img = Image.new("RGB", (width, height), "white")
-    for prep in preps:
-        rendered = _finish(prep, sheet, width, height)
-        img.paste((0, 0, 0), (rendered.x, rendered.y), ImageOps.invert(rendered.image))
-    return img.rotate(-90, expand=True) if sheet.horizontal else img
+    return compose([_finish(prep, sheet, width, height) for prep in preps], (width, height),
+                   doc.orientation)
+
+
+def compose(rendered: list[RenderedObject], size: tuple[int, int],
+            orientation: str = "vertical") -> Image.Image:
+    """Druckbild aus einzeln gerenderten Objekten (``size`` = Etikett in Leserichtung).
+
+    Die Arbeitsfläche zeigt dieselben Objektbilder – so bleibt Vorschau = Druck.
+    """
+    img = Image.new("RGB", size, "white")
+    for obj in rendered:
+        img.paste((0, 0, 0), (obj.x, obj.y), ImageOps.invert(obj.image))
+    return img.rotate(-90, expand=True) if orientation == "horizontal" else img
 
 
 def label_size(doc: Document, model: str = "QL-600") -> tuple[int, int]:

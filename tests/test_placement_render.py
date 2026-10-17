@@ -188,3 +188,14 @@ def test_base_pt_of_auto_object_reproduces_image():
     assert 4 < ro.base_pt < 100
     fixed = Document("62", objects=[TextObject("Hallo", size_pt=ro.base_pt)])
     assert render_document(fixed).tobytes() == render_document(doc).tobytes()
+
+
+# --- Zusammensetzen aus Objektbildern (Arbeitsfläche = Druck) -------------------------
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+def test_compose_from_object_images_equals_render_document(orientation):
+    from labelwerk.render import compose, label_size
+    doc = Document("62", orientation=orientation, objects=[
+        TextObject("Mitte"), TextObject("oben", size_pt=14, x_mm=3, y_mm=2)])
+    rendered = [render_object(obj, doc) for obj in doc.objects]
+    image = compose(rendered, label_size(doc), orientation)
+    assert image.tobytes() == render_document(doc).tobytes()

@@ -15,6 +15,7 @@ from .render import REF_PT, RenderedObject, label_margins, label_size, render_ob
 ALIGN_MODES = ("left", "hcenter", "right", "top", "vcenter", "bottom")
 SIZE_MODES = ("same", "width", "height")
 _EPS = 1e-6                # Rundungsspielraum beim Vergleich von mm-Werten
+_DECIMALS = 3              # Positionen/Rahmen im Modell: auf 1/1000 mm
 
 
 def _mm(dots: float) -> float:
@@ -171,6 +172,77 @@ def place(obj: TextObject, rect: Rect) -> TextObject:
         w, h = (rect.h, rect.w) if obj.rotation in (90, 270) else (rect.w, rect.h)
         placed.w_mm, placed.h_mm = w, h
     return placed
+
+
+def fix_size(obj: TextObject, base_pt: float) -> TextObject:
+    """Kopie mit der wirksamen Grundgröße ``base_pt`` als fester Schriftgröße, ohne Rahmengröße.
+
+    Stücke mit eigener Größe behalten ihr Verhältnis; das Bild bleibt gleich.
+    """
+    base_pt = round(base_pt, 1)            # wie scale_text; Stücke rechnen mit derselben Größe
+    factor = 1.0 if obj.size_pt is None else base_pt / obj.size_pt
+    fixed = scale_text(obj, factor, base_pt=base_pt)
+    fixed.fit = False
+    return fixed
+
+
+def exact_rect(obj: TextObject, rendered: RenderedObject) -> Rect:
+    """Rahmen in mm, wie er im Modell steht (ohne Rundung auf Druckpunkte).
+
+    Position aus ``x_mm``/``y_mm``, Größe bei fester Rahmengröße aus ``w_mm``/``h_mm``
+    (gedreht), sonst wie gerendert; ein Objekt ohne Position steht, wo es gerendert wurde.
+    """
+    r = object_rect(rendered)
+    x, y = ((obj.x_mm or 0.0, obj.y_mm or 0.0) if obj.positioned else (r.x, r.y))
+    w, h = r.w, r.h
+    if obj.positioned and obj.fit and obj.w_mm is not None and obj.h_mm is not None:
+        w, h = (obj.h_mm, obj.w_mm) if obj.rotation in (90, 270) else (obj.w_mm, obj.h_mm)
+    return Rect(x, y, w, h)
+
+
+def _apply_change(obj: TextObject, rect: Rect, rendered: RenderedObject) -> Rect:
+    """Änderung gegenüber dem gerenderten Rahmen auf den Rahmen im Modell übertragen.
+
+    So verschieben Pfeiltasten genau um 0,1 mm, obwohl das Bild auf Druckpunkte gerundet ist;
+    Reste der Umrechnung werden auf 1/1000 mm gerundet.
+    """
+    shown, exact = object_rect(rendered), exact_rect(obj, rendered)
+    return Rect(*(round(e + n - s, _DECIMALS) for e, n, s in (
+        (exact.x, rect.x, shown.x), (exact.y, rect.y, shown.y),
+        (exact.w, rect.w, shown.w), (exact.h, rect.h, shown.h))))
+
+
+def move(obj: TextObject, rect: Rect, rendered: RenderedObject) -> TextObject:
+    """Kopie von ``obj``, verschoben auf ``rect`` (neue Lage des gerenderten Rahmens).
+
+    Die Größe bleibt. Ein automatisch großes Objekt ohne eigenen Rahmen bekommt beim ersten
+    Verschieben seine wirksame Größe (``rendered.base_pt``) als feste Schriftgröße – es sieht
+    danach genauso aus.
+    """
+    target = _apply_change(obj, rect, rendered)
+    if obj.size_pt is None or (obj.fit and not obj.positioned):
+        obj = fix_size(obj, rendered.base_pt)
+    moved = copy.deepcopy(obj)
+    moved.x_mm, moved.y_mm = target.x, target.y
+    return moved
+
+
+def resize(obj: TextObject, rect: Rect, rendered: RenderedObject, corner: bool) -> TextObject:
+    """Kopie nach Ziehen an einem Anfasser: gerenderter Rahmen → ``rect``.
+
+    Mit fester Rahmengröße ändert jeder Anfasser den Rahmen. Ohne skaliert eine Ecke
+    (``corner``) die Schrift, eine Kante schaltet die feste Rahmengröße ein.
+    """
+    target = _apply_change(obj, rect, rendered)
+    if obj.fit:
+        return place(obj, target)
+    if corner:
+        old = object_rect(rendered)
+        factor = ((rect.w * rect.h) / (old.w * old.h)) ** 0.5 if old.w and old.h else 1.0
+        return place(scale_text(obj, factor, base_pt=rendered.base_pt), target)
+    framed = copy.deepcopy(obj)
+    framed.fit = True
+    return place(framed, target)
 
 
 def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> TextObject:
