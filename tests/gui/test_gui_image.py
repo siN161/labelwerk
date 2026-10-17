@@ -110,6 +110,10 @@ def _focus_canvas(win, qtbot):
 
 def _drop(canvas, mime, pos, process=True):
     """Ablegen; verarbeitet wird erst nach dem Ereignis (``process``: gleich abwarten)."""
+    try:                    # QDragEnterEvent nimmt erst ab PySide6 6.12 QPointF (CI 3.10: 6.11)
+        QDragEnterEvent(pos, Qt.DropAction.CopyAction, mime, LEFT, NO_MOD)
+    except TypeError:
+        pos = pos.toPoint()
     for event in (QDragEnterEvent(pos, Qt.DropAction.CopyAction, mime, LEFT, NO_MOD),
                   QDropEvent(pos, Qt.DropAction.CopyAction, mime, LEFT, NO_MOD)):
         QApplication.sendEvent(canvas.viewport(), event)
