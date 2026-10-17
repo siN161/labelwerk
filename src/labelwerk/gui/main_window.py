@@ -32,6 +32,7 @@ from .panels.text import DEFAULT_PT
 from .print_worker import PrintWorker
 from .settings_dialog import SettingsDialog
 from .symbols import SIZE, line_icon
+from .text_edit_mode import TextEditSession
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
@@ -200,6 +201,12 @@ class MainWindow(QMainWindow):
         self._printer_timer.timeout.connect(self.refresh_printer)
         self._printer_timer.start()
 
+        # Schreibmodus direkt auf dem Etikett (Editor des Text-Panels als Eingabepuffer)
+        self.edit_session = TextEditSession(self)
+        self.panel("text").changed.connect(self.edit_session.content_changed)
+        # Esc und Klick neben den Rahmen beenden ihn; ein leerer Rahmen entfällt dabei
+        for signal in (self.edit_session.end_requested, self.canvas.edit_left):
+            signal.connect(lambda: self.finish_editing(drop_empty=True))
         self.render_now()
         self.canvas.selection_changed.connect(self._on_selection)
         self.panel("text").frame_edited.connect(self._edit_frame)
@@ -239,8 +246,8 @@ class MainWindow(QMainWindow):
         handlers = {"edit.delete": self.delete_selected, "edit.select_all": self.canvas.select_all,
                     "edit.cut": self.cut_selected, "edit.copy": self.copy_selected,
                     "edit.paste": self.paste, "edit.duplicate": self.duplicate_selected,
-                    "tool.select": lambda: self.canvas.set_tool("select"),
-                    "tool.text": lambda: self.canvas.set_tool("text")}
+                    "tool.select": lambda: self._choose_tool("select"),
+                    "tool.text": lambda: self._choose_tool("text")}
         for key, handler in handlers.items():
             self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
             self.canvas.addAction(self.shortcut_actions[key])
@@ -292,9 +299,17 @@ class MainWindow(QMainWindow):
         self.tool_actions[key].setChecked(True)
         self.panels.setCurrentWidget(self.panel(key))
 
+    def _choose_tool(self, tool: str) -> None:
+        """Auswahl-Pfeil oder „Text anlegen“ (Bearbeitungsleiste, Kürzel) – beendet den
+        Schreibmodus."""
+        self.finish_editing()
+        self.canvas.set_tool(tool)
+
     def _tool_triggered(self, key: str) -> None:
         """Werkzeug-Reiter: Panel zeigen; Text ohne Auswahl heißt „Text anlegen“, jedes
-        andere Panel arbeitet mit dem Auswahl-Pfeil."""
+        andere Panel arbeitet mit dem Auswahl-Pfeil (und beendet den Schreibmodus)."""
+        if key != "text":
+            self.finish_editing()
         self.panels.setCurrentWidget(self.panel(key))
         if key == "text":
             self._sync_tool()
@@ -316,6 +331,8 @@ class MainWindow(QMainWindow):
         if self._arranging:                         # Anlegen, Umnummerieren: nur mitführen
             self._follow_selection(indices)
             return
+        if self.edit_session.active and indices != [self.edit_session.index]:
+            self.finish_editing()                   # leere Rahmen entfallen gleich hier unten
         if not self._restoring:
             indices = self._drop_empty_frames(indices)
         self._follow_selection(indices)
@@ -429,6 +446,7 @@ class MainWindow(QMainWindow):
                                  grow=growing_axis(self.doc))
         self.panel("layout").set_growing(growing_axis(self.doc))
         self._update_frame()
+        self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
 
     def _drop_stale_view(self) -> None:
         """Nach einem Renderfehler: Objektbilder, die nicht mehr zu ``doc.objects`` passen
@@ -559,10 +577,11 @@ class MainWindow(QMainWindow):
         self._commit()
 
     def create_text(self, x_mm: float, y_mm: float) -> None:
-        """Neuer leerer Textrahmen an x/y (mm, Leserichtung), ausgewählt, Schreibmarke ins Textfeld.
+        """Neuer leerer Textrahmen an x/y (mm, Leserichtung), ausgewählt, gleich im Schreibmodus.
 
         Schrift aus den Einstellungen (automatische Größe → 19 pt). Andere leere Texte sind
         unsichtbar und drucken nicht – sie entfallen dabei."""
+        self.finish_editing()
         self._structure_changing()
         self._commit()
         family = None if self.settings.font_family == DEFAULT_FAMILY else self.settings.font_family
@@ -581,15 +600,36 @@ class MainWindow(QMainWindow):
         self._commit()
         self.edit_text(index)
 
-    def edit_text(self, index: int) -> None:
-        """Text eines Objekts bearbeiten: auswählen, Text-Panel zeigen, Schreibmarke hinein."""
-        if index not in self.canvas.selection():
+    def edit_text(self, index: int, point=None) -> None:
+        """Schreibmodus für ein Objekt: auswählen, Text-Panel zeigen, Schreibmarke an
+        ``point`` (QPointF, Druckpunkte in Leserichtung – z. B. Doppelklick) bzw. ans Ende."""
+        if self.edit_session.active:
+            if self.edit_session.index == index:
+                return
+            self.finish_editing()
+        if not self._valid(index):
+            return
+        if self.canvas.selection() != [index]:
             self.canvas.set_selection([index])
         self._show_tool("text")
-        self.panel("text").edit.setFocus()
+        if self._timer.isActive():
+            self.render_now()                       # Klick trifft den aktuellen Zeilensatz
+        self.edit_session.start(index, point)
+
+    def finish_editing(self, drop_empty: bool = False) -> None:
+        """Schreibmodus beenden (Esc, Klick daneben, anderes Werkzeug, Befehl auf der Auswahl).
+        ``drop_empty``: ein leer gebliebener Rahmen entfällt sofort (Esc, Klick daneben) –
+        sonst wie bisher, sobald er die Auswahl verlässt."""
+        index = self.edit_session.end()
+        if index is None:
+            return
+        if (drop_empty and self._valid(index) and self.doc.objects[index].positioned
+                and self.doc.objects[index].is_empty()):
+            self.canvas.set_selection([])           # leerer Rahmen entfällt (_on_selection)
 
     def delete_selected(self) -> None:
         """Ausgewählte Objekte löschen (auch das letzte – das Etikett ist dann leer)."""
+        self.finish_editing()
         indices = self.canvas.selection()
         if not indices:
             return
@@ -603,6 +643,7 @@ class MainWindow(QMainWindow):
 
     def _edit_frame(self, key: str, value: float) -> None:
         """Zahl im Bereich „Position“ geändert: Objekt verschieben bzw. Rahmen ändern."""
+        self.finish_editing()
         index = self.panel("text").index
         if index is None or not self._valid(index):
             return
@@ -639,6 +680,7 @@ class MainWindow(QMainWindow):
         """Gewählte Objekte durch ``change(objekte, gerendert)`` ersetzen – ein Schritt.
 
         ``change`` läuft nach dem Rendern: Rahmen und ``self._area`` sind aktuell."""
+        self.finish_editing()
         if self._timer.isActive():
             self.render_now()                   # z. B. eben Getipptes: aktuelle Rahmen
         # leere Rahmen sind unsichtbar und drucken nicht: sie nehmen an Layout-Befehlen nicht teil
@@ -655,6 +697,7 @@ class MainWindow(QMainWindow):
 
     def reorder_selected(self, step: int) -> None:
         """Auswahl einen Platz nach vorne (1) bzw. hinten (−1); die Auswahl wandert mit."""
+        self.finish_editing()
         indices = self.canvas.selection()
         if not indices:
             return
@@ -698,6 +741,7 @@ class MainWindow(QMainWindow):
         return move(obj, object_rect(rendered), rendered)
 
     def _insert(self, objects: list[TextObject]) -> None:
+        self.finish_editing()
         self._structure_changing()
         self._commit()
         start = len(self.doc.objects)

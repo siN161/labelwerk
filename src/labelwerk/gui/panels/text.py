@@ -3,6 +3,10 @@
 Regel wie bei einem ausgewählten Textrahmen in P-touch: Ist nichts markiert, wirkt eine
 Formatierung auf den ganzen Text; sonst nur auf die Markierung. Bereich „Position“: Lage
 und (mit fester Rahmengröße) Größe des Rahmens in mm.
+
+Geschrieben wird direkt auf dem Etikett (``gui.text_edit_mode``): Der Editor ``edit`` ist
+dafür ein unsichtbarer Eingabepuffer (Kind des Panels, Größe 0, nicht im Layout) – er behält
+im Schreibmodus den Tastaturfokus, damit tote Tasten, Compose und Eingabemethoden wirken.
 """
 from __future__ import annotations
 
@@ -38,9 +42,18 @@ class PlainPasteEdit(QTextEdit):
 
     focus_left = Signal()            # Tippen ist abgeschlossen (ein Schritt für Rückgängig)
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.setTabChangesFocus(True)      # Tab springt weiter, statt "\t" einzufügen
+        # eine Zeile je Absatz wie auf dem Etikett: Pos1/Ende gelten für den ganzen Absatz
+        self.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        # Schreibmodus: Lage der Schreibmarke auf dem Etikett für Eingabemethoden (→ QRect)
+        self.caret_rect = None
+
+    def inputMethodQuery(self, query):
+        if query == Qt.InputMethodQuery.ImCursorRectangle and self.caret_rect is not None:
+            return self.caret_rect()           # Kandidatenfenster an der Schreibmarke
+        return super().inputMethodQuery(query)
 
     def keyPressEvent(self, event) -> None:
         if (event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
@@ -97,12 +110,14 @@ class TextPanel(Panel):
         self.hint.setWordWrap(True)
         self.layout_.addWidget(self.hint)
 
-        self.section("Inhalt")
-        self.edit = PlainPasteEdit()
-        self.edit.setPlaceholderText("Text eingeben …")
-        # Absätze ohne eigene Ausrichtung stehen zentriert – wie bisher in labelwerk
-        self.edit.document().setDefaultTextOption(QTextOption(Qt.AlignmentFlag.AlignHCenter))
-        self.layout_.addWidget(self.edit)
+        # unsichtbarer Eingabepuffer des Schreibmodus: fokussierbar, aber ohne Fläche
+        self.edit = PlainPasteEdit(self)
+        self.edit.setFixedSize(0, 0)
+        # Absätze ohne eigene Ausrichtung stehen zentriert – wie bisher in labelwerk; kein
+        # Umbruch im Editor (Größe 0), damit Pos1/Ende und Zeilen den Absätzen entsprechen
+        option = QTextOption(Qt.AlignmentFlag.AlignHCenter)
+        option.setWrapMode(QTextOption.WrapMode.NoWrap)
+        self.edit.document().setDefaultTextOption(option)
 
         self.section("Schrift")
         self.family = QFontComboBox()
