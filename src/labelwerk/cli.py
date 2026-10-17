@@ -1,4 +1,4 @@
-"""Kommandozeile: labelwerk labels | print "Text" -l 62 | print-file datei.pdf -l 62"""
+"""Kommandozeile: labelwerk labels | print "Text" | print-file datei.pdf | media | install-desktop"""
 from __future__ import annotations
 
 import argparse
@@ -11,12 +11,15 @@ from . import desktop
 from . import printer as prn
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
 from .files import crop, fit_to_label, load_file
+from .document import ORIENTATIONS, Document, TextObject
 from .labels import format_mm, labels_for_model
-from .render import render_text
+from .media import MediaError, label_for_media, read_media
+from .render import render_document
+from .settings import load_settings
 
 
 def _add_output_options(p: argparse.ArgumentParser) -> None:
-    p.add_argument("-l", "--label", default="62")
+    p.add_argument("-l", "--label", help="Etikett, z. B. 62 (Standard aus den Einstellungen)")
     p.add_argument("-p", "--printer", default="auto",
                    help="auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP")
     p.add_argument("-b", "--backend", default=prn.DEFAULT_BACKEND,
@@ -34,8 +37,12 @@ def _parser() -> argparse.ArgumentParser:
 
     pr = sub.add_parser("print", help="Text drucken")
     pr.add_argument("text", help="Text, Zeilenumbruch mit \\n")
-    pr.add_argument("-s", "--font-size", type=int)
+    pr.add_argument("-s", "--font-size", type=int, help="Standard aus den Einstellungen")
     pr.add_argument("--font", help="Pfad zu einer .ttf-Datei")
+    pr.add_argument("--orientation", choices=ORIENTATIONS,
+                    help="vertical: Text quer zum Band, horizontal: längs (Standard aus den Einstellungen)")
+    pr.add_argument("--margin", type=float, metavar="MM",
+                    help="Rand in Bandlaufrichtung in mm (Standard aus den Einstellungen)")
     _add_output_options(pr)
 
     pf = sub.add_parser("print-file", help="PDF/Bild 1:1 drucken")
@@ -46,6 +53,8 @@ def _parser() -> argparse.ArgumentParser:
     pf.add_argument("--rotate", default="auto", choices=["auto", "0", "90", "180", "270"],
                     help="auto (Standard: nur drehen wenn nötig) oder Grad im Uhrzeigersinn")
     _add_output_options(pf)
+
+    sub.add_parser("media", help="eingelegte Rolle vom Drucker abfragen (druckt nichts)")
 
     di = sub.add_parser("install-desktop", help="labelwerk-gui im Starter (Super-Taste) eintragen")
     di.add_argument("--remove", action="store_true", help="Eintrag und Icon wieder entfernen")
@@ -77,7 +86,9 @@ def _make_image(args: argparse.Namespace) -> Image.Image:
         rotate = args.rotate if args.rotate == "auto" else int(args.rotate)
         return fit_to_label(img, args.label, fit=args.fit, model=args.model, rotate=rotate)
     text = args.text.replace("\\n", "\n")
-    return render_text(text, args.label, font_size=args.font_size, font_path=args.font)
+    doc = Document(args.label, orientation=args.orientation, margin_mm=args.margin,
+                   objects=[TextObject(text, font_size=args.font_size, font_path=args.font)])
+    return render_document(doc, args.model)
 
 
 def _send(img: Image.Image, args: argparse.Namespace) -> int:
@@ -97,6 +108,35 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
     ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
     print(f"Status: {status.get('outcome')}")
     return 0 if ok else 1
+
+
+def _show_media() -> int:
+    printer = find_brother_lp()
+    if printer is None:
+        print(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND, file=sys.stderr)
+        return 2
+    try:
+        media = read_media(printer)
+    except MediaError as e:
+        print(e, file=sys.stderr)
+        return 2
+    label = label_for_media(media)
+    hint = f" (Etikett {label})" if label else " (kein passendes Etikett)" if media.kind != "none" else ""
+    print(f"Eingelegt: {media.describe()}{hint}")
+    return 0
+
+
+def _apply_settings(args: argparse.Namespace) -> None:
+    """Nicht angegebene Optionen mit den Standardwerten aus den Einstellungen füllen."""
+    settings = load_settings()
+    for warning in settings.warnings:
+        print(warning, file=sys.stderr)
+    if getattr(args, "label", None) is None and hasattr(args, "label"):
+        args.label = settings.label_id
+    if args.cmd == "print":
+        args.orientation = args.orientation or settings.orientation
+        args.margin = settings.margin_mm if args.margin is None else args.margin
+        args.font_size = args.font_size or settings.font_size
 
 
 def _install_desktop(remove: bool) -> int:
@@ -127,6 +167,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "install-desktop":
         return _install_desktop(args.remove)
+    if args.cmd == "media":
+        return _show_media()
+
+    _apply_settings(args)
 
     try:
         img = _make_image(args)

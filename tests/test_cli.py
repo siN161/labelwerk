@@ -153,3 +153,82 @@ def test_install_desktop_uses_xdg_data_home(tmp_path, monkeypatch, capsys):
     assert "labelwerk.desktop" in capsys.readouterr().out
     assert main(["install-desktop", "--remove"]) == 0
     assert not (tmp_path / "applications" / "labelwerk.desktop").exists()
+
+
+def _write_settings(**values):
+    import json
+    import os
+    from pathlib import Path
+    path = Path(os.environ["XDG_CONFIG_HOME"]) / "labelwerk" / "settings.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(values))
+
+
+def test_default_label_comes_from_settings(tmp_path, capsys):
+    _write_settings(label_id="62x29")
+    rc = main(["print", "Hallo", "--preview", str(tmp_path / "v.png")])
+    assert rc == 0
+    assert "58,9 × 22,9 mm" in capsys.readouterr().out
+
+
+def _preview(tmp_path, *args):
+    out = tmp_path / "v.png"
+    assert main(["print", "Hallo Welt", *args, "--preview", str(out)]) == 0
+    return Image.open(out).convert("RGB").tobytes()
+
+
+def _expected(orientation="vertical", margin=1.0):
+    from labelwerk.document import Document, TextObject
+    from labelwerk.render import render_document
+    doc = Document("62", orientation=orientation, margin_mm=margin, objects=[TextObject("Hallo Welt")])
+    return render_document(doc).convert("RGB").tobytes()
+
+
+def test_default_orientation_comes_from_settings(tmp_path):
+    _write_settings(orientation="horizontal")
+    assert _preview(tmp_path) == _expected("horizontal")
+
+
+def test_orientation_option_overrides_settings(tmp_path):
+    _write_settings(orientation="horizontal")
+    assert _preview(tmp_path, "--orientation", "vertical") == _expected("vertical")
+
+
+def test_margin_option(tmp_path):
+    assert _preview(tmp_path, "--margin", "5") == _expected(margin=5.0)
+
+
+def test_broken_settings_warn_but_work(tmp_path, capsys):
+    import os
+    from pathlib import Path
+    path = Path(os.environ["XDG_CONFIG_HOME"]) / "labelwerk" / "settings.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{kaputt")
+    assert main(["print", "Hallo", "--preview", str(tmp_path / "v.png")]) == 0
+    assert "nicht lesbar" in capsys.readouterr().err
+
+
+def test_media_command_shows_loaded_roll(monkeypatch, capsys):
+    from labelwerk.media import Media
+    monkeypatch.setattr("labelwerk.cli.find_brother_lp", lambda: "file:///dev/usb/lp0")
+    monkeypatch.setattr("labelwerk.cli.read_media", lambda printer: Media(62, 0, "endless"))
+    assert main(["media"]) == 0
+    assert "Eingelegt: 62 mm endlos (Etikett 62)" in capsys.readouterr().out
+
+
+def test_media_command_error(monkeypatch, capsys):
+    from labelwerk.media import MediaError
+    monkeypatch.setattr("labelwerk.cli.find_brother_lp", lambda: "file:///dev/usb/lp0")
+
+    def fail(printer):
+        raise MediaError("Keine Antwort vom Drucker auf die Statusabfrage.")
+    monkeypatch.setattr("labelwerk.cli.read_media", fail)
+    assert main(["media"]) == 2
+    assert "Keine Antwort" in capsys.readouterr().err
+
+
+def test_media_command_without_printer(monkeypatch, capsys):
+    monkeypatch.setattr("labelwerk.cli.find_brother_lp", lambda: None)
+    monkeypatch.setattr("labelwerk.cli.brother_busy", lambda: False)
+    assert main(["media"]) == 2
+    assert "nicht gefunden" in capsys.readouterr().err
