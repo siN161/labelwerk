@@ -18,13 +18,13 @@ def test_actions_have_unique_dotted_ids_and_valid_scopes():
     assert all(re.fullmatch(r"[a-z]+(\.[a-z0-9_]+)+", i) for i in ids)
     assert all(a.scope in SCOPES for a in ACTIONS)
     assert all(a.name.strip() for a in ACTIONS)
-    assert SCOPES == ("global", "canvas", "text")
+    assert SCOPES == ("global", "canvas", "edit")
 
 
 def test_actions_cover_all_app_shortcuts():
     expected = {
         "file.print", "app.settings", "view.zoom_in", "view.zoom_out", "view.zoom_reset",
-        "text.bold", "text.italic", "text.underline", "tool.select", "tool.text",
+        "text.bold", "text.italic", "text.underline", "text.end_edit", "tool.select", "tool.text",
         "edit.cut", "edit.copy", "edit.paste", "edit.duplicate", "edit.delete",
         "edit.select_all", "edit.undo", "edit.redo",
         "object.nudge_left", "object.nudge_right", "object.nudge_up", "object.nudge_down",
@@ -122,10 +122,32 @@ def test_conflict_detected_case_insensitive():
     assert shortcuts.conflicts(mapping) == [("Ctrl+C", ["edit.copy", "edit.duplicate"])]
 
 
-def test_no_conflict_between_canvas_and_text():
-    # Strg+B auf der Arbeitsfläche stört Fett im Textfeld nicht – nie beide gleichzeitig aktiv
+def test_no_conflict_between_canvas_and_edit_mode():
+    # Strg+B auf der Arbeitsfläche stört Fett im Schreibmodus nicht – nie beide gleichzeitig aktiv
     mapping = shortcuts.effective({"edit.duplicate": "Ctrl+B"})
     assert shortcuts.conflicts(mapping) == []
+
+
+def test_edit_mode_conflicts_with_itself_and_global():
+    mapping = shortcuts.effective({"text.italic": "Ctrl+B"})
+    assert shortcuts.conflicts(mapping) == [("Ctrl+B", ["text.bold", "text.italic"])]
+    mapping = shortcuts.effective({"view.zoom_reset": "Ctrl+U"})
+    assert shortcuts.conflicts(mapping) == [("Ctrl+U", ["text.underline", "view.zoom_reset"])]
+
+
+def test_formatting_and_end_edit_belong_to_edit_mode():
+    for action_id in ("text.bold", "text.italic", "text.underline", "text.end_edit"):
+        assert shortcuts.action(action_id).scope == "edit"
+    end = shortcuts.action("text.end_edit")
+    assert (end.name, end.default, end.fixed) == ("Schreibmodus beenden", "Esc", True)
+    assert not shortcuts.action("text.bold").fixed
+
+
+def test_fixed_shortcut_cannot_be_overridden():
+    assert shortcuts.effective({"text.end_edit": "Ctrl+Q"})["text.end_edit"] == "Esc"
+    clean, warnings = shortcuts.validate({"text.end_edit": "Ctrl+Q", "text.bold": "Ctrl+Q"})
+    assert clean == {"text.bold": "Ctrl+Q"}
+    assert len(warnings) == 1 and "fest" in warnings[0]
 
 
 def test_global_conflicts_with_every_scope():
@@ -219,3 +241,24 @@ def test_without_conflicts_compares_normalized_forms():
     mapping = shortcuts.effective({"edit.duplicate": "ctrl+c"})
     clean, _ = shortcuts.without_conflicts(mapping)
     assert clean["edit.duplicate"] == ""
+
+
+def test_fixed_shortcut_always_keeps_its_key():
+    mapping = shortcuts.effective({})
+    mapping["file.print"] = "Esc"                  # global: kollidiert mit jedem Bereich
+    clean, warnings = shortcuts.without_conflicts(mapping)
+    assert clean["text.end_edit"] == "Esc"         # fest – gewinnt immer
+    assert clean["file.print"] == ""
+    assert clean["tool.select"] == "Esc"           # Arbeitsfläche: kein Konflikt mit dem Schreibmodus
+    assert len(warnings) == 1 and "Drucken" in warnings[0]
+
+
+@pytest.mark.parametrize("seq", ["Esc", "Return", "Enter", "Tab", "Shift+Tab", "Backtab"])
+def test_keys_reserved_for_editing_are_rejected(seq):
+    clean, warnings = shortcuts.validate({"file.print": seq})
+    assert clean == {}
+    assert len(warnings) == 1 and "nicht belegbar" in warnings[0]
+
+
+def test_reserved_key_is_fine_as_the_actions_own_default():
+    assert shortcuts.validate({"tool.select": "Esc"}) == ({"tool.select": "Esc"}, [])

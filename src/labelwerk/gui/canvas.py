@@ -1,14 +1,19 @@
 """Arbeitsfläche: Etikett in echter Größe und Form, Objekte (auswählen, ziehen, einrasten,
-an Anfassern skalieren, Text anlegen), mm-Lineale, Zoom, Längen-Anfasser."""
+an Anfassern skalieren, Text anlegen), mm-Lineale, Zoom, Längen-Anfasser.
+
+Schreibmodus (``gui.text_edit_mode``): Der bearbeitete Rahmen ist durchgezogen und ohne
+Anfasser; Schreibmarke und Markierung kommen als Lage in Druckpunkten vom Schreibmodus
+(``set_edit_marks``), die Arbeitsfläche zeichnet sie nur und meldet Mausklicks hinein."""
 from __future__ import annotations
 
 import math
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QLineF, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QBrush, QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap,
                            QTransform)
-from PySide6.QtWidgets import QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsScene, QGraphicsView
+from PySide6.QtWidgets import (QApplication, QGraphicsPixmapItem, QGraphicsRectItem,
+                               QGraphicsScene, QGraphicsView)
 
 from .. import layout
 from ..labels import DPI, Label, format_mm, length_limits
@@ -35,6 +40,8 @@ _HANDLE_CURSORS = {
 _GUIDE_COLOR = QColor("#E53935")
 _TAPE_COLOR = QColor("#BDBDBD")    # heller als die Arbeitsfläche, in jedem Design lesbar
 TOOL_MODES = ("select", "text")   # Auswahl-Pfeil, „Text anlegen“
+_EDIT_REACH_PX = 3                # Schreibmodus: Klick so knapp neben dem Rahmen zählt noch hinein
+_SELECTION_ALPHA = 90             # Markierung: Systemfarbe zu ≈ 35 % deckend
 
 
 def to_qimage(img: Image.Image) -> QImage:
@@ -92,7 +99,12 @@ class Canvas(QGraphicsView):
     objects_moved = Signal(list, list)         # Indizes, neue Rahmen (Rect, mm) nach dem Loslassen
     object_resized = Signal(int, object, str)  # Index, neuer Rahmen (Rect, mm), Anfasser („tl“ …)
     text_requested = Signal(float, float)      # „Text anlegen“: Klick aufs Etikett (mm, Leserichtung)
-    edit_requested = Signal(int)               # Text eines Objekts bearbeiten (Doppelklick)
+    edit_requested = Signal(int, object)       # Text bearbeiten (Doppelklick): Index, Klickpunkt
+                                               # (QPointF, Druckpunkte in Leserichtung) oder None
+    edit_pressed = Signal(object, bool)        # Schreibmodus: Klick in den Rahmen (Punkt, Umschalt)
+    edit_dragged = Signal(object)              # Schreibmodus: Ziehen im Rahmen markiert (Punkt)
+    edit_double_clicked = Signal(object)       # Schreibmodus: Doppelklick markiert ein Wort
+    edit_left = Signal()                       # Schreibmodus: Klick neben den Rahmen beendet ihn
     object_clicked = Signal(int)               # Klick auf ein Objekt (auch ein schon gewähltes)
     tool_changed = Signal(str)                 # Werkzeug: "select" | "text"
 
@@ -133,6 +145,14 @@ class Canvas(QGraphicsView):
         self._handle_offset = QPointF()
         self._handle_cursor = False
         self._tool = "select"
+        self._editing: int | None = None                   # Objekt im Schreibmodus
+        self._edit_frame = QRectF()                        # Rahmen, Schreibmarke, Markierung
+        self._caret: QLineF | None = None                  # (Druckpunkte in Leserichtung)
+        self._marked: list[QRectF] = []
+        self._caret_on = True
+        self._caret_focus = True                           # Editor hat den Tastaturfokus
+        self._blink = QTimer(self)
+        self._blink.timeout.connect(self._toggle_caret)
         self._apply_zoom()
 
     # --- Inhalt -----------------------------------------------------------
@@ -181,6 +201,7 @@ class Canvas(QGraphicsView):
         ratios = keep_ratio if keep_ratio is not None else [True] * len(rendered)
         self.objects = [ObjectItem(i, obj, self._pixmaps[id(obj)][1], ratio, self.sheet)
                         for i, (obj, ratio) in enumerate(zip(rendered, ratios))]
+        self._show_edit_cursor()
         self._label_rect = Rect(0, 0, width / MM, height / MM)
         self._area = area if area is not None else self._label_rect
         self._grow = grow
@@ -266,6 +287,79 @@ class Canvas(QGraphicsView):
     def _selectable(self, index: int) -> bool:
         return 0 <= index < len(self.objects)
 
+    # --- Schreibmodus -----------------------------------------------------
+    def editing(self) -> int | None:
+        """Objekt im Schreibmodus (None = keins)."""
+        return self._editing
+
+    def set_editing(self, index: int | None) -> None:
+        """Schreibmodus für ein Objekt anzeigen bzw. mit None beenden: Rahmen durchgezogen,
+        keine Anfasser, Textcursor über dem Objekt; Klicks hinein melden ``edit_pressed``."""
+        self._editing = index
+        if index is None:
+            self._edit_frame, self._caret, self._marked = QRectF(), None, []
+            self._blink.stop()
+        self._show_edit_cursor()
+        self.viewport().update()
+
+    def set_edit_marks(self, frame: QRectF, caret: QLineF | None, marked: list[QRectF]) -> None:
+        """Rahmen, Schreibmarke und Markierung des Schreibmodus (Druckpunkte in Leserichtung,
+        wie ``sheet``). Die Schreibmarke erscheint sofort und blinkt im Systemtakt."""
+        self._edit_frame, self._caret, self._marked = QRectF(frame), caret, list(marked)
+        self._restart_blink()
+
+    def set_caret_focus(self, focused: bool) -> None:
+        """Schreibmarke nur zeigen, solange der Editor den Tastaturfokus hat – sonst landet
+        Getipptes woanders (z. B. im Feld „Schrift“)."""
+        self._caret_focus = focused
+        self._restart_blink()
+
+    def caret_shown(self) -> bool:
+        """Wird im Schreibmodus eine Schreibmarke gezeigt (blinkend)?"""
+        return self._editing is not None and self._caret is not None and self._caret_focus
+
+    def _restart_blink(self) -> None:
+        """Schreibmarke sofort sichtbar, blinkt im Systemtakt; ohne Fokus aus."""
+        self._caret_on = True
+        flash = QApplication.cursorFlashTime()
+        if flash > 0 and self.caret_shown():
+            self._blink.start(flash // 2)
+        else:
+            self._blink.stop()                             # aus oder Blinken abgeschaltet
+        self.viewport().update()
+
+    def caret_line(self) -> QLineF:
+        """Schreibmarke in Ansichtskoordinaten (leer außerhalb des Schreibmodus)."""
+        if self._caret is None or self.sheet is None:
+            return QLineF()
+        return QLineF(self._view_point(self._caret.x1(), self._caret.y1()),
+                      self._view_point(self._caret.x2(), self._caret.y2()))
+
+    def selection_rects(self) -> list[QRectF]:
+        """Markierung im Schreibmodus in Ansichtskoordinaten (ein Rechteck je Zeile)."""
+        return [self._view_rect(rect) for rect in self._marked] if self.sheet is not None else []
+
+    def edit_frame_rect(self) -> QRectF:
+        """Rahmen des Objekts im Schreibmodus in Ansichtskoordinaten."""
+        return self._view_rect(self._edit_frame) if self.sheet is not None else QRectF()
+
+    def _view_rect(self, rect: QRectF) -> QRectF:
+        return self.viewportTransform().mapRect(self.sheet.mapRectToScene(rect))
+
+    def _in_edit_frame(self, pos: QPointF) -> bool:
+        reach = _EDIT_REACH_PX
+        return self.edit_frame_rect().adjusted(-reach, -reach, reach, reach).contains(pos)
+
+    def _show_edit_cursor(self) -> None:
+        """Textcursor über dem bearbeiteten Objekt, sonst der Verschiebe-Cursor."""
+        for item in self.objects:
+            item.setCursor(Qt.CursorShape.IBeamCursor if item.index == self._editing
+                           else Qt.CursorShape.SizeAllCursor)
+
+    def _toggle_caret(self) -> None:
+        self._caret_on = not self._caret_on
+        self.viewport().update()
+
     def nudge(self, dx_mm: float, dy_mm: float) -> None:
         """Ausgewählte Objekte um dx/dy mm verschieben (Pfeiltasten; nicht während des Ziehens)."""
         if self._selection and self._drag not in ("move", "resize"):
@@ -294,7 +388,7 @@ class Canvas(QGraphicsView):
         if item is not None:
             self.set_selection([item.index])
             self.set_tool("select")
-            self.edit_requested.emit(item.index)
+            self.edit_requested.emit(item.index, self._reading(pos))
             return
         point = self._reading(pos)
         x, y = point.x() / MM, point.y() / MM
@@ -342,8 +436,8 @@ class Canvas(QGraphicsView):
     def _handle_at(self, pos: QPointF) -> tuple[int, str] | None:
         reach = HANDLE_PX / 2 + 1
         for index in reversed(self._selection):            # zuletzt gewähltes zuerst
-            if self.objects[index].is_empty():
-                continue                                   # Platzhalter hat keine Anfasser
+            if self.objects[index].is_empty() or index == self._editing:
+                continue                                   # Platzhalter, Schreibmodus: keine Anfasser
             for key, point in self.handle_points(index).items():
                 if abs(point.x() - pos.x()) <= reach and abs(point.y() - pos.y()) <= reach:
                     return index, key
@@ -381,8 +475,9 @@ class Canvas(QGraphicsView):
         return self.handle is not None and self.itemAt(event.position().toPoint()) is self.handle
 
     def is_dragging(self) -> bool:
-        """Längen-Anfasser oder Objekt wird gerade gezogen."""
-        return self._drag is not None
+        """Längen-Anfasser oder Objekt wird gerade gezogen (Markieren im Schreibmodus zählt
+        nicht – dabei ändert sich kein Objekt)."""
+        return self._drag in ("length", "move", "resize")
 
     def snap_length(self, scene_y: float) -> float:
         """Szene-y der Unterkante → Länge in mm (Raster 0,5 mm, innerhalb der Modellgrenzen)."""
@@ -396,6 +491,15 @@ class Canvas(QGraphicsView):
         pos = event.position()
         self._press = pos
         self._moved = False
+        # Werkzeug dieses Klicks – auch wenn das Ende des Schreibmodus es gleich umstellt
+        tool = self._tool
+        if self._editing is not None:
+            if self._in_edit_frame(pos):
+                self._drag = "text"
+                shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                self.edit_pressed.emit(self._reading(pos), shift)
+                return
+            self.edit_left.emit()                          # danach wirkt der Klick wie sonst
         if self._on_handle(event):
             self._drag = "length"
             # Versatz zwischen Cursor und Schnittkante merken, damit der Anfasser nicht springt
@@ -403,7 +507,7 @@ class Canvas(QGraphicsView):
             return
         if self.sheet is None:
             return
-        if self._tool == "text":
+        if tool == "text":
             self._create_text(pos)
             return
         hit = self._handle_at(pos)
@@ -446,6 +550,9 @@ class Canvas(QGraphicsView):
             self.viewport().update()
             self._moved = True
             self.length_changed.emit(mm)
+            return
+        if self._drag == "text":
+            self.edit_dragged.emit(self._reading(pos))
             return
         if self._drag in ("move", "resize"):
             if not self._moved and (pos - self._press).manhattanLength() < _DRAG_START_PX:
@@ -500,6 +607,8 @@ class Canvas(QGraphicsView):
 
     def mouseReleaseEvent(self, event) -> None:
         drag, self._drag = self._drag, None
+        if drag == "text":
+            return
         if drag == "length":
             if self._moved:
                 self.drag_finished.emit()
@@ -530,10 +639,13 @@ class Canvas(QGraphicsView):
         if self._on_handle(event):
             self.length_changed.emit(None)
             return
+        if self._editing is not None and self._in_edit_frame(event.position()):
+            self.edit_double_clicked.emit(self._reading(event.position()))
+            return
         item = self._object_at(event.position()) if self.sheet is not None else None
         if item is not None and event.button() == Qt.MouseButton.LeftButton:
             self.set_selection([item.index])
-            self.edit_requested.emit(item.index)
+            self.edit_requested.emit(item.index, self._reading(event.position()))
             return
         super().mouseDoubleClickEvent(event)
 
@@ -546,6 +658,7 @@ class Canvas(QGraphicsView):
         painter.resetTransform()
         vw, vh = self.viewport().width(), self.viewport().height()
         self._draw_selection(painter)
+        self._draw_editing(painter)
         self._draw_guides(painter, vw, vh)
         if self.outline is not None:
             box = self.label_view_rect()
@@ -564,6 +677,8 @@ class Canvas(QGraphicsView):
         border = QPen(Qt.GlobalColor.black, 1)
         half = HANDLE_PX / 2
         for index in self._selection:
+            if index == self._editing:
+                continue                                   # Schreibmodus: _draw_editing
             painter.setPen(frame)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(self.view_rect(index))
@@ -574,6 +689,27 @@ class Canvas(QGraphicsView):
             for point in self.handle_points(index).values():
                 painter.drawRect(QRectF(point.x() - half, point.y() - half, HANDLE_PX, HANDLE_PX))
         painter.setBrush(Qt.BrushStyle.NoBrush)
+
+    def _draw_editing(self, painter: QPainter) -> None:
+        """Schreibmodus: durchgezogener Rahmen ohne Anfasser, Markierung in der Systemfarbe
+        (halbtransparent über dem Druckbild), blinkende Schreibmarke (1 Bildschirmpixel)."""
+        if self._editing is None or self.sheet is None:
+            return
+        painter.setPen(QPen(Qt.GlobalColor.black, 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(self.edit_frame_rect())
+        color = QColor(self.palette().highlight().color())
+        color.setAlpha(_SELECTION_ALPHA)
+        for rect in self.selection_rects():
+            painter.fillRect(rect, color)
+        if self.caret_shown() and self._caret_on:
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)   # scharf, 1 Pixel
+            painter.setPen(QPen(Qt.GlobalColor.black, 0))
+            line = self.caret_line()
+            painter.drawLine(QPointF(round(line.x1()), round(line.y1())),
+                             QPointF(round(line.x2()), round(line.y2())))
+            painter.restore()
 
     def _draw_guides(self, painter: QPainter, vw: int, vh: int) -> None:
         """Rote Hilfslinien über die ganze Ansicht, solange ein Objekt einrastet."""

@@ -1,7 +1,8 @@
 """QActions aus dem Kürzel-Verzeichnis (``shortcuts.ACTIONS``): eine je Aktion, Kürzel änderbar.
 
 Wer eine Aktion nutzt, verbindet ``triggered`` und hängt sie an das passende Widget
-(globale ans Hauptfenster, „canvas“ an die Arbeitsfläche, „text“ ans Textfeld).
+(globale ans Hauptfenster, „canvas“ an die Arbeitsfläche, „edit“ ans Text-Panel, in dem der
+Editor des Schreibmodus steckt).
 """
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from .. import shortcuts
 _CONTEXT = {
     "global": Qt.ShortcutContext.WindowShortcut,
     "canvas": Qt.ShortcutContext.WidgetWithChildrenShortcut,
-    "text": Qt.ShortcutContext.WidgetWithChildrenShortcut,
+    "edit": Qt.ShortcutContext.WidgetWithChildrenShortcut,
 }
 
 
@@ -33,7 +34,10 @@ def apply_shortcuts(actions: dict[str, QAction], mapping: dict[str, str]) -> Non
     """Kürzel (z. B. nach dem Speichern der Einstellungen) setzen; Tooltip nennt das Kürzel."""
     for action_id, action in actions.items():
         sequence = QKeySequence(mapping.get(action_id, ""))
-        action.setShortcut(sequence)
+        if sequence.toString() == "Return":           # Enter auf dem Ziffernblock gilt mit
+            action.setShortcuts([sequence, QKeySequence("Enter")])
+        else:
+            action.setShortcut(sequence)
         name = shortcuts.action(action_id).name
         keys = sequence.toString(QKeySequence.SequenceFormat.NativeText)
         action.setToolTip(f"{name} ({keys})" if keys else name)

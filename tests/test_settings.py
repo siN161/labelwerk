@@ -176,3 +176,12 @@ def test_shortcuts_null_keeps_defaults_with_warning(tmp_path):
     s = load_settings(path)
     assert s.shortcuts == {} and s.label_id == "29"
     assert len(s.warnings) == 1 and "shortcuts" in s.warnings[0]
+
+
+def test_esc_from_settings_file_is_rejected(tmp_path):
+    from labelwerk.settings import load_settings
+    path = tmp_path / "settings.json"
+    path.write_text('{"shortcuts": {"file.print": "Esc"}}', encoding="utf-8")
+    settings = load_settings(path)
+    assert settings.shortcuts == {}
+    assert any("nicht belegbar" in w for w in settings.warnings)

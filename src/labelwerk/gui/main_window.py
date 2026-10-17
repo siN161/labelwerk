@@ -7,7 +7,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
+                               QMessageBox,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
@@ -32,6 +33,7 @@ from .panels.text import DEFAULT_PT
 from .print_worker import PrintWorker
 from .settings_dialog import SettingsDialog
 from .symbols import SIZE, line_icon
+from .text_edit_mode import TextEditSession
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
@@ -160,6 +162,8 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
         scroll = QScrollArea()                  # kleine Bildschirme: Panel rollt statt Fenster wächst
         scroll.setObjectName("panelScroll")
+        # Klick auf freie Panel-Fläche nimmt niemandem den Fokus (Schreibmodus tippt weiter)
+        scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         scroll.setWidget(self.panels)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -200,6 +204,10 @@ class MainWindow(QMainWindow):
         self._printer_timer.timeout.connect(self.refresh_printer)
         self._printer_timer.start()
 
+        # Schreibmodus direkt auf dem Etikett (Editor des Text-Panels als Eingabepuffer)
+        self.edit_session = TextEditSession(self)
+        self.panel("text").changed.connect(self.edit_session.content_changed)
+        self._connect_edit_mode()
         self.render_now()
         self.canvas.selection_changed.connect(self._on_selection)
         self.panel("text").frame_edited.connect(self._edit_frame)
@@ -239,15 +247,32 @@ class MainWindow(QMainWindow):
         handlers = {"edit.delete": self.delete_selected, "edit.select_all": self.canvas.select_all,
                     "edit.cut": self.cut_selected, "edit.copy": self.copy_selected,
                     "edit.paste": self.paste, "edit.duplicate": self.duplicate_selected,
-                    "tool.select": lambda: self.canvas.set_tool("select"),
-                    "tool.text": lambda: self.canvas.set_tool("text")}
+                    "tool.select": lambda: self._choose_tool("select"),
+                    "tool.text": lambda: self._choose_tool("text")}
+        handlers["text.start_edit"] = handlers["text.start_edit_enter"] = self.edit_selected
         for key, handler in handlers.items():
             self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
             self.canvas.addAction(self.shortcut_actions[key])
-        # global: wirkt überall – außer im Textfeld, das Strg+Z selbst nutzt (eigenes Rückgängig)
+        # global: wirkt überall; im Schreibmodus nutzt der Editor Strg+Z selbst (eigenes Rückgängig)
+        # und gibt an das Dokument weiter, wenn er nichts mehr hat
         self.shortcut_actions["edit.undo"].triggered.connect(self.undo)
         self.shortcut_actions["edit.redo"].triggered.connect(self.redo)
         self.addActions([self.shortcut_actions["edit.undo"], self.shortcut_actions["edit.redo"]])
+
+    def _connect_edit_mode(self) -> None:
+        """Esc (Bereich „Schreibmodus“, fest) und Klick neben den Rahmen beenden den
+        Schreibmodus – ein leer gebliebener Rahmen entfällt dabei. Rückgängig, Zwischenablage
+        und ihre Knöpfe folgen im Schreibmodus dem Editor."""
+        end = self.shortcut_actions["text.end_edit"]
+        end.triggered.connect(lambda _=False: self.finish_editing())
+        self.panel("text").addAction(end)
+        self.canvas.edit_left.connect(lambda: self.finish_editing())
+        editor = self.panel("text").edit
+        for signal in (editor.copyAvailable, editor.undoAvailable, editor.redoAvailable):
+            signal.connect(self._update_edit_actions)
+        # Einfügen-Knopf folgt der Zwischenablage des Systems (PySide trennt die Verbindung
+        # mit dem Fenster, ein späteres Ändern der Zwischenablage trifft nichts Gelöschtes)
+        QApplication.clipboard().dataChanged.connect(self._update_edit_actions)
 
     def _connect_layout_actions(self) -> None:
         """Reiter „Layout“: Ausrichten, Größe angleichen, Drehen, Reihenfolge (auch per Kürzel)."""
@@ -292,9 +317,17 @@ class MainWindow(QMainWindow):
         self.tool_actions[key].setChecked(True)
         self.panels.setCurrentWidget(self.panel(key))
 
+    def _choose_tool(self, tool: str) -> None:
+        """Auswahl-Pfeil oder „Text anlegen“ (Bearbeitungsleiste, Kürzel) – beendet den
+        Schreibmodus."""
+        self.finish_editing()
+        self.canvas.set_tool(tool)
+
     def _tool_triggered(self, key: str) -> None:
         """Werkzeug-Reiter: Panel zeigen; Text ohne Auswahl heißt „Text anlegen“, jedes
-        andere Panel arbeitet mit dem Auswahl-Pfeil."""
+        andere Panel arbeitet mit dem Auswahl-Pfeil (und beendet den Schreibmodus)."""
+        if key != "text":
+            self.finish_editing()
         self.panels.setCurrentWidget(self.panel(key))
         if key == "text":
             self._sync_tool()
@@ -316,6 +349,8 @@ class MainWindow(QMainWindow):
         if self._arranging:                         # Anlegen, Umnummerieren: nur mitführen
             self._follow_selection(indices)
             return
+        if self.edit_session.active and indices != [self.edit_session.index]:
+            self.finish_editing(drop_empty=False)   # leere Rahmen entfallen gleich hier unten
         if not self._restoring:
             indices = self._drop_empty_frames(indices)
         self._follow_selection(indices)
@@ -375,6 +410,24 @@ class MainWindow(QMainWindow):
             panel.show_frame(exact_rect(self.doc.objects[index], self.rendered[index]))
 
     def _update_edit_actions(self) -> None:
+        if self.edit_session.active:                # Knöpfe wirken auf den Text im Editor
+            editor = self.panel("text").edit
+            marked = editor.textCursor().hasSelection()
+            enabled = {"edit.cut": marked, "edit.copy": marked, "edit.paste": editor.canPaste(),
+                       "edit.duplicate": False, "edit.delete": False,
+                       "edit.undo": (editor.document().isUndoAvailable()
+                                     or self.history.can_undo(self.doc)),
+                       "edit.redo": (editor.document().isRedoAvailable()
+                                     or self.history.can_redo(self.doc)),
+                       "text.end_edit": True, "text.start_edit": False,
+                       "text.start_edit_enter": False}
+            for key, value in enabled.items():
+                self.shortcut_actions[key].setEnabled(value)
+            return
+        self.shortcut_actions["text.end_edit"].setEnabled(False)
+        single = len(self.canvas.selection()) == 1
+        for key in ("text.start_edit", "text.start_edit_enter"):
+            self.shortcut_actions[key].setEnabled(single)
         selected = bool(self.canvas.selection())
         for key in _SELECTION_ACTIONS:
             self.shortcut_actions[key].setEnabled(selected)
@@ -429,6 +482,7 @@ class MainWindow(QMainWindow):
                                  grow=growing_axis(self.doc))
         self.panel("layout").set_growing(growing_axis(self.doc))
         self._update_frame()
+        self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
 
     def _drop_stale_view(self) -> None:
         """Nach einem Renderfehler: Objektbilder, die nicht mehr zu ``doc.objects`` passen
@@ -481,19 +535,47 @@ class MainWindow(QMainWindow):
     def _commit(self, merge=None) -> None:
         """Stand nach einer abgeschlossenen Aktion festhalten (ohne Änderung kein Schritt).
 
-        Vor jeder Aktion aufgerufen, wird noch nicht Festgehaltenes (Getipptes) ein eigener
-        Schritt. Tippen im Textfeld wird ein Schritt, sobald der Fokus das Feld verlässt –
-        nicht, während die Auswahl intern umgestellt wird (z. B. Textfeld gesperrt, weil ein
-        leerer Rahmen entfällt); das hält der Aufrufer selbst fest."""
-        if self._arranging:
+        Vor jeder Aktion aufgerufen, wird noch nicht Festgehaltenes ein eigener Schritt. Nicht
+        während die Auswahl intern umgestellt wird (z. B. ein leerer Rahmen entfällt); das hält
+        der Aufrufer selbst fest. Im Schreibmodus gehört alles zur laufenden Bearbeitung – sie
+        wird beim Beenden ein Schritt (``finish_editing``)."""
+        if self._arranging or self.edit_session.active:
             return
         self.history.push(self.doc, merge, self.canvas.selection())
         self._update_edit_actions()
 
     def undo(self) -> None:
+        """Rückgängig – im Schreibmodus innerhalb der Bearbeitung (Editor); ist dort nichts
+        mehr zurückzunehmen, endet der Schreibmodus und es geht im Dokument weiter (Knopf und
+        Strg+Z gleich). Ein leerer neuer Rahmen entfällt dabei – das ist dann der ganze
+        Schritt."""
+        if self.edit_session.active:
+            editor = self.panel("text").edit
+            if editor.document().isUndoAvailable():
+                editor.undo()
+                return
+            obj = self.doc.objects[self.edit_session.index]
+            if obj.positioned and obj.is_empty():
+                selection = self.history.selection  # Auswahl vor dem Anlegen
+                self.finish_editing()
+                self.canvas.set_selection(selection)
+                return
+            if not self.history.can_undo(self.doc):
+                return                              # nichts zurückzunehmen: weiter schreiben
+            self.finish_editing()
         self._restore(self.history.undo(self.doc, self.canvas.selection()))
 
     def redo(self) -> None:
+        """Wiederherstellen – im Schreibmodus im Editor; hat er nichts mehr, endet der
+        Schreibmodus und es geht im Dokument weiter (wie bei ``undo``)."""
+        if self.edit_session.active:
+            editor = self.panel("text").edit
+            if editor.document().isRedoAvailable():
+                editor.redo()
+                return
+            if not self.history.can_redo(self.doc):
+                return                              # nichts zu wiederholen: weiter schreiben
+            self.finish_editing()
         self._restore(self.history.redo(self.doc, self.canvas.selection()))
 
     def _restore(self, snapshot: Document | None) -> None:
@@ -559,14 +641,17 @@ class MainWindow(QMainWindow):
         self._commit()
 
     def create_text(self, x_mm: float, y_mm: float) -> None:
-        """Neuer leerer Textrahmen an x/y (mm, Leserichtung), ausgewählt, Schreibmarke ins Textfeld.
+        """Neuer leerer Textrahmen an x/y (mm, Leserichtung), ausgewählt, gleich im Schreibmodus.
 
         Schrift aus den Einstellungen (automatische Größe → 19 pt). Andere leere Texte sind
         unsichtbar und drucken nicht – sie entfallen dabei."""
+        self.finish_editing()
         self._structure_changing()
         self._commit()
         family = None if self.settings.font_family == DEFAULT_FAMILY else self.settings.font_family
-        obj = TextObject.plain("", size_pt=self.settings.font_size_pt or DEFAULT_PT, family=family)
+        # linksbündig: Schreibmarke am Klickpunkt, der Text wächst nach rechts (wie P-touch)
+        obj = TextObject.plain("", size_pt=self.settings.font_size_pt or DEFAULT_PT, align="left",
+                               family=family)
         obj.x_mm, obj.y_mm = round(x_mm, 1), round(y_mm, 1)
         self.doc.objects[:] = [o for o in self.doc.objects if not o.is_empty()]
         self.doc.objects.append(obj)
@@ -578,18 +663,48 @@ class MainWindow(QMainWindow):
         finally:
             self._arranging = False
         self.canvas.set_selection([index])
-        self._commit()
-        self.edit_text(index)
+        self.edit_text(index)                       # Anlegen und Schreiben: ein Schritt
 
-    def edit_text(self, index: int) -> None:
-        """Text eines Objekts bearbeiten: auswählen, Text-Panel zeigen, Schreibmarke hinein."""
-        if index not in self.canvas.selection():
+    def edit_selected(self) -> None:
+        """F2/Enter: Schreibmodus für das einzige gewählte Objekt, Schreibmarke am Textende."""
+        selection = self.canvas.selection()
+        if not self.edit_session.active and len(selection) == 1:
+            self.edit_text(selection[0])
+
+    def edit_text(self, index: int, point=None) -> None:
+        """Schreibmodus für ein Objekt: auswählen, Text-Panel zeigen, Schreibmarke an
+        ``point`` (QPointF, Druckpunkte in Leserichtung – z. B. Doppelklick) bzw. ans Ende."""
+        if self.edit_session.active:
+            if self.edit_session.index == index:
+                return
+            self.finish_editing(drop_empty=False)   # entfällt gleich beim Wählen (Nummern!)
+        if not self._valid(index):
+            return
+        if self.canvas.selection() != [index]:
             self.canvas.set_selection([index])
+            index = self.canvas.selection()[-1]     # ggf. umnummeriert (leerer Rahmen entfiel)
         self._show_tool("text")
-        self.panel("text").edit.setFocus()
+        if self._timer.isActive():
+            self.render_now()                       # Klick trifft den aktuellen Zeilensatz
+        self.edit_session.start(index, point)
+        self._update_edit_actions()
+
+    def finish_editing(self, drop_empty: bool = True) -> None:
+        """Schreibmodus beenden (Esc, Klick daneben, anderes Werkzeug oder Reiter, Befehl auf
+        der Auswahl); die ganze Bearbeitung wird ein Rückgängig-Schritt. Ein leer gebliebener
+        Rahmen entfällt dabei – außer bei ``drop_empty=False``, wenn der Aufrufer gerade die
+        Auswahl ändert (dann entfällt er dort, ``_on_selection``)."""
+        index = self.edit_session.end()
+        if index is None:
+            return
+        if (drop_empty and self._valid(index) and self.doc.objects[index].positioned
+                and self.doc.objects[index].is_empty()):
+            self.canvas.set_selection([])           # leerer Rahmen entfällt (_on_selection)
+        self._commit()
 
     def delete_selected(self) -> None:
         """Ausgewählte Objekte löschen (auch das letzte – das Etikett ist dann leer)."""
+        self.finish_editing()
         indices = self.canvas.selection()
         if not indices:
             return
@@ -603,6 +718,7 @@ class MainWindow(QMainWindow):
 
     def _edit_frame(self, key: str, value: float) -> None:
         """Zahl im Bereich „Position“ geändert: Objekt verschieben bzw. Rahmen ändern."""
+        self.finish_editing()
         index = self.panel("text").index
         if index is None or not self._valid(index):
             return
@@ -639,6 +755,7 @@ class MainWindow(QMainWindow):
         """Gewählte Objekte durch ``change(objekte, gerendert)`` ersetzen – ein Schritt.
 
         ``change`` läuft nach dem Rendern: Rahmen und ``self._area`` sind aktuell."""
+        self.finish_editing()
         if self._timer.isActive():
             self.render_now()                   # z. B. eben Getipptes: aktuelle Rahmen
         # leere Rahmen sind unsichtbar und drucken nicht: sie nehmen an Layout-Befehlen nicht teil
@@ -655,6 +772,7 @@ class MainWindow(QMainWindow):
 
     def reorder_selected(self, step: int) -> None:
         """Auswahl einen Platz nach vorne (1) bzw. hinten (−1); die Auswahl wandert mit."""
+        self.finish_editing()
         indices = self.canvas.selection()
         if not indices:
             return
@@ -667,18 +785,30 @@ class MainWindow(QMainWindow):
 
     # --- Zwischenablage ---------------------------------------------------
     def copy_selected(self) -> None:
-        """Ausgewählte Objekte (in Zeichenreihenfolge) in die interne Zwischenablage kopieren."""
+        """Ausgewählte Objekte (in Zeichenreihenfolge) in die interne Zwischenablage kopieren –
+        im Schreibmodus den markierten Text in die Zwischenablage des Systems."""
+        if self.edit_session.active:
+            self.panel("text").edit.copy()
+            self._update_edit_actions()             # Einfügen ist jetzt möglich
+            return
         indices = sorted(self.canvas.selection())
         if indices:
             self._clipboard = [self._placed_copy(i) for i in indices]
             self._update_edit_actions()
 
     def cut_selected(self) -> None:
+        if self.edit_session.active:
+            self.panel("text").edit.cut()
+            return
         self.copy_selected()
         self.delete_selected()
 
     def paste(self) -> None:
-        """Zwischenablage einfügen – jedes Mal 2 mm weiter versetzt; Eingefügtes ist ausgewählt."""
+        """Zwischenablage einfügen – jedes Mal 2 mm weiter versetzt; Eingefügtes ist ausgewählt.
+        Im Schreibmodus Text aus der Zwischenablage des Systems (als reiner Text)."""
+        if self.edit_session.active:
+            self.panel("text").edit.paste()
+            return
         if self._clipboard:
             self._clipboard = [_offset(obj) for obj in self._clipboard]
             self._insert(copy.deepcopy(self._clipboard))
@@ -698,6 +828,7 @@ class MainWindow(QMainWindow):
         return move(obj, object_rect(rendered), rendered)
 
     def _insert(self, objects: list[TextObject]) -> None:
+        self.finish_editing()
         self._structure_changing()
         self._commit()
         start = len(self.doc.objects)
@@ -817,10 +948,18 @@ class MainWindow(QMainWindow):
         self._media_finished()
         adjusted = label_id is not None and label_id != self.doc.label_id
         if adjusted:
+            editing = self.edit_session.active
+            if editing:     # Stand vor der Bearbeitung mit neuer Rolle: eigener Schritt davor
+                before = self.history.current()
+                before.label_id = label_id
             self.doc.label_id = label_id
             self.panel("paper").refresh()
             self.schedule_render()
-            self._commit()
+            if editing:
+                self.history.push(before, selection=self.history.selection)
+                self._update_edit_actions()
+            else:
+                self._commit()
         self.panel("paper").show_media(media, label_id, adjusted)
 
     def _media_failed(self, message: str) -> None:

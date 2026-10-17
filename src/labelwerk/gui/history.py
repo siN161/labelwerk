@@ -1,8 +1,8 @@
 """Rückgängig/Wiederherstellen über Dokument-Schnappschüsse (``copy.deepcopy``).
 
 Nach jeder abgeschlossenen Aktion hält das Hauptfenster den Stand mit ``push`` fest.
-Änderungen, die noch nicht festgehalten sind (z. B. Tippen im Textfeld, das erst beim
-Verlassen des Felds ein Schritt wird), macht ``undo`` vorher selbst zu einem Schritt.
+Änderungen, die noch nicht festgehalten sind (z. B. eine laufende Bearbeitung im
+Schreibmodus), macht ``undo`` vorher selbst zu einem Schritt.
 
 Zu jedem Stand gehört die Auswahl (Indizes), die zuletzt dazu galt: Nach Rückgängig/
 Wiederherstellen zeigt ``selection`` sie, damit die Auswahl auf denselben Objekten liegt –
@@ -41,6 +41,10 @@ class History(QObject):
         self._pos = 0
         self._merge: Hashable | None = None
         self.changed.emit()
+
+    def current(self) -> Document:
+        """Kopie des aktuellen Stands (ohne noch nicht Festgehaltenes)."""
+        return copy.deepcopy(self._states[self._pos].doc)
 
     @property
     def selection(self) -> list[int]:
