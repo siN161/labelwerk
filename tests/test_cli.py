@@ -53,3 +53,9 @@ def test_unknown_label_gives_friendly_error(capsys):
     rc = main(["print", "Hallo", "-l", "99", "--preview", "x.png"])
     assert rc == 2
     assert "Unbekanntes Etikett" in capsys.readouterr().err
+
+
+def test_font_size_too_large_gives_friendly_error(capsys):
+    rc = main(["print", "Sehr langer Text", "-l", "29", "-s", "200", "--preview", "x.png"])
+    assert rc == 2
+    assert "passt nicht" in capsys.readouterr().err

@@ -15,6 +15,15 @@ _FONT_CANDIDATES = [
 ]
 
 
+class TextTooLarge(ValueError):
+    """Text passt bei fester Schriftgröße nicht aufs Etikett."""
+
+    def __init__(self, size: int, max_size: int, label_id: str):
+        super().__init__(f"Text passt nicht auf Etikett {label_id!r} bei Schriftgröße {size} "
+                         f"(höchstens {max_size}).")
+        self.size, self.max_size = size, max_size
+
+
 def _load_font(size: int, font_path: str | None):
     for path in [font_path, *_FONT_CANDIDATES]:
         if path and Path(path).exists():
@@ -46,6 +55,8 @@ def render_text(
         if (fits_w and fits_h) or size <= 8:
             break
         size -= 2
+    if font_size is not None and size != font_size:
+        raise TextTooLarge(font_size, size, label_id)
 
     text_w, text_h = r - l, b - t
     height = label.height or text_h + 2 * MARGIN
