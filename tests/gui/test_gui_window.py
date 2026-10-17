@@ -361,3 +361,30 @@ def test_font_replacement_hint_in_status_bar(window):
     window.doc.objects[0] = TextObject([Paragraph([Span("Hallo")])])
     window.render_now()
     assert window.result.text() == ""
+
+
+def test_global_actions_come_from_shortcut_registry(window, monkeypatch):
+    """Drucken, Einstellungen und Zoom sind Aktionen des Kürzel-Verzeichnisses."""
+    from PySide6.QtGui import QKeySequence
+    assert window.print_action is window.actions["file.print"]
+    assert window.settings_action is window.actions["app.settings"]
+    assert window.print_action.shortcut() == QKeySequence("Ctrl+P")
+    assert "Ctrl+P" in window.print_action.toolTip()
+    asked = []                                              # leeres Etikett: Rückfrage = Druck läuft
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.Cancel)
+    window.panel("text").edit.setPlainText("")
+    window.actions["file.print"].trigger()
+    assert asked
+    window.canvas.set_zoom(100)
+    window.actions["view.zoom_in"].trigger()
+    assert window.canvas.zoom == 110
+    window.actions["view.zoom_out"].trigger()
+    window.actions["view.zoom_out"].trigger()
+    assert window.canvas.zoom == 90
+    window.actions["view.zoom_reset"].trigger()
+    assert window.canvas.zoom == 100
+    from PySide6.QtWidgets import QWidget
+    window_actions = QWidget.actions(window)                # self.actions ist das Verzeichnis
+    assert all(window.actions[key] in window_actions
+               for key in ("view.zoom_in", "view.zoom_out", "view.zoom_reset", "edit.undo"))

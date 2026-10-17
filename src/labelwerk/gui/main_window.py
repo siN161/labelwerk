@@ -37,6 +37,7 @@ RENDER_DELAY_MS = 150
 PANEL_WIDTH = 280          # Eigenschaften-Panels; bei wenig Höhe rollbar
 MEDIA_STATUS_MAX_PX = 360   # Rollen-Hinweis in der Fußzeile; Rest per „…“ und Tooltip
 PRINTER_POLL_MS = 2000     # Druckererkennung: nur Blick in /sys, kein USB-Zugriff
+ZOOM_STEP = 10             # Prozentpunkte je Klick bzw. Kürzel
 NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit Umschalt
 _DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
 OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
@@ -79,6 +80,8 @@ class MainWindow(QMainWindow):
         self._media_check_pending = False
         self._clipboard: list[TextObject] = []      # interne Zwischenablage (Kopien)
         self._merge_next = None                     # Pfeiltasten: Schritte zusammenfassen
+        # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar
+        self.actions = build_actions(self, effective(self.settings.shortcuts))
 
         # Werkzeugleiste + Panels aus der Registry
         toolbar = QToolBar("Werkzeuge")
@@ -108,11 +111,11 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(spacer)
-        self.settings_action = QAction(QIcon.fromTheme("preferences-system"), "EINSTELLUNGEN", self)
-        self.settings_action.triggered.connect(self.open_settings)
+        self.settings_action = self._toolbar_action("app.settings", "preferences-system",
+                                                    "EINSTELLUNGEN", self.open_settings)
         toolbar.addAction(self.settings_action)
-        self.print_action = QAction(QIcon.fromTheme("document-print"), "DRUCKEN", self)
-        self.print_action.triggered.connect(self.print_label)
+        self.print_action = self._toolbar_action("file.print", "document-print", "DRUCKEN",
+                                                 self.print_label)
         toolbar.addAction(self.print_action)
         toolbar.widgetForAction(self.print_action).setObjectName("print")
 
@@ -129,7 +132,7 @@ class MainWindow(QMainWindow):
         self.canvas.object_clicked.connect(self._show_object_panel)
         self.history = History(self.doc)
         self.history.changed.connect(self._update_edit_actions)
-        self.actions = build_actions(self, effective(self.settings.shortcuts))
+        self._connect_view_actions()
         self._connect_canvas_actions()
         self._connect_layout_actions()
         self._build_edit_bar()
@@ -161,7 +164,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(self.media_status)
         self.statusBar().addWidget(self.result, 1)
         self.zoom_label = QLabel()
-        for text, delta in (("−", -10), ("+", 10)):
+        for text, delta in (("−", -ZOOM_STEP), ("+", ZOOM_STEP)):
             button = QToolButton()
             button.setText(text)
             button.clicked.connect(lambda _=False, d=delta: self.canvas.set_zoom(self.canvas.zoom + d))
@@ -195,6 +198,23 @@ class MainWindow(QMainWindow):
 
     def panel(self, key: str):
         return self._panel_by_key[key]
+
+    def _toolbar_action(self, key: str, icon: str, text: str, handler) -> QAction:
+        """Aktion aus dem Verzeichnis als Knopf der Werkzeugleiste (Kürzel bleibt änderbar)."""
+        action = self.actions[key]
+        action.setIcon(QIcon.fromTheme(icon))
+        action.setText(text)
+        action.triggered.connect(lambda _=False: handler())
+        return action
+
+    def _connect_view_actions(self) -> None:
+        """Zoom per Kürzel – wie die Knöpfe −/+ in der Statusleiste."""
+        handlers = {"view.zoom_in": lambda: self.canvas.set_zoom(self.canvas.zoom + ZOOM_STEP),
+                    "view.zoom_out": lambda: self.canvas.set_zoom(self.canvas.zoom - ZOOM_STEP),
+                    "view.zoom_reset": lambda: self.canvas.set_zoom(100)}
+        for key, handler in handlers.items():
+            self.actions[key].triggered.connect(lambda _=False, h=handler: h())
+            self.addAction(self.actions[key])
 
     def _connect_canvas_actions(self) -> None:
         """Kürzel der Arbeitsfläche (Pfeiltasten, Zwischenablage, Werkzeug) und Rückgängig."""
@@ -618,8 +638,11 @@ class MainWindow(QMainWindow):
 
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, model=self.model, parent=self)
-        if dialog.exec() == SettingsDialog.DialogCode.Accepted and dialog.saved is not None:
-            self.settings = dialog.saved
+        accepted = dialog.exec() == SettingsDialog.DialogCode.Accepted
+        saved = dialog.saved
+        dialog.deleteLater()                    # nicht bis zum Schließen des Fensters behalten
+        if accepted and saved is not None:
+            self.settings = saved
             from PySide6.QtWidgets import QApplication
             from .app import apply_theme
             apply_theme(QApplication.instance(), self.settings.theme)

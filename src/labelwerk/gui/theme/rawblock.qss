@@ -116,6 +116,42 @@ QToolButton#layoutButton { background: #FFFFFF; border: 3px solid #000000; borde
 QToolButton#layoutButton:hover { background: #000000; }
 QToolButton#layoutButton:disabled { background: #F0F0F0; border-color: #CCCCCC; }
 
+/* Einstellungen: Reiter und Kürzel-Tabelle */
+QTabWidget::pane { border: 3px solid #000000; top: -3px; }
+QTabBar::tab {
+    background: #FFFFFF;
+    border: 3px solid #000000;
+    padding: 6px 14px;
+    margin-right: -3px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+QTabBar::tab:selected { background: #000000; color: #FFFFFF; }
+QTabBar::tab:hover:!selected { background: #E8E8E8; }
+QTableWidget {
+    border: 3px solid #000000;
+    gridline-color: #CCCCCC;
+    selection-background-color: #000000;
+    selection-color: #FFFFFF;
+}
+QHeaderView::section {
+    background: #000000;
+    color: #FFFFFF;
+    border: none;
+    border-right: 1px solid #FFFFFF;
+    padding: 4px 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+QPushButton#tableButton { border-width: 2px; padding: 1px 8px; margin: 1px 2px; letter-spacing: 0; }
+QKeySequenceEdit QLineEdit {
+    background: #F0F0F0;
+    border: 3px solid #000000;
+    border-radius: 0;
+    padding: 0 4px;
+    font-family: "Space Mono", "DejaVu Sans Mono", monospace;
+}
+
 QStatusBar { border-top: 3px solid #000000; }
 QStatusBar QLabel[state="ok"] { color: #008000; font-weight: 700; }
 QStatusBar QLabel[state="error"] { color: #FF0000; font-weight: 700; }

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import (QFont, QIcon, QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QTextFormat,
+from PySide6.QtGui import (QAction, QFont, QIcon, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QGridLayout, QHBoxLayout,
                                QLabel, QPushButton, QTextEdit)
@@ -201,11 +201,13 @@ class TextPanel(Panel):
         for key, button in self.align_buttons.items():
             button.clicked.connect(lambda _=False, k=key: step(self._align, k))
         self.fit.toggled.connect(lambda _: step(self._apply))
-        for keys, button in ((QKeySequence.StandardKey.Bold, self.bold),
-                             (QKeySequence.StandardKey.Italic, self.italic),
-                             (QKeySequence.StandardKey.Underline, self.underline)):
-            QShortcut(keys, self, context=Qt.ShortcutContext.WidgetWithChildrenShortcut,
-                      activated=button.click)
+
+    def use_actions(self, actions: dict[str, QAction]) -> None:
+        """Kürzel für Fett/Kursiv/Unterstrichen: wirken, solange das Panel den Fokus hat."""
+        for key, button in (("text.bold", self.bold), ("text.italic", self.italic),
+                            ("text.underline", self.underline)):
+            actions[key].triggered.connect(lambda _=False, b=button: b.click())
+            self.addAction(actions[key])
 
     @property
     def obj(self) -> TextObject:

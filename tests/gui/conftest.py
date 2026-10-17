@@ -10,6 +10,13 @@ else:
     import pytest
 
     @pytest.fixture(autouse=True)
+    def no_leftover_theme(qapp):
+        """Speichern der Einstellungen setzt das Design der ganzen Anwendung – danach zurück,
+        damit jeder Test im Qt-Grundstil startet."""
+        yield
+        qapp.setStyleSheet("")
+
+    @pytest.fixture(autouse=True)
     def no_printer(monkeypatch):
         """Kein Test liest echte Druckerdaten aus /sys."""
         for module in ("labelwerk.gui.main_window", "labelwerk.gui.print_worker",
