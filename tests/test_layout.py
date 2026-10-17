@@ -2,7 +2,7 @@
 import pytest
 
 from labelwerk import layout, render
-from labelwerk.document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
+from labelwerk.document import MAX_PT, MIN_PT, Document, ImageObject, Paragraph, Span, TextObject
 from labelwerk.labels import DPI
 from labelwerk.layout import Rect, Snap
 from labelwerk.render import MARGIN, RenderedObject, render_document, render_object
@@ -427,9 +427,9 @@ def test_resize_fit_object_changes_frame():
     obj = TextObject("A", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=20, h_mm=8)
     rendered = _rendered(1, 1, 20, 8, base_pt=30)
     old = layout.object_rect(rendered)
-    for corner in (True, False):
+    for handle in ("bl", "b"):
         new = Rect(old.x - 1, old.y, old.w + 5, old.h + 4)
-        resized = layout.resize(obj, new, rendered, corner=corner)
+        resized = layout.resize(obj, new, rendered, handle)
         assert (resized.x_mm, resized.y_mm, resized.w_mm, resized.h_mm) == \
             pytest.approx((0, 1, 25, 12))
         assert resized.fit and resized.size_pt == 12
@@ -440,7 +440,7 @@ def test_resize_corner_scales_text_without_frame():
     rendered = _rendered(1, 1, 10, 5)
     old = layout.object_rect(rendered)
     bigger = Rect(old.x, old.y, old.w * 1.5, old.h * 1.5)
-    resized = layout.resize(obj, bigger, rendered, corner=True)
+    resized = layout.resize(obj, bigger, rendered, "br")
     assert (resized.size_pt, resized.fit) == (18, False)
     assert (resized.x_mm, resized.y_mm) == pytest.approx((1, 1))
     assert resized.w_mm is None
@@ -450,7 +450,7 @@ def test_resize_corner_of_auto_object_uses_effective_size():
     rendered = _rendered(1, 1, 10, 5, base_pt=20)
     old = layout.object_rect(rendered)
     smaller = Rect(0, 0, old.w / 2, old.h / 2)
-    resized = layout.resize(TextObject("A"), smaller, rendered, corner=True)
+    resized = layout.resize(TextObject("A"), smaller, rendered, "tl")
     assert (resized.size_pt, resized.x_mm, resized.y_mm) == (10, 0, 0)
 
 
@@ -458,7 +458,7 @@ def test_resize_edge_turns_fixed_frame_on():
     obj = TextObject("A", size_pt=12, x_mm=1, y_mm=1, rotation=90)
     rendered = _rendered(1, 1, 5, 10)
     old = layout.object_rect(rendered)
-    resized = layout.resize(obj, Rect(old.x, old.y, old.w, old.h + 8), rendered, corner=False)
+    resized = layout.resize(obj, Rect(old.x, old.y, old.w, old.h + 8), rendered, "b")
     assert resized.fit
     assert (resized.x_mm, resized.y_mm, resized.w_mm, resized.h_mm) == \
         pytest.approx((1, 1, old.h + 8, old.w), abs=0.001)             # ungedreht gespeichert
@@ -836,7 +836,7 @@ def test_edge_resize_of_auto_size_text_then_move_keeps_frame():
     obj = TextObject("A", x_mm=1, y_mm=1)                    # size_pt None
     rendered = _rendered(1, 1, 10, 5, base_pt=20)
     old = layout.object_rect(rendered)
-    framed = layout.resize(obj, Rect(old.x, old.y, old.w + 10, old.h), rendered, corner=False)
+    framed = layout.resize(obj, Rect(old.x, old.y, old.w + 10, old.h), rendered, "r")
     assert framed.fit and framed.size_pt == 20
     moved = layout.move(framed, Rect(old.x + 2, old.y, old.w + 10, old.h),
                         _rendered(1, 1, 20, 5, base_pt=20))
@@ -886,3 +886,203 @@ def test_snap_to_start_margin_on_auto_length(grow, moving):
     axis = "y" if grow == "y" else "x"
     assert (s.dy if grow == "y" else s.dx) == pytest.approx(-0.4)
     assert (axis, 1.0) in s.guides
+
+
+# --- Bilder (Etappe 3d-2a) ----------------------------------------------------------
+def _picture(x_mm=10, y_mm=5, w_mm=20, h_mm=10, **kw):
+    from PIL import Image
+    obj = ImageObject.from_image(Image.new("RGB", (40, 20), "black"), 300, "bild.png")
+    obj.x_mm, obj.y_mm, obj.w_mm, obj.h_mm = x_mm, y_mm, w_mm, h_mm
+    for key, value in kw.items():
+        setattr(obj, key, value)
+    return obj
+
+
+def test_exact_rect_of_image_is_its_frame():
+    assert layout.exact_rect(_picture(), _rendered(10, 5, 20, 10)) == Rect(10, 5, 20, 10)
+    turned = _picture(rotation=90)
+    assert layout.exact_rect(turned, _rendered(10, 5, 10, 20)) == Rect(10, 5, 10, 20)
+
+
+def test_move_image_keeps_size():
+    obj = _picture()
+    rendered = _rendered(10, 5, 20, 10)
+    moved = layout.move(obj, layout.object_rect(rendered).moved(1.5, -0.5), rendered)
+    assert _model_frame(moved) == pytest.approx((11.5, 4.5, 20, 10))
+    assert isinstance(moved, ImageObject) and moved.png is obj.png and obj.x_mm == 10
+
+
+def test_set_frame_of_image_sets_position_and_size():
+    obj = _picture(rotation=270)
+    placed = layout.set_frame(obj, Rect(1, 2, 8, 30), _rendered(10, 5, 10, 20))
+    assert _model_frame(placed) == (1, 2, 30, 8)                   # ungedreht gespeichert
+
+
+@pytest.mark.parametrize("handle, new, expected", [
+    ("br", Rect(10, 5, 40, 12), (10, 5, 40, 20)),     # rechts unten gezogen: größeres Maß zählt
+    ("bl", Rect(0, 5, 30, 25), (-20, 5, 50, 25)),     # links unten: rechte obere Ecke bleibt
+    ("tl", Rect(14, 1, 16, 14), (2, 1, 28, 14)),      # links oben: rechte untere Ecke bleibt
+])
+def test_resize_image_corner_keeps_ratio(handle, new, expected):
+    obj = _picture()
+    rendered = _rendered(10, 5, 20, 10)
+    shown = layout.object_rect(rendered)
+    delta = Rect(new.x - 10 + shown.x, new.y - 5 + shown.y, new.w - 20 + shown.w,
+                 new.h - 10 + shown.h)                 # relativ zum gerundeten Rahmen
+    resized = layout.resize(obj, delta, rendered, handle)
+    assert _model_frame(resized) == pytest.approx(expected, abs=0.002)
+    assert resized.w_mm / resized.h_mm == pytest.approx(2)
+
+
+def test_resize_image_edge_with_keep_ratio_scales_uniformly_around_centre():
+    obj = _picture()
+    rendered = _rendered(10, 5, 20, 10)
+    old = layout.object_rect(rendered)
+    wider = layout.resize(obj, Rect(old.x, old.y, old.w + 10, old.h), rendered, "r")
+    assert _model_frame(wider) == pytest.approx((10, 2.5, 30, 15), abs=0.002)   # Mitte senkrecht
+    taller = layout.resize(obj, Rect(old.x, old.y - 5, old.w, old.h + 5), rendered, "t")
+    assert _model_frame(taller) == pytest.approx((5, 0, 30, 15), abs=0.002)     # Mitte waagerecht
+
+
+HANDLES = ("tl", "t", "tr", "r", "br", "b", "bl", "l")
+
+
+def _dragged(rect: Rect, handle: str, amount: float) -> Rect:
+    """``rect`` nach Ziehen am Anfasser ``handle`` um ``amount`` mm nach außen."""
+    left, top, right, bottom = rect.x, rect.y, rect.right, rect.bottom
+    left -= amount if "l" in handle else 0
+    right += amount if "r" in handle else 0
+    top -= amount if "t" in handle else 0
+    bottom += amount if "b" in handle else 0
+    return Rect(left, top, right - left, bottom - top)
+
+
+@pytest.mark.parametrize("handle", HANDLES)
+def test_keep_aspect_fixes_what_the_handle_says(handle):
+    """Ecke: gegenüberliegende Ecke bleibt; Kante: gegenüberliegende Kante bleibt, quer dazu
+    die Mitte – unabhängig davon, welches Maß sich (in Rechenrauschen) mehr geändert hat."""
+    old = Rect(10, 20, 40, 20)
+    new = layout.keep_aspect(old, _dragged(old, handle, 4), handle)
+    assert new.w / new.h == pytest.approx(2)
+    assert new.w > old.w
+    for edge, opposite in (("l", "right"), ("r", "x"), ("t", "bottom"), ("b", "y")):
+        if edge in handle:
+            assert getattr(new, opposite) == pytest.approx(getattr(old, opposite))
+    if handle in ("t", "b"):
+        assert new.cx == pytest.approx(old.cx)
+    if handle in ("l", "r"):
+        assert new.cy == pytest.approx(old.cy)
+
+
+def test_keep_aspect_edge_ignores_noise_in_the_other_axis():
+    old = Rect(10, 20, 40, 20)
+    noisy = Rect(10, 20 - 1e-9, 40 + 1e-12, 26 + 1e-9)       # unten gezogen, quer nur Rauschen
+    new = layout.keep_aspect(old, noisy, "b")
+    assert (new.y, new.h, new.cx) == pytest.approx((20, 26, old.cx))
+
+
+@pytest.mark.parametrize("rotation", [0, 90])
+@pytest.mark.parametrize("handle", HANDLES)
+def test_resize_image_result_matches_preview(handle, rotation):
+    """Die Vorschau (``keep_aspect`` auf dem gezeigten Rahmen) ist das Ergebnis (±1 Punkt)."""
+    obj = _picture(x_mm=20, y_mm=12, rotation=rotation)
+    _, rendered = _frame(obj)
+    shown = layout.object_rect(rendered)
+    preview = layout.keep_aspect(shown, _dragged(shown, handle, 3.3), handle)
+    resized = layout.resize(obj, preview, rendered, handle)
+    after, _ = _frame(resized)
+    for a, b in zip((after.x, after.y, after.right, after.bottom),
+                    (preview.x, preview.y, preview.right, preview.bottom)):
+        assert a == pytest.approx(b, abs=DOT_MM * 1.01)
+
+
+@pytest.mark.parametrize("handle", ["br", "r"])
+def test_resize_image_without_keep_ratio_distorts(handle):
+    obj = _picture(keep_ratio=False)
+    rendered = _rendered(10, 5, 20, 10)
+    old = layout.object_rect(rendered)
+    resized = layout.resize(obj, Rect(old.x, old.y, old.w + 10, old.h), rendered, handle)
+    assert _model_frame(resized) == pytest.approx((10, 5, 30, 10), abs=0.002)
+
+
+@pytest.mark.parametrize("degrees, end", [(90, 90), (-90, 270)])
+def test_rotate_image_keeps_centre(degrees, end):
+    obj = _picture(x_mm=10, y_mm=10)
+    before, rendered = _frame(obj)
+    turned = layout.rotate(obj, rendered, degrees)
+    after, _ = _frame(turned)
+    assert turned.rotation == end and (turned.w_mm, turned.h_mm) == (20, 10)
+    assert (after.w, after.h) == pytest.approx((10, 20), abs=0.1)
+    assert (after.cx, after.cy) == pytest.approx((before.cx, before.cy), abs=0.1)
+
+
+def _text_and_image():
+    return [TextObject("Text", size_pt=12, x_mm=4, y_mm=4), _picture(x_mm=20, y_mm=12),
+            TextObject("Rahmen", size_pt=12, fit=True, x_mm=7, y_mm=25, w_mm=20, h_mm=6)]
+
+
+@pytest.mark.parametrize("mode, attr", [("left", "x"), ("right", "right"), ("vcenter", "cy")])
+def test_align_mixed_text_and_images(mode, attr):
+    objs = _text_and_image()
+    aligned = layout.align_objects(objs, _rendered_of(objs), mode)
+    rects = [layout.exact_rect(o, r) for o, r in zip(aligned, _rendered_of(aligned))]
+    assert len({round(getattr(r, attr), 1) for r in rects}) == 1
+    assert (aligned[1].w_mm, aligned[1].h_mm) == (20, 10)
+
+
+def test_match_size_image_to_text_keeps_image_ratio():
+    objs = [TextObject("Rahmen", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=30, h_mm=6),
+            _picture(x_mm=5, y_mm=20)]
+    rendered = _rendered_of(objs)
+    # Breite × 1,5, Höhe × 0,6; „gleiche Größe“: Mittel aus beiden Faktoren
+    for mode, width in (("width", 30), ("height", 12), ("same", 20 * (1.5 * 0.6) ** 0.5)):
+        _, image = layout.match_objects(objs, rendered, mode)
+        assert (image.x_mm, image.y_mm) == (5, 20)              # Ecke bleibt
+        assert (image.w_mm, image.h_mm) == pytest.approx((width, width / 2), abs=0.002)
+
+
+def test_match_size_image_without_keep_ratio_takes_frame():
+    objs = [TextObject("Rahmen", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=30, h_mm=6),
+            _picture(x_mm=5, y_mm=20, keep_ratio=False)]
+    _, image = layout.match_objects(objs, _rendered_of(objs), "same")
+    assert _model_frame(image) == (5, 20, 30, 6)
+
+
+def test_match_size_text_to_image_scales_text():
+    objs = [_picture(x_mm=1, y_mm=1, w_mm=40, h_mm=20),
+            TextObject("Wort", size_pt=10, x_mm=5, y_mm=30)]
+    ref, text = layout.match_objects(objs, _rendered_of(objs), "width")
+    assert ref is objs[0] and text.size_pt > 10 and not text.fit
+
+
+@pytest.mark.parametrize("keep_ratio", [True, False])
+def test_maximize_image_fills_area_centred(keep_ratio):
+    obj = _picture(keep_ratio=keep_ratio)
+    doc = Document("62", length_mm=40, objects=[obj])
+    area = layout.printable_area(doc)
+    big = layout.maximize_object(obj, render_object(obj, doc), area, doc)
+    assert big.w_mm / big.h_mm == pytest.approx(2)
+    assert big.w_mm == pytest.approx(area.w, abs=0.002)
+    assert (big.x_mm + big.w_mm / 2, big.y_mm + big.h_mm / 2) == \
+        pytest.approx((area.cx, area.cy), abs=0.002)
+
+
+def test_outside_counts_images():
+    doc = Document("62", length_mm=40, objects=[TextObject("A", size_pt=12, x_mm=2, y_mm=2),
+                                                _picture(x_mm=50, y_mm=5)])
+    assert layout.objects_outside(doc) == [1]
+
+
+def test_to_grid_rounds_image_frame():
+    obj = layout.to_grid(_picture(x_mm=1.234, w_mm=20.06), x=True, w=True)
+    assert (obj.x_mm, obj.w_mm) == (1.2, 20.1)
+
+
+def test_text_only_helpers_refuse_images():
+    obj = _picture()
+    rendered = _rendered(10, 5, 20, 10)
+    for call in (lambda: layout.scale_text(obj, 2), lambda: layout.fix_size(obj, 12),
+                 lambda: layout.anchor_after_edit(obj, rendered, rendered),
+                 lambda: layout.anchor_align(obj)):
+        with pytest.raises(TypeError, match="Text"):
+            call()

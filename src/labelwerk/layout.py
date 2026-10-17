@@ -4,13 +4,16 @@ Alle Rechtecke in mm in Leserichtung, Ursprung = linke obere Ecke des Etiketts
 (wie ``TextObject.x_mm``/``y_mm``). Die GUI rechnet nur in Bildschirmkoordinaten um.
 Ausnahme Schreibmodus (``to_object``/``from_object``): Punkte in Druckpunkten wie
 ``RenderedObject`` und ``TextLayout`` – so rechnet die Arbeitsfläche ohne Umweg über mm.
+
+Bild-Objekte verhalten sich wie Text mit fester Rahmengröße (``_framed``); Funktionen nur
+für Schrift (``scale_text``, ``fix_size``, Schreibmodus) weisen sie mit ``TypeError`` ab.
 """
 from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field, replace
 
-from .document import MAX_PT, MIN_PT, ROTATIONS, Document, TextObject
+from .document import MAX_PT, MIN_PT, ROTATIONS, Document, ImageObject, TextObject
 from .labels import DPI, get_label
 from .render import (PT, REF_PT, RenderedObject, span_dots, label_margins, label_size,
                      render_object)
@@ -198,11 +201,30 @@ def maximize(rect: Rect, area: Rect, grow: str | None = None) -> Rect:
 
 
 # --- Objekte ----------------------------------------------------------------------
-def place(obj: TextObject, rect: Rect) -> TextObject:
-    """Kopie von ``obj`` an ``rect``; bei fester Rahmengröße auch Breite/Höhe (ungedreht)."""
+Object = TextObject | ImageObject
+
+
+def _framed(obj: Object) -> bool:
+    """Fester Rahmen in ``w_mm``/``h_mm``: Bild oder Text mit fester Rahmengröße."""
+    return isinstance(obj, ImageObject) or obj.fit
+
+
+def _needs_size(obj: Object) -> bool:
+    """Text mit automatischer Schriftgröße ohne festen Rahmen: bekommt beim Platzieren seine
+    wirksame Größe fest (``fix_size``)."""
+    return isinstance(obj, TextObject) and not obj.fit and obj.size_pt is None
+
+
+def _text_only(obj: Object) -> None:
+    if not isinstance(obj, TextObject):
+        raise TypeError(f"Nur für Text-Objekte, nicht für {type(obj).__name__}.")
+
+
+def place(obj: Object, rect: Rect) -> Object:
+    """Kopie von ``obj`` an ``rect``; bei festem Rahmen auch Breite/Höhe (ungedreht)."""
     placed = copy.deepcopy(obj)
     placed.x_mm, placed.y_mm = rect.x, rect.y
-    if obj.fit:
+    if _framed(obj):
         w, h = (rect.h, rect.w) if obj.rotation in (90, 270) else (rect.w, rect.h)
         placed.w_mm, placed.h_mm = w, h
     return placed
@@ -214,6 +236,7 @@ def fix_size(obj: TextObject, base_pt: float) -> TextObject:
     Stücke mit eigener Größe behalten ihr Verhältnis; das Bild bleibt gleich: Jede Größe
     bekommt die kürzeste Dezimalzahl (ab 0,1 pt), die dieselbe Druckgröße ergibt.
     """
+    _text_only(obj)
     base_dots = round(base_pt * PT)
     fixed = copy.deepcopy(obj)
     fixed.size_pt, fixed.fit = round(base_pt, 1), False   # ergibt wieder base_dots
@@ -229,21 +252,22 @@ def fix_size(obj: TextObject, base_pt: float) -> TextObject:
     return fixed
 
 
-def exact_rect(obj: TextObject, rendered: RenderedObject) -> Rect:
+def exact_rect(obj: Object, rendered: RenderedObject) -> Rect:
     """Rahmen in mm, wie er im Modell steht (ohne Rundung auf Druckpunkte).
 
-    Position aus ``x_mm``/``y_mm``, Größe bei fester Rahmengröße aus ``w_mm``/``h_mm``
-    (gedreht), sonst wie gerendert; ein Objekt ohne Position steht, wo es gerendert wurde.
+    Position aus ``x_mm``/``y_mm``, Größe bei festem Rahmen (Bild, feste Rahmengröße) aus
+    ``w_mm``/``h_mm`` (gedreht), sonst wie gerendert; ein Objekt ohne Position steht, wo es
+    gerendert wurde.
     """
     r = object_rect(rendered)
     x, y = ((obj.x_mm or 0.0, obj.y_mm or 0.0) if obj.positioned else (r.x, r.y))
     w, h = r.w, r.h
-    if obj.positioned and obj.fit and obj.w_mm is not None and obj.h_mm is not None:
+    if obj.positioned and _framed(obj) and obj.w_mm is not None and obj.h_mm is not None:
         w, h = (obj.h_mm, obj.w_mm) if obj.rotation in (90, 270) else (obj.w_mm, obj.h_mm)
     return Rect(x, y, w, h)
 
 
-def _apply_change(obj: TextObject, rect: Rect, rendered: RenderedObject) -> Rect:
+def _apply_change(obj: Object, rect: Rect, rendered: RenderedObject) -> Rect:
     """Änderung gegenüber dem gerenderten Rahmen auf den Rahmen im Modell übertragen.
 
     So verschieben Pfeiltasten genau um 0,1 mm, obwohl das Bild auf Druckpunkte gerundet ist;
@@ -255,7 +279,7 @@ def _apply_change(obj: TextObject, rect: Rect, rendered: RenderedObject) -> Rect
         (exact.w, rect.w, shown.w), (exact.h, rect.h, shown.h))))
 
 
-def move(obj: TextObject, rect: Rect, rendered: RenderedObject) -> TextObject:
+def move(obj: Object, rect: Rect, rendered: RenderedObject) -> Object:
     """Kopie von ``obj``, verschoben auf ``rect`` (neue Lage des gerenderten Rahmens).
 
     Die Größe bleibt. Ein automatisch großes Objekt ohne eigenen Rahmen bekommt beim ersten
@@ -263,31 +287,39 @@ def move(obj: TextObject, rect: Rect, rendered: RenderedObject) -> TextObject:
     danach genauso aus.
     """
     target = _apply_change(obj, rect, rendered)
-    if obj.size_pt is None or (obj.fit and not obj.positioned):
+    if isinstance(obj, TextObject) and (obj.size_pt is None or (obj.fit and not obj.positioned)):
         obj = fix_size(obj, rendered.base_pt)
     moved = copy.deepcopy(obj)
     moved.x_mm, moved.y_mm = target.x, target.y
     return moved
 
 
-def set_frame(obj: TextObject, rect: Rect, rendered: RenderedObject) -> TextObject:
+def set_frame(obj: Object, rect: Rect, rendered: RenderedObject) -> Object:
     """Kopie mit dem Rahmen ``rect`` in mm, wie er im Modell steht (Zahlen im Panel „Position“).
 
-    Mit fester Rahmengröße gelten Lage und Größe, sonst nur die Lage. Ein automatisch großes
-    Objekt bekommt dabei seine wirksame Größe (``rendered.base_pt``) als feste Schriftgröße.
+    Mit festem Rahmen (Bild, feste Rahmengröße) gelten Lage und Größe, sonst nur die Lage. Ein
+    automatisch großes Objekt bekommt dabei seine wirksame Größe (``rendered.base_pt``) als
+    feste Schriftgröße.
     """
-    if not obj.fit and obj.size_pt is None:
+    if _needs_size(obj):
         obj = fix_size(obj, rendered.base_pt)
     return place(obj, rect)
 
 
-def resize(obj: TextObject, rect: Rect, rendered: RenderedObject, corner: bool) -> TextObject:
-    """Kopie nach Ziehen an einem Anfasser: gerenderter Rahmen → ``rect``.
+def resize(obj: Object, rect: Rect, rendered: RenderedObject, handle: str) -> Object:
+    """Kopie nach Ziehen am Anfasser ``handle`` („tl“, „t“, … „l“): gerenderter Rahmen → ``rect``.
 
-    Mit fester Rahmengröße ändert jeder Anfasser den Rahmen. Ohne skaliert eine Ecke
-    (``corner``) die Schrift, eine Kante schaltet die feste Rahmengröße ein.
+    Mit fester Rahmengröße ändert jeder Anfasser den Rahmen. Ohne skaliert eine Ecke die
+    Schrift, eine Kante schaltet die feste Rahmengröße ein.
+    Ein Bild mit ``keep_ratio`` behält dabei sein Seitenverhältnis (``keep_aspect``, dieselbe
+    Regel wie die Vorschau der Arbeitsfläche), ohne verzerren Kanten und Ecken den Rahmen.
     """
+    corner = len(handle) == 2
     target = _apply_change(obj, rect, rendered)
+    if isinstance(obj, ImageObject):
+        if obj.keep_ratio:
+            target = _rounded(keep_aspect(exact_rect(obj, rendered), target, handle))
+        return place(obj, target)
     if obj.fit:
         return place(obj, target)
     if corner:
@@ -300,6 +332,32 @@ def resize(obj: TextObject, rect: Rect, rendered: RenderedObject, corner: bool) 
     return place(framed, target)
 
 
+def keep_aspect(old: Rect, new: Rect, handle: str) -> Rect:
+    """Rahmen ``new`` (nach Ziehen am Anfasser ``handle``) mit dem Seitenverhältnis von ``old``.
+
+    Was fest bleibt, folgt allein aus dem Anfasser (Vorschau und Ergebnis rechnen gleich):
+    Ecke – das stärker gewachsene Maß zählt, die gegenüberliegende Ecke bleibt. Kante – das
+    gezogene Maß zählt, die gegenüberliegende Kante bleibt, quer dazu die Mitte (links/rechts:
+    senkrecht mittig, oben/unten: waagerecht mittig).
+    """
+    if old.w <= 0 or old.h <= 0:
+        return new
+    across, along = "l" in handle or "r" in handle, "t" in handle or "b" in handle
+    fx, fy = new.w / old.w, new.h / old.h
+    factor = max(fx, fy) if across and along else fx if across else fy
+    w, h = old.w * factor, old.h * factor
+
+    def start(old0: float, old1: float, size: float, moves_start: bool, moves_end: bool) -> float:
+        if moves_start:
+            return old1 - size                 # Ende bleibt
+        if moves_end:
+            return old0                        # Anfang bleibt
+        return (old0 + old1 - size) / 2        # quer zur gezogenen Kante: Mitte bleibt
+
+    return Rect(start(old.x, old.right, w, "l" in handle, "r" in handle),
+                start(old.y, old.bottom, h, "t" in handle, "b" in handle), w, h)
+
+
 def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> TextObject:
     """Kopie mit allen Schriftgrößen (Grundgröße und Stücke) × ``factor``, auf 4–100 pt begrenzt.
 
@@ -308,6 +366,7 @@ def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> 
     ``base_pt``: wirksame Grundgröße (``RenderedObject.base_pt``) für Text mit automatischer
     Größe – Stücke mit eigener Größe beziehen sich dann auf 12 pt und werden umgerechnet.
     """
+    _text_only(obj)
     if factor <= 0:
         raise ValueError(f"Faktor muss größer als 0 sein, nicht {factor!r}.")
     scaled = copy.deepcopy(obj)
@@ -340,7 +399,7 @@ def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> 
 
 
 def outside_indices(rendered: list[RenderedObject], size: tuple[int, int],
-                    objects: list[TextObject] | None = None) -> list[int]:
+                    objects: list[Object] | None = None) -> list[int]:
     """Indizes der schon gerenderten Objekte, deren Rahmen über das Etikett ``size``
     (Druckpunkte in Leserichtung, wie ``render.label_size``) ragt – ohne neu zu rendern.
 
@@ -369,8 +428,8 @@ def objects_outside(doc: Document, model: str = "QL-600") -> list[int]:
 
 
 # --- Reiter „Layout“ ----------------------------------------------------------------
-def align_objects(objs: list[TextObject], rendered: list[RenderedObject], mode: str,
-                  area: Rect | None = None, grow: str | None = None) -> list[TextObject]:
+def align_objects(objs: list[Object], rendered: list[RenderedObject], mode: str,
+                  area: Rect | None = None, grow: str | None = None) -> list[Object]:
     """Kopien der Objekte, ausgerichtet wie ``align`` – mit ``area`` am Papier, sonst aneinander.
 
     Gerechnet wird mit den Rahmen, wie sie im Modell stehen (``exact_rect``); ein Objekt ohne
@@ -391,40 +450,46 @@ def align_objects(objs: list[TextObject], rendered: list[RenderedObject], mode: 
     return [set_frame(o, _rounded(rect), r) for o, r, rect in zip(objs, rendered, moved)]
 
 
-def match_objects(objs: list[TextObject], rendered: list[RenderedObject],
-                  mode: str) -> list[TextObject]:
+def match_objects(objs: list[Object], rendered: list[RenderedObject],
+                  mode: str) -> list[Object]:
     """Kopien mit der Größe des ersten Objekts (``same``, ``width``, ``height``); Ecke bleibt.
     Das erste (Bezug) bleibt unverändert dasselbe Objekt – so muss es nicht neu gerendert werden.
 
-    Mit fester Rahmengröße wird der Rahmen gesetzt. Text ohne feste Rahmengröße wird
-    skaliert (Seitenverhältnis bleibt): bei „gleicher Größe“ mit dem Mittel aus Breiten-
-    und Höhenverhältnis, sonst nach dem angeglichenen Maß. Hat der Bezug keine Fläche
-    (leerer Text), bleibt alles unverändert.
+    Mit fester Rahmengröße (auch Bild ohne ``keep_ratio``) wird der Rahmen gesetzt. Text ohne
+    feste Rahmengröße und Bilder mit ``keep_ratio`` werden skaliert (Seitenverhältnis
+    bleibt): bei „gleicher Größe“ mit dem Mittel aus Breiten- und Höhenverhältnis, sonst nach
+    dem angeglichenen Maß. Hat der Bezug keine Fläche (leerer Text), bleibt alles unverändert.
     """
     rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
     if not rects or rects[0].w <= 0 or rects[0].h <= 0:
         return list(objs)           # leerer Bezug (unsichtbarer Rahmen): nichts angleichen
     result = objs[:1]
     for obj, r, old, new in zip(objs[1:], rendered[1:], rects[1:], match_size(rects, mode)[1:]):
-        if obj.fit:
+        uniform = obj.keep_ratio if isinstance(obj, ImageObject) else not obj.fit
+        if not uniform:
             result.append(set_frame(obj, _rounded(new), r))
             continue
         fx = new.w / old.w if old.w else 1.0
         fy = new.h / old.h if old.h else 1.0
         factor = {"same": (fx * fy) ** 0.5, "width": fx, "height": fy}[mode]
-        result.append(place(scale_text(obj, factor, base_pt=r.base_pt), _rounded(old)))
+        if isinstance(obj, ImageObject):
+            result.append(place(obj, _rounded(Rect(old.x, old.y, old.w * factor,
+                                                   old.h * factor))))
+        else:
+            result.append(place(scale_text(obj, factor, base_pt=r.base_pt), _rounded(old)))
     return result
 
 
-def maximize_object(obj: TextObject, rendered: RenderedObject, area: Rect, doc: Document,
-                    model: str = "QL-600") -> TextObject:
+def maximize_object(obj: Object, rendered: RenderedObject, area: Rect, doc: Document,
+                    model: str = "QL-600") -> Object:
     """Kopie, so groß wie möglich mittig in ``area`` (Seitenverhältnis bleibt).
 
-    Mit fester Rahmengröße wird der Rahmen gesetzt; sonst wird die Schrift skaliert und
-    das Ergebnis gerendert, damit es sicher hineinpasst und genau mittig steht.
+    Mit festem Rahmen (Bild, feste Rahmengröße) wird der Rahmen gesetzt; sonst wird die
+    Schrift skaliert und das Ergebnis gerendert, damit es sicher hineinpasst und genau
+    mittig steht.
     """
     grow = growing_axis(doc)
-    if obj.fit:
+    if _framed(obj):
         return set_frame(obj, _rounded(maximize(exact_rect(obj, rendered), area, grow)),
                          rendered)
     shown = object_rect(rendered)
@@ -459,13 +524,13 @@ def _sizes_of(obj: TextObject) -> list[float | None]:
     return [obj.size_pt, *(span.size_pt for para in obj.paragraphs for span in para.spans)]
 
 
-def rotate(obj: TextObject, rendered: RenderedObject, degrees: int) -> TextObject:
+def rotate(obj: Object, rendered: RenderedObject, degrees: int) -> Object:
     """Kopie, um ``degrees`` (±90, im Uhrzeigersinn) gedreht; die Mitte des Rahmens bleibt.
 
     Ein Objekt ohne Position bekommt seine Lage und wirksame Schriftgröße fest.
     """
     old = exact_rect(obj, rendered)
-    if not obj.fit and obj.size_pt is None:
+    if _needs_size(obj):
         obj = fix_size(obj, rendered.base_pt)
     turned = copy.deepcopy(obj)
     turned.rotation = (obj.rotation + degrees) % 360
@@ -490,8 +555,8 @@ def reorder(items: list, indices: list[int], step: int) -> tuple[list, list[int]
     return [items[i] for i in order], [order.index(i) for i in indices]
 
 
-def to_grid(obj: TextObject, x: bool = False, y: bool = False, w: bool = False,
-            h: bool = False) -> TextObject:
+def to_grid(obj: Object, x: bool = False, y: bool = False, w: bool = False,
+            h: bool = False) -> Object:
     """Kopie mit den gewählten Werten auf ``GRID_MM`` gerundet – so, wie die Felder im Panel
     sie zeigen (nach Ziehen/Skalieren mit der Maus; Pfeiltasten verschieben genau).
 
@@ -562,6 +627,7 @@ def _to_frame(point: tuple[float, float], frame: tuple[float, float, float, floa
 def anchor_align(obj: TextObject) -> str:
     """Textposition, nach der sich der Rahmen beim Wachsen richtet (``anchor_after_edit``):
     die gemeinsame der Absätze; haben sie verschiedene, bleibt die linke Kante („left“)."""
+    _text_only(obj)
     aligns = {para.align for para in obj.paragraphs}
     return aligns.pop() if len(aligns) == 1 else "left"
 
@@ -579,7 +645,7 @@ def anchor_after_edit(obj: TextObject, old: RenderedObject,
     Nur für Objekte mit Position: eines ohne Position bleibt mittig auf dem Etikett, der
     Aufrufer setzt dort keine Position.
     """
-    align = anchor_align(obj)
+    align = anchor_align(obj)                  # nur Text (TypeError bei Bildern)
     start = exact_rect(obj, old)
     # Lage des festen Punkts relativ zur linken oberen Ecke des Rahmens (Druckpunkte)
     ox, oy = from_object(old.layout.anchor(align), old, obj.rotation)

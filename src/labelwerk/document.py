@@ -1,7 +1,12 @@
 """Etikett-Dokument: Etikett und Liste von Objekten (UI-unabhängig, JSON-tauglich)."""
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass, field
+
+from PIL import Image
+
+from .imaging import limit_size, on_white
 
 ORIENTATIONS = ("vertical", "horizontal")
 ALIGNMENTS = ("left", "center", "right", "justify")
@@ -78,13 +83,72 @@ class TextObject:
         return not self.text.strip()
 
 
+@dataclass(kw_only=True)
+class ImageObject:
+    """Bild auf dem Etikett; Schwarz/Weiß erst beim Rendern (``imaging.to_layers``).
+
+    Anlegen meist mit ``ImageObject.from_image``. Der Rahmen ist immer gesetzt – wie bei
+    Text mit fester Rahmengröße: ``x_mm``/``y_mm`` linke obere Ecke auf dem Etikett (nach
+    dem Drehen), ``w_mm``/``h_mm`` Größe vor dem Drehen.
+    """
+    png: bytes = field(repr=False)  # Original in Farbe (auf Weiß), verlustfrei als PNG
+    source: str = ""                # Dateiname oder „Zwischenablage“
+    page: int | None = None         # PDF-Seite
+    crop: tuple[int, int, int, int] | None = None   # Ausschnitt (l, t, r, b) in Pixeln; None = ganz
+    x_mm: float = 0.0
+    y_mm: float = 0.0
+    w_mm: float
+    h_mm: float
+    rotation: int = 0               # 0 | 90 | 180 | 270
+    mode: str = "line"              # line (Strich, harte Schwelle) | photo (Foto, gerastert)
+    threshold: int = 128            # 0–255; höher = mehr Tinte
+    invert: bool = False
+    keep_ratio: bool = True         # Seitenverhältnis beibehalten (Ecken/Kanten skalieren gleich)
+
+    def __post_init__(self) -> None:
+        if self.crop is not None:                # JSON liefert eine Liste
+            self.crop = tuple(int(v) for v in self.crop)
+
+    @property
+    def positioned(self) -> bool:
+        """Ein Bild hat immer eine Position (anders als Text, der mittig stehen kann)."""
+        return True
+
+    def is_empty(self) -> bool:
+        return False
+
+    @classmethod
+    def from_image(cls, img: Image.Image, dpi: float, source: str, page: int | None = None,
+                   crop: tuple[int, int, int, int] | None = None) -> "ImageObject":
+        """Bild 1:1 nach ``dpi`` (Größe des Ausschnitts ``crop``, sonst des ganzen Bilds).
+
+        Transparenz wird weiß; sehr große Bilder werden begrenzt (``imaging.limit_size``) –
+        der Ausschnitt rechnet mit, die Druckgröße bleibt.
+        """
+        l, t, r, b = crop if crop is not None else (0, 0, *img.size)
+        mm = 25.4 / dpi                          # Druckgröße aus dem Original
+        rgb, _ = limit_size(on_white(img), dpi)
+        if crop is not None and rgb.size != img.size:
+            fx, fy = rgb.width / img.width, rgb.height / img.height
+            crop = (round(l * fx), round(t * fy), round(r * fx), round(b * fy))
+        buffer = io.BytesIO()
+        rgb.save(buffer, "PNG", compress_level=1)   # große Fotos rund 4× schneller
+        return cls(png=buffer.getvalue(), source=source, page=page, crop=crop,
+                   w_mm=(r - l) * mm, h_mm=(b - t) * mm)
+
+    def image(self) -> Image.Image:
+        """Das Original als RGB-Bild."""
+        with Image.open(io.BytesIO(self.png)) as img:
+            return img.convert("RGB")
+
+
 @dataclass
 class Document:
     label_id: str = "62"
     length_mm: float | None = None    # nur Endlosband; None = automatisch
     orientation: str = "vertical"     # "vertical" (Text quer zum Band) | "horizontal" (längs)
     margin_mm: float = 1.0            # Rand in Bandlaufrichtung (vorne/hinten)
-    objects: list[TextObject] = field(default_factory=list)
+    objects: list[TextObject | ImageObject] = field(default_factory=list)
 
     def is_empty(self) -> bool:
         """True, wenn kein Objekt sichtbaren Inhalt hat."""

@@ -5,7 +5,7 @@ import random
 import pytest
 
 from labelwerk import render
-from labelwerk.document import Document, Paragraph, Span, TextObject
+from labelwerk.document import Document, ImageObject, Paragraph, Span, TextObject
 from labelwerk.render import Rendered, Renderer, label_size, render_document, render_object
 
 
@@ -171,3 +171,111 @@ def test_random_documents_are_byte_identical_also_incrementally():
         result = renderer.render(doc, "QL-600")
         assert result.image.size == expected.size
         assert result.image.tobytes() == expected.tobytes()
+
+
+# --- Bilder -------------------------------------------------------------------------
+def _with_images() -> Document:
+    from PIL import Image
+    doc = _doc()
+    for x in (20, 40):
+        img = Image.new("RGB", (200, 100), (120, 120, 120))
+        doc.objects.append(ImageObject.from_image(img, 300, "grau.png"))
+        doc.objects[-1].x_mm, doc.objects[-1].y_mm = x, 25
+    return doc
+
+
+@pytest.fixture
+def finished(monkeypatch):
+    """Zählt das Zeichnen (``_finish``) je Objekt (Index in ``_with_images``)."""
+    seen = []
+    real = render._finish
+
+    def counting(prep, *args, **kwargs):
+        seen.append(prep.obj)
+        return real(prep, *args, **kwargs)
+    monkeypatch.setattr(render, "_finish", counting)
+    return seen
+
+
+def test_changing_threshold_redraws_only_that_image(finished):
+    renderer, doc = Renderer(), _with_images()
+    renderer.render(doc, "QL-600")
+    finished.clear()
+    doc.objects[3].threshold = 100
+    result = renderer.render(doc, "QL-600")
+    assert finished == [doc.objects[3]]
+    assert result.image.tobytes() == render_document(doc).tobytes()
+
+
+@pytest.mark.parametrize("change", [
+    {"mode": "photo"}, {"invert": True}, {"keep_ratio": False}, {"rotation": 90},
+    {"crop": (0, 0, 50, 50)}, {"w_mm": 5.0}, {"x_mm": 1.0}, {"page": 2}, {"source": "neu.png"}])
+def test_every_image_setting_is_part_of_the_cache_key(finished, change):
+    renderer, doc = Renderer(), _with_images()
+    renderer.render(doc, "QL-600")
+    finished.clear()
+    for key, value in change.items():
+        setattr(doc.objects[2], key, value)
+    renderer.render(doc, "QL-600")
+    assert finished == [doc.objects[2]]
+
+
+def test_new_png_bytes_redraw_the_image(finished):
+    from PIL import Image
+    renderer, doc = Renderer(), _with_images()
+    renderer.render(doc, "QL-600")
+    finished.clear()
+    doc.objects[2].png = ImageObject.from_image(Image.new("RGB", (200, 100)), 300, "x").png
+    result = renderer.render(doc, "QL-600")
+    assert finished == [doc.objects[2]]
+    assert result.image.tobytes() == render_document(doc).tobytes()
+
+
+def test_unchanged_images_render_nothing(finished):
+    renderer, doc = Renderer(), _with_images()
+    first = renderer.render(doc, "QL-600")
+    finished.clear()
+    assert renderer.render(doc, "QL-600").image is first.image
+    assert finished == []
+
+
+def test_threshold_change_does_not_decode_or_scale_again():
+    render._scaled_source.cache_clear()
+    doc = _with_images()
+    renderer = Renderer()
+    renderer.render(doc, "QL-600")
+    misses = render._scaled_source.cache_info().misses
+    doc.objects[2].threshold = 90
+    renderer.render(doc, "QL-600")
+    assert render._scaled_source.cache_info().misses == misses
+
+
+def test_random_changes_with_images_stay_byte_identical():
+    from PIL import Image
+    rng = random.Random(11)
+    source = Image.radial_gradient("L").convert("RGB").resize((120, 80))
+    renderer = Renderer()
+    doc = Document("62", length_mm=None)
+    for _ in range(40):
+        doc.orientation = rng.choice([doc.orientation] * 4 + ["vertical", "horizontal"])
+        action = rng.random()
+        if action < 0.3 or not doc.objects:
+            if rng.random() < 0.5:
+                obj = ImageObject.from_image(source, rng.choice([150, 300, 600]), "verlauf.png")
+                obj.x_mm, obj.y_mm = rng.uniform(0, 30), rng.uniform(0, 30)
+            else:
+                obj = TextObject("Ab", size_pt=10, x_mm=rng.uniform(0, 30), y_mm=5)
+            doc.objects.append(obj)
+        elif action < 0.8:
+            obj = rng.choice(doc.objects)
+            if isinstance(obj, ImageObject):
+                setattr(obj, *rng.choice([
+                    ("threshold", rng.randint(0, 255)), ("mode", rng.choice(["line", "photo"])),
+                    ("invert", rng.random() < 0.5), ("rotation", rng.choice([0, 90, 180, 270])),
+                    ("keep_ratio", rng.random() < 0.5), ("w_mm", rng.uniform(3, 20)),
+                    ("crop", rng.choice([None, (10, 10, 60, 40)]))]))
+            else:
+                obj.x_mm = rng.uniform(0, 30)
+        else:
+            del doc.objects[rng.randrange(len(doc.objects))]
+        assert renderer.render(doc, "QL-600").image.tobytes() == render_document(doc).tobytes()

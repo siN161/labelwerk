@@ -544,8 +544,7 @@ class MainWindow(QMainWindow):
         if not self._valid(index):
             return
         self._commit()
-        resized = resize(self.doc.objects[index], rect, self.rendered[index],
-                         corner=len(handle) == 2)
+        resized = resize(self.doc.objects[index], rect, self.rendered[index], handle)
         # nur die gezogenen Kanten auf 0,1 mm (wie die Felder) – die anderen bleiben genau
         self.doc.objects[index] = to_grid(resized, x="l" in handle, y="t" in handle,
                                           w="l" in handle or "r" in handle,
