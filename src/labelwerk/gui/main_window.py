@@ -144,8 +144,11 @@ class MainWindow(QMainWindow):
         if self.doc.is_empty() and not self.confirm_empty():
             return
         self.print_action.setEnabled(False)
+        self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
+        self.result.style().polish(self.result)
         self.result.setText("Drucke …")
         worker = PrintWorker(self.image, self.doc.label_id, self.model)
+        self._print_signals = worker.signals  # Referenz bis zum Ende des Drucks
         worker.signals.done.connect(self._print_done)
         worker.signals.failed.connect(self._print_failed)
         QThreadPool.globalInstance().start(worker)
@@ -162,6 +165,7 @@ class MainWindow(QMainWindow):
         self._print_finished()
 
     def _print_finished(self) -> None:
+        self._print_signals = None
         self.result.style().polish(self.result)
         self.print_action.setEnabled(True)
         self.refresh_printer()

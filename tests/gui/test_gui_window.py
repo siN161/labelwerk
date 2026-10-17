@@ -158,3 +158,37 @@ def test_empty_label_asks_and_cancel_does_not_print(window, monkeypatch):
     assert asked
     assert window.print_action.isEnabled()
     assert window.result.text() == ""
+
+
+def test_detection_error_does_not_hang_button(window, qtbot, monkeypatch):
+    def broken():
+        raise OSError("kaputt")
+
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", broken)
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert "kaputt" in window.result.text()
+
+
+def test_new_print_resets_result_state(window, qtbot, monkeypatch):
+    from labelwerk.printer import PrintError
+
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp",
+                        lambda: "file:///dev/usb/lp0")
+
+    def fail(*a, **kw):
+        raise PrintError("kaputt")
+
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image", fail)
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert window.result.property("state") == "error"
+
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: {"outcome": "printed", "did_print": True})
+    window.print_label()
+    assert window.result.property("state") == ""
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert window.result.property("state") == "ok"

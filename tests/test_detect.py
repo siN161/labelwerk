@@ -64,3 +64,7 @@ def test_brother_with_usblp_is_not_busy(tmp_path):
 def test_other_vendor_on_usbfs_is_ignored(tmp_path):
     devices = _fake_usb_device(tmp_path, "1-6", "03f0", "usbfs")
     assert brother_busy(devices) is False
+
+
+def test_busy_check_without_sysfs_returns_false(tmp_path):
+    assert brother_busy(tmp_path / "fehlt") is False

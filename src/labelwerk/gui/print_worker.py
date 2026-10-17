@@ -20,11 +20,11 @@ class PrintWorker(QRunnable):
         self.signals = PrintSignals()
 
     def run(self) -> None:
-        printer = find_brother_lp()
-        if printer is None:
-            self.signals.failed.emit(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
-            return
         try:
+            printer = find_brother_lp()
+            if printer is None:
+                self.signals.failed.emit(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
+                return
             status = print_image(self.image, self.label_id, model=self.model, printer=printer)
         except PrintError as e:
             self.signals.failed.emit(str(e))
