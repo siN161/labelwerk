@@ -12,7 +12,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - GUI-MVP: `labelwerk-gui` (Papier/Text, Live-Vorschau, Etikettform, Länge ziehen, Drucken im Hintergrund).
 - `labelwerk install-desktop` trägt die GUI mit Icon im Starter ein (XDG, `~/.local/share`); App-ID `labelwerk`.
 - Papier: Ausrichtung H/V, Ränder, Medium prüfen (GUI + `labelwerk media`), Einstellungen (`settings.json`, GUI-Dialog), Live-Druckererkennung.
-- 188 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 204 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -42,7 +42,7 @@ src/labelwerk/
     icons/          labelwerk.svg (Platzhalter; eigenes Logo: SVG Tiny, quadratisch, Text als Pfade, ab 16 px erkennbar)
   cli.py      labelwerk labels | labelwerk media | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] [--orientation horizontal|vertical] [--margin MM] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]
 ```
-Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `detect` auf – keine Drucklogik in der UI.
+Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.
 
 Abhängigkeiten: `brother_ql-inventree>=1.3` (GPLv3+, Import als `brother_ql`), `pillow>=10`, `pypdfium2>=4`. Build: hatchling, src-Layout.
 
@@ -92,7 +92,7 @@ Umsetzung:
 ## Roadmap danach
 0. Etappen P-touch-Übernahme: 1 Papier komplett (erledigt) · 2 Verwendungsart (P-touch-Vorlagen recherchieren) · 3 Funktionsliste P-touch → labelwerk (Text-Formatierung, Rahmen, Bild, Favoriten, Layout/freies Platzieren, Speichern/Neu).
 1. ~~Text 90° drehen (Text längs zum Endlosband, wichtig für 12–29 mm)~~ erledigt in Etappe 1
-2. ~~Eingelegte Rolle automatisch aus dem Druckerstatus auslesen → `-l` optional, Vorauswahl in der GUI~~ erledigt in Etappe 1
+2. Eingelegte Rolle automatisch aus dem Druckerstatus auslesen → teilweise erledigt in Etappe 1 (GUI-Vorauswahl, `labelwerk media`); `-l auto` in der CLI fehlt noch
 3. Barcodes und QR-Codes
 4. Vorlagen (YAML/JSON) und Serien aus CSV/Excel (.xlsx) (z. B. Klemmen-/Betriebsmittelkennzeichnung)
 5. Importe:

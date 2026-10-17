@@ -49,7 +49,8 @@ Ungültige `orientation` → `ValueError` beim Rendern. `margin_mm` wird beim Re
   - Automatische Schriftgröße: **gleiche Regel wie Vertikal** – höchstens 1/5 der Bandbreite (62 mm: 139 Punkte ≈ 8,6 mm Buchstabenhöhe), kleiner, falls der Text sonst nicht in Bandbreite bzw. feste Länge passt. („Bandbreite füllen“ wurde verworfen: eine dreizeilige Adresse würde 233 mm lang.) Wer feste Größen will, nutzt die Einstellung „Standard-Schriftgröße“ (z. B. 80 → Adresse ≈ 75 mm).
   - Suche der passenden Größe per Halbierung (≈ 20 ms pro Rendern, live-tauglich). Textmaße werden auf ganze Punkte gerundet (Pillow liefert bei mehrzeiligem Text teils Kommazahlen).
   - Gestanzt/rund: Leserichtungs-Bild = bedruckbarer Bereich um 90° gedreht (z. B. 62x29: 271 × 696 Punkte).
-  - Drehung zum Druckbild: `Image.rotate(90, expand=True)` (wie `files.fit_to_label` bei automatischer Drehung).
+  - Drehung zum Druckbild: `Image.rotate(-90, expand=True)` (im Uhrzeigersinn: Textanfang wird zuerst gedruckt, das variable Ende liegt in Leserichtung rechts). `files.fit_to_label` dreht bei automatischer Drehung bewusst in die Gegenrichtung (`rotate(90)`) – dort gilt eine andere Konvention, das ist kein Fehler.
+  - CLI: `-s auto` erzwingt die automatische Schriftgröße, auch wenn in den Einstellungen eine feste Größe steht; `-s 8–400` überschreibt die Einstellung; ohne `-s` gilt die Einstellung.
 - Längengrenzen wie bisher (`length_limits`, QL-600: 150–11811 Punkte), gelten für die Bandlaufrichtung in beiden Ausrichtungen.
 - `TextTooLarge` wie bisher, wenn eine feste Schriftgröße nicht passt.
 

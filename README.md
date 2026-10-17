@@ -32,7 +32,7 @@ labelwerk media                                            # eingelegte Rolle an
 labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation horizontal -s 80
 ```
 
-Optionen: `-s` Schriftgröße, `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
+Optionen: `-s` Schriftgröße (`auto` oder 8–400), `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
 `print-file` schneidet auf den Inhalt zu (Schnittmarken, z. B. der Internetmarke, und Leerraum fallen weg), dreht bei Bedarf und druckt 1:1; `--rotate 0|90|180|270` legt die Drehung fest (Grad im Uhrzeigersinn), `--fit` verkleinert zu große Motive, `--page N` wählt die PDF-Seite. Internetmarke quer wie im PDF: `--rotate 0 --fit`.
 
 ## Grafische Oberfläche
