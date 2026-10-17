@@ -949,17 +949,23 @@ class MainWindow(QMainWindow):
     def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
                        notes: list[str], state: str = "warn") -> None:
         """Bilder platzieren (``layout.insert_placement``: mittig; passt ein Bild nur um 90°
-        gedreht 1:1, kommt es gedreht, sonst wird ein zu großes proportional verkleinert und
+        gedreht 1:1, kommt es gedreht; auf einem Endlosband mit automatischer Länge hinter den
+        vorhandenen Objekten statt darüber, sonst wird ein zu großes proportional verkleinert und
         danach auf höchstens 600 dpi der neuen Größe begrenzt; mehrere je 2 mm versetzt) und
         einfügen – ein Schritt, ausgewählt."""
         if objects:
             if self._timer.isActive():
                 self.render_now()                   # aktueller bedruckbarer Bereich
             smallest, shrunk_mode, turned = 1.0, "line", False
+            # vorhandene Objekte: auf einem Endlosband kommt das Bild dahinter, nicht darüber
+            others = [object_rect(r) for o, r in zip(self.doc.objects, self.rendered)
+                      if not o.is_empty()]
             for number, obj in enumerate(objects):
                 rect, rotation, factor = insert_placement(self.doc, self.model, self._area,
-                                                          (obj.w_mm, obj.h_mm), at)
-                shift = number * PASTE_OFFSET_MM
+                                                          (obj.w_mm, obj.h_mm), at, others)
+                others.append(rect)
+                shift = number * PASTE_OFFSET_MM if at is not None or not growing_axis(
+                    self.doc) else 0.0
                 obj.x_mm, obj.y_mm = rect.x + shift, rect.y + shift
                 obj.w_mm, obj.h_mm = (rect.h, rect.w) if rotation else (rect.w, rect.h)
                 obj.rotation = rotation

@@ -134,6 +134,43 @@ def test_insert_placement_on_growing_tape_horizontal_keeps_wide_image():
     assert (rotation, factor) == (90, 1) and (rect.w, rect.h) == (70, 34)
 
 
+# --- Endlosband: hinter vorhandene Objekte statt darüber ---------------------------------
+def test_insert_placement_without_overlap_stays_unchanged():
+    doc = Document("62", length_mm=None)
+    area = Rect(1.5, 1.0, 59.0, 10.0)
+    other = Rect(1.5, 40.0, 20.0, 5.0)
+    assert (layout.insert_placement(doc, "QL-600", area, (30, 20), None, [other])
+            == layout.insert_placement(doc, "QL-600", area, (30, 20)))
+
+
+def test_insert_placement_vertical_overlap_goes_below_last_object():
+    doc = Document("62", length_mm=None)
+    area = Rect(1.5, 1.0, 59.0, 10.0)
+    others = [Rect(1.5, 1.0, 20.0, 8.0), Rect(1.5, 10.0, 20.0, 5.0)]
+    rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (30, 20), None, others)
+    assert (rotation, factor) == (0, 1)
+    assert rect.y == pytest.approx(17.0) and rect.cx == pytest.approx(area.cx)
+
+
+def test_insert_placement_horizontal_overlap_goes_right_of_last_object():
+    doc = Document("62", length_mm=None, orientation="horizontal")
+    area = Rect(1.0, 1.5, 10.0, 59.0)
+    others = [Rect(1.0, 1.5, 12.0, 59.0)]
+    rect, _, _ = layout.insert_placement(doc, "QL-600", area, (30, 20), None, others)
+    assert rect.x == pytest.approx(15.0) and rect.cy == pytest.approx(area.cy)
+
+
+def test_insert_placement_explicit_point_and_fixed_length_ignore_others():
+    others = [Rect(1.5, 1.0, 59.0, 38.0)]
+    grow = Document("62", length_mm=None)
+    area = Rect(1.5, 1.0, 59.0, 10.0)
+    assert (layout.insert_placement(grow, "QL-600", area, (30, 20), (30, 20), others)
+            == layout.insert_placement(grow, "QL-600", area, (30, 20), (30, 20)))
+    fixed = Document("62", length_mm=40)
+    assert (layout.insert_placement(fixed, "QL-600", AREA, (20, 10), None, others)
+            == layout.insert_placement(fixed, "QL-600", AREA, (20, 10)))
+
+
 # --- Zuschnitt umschalten: Maßstab und Lage des Inhalts bleiben ------------------------
 def test_set_crop_keeps_scale_and_content_in_place():
     obj = _image(x_mm=10, y_mm=5)                            # 50,8 × 25,4 mm

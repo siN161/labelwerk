@@ -843,3 +843,17 @@ def test_image_does_not_jump_after_releasing_a_handle(qtbot, tmp_path, handle, o
     for a, b in ((after.x, preview.left()), (after.y, preview.top()),
                  (after.right, preview.right()), (after.bottom, preview.bottom())):
         assert a * MM == pytest.approx(b, abs=0.1 * MM + 0.5)
+
+
+def test_insert_on_growing_tape_goes_behind_existing_text(qtbot):
+    """Endlosband, automatische Länge: ein Bild ohne Ablagepunkt liegt nicht auf dem Text
+    am Anfang, sondern dahinter; das Etikett wächst mit."""
+    win = _window(qtbot, Document("62", length_mm=None, objects=[
+        TextObject("Absender", size_pt=14, x_mm=4, y_mm=2)]))
+    win.render_now()
+    before = layout.label_rect(win.doc).h
+    win._insert_picture(_picture(300, 300), CLIPBOARD)
+    win.render_now()
+    text, image = (layout.object_rect(r) for r in win.rendered)
+    assert image.y >= text.bottom + 2 - 0.2
+    assert layout.label_rect(win.doc).h > before

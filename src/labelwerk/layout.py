@@ -359,6 +359,9 @@ def keep_aspect(old: Rect, new: Rect, handle: str) -> Rect:
 
 
 # --- Bild-Objekte: einfügen und einstellen ---------------------------------------
+INSERT_GAP_MM = 2.0      # Abstand eines hinter vorhandene Objekte eingefügten Objekts
+
+
 def insert_frame(doc: Document, model: str, area: Rect, size: tuple[float, float],
                  at: tuple[float, float] | None = None) -> tuple[Rect, float]:
     """Rahmen für ein neues Objekt der Größe ``size`` (mm) und den Faktor, um den es dafür
@@ -386,9 +389,15 @@ def insert_frame(doc: Document, model: str, area: Rect, size: tuple[float, float
 
 
 def insert_placement(doc: Document, model: str, area: Rect, size: tuple[float, float],
-                     at: tuple[float, float] | None = None) -> tuple[Rect, int, float]:
+                     at: tuple[float, float] | None = None,
+                     others: list[Rect] | None = None) -> tuple[Rect, int, float]:
     """Wie ``insert_frame``, aber lieber gedreht als verkleinert (wie ``print-file
     --rotate auto``): (Rahmen auf dem Etikett nach dem Drehen, Drehung 0/90, Faktor).
+
+    ``others``: Rahmen vorhandener (nicht leerer) Objekte. Wächst das Etikett mit
+    (``growing_axis``), ohne ausdrücklichen Punkt ``at``, und läge der Rahmen auf einem
+    davon, kommt er ``INSERT_GAP_MM`` hinter das am weitesten hinten liegende Objekt
+    (senkrecht: unter, waagerecht: rechts davon), quer weiter mittig.
 
     Passt das Objekt 1:1 nicht in den Bereich, gedreht um 90° aber schon, kommt es gedreht
     und 1:1; nur wenn es in keiner Lage passt, wird es ungedreht verkleinert. Die Grenzen
@@ -398,7 +407,17 @@ def insert_placement(doc: Document, model: str, area: Rect, size: tuple[float, f
     w, h = size
     turn = not (w <= limit_w and h <= limit_h) and h <= limit_w and w <= limit_h
     rect, factor = insert_frame(doc, model, area, (h, w) if turn else size, at)
+    grow = growing_axis(doc)
+    if grow and at is None and any(_overlap(rect, o) for o in others or ()):
+        if grow == "x":
+            rect = _rounded(replace(rect, x=max(o.right for o in others) + INSERT_GAP_MM))
+        else:
+            rect = _rounded(replace(rect, y=max(o.bottom for o in others) + INSERT_GAP_MM))
     return rect, 90 if turn else 0, factor
+
+
+def _overlap(a: Rect, b: Rect) -> bool:
+    return a.x < b.right and b.x < a.right and a.y < b.bottom and b.y < a.bottom
 
 
 def _insert_limits(doc: Document, model: str, area: Rect) -> tuple[float, float]:
