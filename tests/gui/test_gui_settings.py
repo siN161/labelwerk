@@ -58,8 +58,14 @@ def test_window_opens_dialog_and_takes_new_settings(qtbot, monkeypatch):
 
 
 def test_qt_dialog_buttons_are_german(qapp):
+    import pytest
     from PySide6.QtWidgets import QDialogButtonBox
     from labelwerk.gui.app import install_translations
-    install_translations(qapp)
-    box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-    assert sorted(b.text() for b in box.buttons()) == ["Abbrechen", "Speichern"]
+    translator = install_translations(qapp)
+    if translator is None:
+        pytest.skip("qtbase_de.qm nicht installiert")
+    try:
+        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        assert sorted(b.text() for b in box.buttons()) == ["Abbrechen", "Speichern"]
+    finally:
+        qapp.removeTranslator(translator)

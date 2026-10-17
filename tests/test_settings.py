@@ -59,3 +59,15 @@ def test_new_document_uses_settings():
     doc = new_document(Settings(label_id="62x29", orientation="horizontal", margin_mm=3, font_size=80))
     assert (doc.label_id, doc.orientation, doc.margin_mm) == ("62x29", "horizontal", 3)
     assert doc.objects[0].font_size == 80 and doc.objects[0].text == ""
+
+
+import pytest
+
+
+@pytest.mark.parametrize("label", ["102", "62red"])
+def test_label_not_in_model_list_falls_back(tmp_path, label):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"label_id": label}))
+    s = load_settings(path)
+    assert s.label_id == "62"
+    assert len(s.warnings) == 1

@@ -26,12 +26,14 @@ def apply_identity(app: QApplication) -> None:
     app.setWindowIcon(QIcon(str(icon)))
 
 
-def install_translations(app: QApplication) -> None:
+def install_translations(app: QApplication) -> QTranslator | None:
     """Qt-eigene Texte (Speichern, Abbrechen, Ja …) auf Deutsch – passend zu labelwerk."""
     translator = QTranslator(app)
     if translator.load(QLocale(QLocale.Language.German, QLocale.Country.Germany), "qtbase", "_",
                        QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)):
         app.installTranslator(translator)
+        return translator
+    return None
 
 
 def main() -> int:

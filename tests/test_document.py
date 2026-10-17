@@ -113,3 +113,23 @@ def test_horizontal_render_is_fast_enough_for_live_preview():
     start = time.perf_counter()
     render_document(doc)
     assert time.perf_counter() - start < 0.5
+
+
+def _ink_bbox(img):
+    from PIL import ImageOps
+    return ImageOps.invert(img.convert("L")).getbbox()
+
+
+def test_margin_larger_than_fixed_length_is_limited():
+    img = render_document(Document("62", length_mm=10, margin_mm=20, objects=[TextObject("A")]))
+    assert img.height == 150
+    left, top, right, bottom = _ink_bbox(img)
+    assert top > 0 and bottom < img.height
+    assert bottom - top >= 20                 # nicht auf Mindestschrift geschrumpft
+
+
+def test_margin_larger_than_die_cut_label_is_limited():
+    img = render_document(Document("62x29", margin_mm=20, objects=[TextObject("A")]))
+    assert img.size == (696, 271)
+    box = _ink_bbox(img)
+    assert box is not None and box[3] - box[1] >= 20

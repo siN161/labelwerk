@@ -65,6 +65,8 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     feed = label.height                       # in Bandlaufrichtung; None = automatisch
     if feed is None and doc.length_mm is not None:
         feed = min(max(round(doc.length_mm * DPI / 25.4), min_len), max_len)
+    if feed is not None:                      # feste Länge: Rand darf nicht alles aufbrauchen
+        margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
     obj = doc.objects[0] if doc.objects else TextObject()
 
     across_room = across - 2 * MARGIN
