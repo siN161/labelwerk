@@ -354,8 +354,7 @@ def test_consecutive_nudges_are_one_step(window, qtbot):
 def test_undo_create_delete_paste_duplicate(window):
     steps = []
     window.create_text(30, 12)
-    steps.append(3)
-    window.panel("text").edit.setPlainText("Neu")            # Getipptes: eigener Schritt
+    window.panel("text").edit.setPlainText("Neu")            # Anlegen + Schreiben: ein Schritt
     steps.append(3)
     window.canvas.set_selection([0])
     window.delete_selected()
@@ -507,7 +506,11 @@ def test_frame_with_text_stays(window):
 def test_empty_frame_removed_while_pasting_is_part_of_the_paste_step(window):
     window.canvas.set_selection([0])
     window.copy_selected()
-    window.create_text(30, 12)
+    frame = TextObject.plain("", size_pt=14)                # gewählter leerer Rahmen außerhalb
+    frame.x_mm, frame.y_mm = 30, 12                         # des Schreibmodus (z. B. aus einer Datei)
+    window.doc.objects.append(frame)
+    window.render_now()
+    window.canvas.set_selection([2])
     window.paste()
     assert [o.text for o in window.doc.objects] == ["Eins", "Zwei", "Eins"]
     assert window.canvas.selection() == [2]

@@ -1,8 +1,10 @@
 """Panel „Text“: bearbeitet den ausgewählten Textrahmen – zeichenweise wie im P-touch Editor.
 
 Regel wie bei einem ausgewählten Textrahmen in P-touch: Ist nichts markiert, wirkt eine
-Formatierung auf den ganzen Text; sonst nur auf die Markierung. Bereich „Position“: Lage
-und (mit fester Rahmengröße) Größe des Rahmens in mm.
+Formatierung auf den ganzen Text; sonst nur auf die Markierung. Im Schreibmodus wirkt sie
+ohne Markierung aufs Weitertippen (Textposition: auf den Absatz der Schreibmarke) – außer
+der Rahmen ist noch leer. Bereich „Position“: Lage und (mit fester Rahmengröße) Größe des
+Rahmens in mm.
 
 Geschrieben wird direkt auf dem Etikett (``gui.text_edit_mode``): Der Editor ``edit`` ist
 dafür ein unsichtbarer Eingabepuffer (Kind des Panels, Größe 0, nicht im Layout) – er behält
@@ -86,6 +88,7 @@ def _align_icon(key: str, dark_checked: bool = True) -> QIcon:
 
 class TextPanel(Panel):
     frame_edited = Signal(str, float)   # Feld im Bereich „Position“ ("x" | "y" | "w" | "h"), mm
+    formatted = Signal()                # Knopf/Feld hat formatiert (Schreibmodus: Fokus zurück)
 
     def set_icon_style(self, dark_checked: bool) -> None:
         """Ausrichtungssymbole an das Design anpassen (weiß auf schwarz nur bei RawBlock)."""
@@ -97,6 +100,7 @@ class TextPanel(Panel):
         super().__init__(doc, "Text")
         self.dark_checked_icons = True
         self.index: int | None = None   # bearbeitetes Objekt; None = kein Text ausgewählt
+        self._editing = False           # Schreibmodus (``set_editing``)
         self._frame: Rect | None = None   # zuletzt angezeigter Rahmen (mm)
         self._updating = False
         self._formatting = False        # während einer Formatierung: contentsChanged nicht doppelt anwenden
@@ -113,6 +117,8 @@ class TextPanel(Panel):
         # unsichtbarer Eingabepuffer des Schreibmodus: fokussierbar, aber ohne Fläche
         self.edit = PlainPasteEdit(self)
         self.edit.setFixedSize(0, 0)
+        # nur der Schreibmodus gibt ihm den Fokus (setFocus) – nie Tab oder ein Klick
+        self.edit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         # Absätze ohne eigene Ausrichtung stehen zentriert – wie bisher in labelwerk; kein
         # Umbruch im Editor (Größe 0), damit Pos1/Ende und Zeilen den Absätzen entsprechen
         option = QTextOption(Qt.AlignmentFlag.AlignHCenter)
@@ -244,13 +250,24 @@ class TextPanel(Panel):
                 self.italic, self.underline, *self.align_buttons.values(), self.fit,
                 *self._frame_spins.values())
 
+    def set_editing(self, editing: bool) -> None:
+        """Schreibmodus an/aus: Formatieren ohne Markierung wirkt dann aufs Weitertippen."""
+        self._editing = editing
+
+    def _whole_text(self) -> bool:
+        """Wirkt eine Formatierung ohne Markierung auf den ganzen Text? Außerhalb des
+        Schreibmodus immer, im Schreibmodus nur bei noch leerem Rahmen."""
+        return not self._editing or self.edit.document().isEmpty()
+
     def _step(self, change, *args, **kwargs) -> None:
-        """Änderung als eigener Rückgängig-Schritt: vorher Getipptes festhalten, danach das Neue."""
+        """Änderung als eigener Rückgängig-Schritt: vorher Getipptes festhalten, danach das Neue.
+        (Im Schreibmodus gehört sie zur laufenden Bearbeitung – das regelt das Hauptfenster.)"""
         if self._updating:
             return
         self.edited.emit()
         change(*args, **kwargs)
         self.edited.emit()
+        self.formatted.emit()
 
     # --- Formatieren ------------------------------------------------------
     def _target(self) -> QTextCursor:
@@ -276,15 +293,18 @@ class TextPanel(Panel):
             fmt.setFontItalic(italic)
         if underline is not None:
             fmt.setFontUnderline(underline)
-        if not self.edit.textCursor().hasSelection():   # ganzer Text: Grundformat anpassen
+        selected = self.edit.textCursor().hasSelection()
+        whole = not selected and self._whole_text()
+        if whole:                                       # ganzer Text: Grundformat anpassen
             for key, value in (("family", family), ("pt", size), ("bold", bold),
                                ("italic", italic), ("underline", underline)):
                 if value is not None:
                     self._base[key] = value
         self._formatting = True
         try:
-            self._target().mergeCharFormat(fmt)
-            if not self.edit.textCursor().hasSelection():
+            if selected or whole:
+                self._target().mergeCharFormat(fmt)
+            if not selected:
                 self.edit.mergeCurrentCharFormat(fmt)   # Weitertippen in gleicher Formatierung
         finally:
             self._formatting = False
@@ -323,6 +343,13 @@ class TextPanel(Panel):
         if self._updating:
             return
         selected = self.edit.textCursor().hasSelection()
+        if not selected and not self._whole_text():     # Schreibmodus: nur fürs Weitertippen
+            pt = self._props(self.edit.currentCharFormat())["pt"]
+            fmt = QTextCharFormat()
+            fmt.setFontPointSize(min(max(self._step_pt(pt, direction), MIN_PT), MAX_PT))
+            self.edit.mergeCurrentCharFormat(fmt)
+            self._apply()
+            return
         cursor = self._target()
         start, end = cursor.selectionStart(), cursor.selectionEnd()
         document = self.edit.document()
@@ -360,8 +387,10 @@ class TextPanel(Panel):
         self._apply()
 
     def _align(self, key: str) -> None:
+        """Textposition der Absätze in der Markierung bzw. – im Schreibmodus ohne Markierung –
+        des Absatzes an der Schreibmarke; sonst aller Absätze."""
         cursor = self.edit.textCursor()
-        if not cursor.hasSelection():
+        if not cursor.hasSelection() and self._whole_text():
             cursor.select(QTextCursor.SelectionType.Document)
         fmt = cursor.blockFormat()
         fmt.setAlignment(_ALIGN_TO_QT[key])
@@ -566,6 +595,19 @@ class TextPanel(Panel):
         self.align_buttons[align].setChecked(True)
         for w in widgets:
             w.blockSignals(False)
+
+    def typing_scale(self) -> float:
+        """Schriftgröße fürs Weitertippen relativ zur Schrift, nach der die Schreibmarke im
+        Zeilensatz bemessen ist (Zeichen davor, am Absatzanfang danach, leerer Absatz:
+        Grundgröße); 1.0 mit Markierung oder ohne eigenes Format fürs Weitertippen."""
+        cursor = self.edit.textCursor()
+        if cursor.hasSelection():
+            return 1.0
+        probe = QTextCursor(self.edit.document())     # Format im Text, nicht das zum Tippen
+        probe.setPosition(cursor.position())
+        here = (self._base["pt"] if probe.block().length() <= 1
+                else self._props(probe.charFormat())["pt"])
+        return self._props(self.edit.currentCharFormat())["pt"] / here
 
     def _selection_sizes(self) -> set[float]:
         """Verschiedene Größen innerhalb der Markierung (leer ohne Markierung)."""

@@ -8,25 +8,26 @@ Text wird wie im P-touch Editor **direkt im Rahmen auf dem Etikett** geschrieben
 
 ## Nicht enthalten
 
-Automatischer Zeilenumbruch, Rechtschreibprüfung, Suchen/Ersetzen, Bearbeiten mehrerer Rahmen gleichzeitig, Ziehen von Text per Drag & Drop.
+Automatischer Zeilenumbruch, Rechtschreibprüfung, Suchen/Ersetzen, Bearbeiten mehrerer Rahmen gleichzeitig, Ziehen von Text per Drag & Drop. Noch nicht übernommene Eingaben einer Eingabemethode (Vorschlagstext/Preedit, z. B. beim Japanisch-Tippen) erscheinen nicht auf dem Etikett – erst der übernommene Text; das Kandidatenfenster steht an der Schreibmarke.
 
 ## Bedienung
 
-- **Neuer Text:** Werkzeug „Text anlegen“ (A) + Klick aufs Etikett → neuer Rahmen an der Klickstelle, **sofort im Schreibmodus**.
+- **Neuer Text:** Werkzeug „Text anlegen“ (A) + Klick aufs Etikett → neuer Rahmen an der Klickstelle, **sofort im Schreibmodus**, **linksbündig**: Schreibmarke am Klickpunkt, der Text wächst nach rechts (wie P-touch/Textverarbeitung); die Textposition lässt sich danach ändern.
 - **Bestehender Text:** 1. Klick wählt den Rahmen (verschieben, Anfasser wie bisher). **Doppelklick** startet den Schreibmodus mit der Schreibmarke an der Klickstelle. Ein Klick in einen schon gewählten Rahmen startet ihn nicht.
 - **Im Schreibmodus:**
   - Ziehen markiert Text, Doppelklick markiert ein Wort, Umschalt+Klick erweitert die Markierung.
   - Tasten des Texteditors: Pfeile bewegen die Schreibmarke (mit Umschalt markieren), Pos1/Ende, Entf/Rücktaste, Enter = neue Zeile, Strg+A = ganzer Text des Rahmens, Strg+C/X/V mit Text (Einfügen nur als reiner Text), Strg+B/I/U, Strg+Z/Strg+Umschalt+Z innerhalb der Bearbeitung.
-  - **Esc** oder **Klick neben den Rahmen** beendet den Schreibmodus. Ziehen an einem anderen Rahmen beendet ihn und verschiebt dann diesen Rahmen.
+  - Tab bleibt ohne Wirkung (Tabulatoren druckt labelwerk nicht; der Fokus bleibt im Text). Strg+Z und der Knopf „Rückgängig“ gehen im Dokument weiter, wenn in der Bearbeitung nichts mehr zurückzunehmen ist; in einem leeren neuen Rahmen nimmt Rückgängig nur den Rahmen zurück.
+  - **Esc** oder **Klick neben den Rahmen** beendet den Schreibmodus (ebenso ein anderes Werkzeug oder ein anderer Reiter). Ziehen an einem anderen Rahmen beendet ihn und verschiebt dann diesen Rahmen.
   - Panel-Formatierung (Schrift, Größe, A⁺/A⁻, B/I/U, Textposition) wirkt auf die Markierung bzw. das Weitertippen; außerhalb des Schreibmodus wie bisher auf den ganzen Rahmen.
 - **Außerhalb des Schreibmodus** gelten die Objekt-Kürzel unverändert (Pfeile verschieben, Entf löscht den Rahmen …).
-- **Leerer Rahmen** entfällt beim Verlassen (wie bisher).
+- **Leerer Rahmen** entfällt beim Verlassen – auf jedem Weg.
 - **Rückgängig:** Eine abgeschlossene Bearbeitung ist **ein** Schritt im Dokument-Verlauf.
 
 ## Darstellung
 
-- Rahmen im Schreibmodus durchgezogen (statt gestrichelt), ohne Anfasser.
-- Schreibmarke: senkrechte Linie, 1 Bildschirmpixel breit, Höhe der Schrift an der Stelle, blinkt im Systemtakt (`QApplication.cursorFlashTime`).
+- Rahmen im Schreibmodus durchgezogen (statt gestrichelt), ohne Anfasser; er umfasst die Zeilen von Ober- bis Unterlänge, damit Schreibmarke und Markierung darin liegen.
+- Schreibmarke: senkrechte Linie, 1 Bildschirmpixel breit, Höhe der Schrift an der Stelle, blinkt im Systemtakt (`QApplication.cursorFlashTime`); sie fehlt, solange der Tastaturfokus woanders ist (z. B. im Feld „Schrift“).
 - Markierung: halbtransparente Systemfarbe für Markierungen (`palette().highlight()`, Alpha ≈ 35 %) über dem Druckbild.
 - Leerer Rahmen: Schreibmarke dort, wo die erste Zeile beginnen würde, Höhe der aktuellen Schriftgröße, Absatz-Ausrichtung gilt (zentriert → mittig).
 - Gedrehte Objekte (90/180/270°): Schreibmarke und Markierung drehen mit; Klicks werden zurückgerechnet.

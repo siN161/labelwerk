@@ -102,6 +102,8 @@ class Canvas(QGraphicsView):
     edit_requested = Signal(int, object)       # Text bearbeiten (Doppelklick): Index, Klickpunkt
                                                # (QPointF, Druckpunkte in Leserichtung) oder None
     edit_pressed = Signal(object, bool)        # Schreibmodus: Klick in den Rahmen (Punkt, Umschalt)
+    edit_dragged = Signal(object)              # Schreibmodus: Ziehen im Rahmen markiert (Punkt)
+    edit_double_clicked = Signal(object)       # Schreibmodus: Doppelklick markiert ein Wort
     edit_left = Signal()                       # Schreibmodus: Klick neben den Rahmen beendet ihn
     object_clicked = Signal(int)               # Klick auf ein Objekt (auch ein schon gewähltes)
     tool_changed = Signal(str)                 # Werkzeug: "select" | "text"
@@ -148,6 +150,7 @@ class Canvas(QGraphicsView):
         self._caret: QLineF | None = None                  # (Druckpunkte in Leserichtung)
         self._marked: list[QRectF] = []
         self._caret_on = True
+        self._caret_focus = True                           # Editor hat den Tastaturfokus
         self._blink = QTimer(self)
         self._blink.timeout.connect(self._toggle_caret)
         self._apply_zoom()
@@ -303,12 +306,26 @@ class Canvas(QGraphicsView):
         """Rahmen, Schreibmarke und Markierung des Schreibmodus (Druckpunkte in Leserichtung,
         wie ``sheet``). Die Schreibmarke erscheint sofort und blinkt im Systemtakt."""
         self._edit_frame, self._caret, self._marked = QRectF(frame), caret, list(marked)
+        self._restart_blink()
+
+    def set_caret_focus(self, focused: bool) -> None:
+        """Schreibmarke nur zeigen, solange der Editor den Tastaturfokus hat – sonst landet
+        Getipptes woanders (z. B. im Feld „Schrift“)."""
+        self._caret_focus = focused
+        self._restart_blink()
+
+    def caret_shown(self) -> bool:
+        """Wird im Schreibmodus eine Schreibmarke gezeigt (blinkend)?"""
+        return self._editing is not None and self._caret is not None and self._caret_focus
+
+    def _restart_blink(self) -> None:
+        """Schreibmarke sofort sichtbar, blinkt im Systemtakt; ohne Fokus aus."""
         self._caret_on = True
         flash = QApplication.cursorFlashTime()
-        if flash > 0:
+        if flash > 0 and self.caret_shown():
             self._blink.start(flash // 2)
         else:
-            self._blink.stop()                             # Blinken abgeschaltet: steht still
+            self._blink.stop()                             # aus oder Blinken abgeschaltet
         self.viewport().update()
 
     def caret_line(self) -> QLineF:
@@ -534,6 +551,9 @@ class Canvas(QGraphicsView):
             self._moved = True
             self.length_changed.emit(mm)
             return
+        if self._drag == "text":
+            self.edit_dragged.emit(self._reading(pos))
+            return
         if self._drag in ("move", "resize"):
             if not self._moved and (pos - self._press).manhattanLength() < _DRAG_START_PX:
                 return
@@ -620,6 +640,7 @@ class Canvas(QGraphicsView):
             self.length_changed.emit(None)
             return
         if self._editing is not None and self._in_edit_frame(event.position()):
+            self.edit_double_clicked.emit(self._reading(event.position()))
             return
         item = self._object_at(event.position()) if self.sheet is not None else None
         if item is not None and event.button() == Qt.MouseButton.LeftButton:
@@ -681,7 +702,7 @@ class Canvas(QGraphicsView):
         color.setAlpha(_SELECTION_ALPHA)
         for rect in self.selection_rects():
             painter.fillRect(rect, color)
-        if self._caret is not None and self._caret_on:
+        if self.caret_shown() and self._caret_on:
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)   # scharf, 1 Pixel
             painter.setPen(QPen(Qt.GlobalColor.black, 0))

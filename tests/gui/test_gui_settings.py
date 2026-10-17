@@ -186,8 +186,19 @@ def test_shortcut_table_lists_every_action_with_scope_and_keys(qtbot):
     native = QKeySequence("Ctrl+Shift+P").toString(QKeySequence.SequenceFormat.NativeText)
     assert table.item(row, 2).text() == native
     assert table.item(_row("edit.copy"), 1).text() == "Arbeitsfläche"
-    assert table.item(_row("text.bold"), 1).text() == "Text"
+    assert table.item(_row("text.bold"), 1).text() == "Schreibmodus"
     assert table.item(_row("align.left"), 2).text() == ""
+
+
+def test_fixed_shortcut_row_is_not_editable(qtbot):
+    from PySide6.QtCore import Qt
+    dialog = _shortcut_dialog(qtbot)
+    row = _row("text.end_edit")
+    table = dialog.shortcut_table
+    assert table.item(row, 1).text() == "Schreibmodus"
+    assert not table.item(row, 2).flags() & Qt.ItemFlag.ItemIsEditable
+    assert "fest" in table.item(row, 2).toolTip()
+    assert table.item(_row("text.bold"), 2).flags() & Qt.ItemFlag.ItemIsEditable
 
 
 def test_values_contain_only_changed_shortcuts(qtbot):

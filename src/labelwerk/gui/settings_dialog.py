@@ -22,7 +22,8 @@ from ..printer import DEFAULT_MODEL
 from ..settings import Settings, save_settings
 from .widgets import DoubleSpinBox, SpinBox
 
-SCOPE_NAMES = {"global": "Global", "canvas": "Arbeitsfläche", "text": "Text"}
+SCOPE_NAMES = {"global": "Global", "canvas": "Arbeitsfläche", "edit": "Schreibmodus"}
+FIXED_TIP = "Kürzel fest – nicht änderbar"
 CONFLICT_COLOR = QColor("#FF0000")
 COL_ACTION, COL_SCOPE, COL_KEYS, COL_RESET = range(4)
 DIALOG_SIZE = (760, 680)     # Wunschgröße: Kürzel-Tabelle mit ungekürzten Aktionsnamen
@@ -172,7 +173,11 @@ class SettingsDialog(QDialog):
                 item.setFlags(fixed)
                 table.setItem(row, column, item)
             item = QTableWidgetItem()
-            item.setFlags(fixed | Qt.ItemFlag.ItemIsEditable)
+            if entry.fixed:
+                item.setFlags(fixed)
+                item.setToolTip(FIXED_TIP)
+            else:
+                item.setFlags(fixed | Qt.ItemFlag.ItemIsEditable)
             table.setItem(row, COL_KEYS, item)
             self._show_keys(entry.id)
         # gleiche Zeilenhöhe, ob mit Knopf „Standard“ oder ohne

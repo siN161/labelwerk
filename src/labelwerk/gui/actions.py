@@ -1,7 +1,8 @@
 """QActions aus dem Kürzel-Verzeichnis (``shortcuts.ACTIONS``): eine je Aktion, Kürzel änderbar.
 
 Wer eine Aktion nutzt, verbindet ``triggered`` und hängt sie an das passende Widget
-(globale ans Hauptfenster, „canvas“ an die Arbeitsfläche, „text“ ans Textfeld).
+(globale ans Hauptfenster, „canvas“ an die Arbeitsfläche, „edit“ ans Text-Panel, in dem der
+Editor des Schreibmodus steckt).
 """
 from __future__ import annotations
 
@@ -13,7 +14,7 @@ from .. import shortcuts
 _CONTEXT = {
     "global": Qt.ShortcutContext.WindowShortcut,
     "canvas": Qt.ShortcutContext.WidgetWithChildrenShortcut,
-    "text": Qt.ShortcutContext.WidgetWithChildrenShortcut,
+    "edit": Qt.ShortcutContext.WidgetWithChildrenShortcut,
 }
 
 

@@ -2,6 +2,7 @@
 import pytest
 from PySide6.QtTest import QTest
 
+from labelwerk import layout
 from labelwerk.document import Document, TextObject
 from labelwerk.gui.main_window import MainWindow
 from labelwerk.labels import DPI
@@ -103,7 +104,11 @@ def test_typing_goes_into_newly_created_text(window, qtbot):
     qtbot.waitUntil(editor.hasFocus, timeout=1000)
     QTest.keyClicks(editor, "Neu")
     assert [o.text for o in window.doc.objects] == ["Eins", "Zwei", "Neu"]
-    assert (window.doc.objects[2].x_mm, window.doc.objects[2].y_mm) == (30, 12)
+    # neuer Text linksbündig: Zeilenanfang und Oberkante der Schrift bleiben am Klickpunkt
+    assert window.doc.objects[2].paragraphs[0].align == "left"
+    rendered = window.rendered[2]
+    x, y = layout.from_object(rendered.layout.anchor("left"), rendered, 0)
+    assert (x * DOT_MM, y * DOT_MM) == pytest.approx((30, 12), abs=DOT_MM)
 
 
 def test_deleting_last_object_leaves_label_empty(qtbot):

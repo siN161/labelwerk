@@ -3,14 +3,16 @@
 Kürzel sind Texte im Qt-Format („Ctrl+Shift+Z“, „Del“, „Shift+Left“); „“ = kein Kürzel.
 Der Kern prüft nur Form und Doppelbelegung, die GUI wandelt mit ``QKeySequence`` um.
 Bereiche: ``global`` (überall), ``canvas`` (Arbeitsfläche hat den Fokus),
-``text`` (Textfeld hat den Fokus). Arbeitsfläche und Textfeld sind nie gleichzeitig aktiv,
-ein globales Kürzel kollidiert dagegen mit jedem Bereich.
+``edit`` (Schreibmodus: der Editor im Text-Panel hat den Fokus – Fett/Kursiv/Unterstrichen
+wirken auch, solange ein anderes Feld des Panels ihn hat). Arbeitsfläche und Schreibmodus
+sind nie gleichzeitig aktiv, ein globales Kürzel kollidiert dagegen mit jedem Bereich.
+Feste Kürzel (``fixed``, z. B. Esc beendet den Schreibmodus) lassen sich nicht ändern.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-SCOPES = ("global", "canvas", "text")
+SCOPES = ("global", "canvas", "edit")
 
 
 @dataclass(frozen=True)
@@ -18,7 +20,8 @@ class Action:
     id: str          # z. B. "edit.copy"
     name: str        # Anzeigename
     default: str     # Standardkürzel, "" = keins
-    scope: str       # global | canvas | text
+    scope: str       # global | canvas | edit
+    fixed: bool = False   # Kürzel fest, in den Einstellungen nicht änderbar
 
 
 ACTIONS: tuple[Action, ...] = (
@@ -65,13 +68,16 @@ ACTIONS: tuple[Action, ...] = (
     Action("size.same", "Gleiche Größe", "", "canvas"),
     Action("size.width", "Gleiche Breite", "", "canvas"),
     Action("size.height", "Gleiche Höhe", "", "canvas"),
-    Action("text.bold", "Fett", "Ctrl+B", "text"),
-    Action("text.italic", "Kursiv", "Ctrl+I", "text"),
-    Action("text.underline", "Unterstrichen", "Ctrl+U", "text"),
+    Action("text.end_edit", "Schreibmodus beenden", "Esc", "edit", fixed=True),
+    Action("text.bold", "Fett", "Ctrl+B", "edit"),
+    Action("text.italic", "Kursiv", "Ctrl+I", "edit"),
+    Action("text.underline", "Unterstrichen", "Ctrl+U", "edit"),
 )
 
 _BY_ID = {a.id: a for a in ACTIONS}
 _MODIFIERS = ("Ctrl", "Alt", "Shift", "Meta")          # Reihenfolge wie Qt
+# bedienen Textfeld, Tabelle und Dialoge: als Kürzel nicht belegbar (außer als eigener Standard)
+_RESERVED = {"Esc", "Return", "Enter", "Tab", "Backtab", "Shift+Tab"}
 _KEY_ALIASES = {"del": "Del", "delete": "Del", "esc": "Esc", "escape": "Esc",
                 "ins": "Ins", "insert": "Ins", "pgup": "PgUp", "pageup": "PgUp",
                 "pgdown": "PgDown", "pagedown": "PgDown"}
@@ -128,9 +134,10 @@ def normalize(seq: str) -> str:
 
 # --- Verzeichnis anwenden -------------------------------------------------------------
 def effective(overrides: dict[str, str]) -> dict[str, str]:
-    """Wirksame Kürzel aller Aktionen: Standard, überschrieben durch ``overrides``."""
+    """Wirksame Kürzel aller Aktionen: Standard, überschrieben durch ``overrides`` (feste
+    Kürzel bleiben)."""
     mapping = {a.id: a.default for a in ACTIONS}
-    mapping.update({k: v for k, v in overrides.items() if k in _BY_ID})
+    mapping.update({k: v for k, v in overrides.items() if k in _BY_ID and not _BY_ID[k].fixed})
     return mapping
 
 
@@ -154,13 +161,14 @@ def conflicts(mapping: dict[str, str]) -> list[tuple[str, list[str]]]:
 
 
 def without_conflicts(mapping: dict[str, str]) -> tuple[dict[str, str], list[str]]:
-    """Doppelbelegungen auflösen (z. B. von Hand bearbeitete settings.json): Die Aktion, die im
-    Verzeichnis zuerst steht, behält das Kürzel, spätere bekommen keins. ``(Kürzel, Warnungen)``.
+    """Doppelbelegungen auflösen (z. B. von Hand bearbeitete settings.json): Feste Kürzel
+    bleiben immer; sonst behält die Aktion, die im Verzeichnis zuerst steht, das Kürzel,
+    spätere bekommen keins. ``(Kürzel, Warnungen)``.
     """
     clean = dict(mapping)
     kept: list[tuple[str, str]] = []                    # (normalisiertes Kürzel, Aktions-ID)
     warnings: list[str] = []
-    for entry in ACTIONS:
+    for entry in sorted(ACTIONS, key=lambda a: not a.fixed):   # feste zuerst, sonst stabil
         seq = clean.get(entry.id, "")
         if not seq or not is_well_formed(seq):
             continue
@@ -195,6 +203,14 @@ def validate(overrides) -> tuple[dict[str, str], list[str]]:
         elif not isinstance(seq, str) or not is_well_formed(seq):
             warnings.append(f"Tastenkürzel für {action_id!r} ungültig ({seq!r}) – "
                             f"Standard {_BY_ID[action_id].default!r} aktiv.")
+        elif (normalize(seq) in _RESERVED
+              and normalize(seq) != normalize(_BY_ID[action_id].default)):
+            warnings.append(f"Tastenkürzel für {action_id!r} ungültig ({seq}) – Esc, Enter und "
+                            f"Tab sind nicht belegbar; Standard "
+                            f"{_BY_ID[action_id].default!r} aktiv.")
+        elif _BY_ID[action_id].fixed and normalize(seq) != normalize(_BY_ID[action_id].default):
+            warnings.append(f"Tastenkürzel für {action_id!r} ist fest "
+                            f"({_BY_ID[action_id].default}) – Einstellung ignoriert.")
         else:
             clean[action_id] = seq
     return clean, warnings
