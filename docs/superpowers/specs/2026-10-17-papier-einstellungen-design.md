@@ -46,7 +46,8 @@ Ungültige `orientation` → `ValueError` beim Rendern. `margin_mm` wird beim Re
 - **Vertikal:** wie heute; Höhe (Bandlauf) = automatisch (Text + 2 × `margin_mm`) oder `length_mm`; Breite = Bandbreite.
 - **Horizontal:**
   - Leserichtungs-Bild: Höhe = bedruckbare Bandbreite, Breite = Länge (automatisch: Textbreite + 2 × `margin_mm`; fest: `length_mm`).
-  - Automatische Schriftgröße: größte Größe, bei der der Textblock in die Bandbreite (minus 2 × 1 mm) passt – und bei fester Länge zusätzlich in die Länge.
+  - Automatische Schriftgröße: **gleiche Regel wie Vertikal** – höchstens 1/5 der Bandbreite (62 mm: 139 Punkte ≈ 8,6 mm Buchstabenhöhe), kleiner, falls der Text sonst nicht in Bandbreite bzw. feste Länge passt. („Bandbreite füllen“ wurde verworfen: eine dreizeilige Adresse würde 233 mm lang.) Wer feste Größen will, nutzt die Einstellung „Standard-Schriftgröße“ (z. B. 80 → Adresse ≈ 75 mm).
+  - Suche der passenden Größe per Halbierung (≈ 20 ms pro Rendern, live-tauglich). Textmaße werden auf ganze Punkte gerundet (Pillow liefert bei mehrzeiligem Text teils Kommazahlen).
   - Gestanzt/rund: Leserichtungs-Bild = bedruckbarer Bereich um 90° gedreht (z. B. 62x29: 271 × 696 Punkte).
   - Drehung zum Druckbild: `Image.rotate(90, expand=True)` (wie `files.fit_to_label` bei automatischer Drehung).
 - Längengrenzen wie bisher (`length_limits`, QL-600: 150–11811 Punkte), gelten für die Bandlaufrichtung in beiden Ausrichtungen.
@@ -62,6 +63,7 @@ Ungültige `orientation` → `ValueError` beim Rendern. `margin_mm` wird beim Re
 | `label_id` | `"62"` | Etikett für neue Etiketten, CLI ohne `-l` |
 | `orientation` | `"vertical"` | Ausrichtung für neue Etiketten, CLI ohne `--orientation` |
 | `margin_mm` | `1.0` | Ränder für neue Etiketten, CLI |
+| `font_size` | `null` (automatisch) | Schriftgröße für neue Etiketten (8–400), CLI ohne `-s` |
 | `check_media_on_start` | `true` | GUI: Medium beim Start / beim Erscheinen des Druckers prüfen |
 | `start_zoom` | `200` | GUI-Startzoom in % (25–400) |
 
@@ -114,7 +116,7 @@ Die Passt-nicht-Warnung erscheint, sobald ein Medium bekannt ist und die Auswahl
 ### Einstellungen
 
 - Zahnrad-Knopf **„EINSTELLUNGEN“** rechts in der Werkzeugleiste → Dialog mit Abschnitten:
-  - **Neues Etikett:** Etikett, Ausrichtung, Ränder.
+  - **Neues Etikett:** Etikett, Ausrichtung, Ränder, Schriftgröße (automatisch/fest).
   - **Drucker:** Medium beim Start prüfen.
   - **Ansicht:** Startzoom.
 - „Speichern“ schreibt `settings.json`. Die Standardwerte greifen, wenn ein neues Etikett entsteht – in dieser Etappe beim **Start der GUI** (`new_document(settings)`), künftig auch bei „Neu“ (kommt mit Speichern/Laden in Etappe 3). Das gerade geöffnete Etikett bleibt unverändert; der Startzoom gilt ab dem nächsten Start. Schreibfehler → Meldung im Dialog.
