@@ -1,5 +1,5 @@
 import pytest
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, Qt, QThreadPool
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -366,27 +366,27 @@ def test_font_replacement_hint_in_status_bar(window):
 def test_global_actions_come_from_shortcut_registry(window, monkeypatch):
     """Drucken, Einstellungen und Zoom sind Aktionen des Kürzel-Verzeichnisses."""
     from PySide6.QtGui import QKeySequence
-    assert window.print_action is window.actions["file.print"]
-    assert window.settings_action is window.actions["app.settings"]
+    assert window.print_action is window.shortcut_actions["file.print"]
+    assert window.settings_action is window.shortcut_actions["app.settings"]
     assert window.print_action.shortcut() == QKeySequence("Ctrl+P")
     assert "Ctrl+P" in window.print_action.toolTip()
     asked = []                                              # leeres Etikett: Rückfrage = Druck läuft
     monkeypatch.setattr(QMessageBox, "question",
                         lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.Cancel)
     window.panel("text").edit.setPlainText("")
-    window.actions["file.print"].trigger()
+    window.shortcut_actions["file.print"].trigger()
     assert asked
     window.canvas.set_zoom(100)
-    window.actions["view.zoom_in"].trigger()
+    window.shortcut_actions["view.zoom_in"].trigger()
     assert window.canvas.zoom == 110
-    window.actions["view.zoom_out"].trigger()
-    window.actions["view.zoom_out"].trigger()
+    window.shortcut_actions["view.zoom_out"].trigger()
+    window.shortcut_actions["view.zoom_out"].trigger()
     assert window.canvas.zoom == 90
-    window.actions["view.zoom_reset"].trigger()
+    window.shortcut_actions["view.zoom_reset"].trigger()
     assert window.canvas.zoom == 100
     from PySide6.QtWidgets import QWidget
-    window_actions = QWidget.actions(window)                # self.actions ist das Verzeichnis
-    assert all(window.actions[key] in window_actions
+    window_actions = QWidget.actions(window)                # self.shortcut_actions ist das Verzeichnis
+    assert all(window.shortcut_actions[key] in window_actions
                for key in ("view.zoom_in", "view.zoom_out", "view.zoom_reset", "edit.undo"))
 
 
@@ -405,9 +405,13 @@ def test_print_with_outside_object_asks_and_no_does_not_print(qtbot, monkeypatch
     asked = []
     monkeypatch.setattr(QMessageBox, "question",
                         lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.No)
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp0")
+    printed = []                     # pytest.fail im Worker-Thread wirkte nicht: zählen
     monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
-                        lambda *a, **kw: pytest.fail("darf nicht drucken"))
+                        lambda *a, **kw: printed.append(a) or {"did_print": True})
     win.print_label()
+    QThreadPool.globalInstance().waitForDone(2000)          # ein gestarteter Druck wäre fertig
+    assert printed == []
     (_, title, text, buttons, default), = asked
     assert text == "Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?"
     assert buttons == QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No

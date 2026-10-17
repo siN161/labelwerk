@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QDialogButtonBox, QFontComboBox, QFormLayout, QGroupBox,
@@ -25,7 +25,9 @@ from .widgets import DoubleSpinBox, SpinBox
 SCOPE_NAMES = {"global": "Global", "canvas": "Arbeitsfläche", "text": "Text"}
 CONFLICT_COLOR = QColor("#FF0000")
 COL_ACTION, COL_SCOPE, COL_KEYS, COL_RESET = range(4)
-DIALOG_SIZE = (760, 680)
+DIALOG_SIZE = (760, 680)     # Wunschgröße: Kürzel-Tabelle mit ungekürzten Aktionsnamen
+MIN_SIZE = (520, 420)        # kleiner geht nicht; Tabelle und Reiter rollen dann
+_SCREEN_SHARE = 0.9          # höchstens so viel vom verfügbaren Bildschirm
 _PORTABLE = QKeySequence.SequenceFormat.PortableText
 _NATIVE = QKeySequence.SequenceFormat.NativeText
 
@@ -35,7 +37,9 @@ class SettingsDialog(QDialog):
                  model: str = DEFAULT_MODEL, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Einstellungen")
-        self.resize(*DIALOG_SIZE)                    # Kürzel-Tabelle: Aktionsnamen ungekürzt
+        self.setMinimumSize(*MIN_SIZE)
+        screen = (parent.screen() if parent is not None else self.screen())
+        self.resize(initial_size(screen.availableGeometry().size()))
         self.path = path
         self.saved: Settings | None = None
         outer = QVBoxLayout(self)
@@ -140,10 +144,14 @@ class SettingsDialog(QDialog):
         page = QWidget()
         self.tabs.addTab(page, "Tastenkürzel")
         layout = QVBoxLayout(page)
-        hint = QLabel("Zeile anklicken und die neue Tastenkombination drücken. "
-                      "Esc bricht ab, ✕ im Feld entfernt das Kürzel.")
+        hint = self.shortcut_hint = QLabel(
+            "Zeile anklicken und die neue Tastenkombination drücken. Esc bricht ab, "
+            "✕ im Feld entfernt das Kürzel. Esc, Enter und Tab lassen sich hier nicht "
+            "belegen (sie bedienen die Tabelle).")
         hint.setWordWrap(True)
         layout.addWidget(hint)
+        self.key_hint = self._error_label()          # verworfene Eingabe
+        layout.addWidget(self.key_hint)
         self._keys = shortcuts.effective(overrides)       # Aktions-ID → Kürzel (Qt-Format)
         self._rows = [a.id for a in shortcuts.ACTIONS]
         table = self.shortcut_table = QTableWidget(len(self._rows), 4)
@@ -191,8 +199,15 @@ class SettingsDialog(QDialog):
     def set_shortcut(self, action_id: str, seq: str) -> None:
         """Kürzel einer Aktion ändern (Tabelle, Standard-Knopf); Konflikte neu prüfen."""
         self._keys[action_id] = seq
+        self.key_hint.hide()
         self._show_keys(action_id)
         self._check_conflicts()
+
+    def reject_keys(self, action_id: str, seq: str) -> None:
+        """Eingabe taugt nicht als Kürzel (z. B. nur Umschalt): melden, Kürzel bleibt."""
+        self.key_hint.setText(f"„{_native(seq) or seq}“ ist kein gültiges Kürzel – "
+                              f"„{shortcuts.action(action_id).name}“ bleibt unverändert.")
+        self.key_hint.show()
 
     def _show_keys(self, action_id: str) -> None:
         row = self._rows.index(action_id)
@@ -297,8 +312,19 @@ class _KeyDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor: QKeySequenceEdit, model, index) -> None:
         seq = editor.keySequence().toString(_PORTABLE)
+        action_id = self._dialog._rows[index.row()]
         if shortcuts.is_well_formed(seq):
-            self._dialog.set_shortcut(self._dialog._rows[index.row()], seq)
+            self._dialog.set_shortcut(action_id, seq)
+        else:
+            self._dialog.reject_keys(action_id, seq)
+
+
+def initial_size(available: QSize) -> QSize:
+    """Startgröße: Wunschgröße, auf kleinen Bildschirmen höchstens 90 % davon – nie kleiner als
+    die Mindestgröße."""
+    width = min(DIALOG_SIZE[0], int(available.width() * _SCREEN_SHARE))
+    height = min(DIALOG_SIZE[1], int(available.height() * _SCREEN_SHARE))
+    return QSize(max(width, MIN_SIZE[0]), max(height, MIN_SIZE[1]))
 
 
 def _native(seq: str) -> str:

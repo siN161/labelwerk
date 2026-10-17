@@ -550,7 +550,7 @@ def test_match_objects_sets_fixed_frame_to_reference():
     rendered = _rendered_of(objs)
     for mode, size in (("same", (30, 10)), ("width", (30, 4)), ("height", (10, 10))):
         ref, other = layout.match_objects(objs, rendered, mode)
-        assert ref == objs[0]
+        assert ref is objs[0]                                # unverändert, keine Kopie (Cache)
         assert (other.w_mm, other.h_mm, other.x_mm, other.y_mm) == (*size, 5, 20)
 
 
@@ -730,3 +730,91 @@ def test_objects_outside_raises_text_too_large_like_rendering():
     doc = Document("29", objects=[TextObject("W" * 60, size_pt=40)])
     with pytest.raises(TextTooLarge):
         layout.objects_outside(doc)
+
+
+# --- Raster der Positionsfelder ------------------------------------------------------
+def test_to_grid_rounds_chosen_values_to_tenth_mm():
+    obj = TextObject("A", fit=True, x_mm=1.234, y_mm=5.678, w_mm=20.049, h_mm=7.051)
+    assert _model_frame(layout.to_grid(obj, x=True, w=True)) == (1.2, 5.678, 20.0, 7.051)
+    assert _model_frame(layout.to_grid(obj, y=True, h=True)) == (1.234, 5.7, 20.049, 7.1)
+    assert _model_frame(obj) == (1.234, 5.678, 20.049, 7.051)          # Original bleibt
+
+
+def test_to_grid_maps_reading_width_of_turned_object_to_h_mm():
+    obj = TextObject("A", fit=True, x_mm=1, y_mm=1, w_mm=20.049, h_mm=7.051, rotation=90)
+    assert _model_frame(layout.to_grid(obj, w=True)) == (1, 1, 20.049, 7.1)
+
+
+def test_to_grid_leaves_missing_values_alone():
+    obj = TextObject("A", size_pt=12, x_mm=1.26)
+    grid = layout.to_grid(obj, x=True, y=True, w=True, h=True)
+    assert _model_frame(grid) == (1.3, None, None, None)
+
+
+def _model_frame(obj):
+    return obj.x_mm, obj.y_mm, obj.w_mm, obj.h_mm
+
+
+# --- Gedrehte und gemischte Objekte im Reiter „Layout“ -------------------------------------
+DOT_MM = 25.4 / DPI
+
+
+def _mixed():
+    """Gedreht ohne/mit fester Rahmengröße und ungedreht – Rahmen in Leserichtung verschieden."""
+    return [TextObject("Quer", size_pt=14, x_mm=3, y_mm=4, rotation=90),
+            TextObject("Rahmen", size_pt=12, fit=True, x_mm=20, y_mm=10, w_mm=24, h_mm=8,
+                       rotation=270),
+            TextObject("Gerade", size_pt=10, x_mm=12, y_mm=30)]
+
+
+def _shown(objs):
+    return [layout.object_rect(r) for r in _rendered_of(objs)]
+
+
+@pytest.mark.parametrize("mode, attr", [("left", "x"), ("right", "right"), ("hcenter", "cx"),
+                                        ("top", "y"), ("bottom", "bottom"), ("vcenter", "cy")])
+def test_align_rotated_and_mixed_objects(mode, attr):
+    objs = _mixed()
+    aligned = layout.align_objects(objs, _rendered_of(objs), mode)
+    values = [getattr(r, attr) for r in _shown(aligned)]
+    assert max(values) - min(values) <= 2 * DOT_MM           # gerendert bündig (Druckpunkte)
+    assert [o.rotation for o in aligned] == [90, 270, 0]
+    assert aligned[1].fit and (aligned[1].w_mm, aligned[1].h_mm) == (24, 8)   # Rahmen bleibt
+
+
+@pytest.mark.parametrize("mode", ["same", "width", "height"])
+def test_match_size_with_rotated_fixed_frame_reference(mode):
+    objs = _mixed()
+    ref, other, plain = layout.match_objects([objs[1], objs[0], objs[2]],
+                                             _rendered_of([objs[1], objs[0], objs[2]]), mode)
+    target = _shown([ref])[0]                                # 8 × 24 mm in Leserichtung
+    after = _shown([ref, other, plain])
+    for r in after[1:]:                                      # Text ohne Rahmen: Verhältnis bleibt
+        measure = {"width": lambda q: q.w, "height": lambda q: q.h,
+                   "same": lambda q: q.w * q.h}[mode]      # „gleiche Größe“: gleiche Fläche
+        assert measure(r) == pytest.approx(measure(target), rel=0.15)
+    assert not other.fit and other.rotation == 90            # Text ohne Rahmen: skaliert
+
+
+def test_match_size_sets_turned_fixed_frame_from_plain_reference():
+    objs = _mixed()
+    ref, framed = layout.match_objects([objs[2], objs[1]], _rendered_of([objs[2], objs[1]]),
+                                       "same")
+    want = _shown([ref])[0]
+    got = _shown([framed])[0]
+    assert (got.w, got.h) == pytest.approx((want.w, want.h), abs=0.1)
+    assert (framed.w_mm, framed.h_mm) == pytest.approx((want.h, want.w), abs=0.01)  # ungedreht
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_maximize_rotated_objects(index):
+    obj = _mixed()[index]
+    doc = Document("62", length_mm=40, objects=[obj])
+    area = layout.printable_area(doc)
+    big = layout.maximize_object(obj, render_object(obj, doc), area, doc)
+    r = layout.object_rect(render_object(big, doc))
+    assert r.x >= area.x - 0.1 and r.right <= area.right + 0.1
+    assert r.y >= area.y - 0.1 and r.bottom <= area.bottom + 0.1
+    assert max(r.w / area.w, r.h / area.h) == pytest.approx(1, abs=0.06)
+    assert (r.cx, r.cy) == pytest.approx((area.cx, area.cy), abs=0.2)
+    assert big.rotation == obj.rotation and big.fit == obj.fit

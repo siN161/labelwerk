@@ -293,6 +293,57 @@ def test_saved_shortcut_takes_effect_in_window(qtbot, monkeypatch):
     monkeypatch.setattr(SettingsDialog, "exec", fake_exec)
     win.settings_action.trigger()
     assert win.settings.shortcuts == {"file.print": "Ctrl+Shift+P", "text.bold": "Ctrl+Shift+B"}
-    assert win.actions["file.print"].shortcut() == QKeySequence("Ctrl+Shift+P")
-    assert win.actions["text.bold"].shortcut() == QKeySequence("Ctrl+Shift+B")
-    assert win.actions["text.bold"] in win.panel("text").actions()   # B/I/U über die Aktionen
+    assert win.shortcut_actions["file.print"].shortcut() == QKeySequence("Ctrl+Shift+P")
+    assert win.shortcut_actions["text.bold"].shortcut() == QKeySequence("Ctrl+Shift+B")
+    assert win.shortcut_actions["text.bold"] in win.panel("text").actions()   # B/I/U über die Aktionen
+    panel = win.panel("text")
+    assert panel.bold.toolTip() == win.shortcut_actions["text.bold"].toolTip()
+    assert "Ctrl+Shift+B" in panel.bold.toolTip() and "Ctrl+I" in panel.italic.toolTip()
+
+
+def test_conflicting_shortcuts_from_file_warn_and_later_one_is_empty(qtbot):
+    from PySide6.QtGui import QKeySequence
+    win = MainWindow(settings=Settings(check_media_on_start=False,
+                                       shortcuts={"edit.duplicate": "Ctrl+C"}))
+    qtbot.addWidget(win)
+    assert win.shortcut_actions["edit.copy"].shortcut() == QKeySequence("Ctrl+C")
+    assert win.shortcut_actions["edit.duplicate"].shortcut().isEmpty()
+    assert "Tastenkürzel doppelt belegt: Ctrl+C" in win.result.text()
+    assert win.result.property("state") == "error"
+
+
+def test_shortcut_hint_names_keys_that_cannot_be_assigned(qtbot):
+    dialog = _shortcut_dialog(qtbot)
+    assert "Esc, Enter und Tab" in dialog.shortcut_hint.text()
+
+
+def test_rejected_key_input_is_reported(qtbot):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeySequence
+    from PySide6.QtWidgets import QKeySequenceEdit
+    dialog = _shortcut_dialog(qtbot)
+    table = dialog.shortcut_table
+    delegate = table.itemDelegateForColumn(2)
+    editor = QKeySequenceEdit()
+    qtbot.addWidget(editor)
+    editor.setKeySequence(QKeySequence(Qt.Key.Key_Shift))   # nur eine Umschalttaste
+    index = table.model().index(_row("edit.copy"), 2)
+    delegate.setModelData(editor, table.model(), index)
+    assert dialog.shortcut("edit.copy") == "Ctrl+C"         # unverändert
+    assert not dialog.key_hint.isHidden()
+    assert "Shift" in dialog.key_hint.text() and "Kopieren" in dialog.key_hint.text()
+    dialog.set_shortcut("edit.copy", "Ctrl+Shift+C")        # nächste gültige Eingabe
+    assert dialog.key_hint.isHidden()
+
+
+def test_dialog_fits_on_small_screens(qtbot):
+    from PySide6.QtCore import QSize
+    from labelwerk.gui.settings_dialog import DIALOG_SIZE, MIN_SIZE, initial_size
+    dialog = _shortcut_dialog(qtbot)
+    assert (dialog.minimumWidth(), dialog.minimumHeight()) == MIN_SIZE   # Mindestgröße, nicht fest
+    assert initial_size(QSize(1920, 1080)) == QSize(*DIALOG_SIZE)
+    small = initial_size(QSize(700, 500))
+    assert small.width() <= 700 and small.height() <= 500
+    assert initial_size(QSize(300, 200)) == QSize(*MIN_SIZE)  # nie kleiner als die Mindestgröße
+    screen = dialog.screen().availableGeometry().size()
+    assert dialog.size() == initial_size(screen)

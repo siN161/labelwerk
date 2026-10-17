@@ -85,7 +85,7 @@ def test_selecting_switches_to_text_panel_and_paper_tab_keeps_selection(window):
 def test_text_tab_without_selection_starts_text_tool(window):
     window.tool_actions["text"].trigger()
     assert window.canvas.tool() == "text"
-    window.actions["tool.select"].trigger()
+    window.shortcut_actions["tool.select"].trigger()
     window.canvas.set_selection([0])
     window.tool_actions["paper"].trigger()
     window.tool_actions["text"].trigger()

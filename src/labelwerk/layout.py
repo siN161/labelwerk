@@ -17,6 +17,7 @@ ALIGN_MODES = ("left", "hcenter", "right", "top", "vcenter", "bottom")
 SIZE_MODES = ("same", "width", "height")
 _EPS = 1e-6                # Rundungsspielraum beim Vergleich von mm-Werten
 _DECIMALS = 3              # Positionen/Rahmen im Modell: auf 1/1000 mm
+GRID_MM = 0.1              # Raster der Positionsfelder: Ziehen/Skalieren endet darauf
 
 
 def _mm(dots: float) -> float:
@@ -380,13 +381,14 @@ def align_objects(objs: list[TextObject], rendered: list[RenderedObject], mode: 
 def match_objects(objs: list[TextObject], rendered: list[RenderedObject],
                   mode: str) -> list[TextObject]:
     """Kopien mit der Größe des ersten Objekts (``same``, ``width``, ``height``); Ecke bleibt.
+    Das erste (Bezug) bleibt unverändert dasselbe Objekt – so muss es nicht neu gerendert werden.
 
     Mit fester Rahmengröße wird der Rahmen gesetzt. Text ohne feste Rahmengröße wird
     skaliert (Seitenverhältnis bleibt): bei „gleicher Größe“ mit dem Mittel aus Breiten-
     und Höhenverhältnis, sonst nach dem angeglichenen Maß.
     """
     rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
-    result = [copy.deepcopy(objs[0])] if objs else []
+    result = objs[:1]
     for obj, r, old, new in zip(objs[1:], rendered[1:], rects[1:], match_size(rects, mode)[1:]):
         if obj.fit:
             result.append(set_frame(obj, _rounded(new), r))
@@ -470,6 +472,25 @@ def reorder(items: list, indices: list[int], step: int) -> tuple[list, list[int]
         if order[pos] in chosen and order[other] not in chosen:
             order[pos], order[other] = order[other], order[pos]
     return [items[i] for i in order], [order.index(i) for i in indices]
+
+
+def to_grid(obj: TextObject, x: bool = False, y: bool = False, w: bool = False,
+            h: bool = False) -> TextObject:
+    """Kopie mit den gewählten Werten auf ``GRID_MM`` gerundet – so, wie die Felder im Panel
+    sie zeigen (nach Ziehen/Skalieren mit der Maus; Pfeiltasten verschieben genau).
+
+    ``w``/``h`` meinen Breite/Höhe in Leserichtung (bei 90/270° also ``h_mm``/``w_mm``);
+    fehlende Werte (None) bleiben. Ein eingerastetes Objekt liegt danach höchstens 0,05 mm
+    neben der Hilfslinie – weniger als ein Druckpunkt (0,085 mm).
+    """
+    if obj.rotation in (90, 270):
+        w, h = h, w
+    grid = copy.deepcopy(obj)
+    for attr, chosen in (("x_mm", x), ("y_mm", y), ("w_mm", w), ("h_mm", h)):
+        value = getattr(grid, attr)
+        if chosen and value is not None:
+            setattr(grid, attr, round(round(value / GRID_MM) * GRID_MM, 1))
+    return grid
 
 
 def _rounded(rect: Rect) -> Rect:

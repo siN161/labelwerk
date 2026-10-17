@@ -188,3 +188,34 @@ def test_non_strings_are_not_well_formed(seq):
 def test_conflicts_skip_non_strings():
     mapping = shortcuts.effective({"edit.copy": None, "edit.cut": 5})
     assert shortcuts.conflicts({**mapping, "edit.paste": ["Ctrl+V"]}) == []
+
+
+# --- Doppelbelegung aus settings.json auflösen -----------------------------------------
+def test_without_conflicts_keeps_defaults_untouched():
+    defaults = shortcuts.effective({})
+    assert shortcuts.without_conflicts(defaults) == (defaults, [])
+
+
+def test_without_conflicts_clears_the_later_action():
+    mapping = shortcuts.effective({"edit.duplicate": "Ctrl+C"})
+    clean, warnings = shortcuts.without_conflicts(mapping)
+    assert clean["edit.copy"] == "Ctrl+C" and clean["edit.duplicate"] == ""
+    assert shortcuts.conflicts(clean) == []
+    assert warnings == ["Tastenkürzel doppelt belegt: Ctrl+C (Kopieren, Duplizieren) – "
+                        "„Duplizieren“ ohne Kürzel."]
+    assert mapping["edit.duplicate"] == "Ctrl+C"            # Eingabe bleibt unverändert
+
+
+def test_without_conflicts_global_wins_by_order_and_other_scopes_stay():
+    mapping = shortcuts.effective({"tool.text": "Ctrl+Y", "text.bold": "Ctrl+Y",
+                                   "file.print": "Ctrl+Y"})
+    clean, warnings = shortcuts.without_conflicts(mapping)
+    assert clean["file.print"] == "Ctrl+Y"                  # steht im Verzeichnis zuerst
+    assert clean["tool.text"] == clean["text.bold"] == ""
+    assert len(warnings) == 2 and shortcuts.conflicts(clean) == []
+
+
+def test_without_conflicts_compares_normalized_forms():
+    mapping = shortcuts.effective({"edit.duplicate": "ctrl+c"})
+    clean, _ = shortcuts.without_conflicts(mapping)
+    assert clean["edit.duplicate"] == ""

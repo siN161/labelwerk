@@ -122,9 +122,9 @@ class TextPanel(Panel):
 
         self.section("Stil")
         row = QHBoxLayout()
-        self.bold = _button("B", "Fett (Strg+B)")
-        self.italic = _button("I", "Kursiv (Strg+I)")
-        self.underline = _button("U", "Unterstrichen (Strg+U)")
+        self.bold = _button("B", "Fett")            # Tooltip mit Kürzel: use_actions
+        self.italic = _button("I", "Kursiv")
+        self.underline = _button("U", "Unterstrichen")
         for button, attr in ((self.bold, "bold"), (self.italic, "italic"),
                              (self.underline, "underline")):
             button.setProperty("style", attr)
@@ -203,11 +203,15 @@ class TextPanel(Panel):
         self.fit.toggled.connect(lambda _: step(self._apply))
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
-        """Kürzel für Fett/Kursiv/Unterstrichen: wirken, solange das Panel den Fokus hat."""
+        """Kürzel für Fett/Kursiv/Unterstrichen: wirken, solange das Panel den Fokus hat.
+        Die Knöpfe zeigen den Tooltip der Aktion – auch nach dem Umbelegen."""
         for key, button in (("text.bold", self.bold), ("text.italic", self.italic),
                             ("text.underline", self.underline)):
-            actions[key].triggered.connect(lambda _=False, b=button: b.click())
-            self.addAction(actions[key])
+            action = actions[key]
+            action.triggered.connect(lambda _=False, b=button: b.click())
+            self.addAction(action)
+            button.setToolTip(action.toolTip())
+            action.changed.connect(lambda b=button, a=action: b.setToolTip(a.toolTip()))
 
     @property
     def obj(self) -> TextObject:

@@ -210,10 +210,13 @@ def test_format_shortcuts_are_actions_scoped_to_panel(window):
     from PySide6.QtGui import QShortcut
     panel = window.panel("text")
     assert panel.findChildren(QShortcut) == []              # alles über das Kürzel-Verzeichnis
-    actions = [window.actions[key] for key in ("text.bold", "text.italic", "text.underline")]
+    actions = [window.shortcut_actions[key] for key in ("text.bold", "text.italic", "text.underline")]
     assert all(a in panel.actions() for a in actions)
     assert all(a.shortcutContext() == Qt.ShortcutContext.WidgetWithChildrenShortcut
                for a in actions)
+    # Tooltip aus der Aktion: stimmt auch nach dem Umbelegen
+    assert [b.toolTip() for b in (panel.bold, panel.italic, panel.underline)] == \
+           [a.toolTip() for a in actions]
 
 
 def test_ctrl_b_in_editor_makes_selection_bold(window, qtbot):

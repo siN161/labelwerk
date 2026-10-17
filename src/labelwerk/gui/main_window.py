@@ -18,12 +18,12 @@ from ..fonts import DEFAULT_FAMILY
 from ..labels import get_label
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, growing_axis,
                       match_objects, maximize_object, move, object_rect, outside_indices,
-                      printable_area, reorder, resize, rotate, set_frame)
+                      printable_area, reorder, resize, rotate, set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
 from ..render import (Prepared, RenderedObject, compose, finish_object, font_warnings,
                       label_size, prepare_object)
 from ..settings import Settings, load_settings, new_document
-from ..shortcuts import effective
+from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
 from .history import History, restore
@@ -91,8 +91,10 @@ class MainWindow(QMainWindow):
         self._outside: list[int] = []               # Objekte, die über das Etikett ragen
         self._area = Rect(0, 0, 0, 0)               # bedruckbarer Bereich (mm), mit dem Bild
         self._composed: tuple = (None, [], None)    # Druckbild und woraus es entstand
-        # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar
-        self.actions = build_actions(self, effective(self.settings.shortcuts))
+        # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar;
+        # doppelt belegte (von Hand bearbeitete Datei): die spätere Aktion bleibt ohne Kürzel
+        keys, key_warnings = without_conflicts(effective(self.settings.shortcuts))
+        self.shortcut_actions = build_actions(self, keys)
 
         # Werkzeugleiste + Panels aus der Registry
         toolbar = QToolBar("Werkzeuge")
@@ -148,7 +150,7 @@ class MainWindow(QMainWindow):
         self._connect_layout_actions()
         self._build_edit_bar()
         for panel in self._panel_by_key.values():
-            panel.use_actions(self.actions)
+            panel.use_actions(self.shortcut_actions)
         self.apply_theme_icons()
         central = QWidget()
         layout = QHBoxLayout(central)
@@ -204,15 +206,15 @@ class MainWindow(QMainWindow):
         self.panel("text").frame_edited.connect(self._edit_frame)
         self._update_edit_actions()
         self.refresh_printer()
-        if self.settings.warnings:
-            self._set_result(" · ".join(self.settings.warnings), "error")
+        if self.settings.warnings or key_warnings:
+            self._set_result(" · ".join(self.settings.warnings + key_warnings), "error")
 
     def panel(self, key: str):
         return self._panel_by_key[key]
 
     def _toolbar_action(self, key: str, icon: str, text: str, handler) -> QAction:
         """Aktion aus dem Verzeichnis als Knopf der Werkzeugleiste (Kürzel bleibt änderbar)."""
-        action = self.actions[key]
+        action = self.shortcut_actions[key]
         action.setIcon(QIcon.fromTheme(icon))
         action.setText(text)
         action.triggered.connect(lambda _=False: handler())
@@ -224,14 +226,14 @@ class MainWindow(QMainWindow):
                     "view.zoom_out": lambda: self.canvas.set_zoom(self.canvas.zoom - ZOOM_STEP),
                     "view.zoom_reset": lambda: self.canvas.set_zoom(100)}
         for key, handler in handlers.items():
-            self.actions[key].triggered.connect(lambda _=False, h=handler: h())
-            self.addAction(self.actions[key])
+            self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
+            self.addAction(self.shortcut_actions[key])
 
     def _connect_canvas_actions(self) -> None:
         """Kürzel der Arbeitsfläche (Pfeiltasten, Zwischenablage, Werkzeug) und Rückgängig."""
         for direction, (sx, sy) in _DIRECTIONS.items():
             for suffix, step in NUDGE_MM.items():
-                action = self.actions[f"object.nudge_{direction}{suffix}"]
+                action = self.shortcut_actions[f"object.nudge_{direction}{suffix}"]
                 action.triggered.connect(
                     lambda _=False, dx=sx * step, dy=sy * step: self.nudge(dx, dy))
                 self.canvas.addAction(action)
@@ -241,12 +243,12 @@ class MainWindow(QMainWindow):
                     "tool.select": lambda: self.canvas.set_tool("select"),
                     "tool.text": lambda: self.canvas.set_tool("text")}
         for key, handler in handlers.items():
-            self.actions[key].triggered.connect(lambda _=False, h=handler: h())
-            self.canvas.addAction(self.actions[key])
+            self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
+            self.canvas.addAction(self.shortcut_actions[key])
         # global: wirkt überall – außer im Textfeld, das Strg+Z selbst nutzt (eigenes Rückgängig)
-        self.actions["edit.undo"].triggered.connect(self.undo)
-        self.actions["edit.redo"].triggered.connect(self.redo)
-        self.addActions([self.actions["edit.undo"], self.actions["edit.redo"]])
+        self.shortcut_actions["edit.undo"].triggered.connect(self.undo)
+        self.shortcut_actions["edit.redo"].triggered.connect(self.redo)
+        self.addActions([self.shortcut_actions["edit.undo"], self.shortcut_actions["edit.redo"]])
 
     def _connect_layout_actions(self) -> None:
         """Reiter „Layout“: Ausrichten, Größe angleichen, Drehen, Reihenfolge (auch per Kürzel)."""
@@ -261,8 +263,8 @@ class MainWindow(QMainWindow):
         for mode in SIZE_MODES:
             handlers[f"size.{mode}"] = lambda m=mode: self.match_selected(m)
         for key, handler in handlers.items():
-            self.actions[key].triggered.connect(lambda _=False, h=handler: h())
-            self.canvas.addAction(self.actions[key])
+            self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
+            self.canvas.addAction(self.shortcut_actions[key])
 
     def _build_edit_bar(self) -> None:
         """Bearbeitungsleiste unter der Werkzeugleiste: Werkzeug, Zwischenablage, Rückgängig."""
@@ -276,15 +278,15 @@ class MainWindow(QMainWindow):
         self.edit_bar = bar
         modes = QActionGroup(self)                 # Auswahl-Pfeil oder „Text anlegen“
         for key in ("tool.select", "tool.text"):
-            self.actions[key].setCheckable(True)
-            modes.addAction(self.actions[key])
-        self.actions["tool.select"].setChecked(True)
-        self.canvas.tool_changed.connect(lambda tool: self.actions[f"tool.{tool}"].setChecked(True))
+            self.shortcut_actions[key].setCheckable(True)
+            modes.addAction(self.shortcut_actions[key])
+        self.shortcut_actions["tool.select"].setChecked(True)
+        self.canvas.tool_changed.connect(lambda tool: self.shortcut_actions[f"tool.{tool}"].setChecked(True))
         for entry in EDIT_BAR:
             if entry is None:
                 bar.addSeparator()
             else:
-                bar.addAction(self.actions[entry[0]])   # Symbol setzt apply_theme_icons
+                bar.addAction(self.shortcut_actions[entry[0]])   # Symbol setzt apply_theme_icons
 
     def _show_tool(self, key: str) -> None:
         """Panel eines Werkzeugs zeigen (wie ein Klick auf seinen Knopf)."""
@@ -376,10 +378,10 @@ class MainWindow(QMainWindow):
     def _update_edit_actions(self) -> None:
         selected = bool(self.canvas.selection())
         for key in _SELECTION_ACTIONS:
-            self.actions[key].setEnabled(selected)
-        self.actions["edit.paste"].setEnabled(bool(self._clipboard))
-        self.actions["edit.undo"].setEnabled(self.history.can_undo(self.doc))
-        self.actions["edit.redo"].setEnabled(self.history.can_redo(self.doc))
+            self.shortcut_actions[key].setEnabled(selected)
+        self.shortcut_actions["edit.paste"].setEnabled(bool(self._clipboard))
+        self.shortcut_actions["edit.undo"].setEnabled(self.history.can_undo(self.doc))
+        self.shortcut_actions["edit.redo"].setEnabled(self.history.can_redo(self.doc))
 
     # --- Rendern ----------------------------------------------------------
     def schedule_render(self) -> None:
@@ -519,8 +521,10 @@ class MainWindow(QMainWindow):
         if not indices_rects:
             return
         self._commit()
+        dragged = self._merge_next is None          # Maus: auf 0,1 mm wie die Felder; Pfeile genau
         for index, rect in indices_rects:
-            self.doc.objects[index] = move(self.doc.objects[index], rect, self.rendered[index])
+            moved = move(self.doc.objects[index], rect, self.rendered[index])
+            self.doc.objects[index] = to_grid(moved, x=True, y=True) if dragged else moved
         self._objects_changed(indices)
         self._commit(self._merge_next)
 
@@ -528,8 +532,12 @@ class MainWindow(QMainWindow):
         if not self._valid(index):
             return
         self._commit()
-        self.doc.objects[index] = resize(self.doc.objects[index], rect, self.rendered[index],
-                                         corner=len(handle) == 2)
+        resized = resize(self.doc.objects[index], rect, self.rendered[index],
+                         corner=len(handle) == 2)
+        # nur die gezogenen Kanten auf 0,1 mm (wie die Felder) – die anderen bleiben genau
+        self.doc.objects[index] = to_grid(resized, x="l" in handle, y="t" in handle,
+                                          w="l" in handle or "r" in handle,
+                                          h="t" in handle or "b" in handle)
         self._objects_changed([index])
         self._commit()
 
@@ -752,7 +760,7 @@ class MainWindow(QMainWindow):
             panel.set_icon_style(dark)
         for entry in EDIT_BAR:
             if entry is not None:
-                self.actions[entry[0]].setIcon(line_icon(entry[1], dark, hover=True))
+                self.shortcut_actions[entry[0]].setIcon(line_icon(entry[1], dark, hover=True))
 
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, model=self.model, parent=self)
@@ -765,7 +773,8 @@ class MainWindow(QMainWindow):
             from .app import apply_theme
             apply_theme(QApplication.instance(), self.settings.theme)
             self.apply_theme_icons()
-            apply_shortcuts(self.actions, effective(self.settings.shortcuts))
+            apply_shortcuts(self.shortcut_actions,
+                            without_conflicts(effective(self.settings.shortcuts))[0])
             self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
 
     # --- Medium prüfen ----------------------------------------------------

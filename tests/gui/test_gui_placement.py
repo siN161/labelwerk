@@ -203,8 +203,8 @@ def test_drag_moves_object_and_updates_model_on_release(qtbot, orientation):
     assert win.doc.objects[0].x_mm == 4                   # Modell erst beim Loslassen
     _send(canvas, QMouseEvent.Type.MouseButtonRelease, end, Qt.MouseButton.NoButton, ALT)
     obj = win.doc.objects[0]
-    assert obj.x_mm == pytest.approx(4 + 80 / ppm, abs=0.01)
-    assert obj.y_mm == pytest.approx(4 + 40 / ppm, abs=0.01)
+    assert obj.x_mm == pytest.approx(4 + 80 / ppm, abs=0.051)   # auf 0,1 mm gerundet
+    assert obj.y_mm == pytest.approx(4 + 40 / ppm, abs=0.051)
     assert win.doc.objects[1].x_mm == 4
     assert canvas.view_rect(0).center().x() == pytest.approx(end.x(), abs=1)
 
@@ -215,7 +215,7 @@ def test_drag_moves_all_selected_objects(window):
     start = _center(canvas, 0)
     _drag(canvas, start, start + QPointF(50, 0), ALT)
     moved = 50 / canvas.px_per_mm()
-    assert [o.x_mm for o in window.doc.objects] == pytest.approx([4 + moved] * 2, abs=0.01)
+    assert [o.x_mm for o in window.doc.objects] == pytest.approx([4 + moved] * 2, abs=0.051)
 
 
 def test_click_without_moving_leaves_model_untouched(window):
@@ -370,7 +370,7 @@ def test_select_all_and_delete_leaves_no_object(window, qtbot):
 
 def test_shortcuts_come_from_settings(qtbot):
     win = _window(qtbot, _doc(), Settings(shortcuts={"object.nudge_left": "Ctrl+J"}))
-    assert win.actions["object.nudge_left"].shortcut() == QKeySequence("Ctrl+J")
+    assert win.shortcut_actions["object.nudge_left"].shortcut() == QKeySequence("Ctrl+J")
     win.canvas.set_selection([0])
     _focus(win, qtbot)
     QTest.keyClick(win.canvas, Qt.Key.Key_J, CTRL)
@@ -448,3 +448,52 @@ def test_moved_signal_with_stale_indices_is_ignored(window):
     window.canvas.objects_moved.emit([5], [layout.Rect(1, 1, 1, 1)])
     window.canvas.object_resized.emit(7, layout.Rect(1, 1, 1, 1), "br")
     assert [(o.x_mm, o.y_mm) for o in window.doc.objects] == [(4, 4), (4, 20)]
+
+
+# --- Raster 0,1 mm nach dem Ziehen --------------------------------------------------
+def _on_grid(value):
+    return value == pytest.approx(round(value, 1), abs=1e-9)
+
+
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+def test_drag_ends_on_tenth_mm_like_the_fields(qtbot, orientation):
+    win = _window(qtbot, _doc(orientation, length_mm=60))
+    start = _center(win.canvas, 0)
+    _drag(win.canvas, start, start + QPointF(37, 23), ALT)
+    obj = win.doc.objects[0]
+    assert _on_grid(obj.x_mm) and _on_grid(obj.y_mm)
+    panel = win.panel("text")
+    win.canvas.set_selection([0])
+    assert (panel.pos_x.value(), panel.pos_y.value()) == pytest.approx((obj.x_mm, obj.y_mm))
+
+
+def test_edge_drag_rounds_only_the_moved_edge(window):
+    canvas = window.canvas
+    canvas.set_selection([0])
+    height = layout.object_rect(canvas.objects[0].rendered).h
+    edge = canvas.handle_points(0)["r"]
+    _drag(canvas, edge, edge + QPointF(37, 0))
+    obj = window.doc.objects[0]
+    assert obj.fit and _on_grid(obj.w_mm)
+    assert obj.h_mm == pytest.approx(height, abs=1e-3)      # Höhe wie gerendert, nicht gerundet
+    assert (obj.x_mm, obj.y_mm) == (4, 4)
+
+
+def test_left_edge_drag_rounds_position_and_width(qtbot):
+    doc = _doc()
+    doc.objects[0] = TextObject("Eins", size_pt=14, fit=True, x_mm=4, y_mm=4, w_mm=20, h_mm=8)
+    win = _window(qtbot, doc)
+    win.canvas.set_selection([0])
+    edge = win.canvas.handle_points(0)["l"]
+    _drag(win.canvas, edge, edge - QPointF(37, 0))
+    obj = win.doc.objects[0]
+    assert _on_grid(obj.x_mm) and _on_grid(obj.w_mm) and (obj.y_mm, obj.h_mm) == (4, 8)
+
+
+def test_nudge_keeps_exact_steps(qtbot):
+    doc = _doc()
+    doc.objects[0].x_mm = 4.234
+    win = _window(qtbot, doc)
+    win.canvas.set_selection([0])
+    win.nudge(0.1, 0)
+    assert win.doc.objects[0].x_mm == pytest.approx(4.334)

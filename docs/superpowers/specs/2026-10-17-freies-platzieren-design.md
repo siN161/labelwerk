@@ -92,7 +92,7 @@ Auswahl-Pfeil, „A“ (Text anlegen) · Ausschneiden, Kopieren, Einfügen · R�
 ### Panels
 
 - **Text-Panel** bearbeitet den ausgewählten Textrahmen (bei mehreren ausgewählten: das zuletzt gewählte). Ohne ausgewählten Text: Hinweis „Auf das Etikett klicken, um einen Textrahmen anzulegen“ und Werkzeug „Text anlegen“ aktiv (auch wenn die Auswahl leer wird, während das Text-Panel zu sehen ist, oder Rückgängig eine leere Auswahl herstellt); mit Auswahl gilt der Auswahl-Pfeil. Wechsel auf ein anderes Panel (Papier, Layout) schaltet zurück auf den Auswahl-Pfeil.
-- **Bereich „Position“** im Text-Panel: X, Y, Breite, Höhe in mm (0,1 mm Schritt). Breite/Höhe nur mit fester Rahmengröße editierbar, sonst Anzeige.
+- **Bereich „Position“** im Text-Panel: X, Y, Breite, Höhe in mm (0,1 mm Schritt). Breite/Höhe nur mit fester Rahmengröße editierbar, sonst Anzeige. Damit Felder und Modell übereinstimmen, landen Ziehen und Anfasser beim Loslassen auf 0,1 mm (`layout.to_grid`; beim Anfasser nur die gezogenen Kanten, die anderen bleiben genau). Entscheidung: auch eingerastete Lagen werden gerundet – sie liegen dann höchstens 0,05 mm neben der Hilfslinie, weniger als ein Druckpunkt (0,085 mm). Pfeiltasten und Felder verschieben genau.
 - Auswahl eines Objekts auf der Arbeitsfläche schaltet auf das Panel seines Werkzeugs.
 
 ### Reiter „Layout“ (neues Werkzeug in `tools.py`)
@@ -111,13 +111,14 @@ Dokument-Schnappschüsse (`copy.deepcopy(doc)`) nach jeder abgeschlossenen Aktio
 
 ### Einstellungen: Reiter
 
-Der Einstellungsdialog bekommt Reiter **Allgemein** (bisheriger Inhalt) und **Tastenkürzel**: Tabelle Aktion | Bereich | Kürzel (Klick → `QKeySequenceEdit`), Knopf „Standard“ je Zeile und „Alle zurücksetzen“. Doppelte Kürzel werden rot markiert, Speichern ist dann gesperrt (Hinweis nennt die andere Aktion). Wirkt sofort nach dem Speichern.
+Der Einstellungsdialog bekommt Reiter **Allgemein** (bisheriger Inhalt) und **Tastenkürzel**: Tabelle Aktion | Bereich | Kürzel (Klick → `QKeySequenceEdit`), Knopf „Standard“ je Zeile und „Alle zurücksetzen“. Doppelte Kürzel werden rot markiert, Speichern ist dann gesperrt (Hinweis nennt die andere Aktion). Esc, Enter und Tab bedienen die Tabelle und sind nicht belegbar (Hinweis im Reiter); eine Eingabe, die kein gültiges Kürzel ist (z. B. nur Umschalt), wird im Reiter gemeldet. Wirkt sofort nach dem Speichern. Der Dialog hat eine Mindestgröße und passt seine Startgröße an kleine Bildschirme an (höchstens 90 %).
 
 ## Fehlerfälle
 
 - Objekt ragt über das Etikett: Hinweis in der Statusleiste; Drucken fragt nach („Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?“).
 - Leeres Etikett / kein Objekt: Hinweis „leerer Druck“ wie bisher.
 - Ungültige Kürzel in `settings.json`: Warnung, Standard gilt.
+- Doppelt belegte Kürzel in `settings.json` (von Hand bearbeitet): Warnung in der Statusleiste („Tastenkürzel doppelt belegt: …“); die im Verzeichnis zuerst stehende Aktion behält das Kürzel, spätere bleiben ohne (`shortcuts.without_conflicts`).
 
 ## Tests
 

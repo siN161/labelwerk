@@ -29,3 +29,13 @@ def test_apply_shortcuts_changes_keys_and_tooltips(qtbot):
     assert "Ctrl+Shift+C" in actions["edit.copy"].toolTip()
     assert actions["edit.cut"].shortcut().isEmpty()
     assert actions["edit.cut"].toolTip() == "Ausschneiden"
+
+
+def test_main_window_keeps_qt_actions_method(qtbot):
+    from labelwerk.gui.main_window import MainWindow
+    from labelwerk.settings import Settings
+    win = MainWindow(settings=Settings(check_media_on_start=False))
+    qtbot.addWidget(win)
+    assert callable(win.actions)                            # QWidget.actions() nicht verdeckt
+    assert win.shortcut_actions["edit.undo"] in win.actions()
+    assert list(win.shortcut_actions) == [a.id for a in shortcuts.ACTIONS]

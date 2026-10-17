@@ -93,7 +93,7 @@ def test_buttons_are_icons_with_tooltips_from_actions(window):
         for key, icon in row:
             button = _panel(window).buttons[key]
             assert isinstance(button, QToolButton)
-            assert button.defaultAction() is window.actions[key]
+            assert button.defaultAction() is window.shortcut_actions[key]
             assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
             assert not button.icon().isNull()
             for color in ("black", "white"):
@@ -266,11 +266,11 @@ def test_undo_and_redo_of_reorder_keep_selection_on_same_objects(window):
     window.canvas.set_selection([0])
     _press(window, "object.bring_forward")
     assert window.canvas.selection() == [1]
-    window.actions["edit.undo"].trigger()
+    window.shortcut_actions["edit.undo"].trigger()
     assert [o.text for o in window.doc.objects] == ["Eins", "Zweiter", "Drei"]
     assert [window.doc.objects[i].text for i in window.canvas.selection()] == ["Eins"]
     assert window.panel("text").edit.toPlainText() == "Eins"
-    window.actions["edit.redo"].trigger()
+    window.shortcut_actions["edit.redo"].trigger()
     assert [window.doc.objects[i].text for i in window.canvas.selection()] == ["Eins"]
 
 
@@ -282,7 +282,7 @@ def test_undo_keeps_panel(window):
     window.canvas.set_selection([2])
     _press(window, "object.send_backward")
     window._show_tool("paper")
-    window.actions["edit.undo"].trigger()
+    window.shortcut_actions["edit.undo"].trigger()
     assert window.panels.currentWidget() is window.panel("paper")
     assert [window.doc.objects[i].text for i in window.canvas.selection()] == ["Drei"]
 
@@ -300,10 +300,10 @@ def test_each_operation_is_one_undo_step(window, key):
     window.canvas.set_selection([1, 2] if key in FROM_TWO else [1])
     before = [o.text for o in window.doc.objects], _frames(window)
     _press(window, key)
-    assert window.actions["edit.undo"].isEnabled()
-    window.actions["edit.undo"].trigger()
+    assert window.shortcut_actions["edit.undo"].isEnabled()
+    window.shortcut_actions["edit.undo"].trigger()
     assert ([o.text for o in window.doc.objects], _frames(window)) == before
-    assert not window.actions["edit.undo"].isEnabled()
+    assert not window.shortcut_actions["edit.undo"].isEnabled()
 
 
 # --- Symbole je Design ------------------------------------------------------------

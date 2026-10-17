@@ -153,6 +153,29 @@ def conflicts(mapping: dict[str, str]) -> list[tuple[str, list[str]]]:
     return result
 
 
+def without_conflicts(mapping: dict[str, str]) -> tuple[dict[str, str], list[str]]:
+    """Doppelbelegungen auflösen (z. B. von Hand bearbeitete settings.json): Die Aktion, die im
+    Verzeichnis zuerst steht, behält das Kürzel, spätere bekommen keins. ``(Kürzel, Warnungen)``.
+    """
+    clean = dict(mapping)
+    kept: list[tuple[str, str]] = []                    # (normalisiertes Kürzel, Aktions-ID)
+    warnings: list[str] = []
+    for entry in ACTIONS:
+        seq = clean.get(entry.id, "")
+        if not seq or not is_well_formed(seq):
+            continue
+        key = normalize(seq)
+        other = next((i for k, i in kept if k == key and _clash(_BY_ID[i].scope, entry.scope)),
+                     None)
+        if other is None:
+            kept.append((key, entry.id))
+            continue
+        clean[entry.id] = ""
+        warnings.append(f"Tastenkürzel doppelt belegt: {seq} ({_BY_ID[other].name}, "
+                        f"{entry.name}) – „{entry.name}“ ohne Kürzel.")
+    return clean, warnings
+
+
 def _clash(scope_a: str, scope_b: str) -> bool:
     return scope_a == scope_b or "global" in (scope_a, scope_b)
 
