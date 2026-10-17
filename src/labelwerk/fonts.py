@@ -38,18 +38,25 @@ def _run(*args: str) -> str | None:
 @lru_cache(maxsize=1)
 def families() -> list[str]:
     """Installierte Schriftfamilien, sortiert."""
-    out = _run("fc-list", ":", "family")
+    # %{family[0]}: erster Familienname je Schrift, ohne fontconfig-Maskierung
+    out = _run("fc-list", "-f", "%{family[0]}\\n", ":")
     if not out:
         return [DEFAULT_FAMILY]
-    names = {line.split(",")[0].strip() for line in out.splitlines() if line.strip()}
+    names = {line.strip() for line in out.splitlines() if line.strip()}
     return sorted(names, key=str.casefold)
+
+
+def _escape(name: str) -> str:
+    """Sonderzeichen des fontconfig-Musters mit Backslash maskieren."""
+    return "".join("\\" + c if c in "\\-:,=" else c for c in name)
 
 
 @lru_cache(maxsize=256)
 def resolve(family: str | None, bold: bool, italic: bool) -> FontMatch:
     """Datei zu Familie + fett/kursiv; fontconfig ersetzt Fehlendes durch Ähnliches."""
     family = family or DEFAULT_FAMILY
-    pattern = family + (":bold" if bold else ":weight=regular") + (":italic" if italic else ":roman")
+    # maskiert; ein führendes "-" wird zu "\\-" und ist so keine Option
+    pattern = _escape(family) + (":bold" if bold else ":weight=regular") + (":italic" if italic else ":roman")
     out = _run("fc-match", "-f", "%{file}|%{family}|%{style}", pattern)
     if out and out.count("|") >= 2:
         path, found, style = out.split("|", 2)

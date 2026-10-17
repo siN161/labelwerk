@@ -45,3 +45,29 @@ def test_without_fontconfig_falls_back_to_dejavu(monkeypatch):
 def test_load_is_cached():
     path = fonts.resolve(None, True, False).path
     assert fonts.load(path, 40) is fonts.load(path, 40)
+
+
+def test_escape_maskiert_sonderzeichen():
+    assert fonts._escape("A-B:C,D=E\\F") == "A\\-B\\:C\\,D\\=E\\\\F"
+
+
+@needs_fontconfig
+def test_families_ohne_backslash():
+    assert not [n for n in fonts.families() if "\\" in n]
+
+
+@needs_fontconfig
+def test_resolve_rundreise_fuer_familien_mit_bindestrich():
+    namen = [n for n in fonts.families() if "-" in n]
+    if not namen:
+        pytest.skip("keine Familie mit Bindestrich installiert")
+    for name in namen:
+        assert fonts.resolve(name, False, False).family == name
+
+
+@needs_fontconfig
+def test_resolve_dejavu_ohne_kursivdatei_meldet_nicht_kursiv():
+    match = fonts.resolve("DejaVu Sans", False, True)
+    if match.italic:
+        pytest.skip("kursive DejaVu-Datei installiert")
+    assert match.italic is False and match.bold is False
