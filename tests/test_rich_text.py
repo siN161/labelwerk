@@ -170,3 +170,55 @@ def test_text_property_and_plain_roundtrip():
     obj = TextObject.plain("Zeile 1\nZeile 2", align="left")
     assert obj.text == "Zeile 1\nZeile 2"
     assert [p.align for p in obj.paragraphs] == ["left", "left"]
+
+
+# --- Fix nach Review ---------------------------------------------------------
+def test_mixed_sizes_descenders_do_not_overlap_next_line():
+    obj = TextObject([Paragraph([Span("gpqy", size_pt=36)], "left"),   # ohne i-/j-Punkte
+                      Paragraph([Span("HHH", size_pt=8)], "left")], size_pt=20)
+    lines = _line_boxes(_ink(render_document(Document("62", objects=[obj]))))
+    assert len(lines) == 2                       # Unterlängen berühren die nächste Zeile nicht
+    assert lines[0][3] <= lines[1][1]
+
+
+def _italic_pair(text):
+    upright = _ink(render_document(Document("62", objects=[TextObject.plain(text, size_pt=60)])))
+    italic = _ink(render_document(Document("62", objects=[TextObject.plain(text, size_pt=60,
+                                                                           italic=True)])))
+    return upright, italic
+
+
+def _dark(ink):
+    return ink.histogram()[255]
+
+
+@pytest.mark.parametrize("text", ["j", "jjj"])
+def test_synthetic_italic_keeps_left_ink(text):
+    upright, italic = _italic_pair(text)
+    assert _dark(italic) >= _dark(upright) * 0.99      # kein abgeschnittener Bogen
+    # Breite links der Mitte: Scherung schiebt die Unterlänge nach links, nichts abgeschnitten
+    up_l, it_l = upright.getbbox(), italic.getbbox()
+    up_c, it_c = (up_l[0] + up_l[2]) / 2, (it_l[0] + it_l[2]) / 2
+    assert (it_c - it_l[0]) >= (up_c - up_l[0])
+
+
+def test_nothing_fits_even_at_minimum_size():
+    with pytest.raises(TextTooLarge, match="auch nicht in der kleinsten Schriftgröße") as exc:
+        render_document(Document("62", objects=[TextObject.plain("W" * 300, size_pt=20)]))
+    assert exc.value.max_pt is None
+
+
+def test_max_pt_below_minimum_reports_nothing_fits():
+    with pytest.raises(TextTooLarge) as exc:
+        render_document(Document("62", objects=[TextObject.plain("W" * 60, size_pt=20)]))
+    assert exc.value.max_pt is None
+    assert str(exc.value) == ("Text passt nicht auf Etikett '62' – auch nicht in der kleinsten "
+                              "Schriftgröße.")
+
+
+def test_italic_with_font_path_is_slanted():
+    upright = render_document(Document("62", objects=[
+        TextObject.plain("Hallo", size_pt=30, font_path=DEJAVU_BOLD)]))
+    italic = render_document(Document("62", objects=[
+        TextObject.plain("Hallo", size_pt=30, italic=True, font_path=DEJAVU_BOLD)]))
+    assert upright.tobytes() != italic.tobytes()

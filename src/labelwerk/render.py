@@ -6,13 +6,14 @@ reiner Text sieht dadurch pixelgleich aus wie früher.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from PIL import Image, ImageDraw
 
 from . import fonts
-from .document import (ALIGNMENTS, MAX_MARGIN_MM, ORIENTATIONS, Document, Paragraph, Span,
-                       TextObject)
+from .document import (ALIGNMENTS, MAX_MARGIN_MM, MIN_PT, ORIENTATIONS, Document, Paragraph,
+                       Span, TextObject)
 from .labels import DPI, get_label, length_limits
 
 MARGIN = 12            # Punkte, ca. 1 mm
@@ -26,9 +27,14 @@ _SLANT = 0.2           # Ersatzkursive: Scherung, wenn die Schrift keine echte K
 class TextTooLarge(ValueError):
     """Text passt bei fester Schriftgröße nicht aufs Etikett."""
 
-    def __init__(self, size_pt: float, max_pt: float, label_id: str):
-        super().__init__(f"Text passt nicht auf Etikett {label_id!r} bei Schriftgröße "
-                         f"{_fmt_pt(size_pt)} pt (höchstens {_fmt_pt(max_pt)} pt).")
+    def __init__(self, size_pt: float, max_pt: float | None, label_id: str):
+        if max_pt is None:                     # passt nicht einmal in der kleinsten Größe
+            message = (f"Text passt nicht auf Etikett {label_id!r} – auch nicht in der "
+                       "kleinsten Schriftgröße.")
+        else:
+            message = (f"Text passt nicht auf Etikett {label_id!r} bei Schriftgröße "
+                       f"{_fmt_pt(size_pt)} pt (höchstens {_fmt_pt(max_pt)} pt).")
+        super().__init__(message)
         self.size_pt, self.max_pt = size_pt, max_pt
 
 
@@ -49,7 +55,7 @@ def font_warnings(doc: Document) -> list[str]:
     for obj in doc.objects:
         for para in obj.paragraphs:
             for span in para.spans:
-                if span.family is None or (obj.font_path and span.family is None):
+                if span.family is None:
                     continue
                 match = fonts.resolve(span.family, span.bold, span.italic)
                 text = f"Schrift „{span.family}“ nicht gefunden – ersetzt durch „{match.family}“."
@@ -125,7 +131,9 @@ def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str
         else:
             hi = mid - 1
     if obj.size_pt is not None:
-        max_pt = int((best if best else MIN_DOTS) / PT)
+        max_pt = int(best / PT) if best else None
+        if max_pt is not None and max_pt < MIN_PT:
+            max_pt = None                      # kleiner als erlaubt: zählt als „passt nicht“
         raise TextTooLarge(obj.size_pt, max_pt, label_id)
     return best if best else MIN_DOTS          # passt nicht einmal klein – kleinste Größe zeigen
 
@@ -144,7 +152,7 @@ class _Piece:
 
 def _font_for(obj: TextObject, span: Span, dots: int):
     if span.family is None and obj.font_path:
-        return fonts.load(obj.font_path, dots), False
+        return fonts.load(obj.font_path, dots), span.italic   # feste Datei: Ersatzkursive
     match = fonts.resolve(span.family, span.bold, span.italic)
     return fonts.load(match.path, dots), span.italic and not match.italic
 
@@ -162,6 +170,8 @@ def _shape(obj: TextObject, base: int, mode: str = "L") -> list[list[_Piece]]:
         rows.append((para, pieces))
 
     widths = [sum(p.font.getlength(p.text, mode) for p in pieces) for _, pieces in rows]
+    # Unterlängen großer Stücke brauchen Platz unter der Zeile; bei einheitlicher Schrift 0
+    min_descent = min(p.font.getmetrics()[1] for _, pieces in rows for p in pieces)
     max_width = max(widths, default=0)
     top = 0.0
     lines = []
@@ -179,7 +189,7 @@ def _shape(obj: TextObject, base: int, mode: str = "L") -> list[list[_Piece]]:
         for p in pieces:
             p.y = top + ascent - p.font.getmetrics()[0]    # gemeinsame Grundlinie
         lines.append(pieces)
-        top += spacing
+        top += spacing + max(p.font.getmetrics()[1] for p in pieces) - min_descent
     return lines
 
 
@@ -196,7 +206,7 @@ def _justify(pieces: list[_Piece], max_width: float, mode: str) -> list[_Piece]:
     extra = (max_width - used) / gaps if gaps else 0.0
     x = 0.0
     for word, gap in zip(words, gaps_before):
-        if gap and word is not words[0]:
+        if gap:
             x += extra
         word.x = x
         x += word.font.getlength(word.text, mode)
@@ -213,6 +223,7 @@ def _block_box(lines: list[list[_Piece]]) -> tuple[int, int, int, int]:
                 b = max(b, p.font.getmetrics()[0] + _underline(p.dots)[0] + _underline(p.dots)[1])
             if p.slant:
                 r += _SLANT * p.font.getmetrics()[0]
+                l -= _slant_pad(p)
             boxes.append((p.x + l, p.y + t, p.x + r, p.y + b))
     if not boxes:
         return (0, 0, 0, 0)
@@ -242,12 +253,20 @@ def _draw(img: Image.Image, lines: list[list[_Piece]], x0: int, y0: int) -> None
                                fill="black")
 
 
+def _slant_pad(p: _Piece) -> int:
+    """Platz links für die Ersatzkursive: nach links gescherte Unterlänge und negative
+    linke Seitenpeilung."""
+    left = p.font.getbbox(p.text, anchor="la")[0] if p.text else 0
+    return math.ceil(_SLANT * p.font.getmetrics()[1]) + max(0, -left)
+
+
 def _draw_slanted(img: Image.Image, p: _Piece, x: float, y: float) -> None:
     """Ersatzkursive: Stück einzeln zeichnen und um die Grundlinie nach rechts scheren."""
     ascent, descent = p.font.getmetrics()
-    width = int(p.font.getlength(p.text) + _SLANT * ascent) + 2
+    pad = _slant_pad(p)
+    width = pad + int(p.font.getlength(p.text) + _SLANT * ascent) + 2
     mask = Image.new("L", (width, ascent + descent), 0)
-    ImageDraw.Draw(mask).text((0, 0), p.text, fill=255, font=p.font, anchor="la")
+    ImageDraw.Draw(mask).text((pad, 0), p.text, fill=255, font=p.font, anchor="la")
     sheared = mask.transform(mask.size, Image.Transform.AFFINE,
                              (1, _SLANT, -_SLANT * ascent, 0, 1, 0), Image.Resampling.BICUBIC)
-    img.paste((0, 0, 0), (round(x), round(y)), sheared)
+    img.paste((0, 0, 0), (round(x) - pad, round(y)), sheared)
