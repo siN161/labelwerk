@@ -16,10 +16,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+gui = ["PySide6>=6.6"]
+dev = ["pytest>=8", "pytest-qt>=4", "PySide6>=6.6"]
 
 [project.scripts]
 labelwerk = "labelwerk.cli:main"
+labelwerk-gui = "labelwerk.gui.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/labelwerk"]
@@ -27,3 +29,4 @@ packages = ["src/labelwerk"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+qt_api = "pyside6"
