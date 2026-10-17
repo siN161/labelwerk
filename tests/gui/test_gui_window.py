@@ -302,3 +302,31 @@ def test_number_fields_keep_text_clear_of_frame(window):
 def test_theme_urls_are_quoted():
     import re
     assert all(u.startswith('"') for u in re.findall(r"url\(([^)]+)\)", load_theme()))
+
+
+def test_toolbar_buttons_have_equal_space_above_and_below(qtbot, qapp):
+    """Abstand Knopf ↔ Leistenrand oben gleich unten (gemessen an dunklen Pixelzeilen)."""
+    from PySide6.QtWidgets import QToolBar
+    from labelwerk.settings import Settings
+    qapp.setStyleSheet(load_theme())
+    try:
+        win = MainWindow(settings=Settings(check_media_on_start=False))
+        qtbot.addWidget(win)
+        win.show()
+        toolbar = win.findChild(QToolBar)
+        img = toolbar.grab().toImage()
+        x = toolbar.widgetForAction(win.tool_actions["text"]).geometry().center().x()
+        dark = [y for y in range(img.height()) if img.pixelColor(x, y).lightness() < 80]
+        bands, current = [], [dark[0]]
+        for y in dark[1:]:
+            if y == current[-1] + 1:
+                current.append(y)
+            else:
+                bands.append(current)
+                current = [y]
+        bands.append(current)
+        top_gap = bands[0][0]
+        bottom_gap = bands[-1][0] - bands[-2][-1] - 1
+        assert top_gap == bottom_gap
+    finally:
+        qapp.setStyleSheet("")

@@ -12,9 +12,11 @@ QToolBar {
     background: #FFFFFF;
     border: none;
     border-bottom: 3px solid #000000;
-    padding: 4px;
+    padding: 6px;
     spacing: 6px;
 }
+/* Qt zieht den 3-px-Unterrand vom unteren Innenabstand ab – ausgleichen, damit oben = unten */
+QToolBar QToolButton { margin-bottom: 3px; }
 QToolBar QToolButton {
     background: #FFFFFF;
     border: 3px solid #000000;
