@@ -320,3 +320,74 @@ def test_icons_turn_white_on_hover_only_in_rawblock(window):
     assert _color(button.icon(), QIcon.Mode.Active) == {(255, 255, 255)}
     window.panel("layout").set_icon_style(False)
     assert _color(button.icon(), QIcon.Mode.Active) == {(0, 0, 0)}
+
+
+# --- Schlussrunde -------------------------------------------------------------------
+@pytest.mark.parametrize("key", ["size.same", "size.width", "size.height"])
+def test_match_with_empty_frame_selected_changes_nothing(qtbot, key, capsys):
+    doc = Document("62", length_mm=60, objects=[TextObject("Eins", size_pt=20, x_mm=10, y_mm=30)])
+    win = _window(qtbot, doc)
+    win.create_text(5, 5)                           # leerer Rahmen, Index 1, ausgewählt
+    win.canvas.set_selection([1, 0])                # Strg+Klick auf „Eins“
+    before = [(o.text, o.size_pt, o.x_mm, o.y_mm) for o in win.doc.objects]
+    win.shortcut_actions[key].trigger()
+    assert [(o.text, o.size_pt, o.x_mm, o.y_mm) for o in win.doc.objects] == before
+    assert win.doc.objects[0].size_pt == 20
+    assert "Traceback" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("key", ["size.same", "size.width", "size.height"])
+def test_match_with_empty_frame_and_two_objects_uses_visible_reference(qtbot, key):
+    doc = Document("62", length_mm=60, objects=[
+        TextObject("Eins", size_pt=20, x_mm=10, y_mm=30), TextObject("Zwei", size_pt=10, x_mm=10, y_mm=10)])
+    win = _window(qtbot, doc)
+    win.create_text(5, 5)
+    win.canvas.set_selection([2, 0, 1])             # leerer Rahmen zuerst gewählt
+    win.shortcut_actions[key].trigger()
+    assert win.doc.objects[0].size_pt == 20          # Bezug (erstes sichtbares) bleibt
+    assert win.doc.objects[1].size_pt != 10          # das andere wurde angeglichen
+
+
+def test_render_error_then_delete_keeps_canvas_in_step(qtbot):
+    doc = Document("62", length_mm=None, objects=[
+        TextObject("A", size_pt=14, x_mm=2, y_mm=2), TextObject("Mitte", size_pt=14)])
+    win = _window(qtbot, doc)
+    win.canvas.set_selection([1])
+    win.doc.objects[1].paragraphs = TextObject("W" * 80, size_pt=40).paragraphs   # zu groß
+    win.doc.objects[1].size_pt = 40
+    win.render_now()
+    assert win._render_error is not None
+    win.canvas.set_selection([0])
+    win.delete_selected()
+    assert win.doc.objects[0].text == "W" * 80
+    assert win.canvas.objects == [] and win.rendered == []      # kein Bild des gelöschten Objekts
+    assert win.canvas.selection() == []
+    before = win.doc.objects[0].x_mm
+    win.canvas.objects_moved.emit([0], [layout.Rect(9, 9, 5, 5)])
+    assert win.doc.objects[0].x_mm == before                    # nichts verschoben
+
+
+@pytest.mark.parametrize("orientation, blocked", [
+    ("vertical", ("top", "vcenter", "bottom")), ("horizontal", ("left", "hcenter", "right"))])
+def test_paper_align_along_growing_axis_is_disabled(qtbot, orientation, blocked):
+    doc = Document("62", length_mm=None, orientation=orientation, objects=[
+        TextObject("A", size_pt=14, x_mm=2, y_mm=2)])
+    win = _window(qtbot, doc)
+    win.canvas.set_selection([0])
+    panel = _panel(win)
+    for mode in ("left", "hcenter", "right", "top", "vcenter", "bottom"):
+        button = panel.buttons[f"align.paper_{mode}"]
+        assert button.isEnabled() == (mode not in blocked), mode
+        if mode in blocked:
+            assert "Länge festlegen" in button.defaultAction().toolTip()
+    win.doc.length_mm = 40                            # feste Länge: alles wieder frei
+    win.render_now()
+    assert all(panel.buttons[f"align.paper_{m}"].isEnabled() for m in blocked)
+    assert "Länge festlegen" not in panel.buttons[f"align.paper_{blocked[0]}"].defaultAction().toolTip()
+
+
+def test_canvas_grabbed_is_not_stale_after_selection_drops(qtbot):
+    win = _window(qtbot)
+    win.canvas._grabbed = 2
+    win.canvas.set_selection([0])
+    assert win.canvas._grabbed in (-1, 0)

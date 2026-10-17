@@ -217,6 +217,8 @@ class Canvas(QGraphicsView):
         chosen = list(dict.fromkeys(i for i in indices if self._selectable(i)))
         if chosen != self._selection:
             self._selection = chosen
+            if self._drag not in ("move", "resize"):
+                self._grabbed = -1       # Nummern können sich geändert haben: nicht festhalten
             self.viewport().update()
             self.selection_changed.emit(self.selection())
 

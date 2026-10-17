@@ -292,7 +292,8 @@ def resize(obj: TextObject, rect: Rect, rendered: RenderedObject, corner: bool) 
         old = object_rect(rendered)
         factor = ((rect.w * rect.h) / (old.w * old.h)) ** 0.5 if old.w and old.h else 1.0
         return place(scale_text(obj, factor, base_pt=rendered.base_pt), target)
-    framed = copy.deepcopy(obj)
+    # feste Rahmengröße braucht eine feste Schrift: sonst ginge der Rahmen beim Verschieben verloren
+    framed = fix_size(obj, rendered.base_pt) if obj.size_pt is None else copy.deepcopy(obj)
     framed.fit = True
     return place(framed, target)
 
@@ -367,12 +368,16 @@ def objects_outside(doc: Document, model: str = "QL-600") -> list[int]:
 
 # --- Reiter „Layout“ ----------------------------------------------------------------
 def align_objects(objs: list[TextObject], rendered: list[RenderedObject], mode: str,
-                  area: Rect | None = None) -> list[TextObject]:
+                  area: Rect | None = None, grow: str | None = None) -> list[TextObject]:
     """Kopien der Objekte, ausgerichtet wie ``align`` – mit ``area`` am Papier, sonst aneinander.
 
     Gerechnet wird mit den Rahmen, wie sie im Modell stehen (``exact_rect``); ein Objekt ohne
     Position bekommt seine Lage und wirksame Schriftgröße fest.
+    ``grow`` (``growing_axis``): Am Papier bleibt die Ausrichtung in dieser Achse aus – das
+    Etikett wüchse bzw. schrumpfte mit dem Objekt und es wanderte bei jedem Aufruf weiter.
     """
+    if area is not None and grow == ("x" if mode in ("left", "hcenter", "right") else "y"):
+        return list(objs)
     rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
     return [set_frame(o, _rounded(rect), r)
             for o, r, rect in zip(objs, rendered, align(rects, mode, area))]
@@ -385,9 +390,12 @@ def match_objects(objs: list[TextObject], rendered: list[RenderedObject],
 
     Mit fester Rahmengröße wird der Rahmen gesetzt. Text ohne feste Rahmengröße wird
     skaliert (Seitenverhältnis bleibt): bei „gleicher Größe“ mit dem Mittel aus Breiten-
-    und Höhenverhältnis, sonst nach dem angeglichenen Maß.
+    und Höhenverhältnis, sonst nach dem angeglichenen Maß. Hat der Bezug keine Fläche
+    (leerer Text), bleibt alles unverändert.
     """
     rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
+    if not rects or rects[0].w <= 0 or rects[0].h <= 0:
+        return list(objs)           # leerer Bezug (unsichtbarer Rahmen): nichts angleichen
     result = objs[:1]
     for obj, r, old, new in zip(objs[1:], rendered[1:], rects[1:], match_size(rects, mode)[1:]):
         if obj.fit:

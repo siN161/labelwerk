@@ -818,3 +818,40 @@ def test_maximize_rotated_objects(index):
     assert max(r.w / area.w, r.h / area.h) == pytest.approx(1, abs=0.06)
     assert (r.cx, r.cy) == pytest.approx((area.cx, area.cy), abs=0.2)
     assert big.rotation == obj.rotation and big.fit == obj.fit
+
+
+# --- Schlussrunde -------------------------------------------------------------------
+@pytest.mark.parametrize("mode", ["same", "width", "height"])
+@pytest.mark.parametrize("fit", [False, True])
+def test_match_objects_with_empty_reference_changes_nothing(mode, fit):
+    empty = TextObject("", size_pt=12, x_mm=1, y_mm=1)
+    other = TextObject("Zwei", size_pt=14, fit=fit, x_mm=5, y_mm=5, w_mm=20 if fit else None,
+                       h_mm=8 if fit else None)
+    rendered = [_rendered(1, 1, 0, 0), _rendered(5, 5, 20, 8)]
+    result = layout.match_objects([empty, other], rendered, mode)
+    assert result == [empty, other]
+
+
+def test_edge_resize_of_auto_size_text_then_move_keeps_frame():
+    obj = TextObject("A", x_mm=1, y_mm=1)                    # size_pt None
+    rendered = _rendered(1, 1, 10, 5, base_pt=20)
+    old = layout.object_rect(rendered)
+    framed = layout.resize(obj, Rect(old.x, old.y, old.w + 10, old.h), rendered, corner=False)
+    assert framed.fit and framed.size_pt == 20
+    moved = layout.move(framed, Rect(old.x + 2, old.y, old.w + 10, old.h),
+                        _rendered(1, 1, 20, 5, base_pt=20))
+    assert moved.fit and moved.w_mm == pytest.approx(framed.w_mm)
+    assert moved.h_mm == pytest.approx(framed.h_mm)
+
+
+@pytest.mark.parametrize("grow, along, across", [
+    ("y", ("top", "vcenter", "bottom"), ("left", "hcenter", "right")),
+    ("x", ("left", "hcenter", "right"), ("top", "vcenter", "bottom"))])
+def test_align_to_paper_is_noop_along_growing_axis(grow, along, across):
+    objs = [TextObject("A", size_pt=12, x_mm=3, y_mm=4)]
+    rendered = [_rendered(3, 4, 10, 5)]
+    area = Rect(2, 2, 50, 50)
+    for mode in along:
+        assert layout.align_objects(objs, rendered, mode, area, grow=grow) == objs
+    for mode in across:
+        assert layout.align_objects(objs, rendered, mode, area, grow=grow) != objs

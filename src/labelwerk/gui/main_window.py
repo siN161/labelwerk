@@ -75,6 +75,8 @@ class MainWindow(QMainWindow):
         self.doc = doc if doc is not None else new_document(self.settings)
         self.model = model
         self.image = None
+        self._shown_size = (0, 0)                   # Etikettgröße der letzten gültigen Anzeige
+        self._structure_dirty = False               # Objektliste seit der letzten Anzeige umgebaut
         self.rendered: list[RenderedObject] = []    # Objektbilder auf der Arbeitsfläche = im Druck
         self._cache: dict[int, _Cached] = {}
         self._render_error: str | None = None
@@ -402,6 +404,7 @@ class MainWindow(QMainWindow):
         except ValueError as e:
             # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
             self._render_error = str(e)
+            self._drop_stale_view()
             self.panel("text").show_error(self._render_error)
             self._set_result(self._render_error, "error")
             return
@@ -420,12 +423,28 @@ class MainWindow(QMainWindow):
         self.panel("text").show_error(None)
         self.image = image
         self.rendered = rendered
+        self._shown_size = size
+        self._structure_dirty = False
         self._outside = outside
         self._area = area
         self.canvas.set_document(get_label(self.doc.label_id), size, rendered, self.doc.orientation,
                                  area, keep_ratio=[not obj.fit for obj in self.doc.objects],
                                  grow=growing_axis(self.doc))
+        self.panel("layout").set_growing(growing_axis(self.doc))
         self._update_frame()
+
+    def _drop_stale_view(self) -> None:
+        """Nach einem Renderfehler: Objektbilder, die nicht mehr zu ``doc.objects`` passen
+        (gelöscht, eingefügt, umsortiert – ``_structure_changing``), von der Arbeitsfläche
+        nehmen – sonst wirkten Auswahl und Ziehen auf ein anderes Objekt. Bei gleichem Aufbau
+        bleibt das letzte gültige Bild stehen."""
+        if not self._structure_dirty:
+            return
+        self._structure_dirty = False
+        self.rendered = []
+        self.canvas.set_document(get_label(self.doc.label_id), self._shown_size, [],
+                                 self.doc.orientation,
+                                 self._area, keep_ratio=[], grow=growing_axis(self.doc))
 
     def _prepare_objects(self) -> list[_Cached]:
         """Objekte messen; unveränderte kommen aus dem Cache."""
@@ -514,6 +533,7 @@ class MainWindow(QMainWindow):
     def _structure_changing(self) -> None:
         """Objektliste ändert sich (Löschen, Einfügen, Rückgängig, Reihenfolge …): laufendes
         Ziehen abbrechen – seine Indizes gälten nicht mehr – und gleich neu zeichnen lassen."""
+        self._structure_dirty = True
         self.canvas.cancel_object_drag()
 
     def _move_objects(self, indices: list[int], rects: list[Rect]) -> None:
@@ -600,7 +620,7 @@ class MainWindow(QMainWindow):
     def align_selected(self, mode: str, paper: bool = False) -> None:
         """Auswahl aneinander bzw. am bedruckbaren Bereich ausrichten."""
         self._change_selected(lambda objs, rendered: align_objects(
-            objs, rendered, mode, self._area if paper else None))
+            objs, rendered, mode, self._area if paper else None, growing_axis(self.doc)))
 
     def match_selected(self, mode: str) -> None:
         """Größe, Breite oder Höhe an das zuerst gewählte Objekt angleichen."""
@@ -624,7 +644,9 @@ class MainWindow(QMainWindow):
         ``change`` läuft nach dem Rendern: Rahmen und ``self._area`` sind aktuell."""
         if self._timer.isActive():
             self.render_now()                   # z. B. eben Getipptes: aktuelle Rahmen
-        indices = [i for i in self.canvas.selection() if self._valid(i)]
+        # leere Rahmen sind unsichtbar und drucken nicht: sie nehmen an Layout-Befehlen nicht teil
+        indices = [i for i in self.canvas.selection()
+                   if self._valid(i) and not self.doc.objects[i].is_empty()]
         if not indices:
             return
         self._commit()
