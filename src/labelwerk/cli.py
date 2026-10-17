@@ -11,23 +11,23 @@ from . import desktop
 from . import printer as prn
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
 from .files import crop, fit_to_label, load_file
-from .document import MAX_MARGIN_MM, ORIENTATIONS, Document, TextObject
+from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .labels import format_mm, labels_for_model
 from .media import MediaError, label_for_media, read_media
 from .render import render_document
 from .settings import load_settings
 
 
-def _font_size(value: str) -> int | None:
-    """'auto' (= None) oder ganze Zahl 8–400."""
+def _font_size(value: str) -> float | None:
+    """'auto' (= None) oder Größe in pt, 4–100."""
     if value.lower() == "auto":
         return None
     try:
-        size = int(value)
+        size = float(value.replace(",", "."))
     except ValueError:
-        size = 0
-    if not 8 <= size <= 400:
-        raise argparse.ArgumentTypeError("Schriftgröße: 'auto' oder 8–400")
+        size = 0.0
+    if not MIN_PT <= size <= MAX_PT:
+        raise argparse.ArgumentTypeError("Schriftgröße: 'auto' oder 4–100 (pt)")
     return size
 
 
@@ -114,7 +114,7 @@ def _make_image(args: argparse.Namespace) -> Image.Image:
         return fit_to_label(img, args.label, fit=args.fit, model=args.model, rotate=rotate)
     text = args.text.replace("\\n", "\n")
     doc = Document(args.label, orientation=args.orientation, margin_mm=args.margin,
-                   objects=[TextObject(text, font_size=args.font_size, font_path=args.font)])
+                   objects=[TextObject.plain(text, size_pt=args.font_size, font_path=args.font)])
     return render_document(doc, args.model)
 
 
@@ -164,7 +164,7 @@ def _apply_settings(args: argparse.Namespace) -> None:
         args.orientation = args.orientation or settings.orientation
         args.margin = settings.margin_mm if args.margin is None else args.margin
         if args.font_size is _UNSET:
-            args.font_size = settings.font_size
+            args.font_size = settings.font_size_pt
 
 
 def _install_desktop(remove: bool) -> int:

@@ -9,7 +9,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
                                QGroupBox, QHBoxLayout, QLabel, QVBoxLayout)
 
-from ..document import MAX_MARGIN_MM
+from ..document import MAX_MARGIN_MM, MAX_PT, MIN_PT
 from ..labels import labels_for_model
 from ..printer import DEFAULT_MODEL
 from ..settings import Settings, save_settings
@@ -46,10 +46,11 @@ class SettingsDialog(QDialog):
         row = QHBoxLayout()
         self.font_auto = QCheckBox("Automatisch")
         self.font_size = SpinBox()
-        self.font_size.setRange(8, 400)
-        self.font_size.setValue(settings.font_size or 80)
-        self.font_auto.setChecked(settings.font_size is None)
-        self.font_size.setEnabled(settings.font_size is not None)
+        self.font_size.setRange(int(MIN_PT), int(MAX_PT))
+        self.font_size.setSuffix(" pt")
+        self.font_size.setValue(round(settings.font_size_pt or 19))
+        self.font_auto.setChecked(settings.font_size_pt is None)
+        self.font_size.setEnabled(settings.font_size_pt is not None)
         self.font_auto.toggled.connect(lambda auto: self.font_size.setEnabled(not auto))
         row.addWidget(self.font_auto)
         row.addWidget(self.font_size)
@@ -93,7 +94,7 @@ class SettingsDialog(QDialog):
             label_id=self.label.currentData(),
             orientation=self.orientation.currentData(),
             margin_mm=self.margin.value(),
-            font_size=None if self.font_auto.isChecked() else self.font_size.value(),
+            font_size_pt=None if self.font_auto.isChecked() else self.font_size.value(),
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
         )

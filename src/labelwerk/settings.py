@@ -10,7 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .document import MAX_MARGIN_MM, ORIENTATIONS, Document, TextObject
+from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .labels import labels_for_model
 
 
@@ -19,7 +19,7 @@ class Settings:
     label_id: str = "62"
     orientation: str = "vertical"
     margin_mm: float = 1.0
-    font_size: int | None = None           # None = automatisch
+    font_size_pt: float | None = None      # None = automatisch
     check_media_on_start: bool = True
     start_zoom: int = 200
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
@@ -35,7 +35,8 @@ def _rules(model: str) -> dict:
         "label_id": lambda v: isinstance(v, str) and v in known,
         "orientation": lambda v: v in ORIENTATIONS,
         "margin_mm": lambda v: (_is_int(v) or isinstance(v, float)) and 0 <= v <= MAX_MARGIN_MM,
-        "font_size": lambda v: v is None or (_is_int(v) and 8 <= v <= 400),
+        "font_size_pt": lambda v: v is None or ((_is_int(v) or isinstance(v, float))
+                                                and MIN_PT <= v <= MAX_PT),
         "check_media_on_start": lambda v: isinstance(v, bool),
         "start_zoom": lambda v: _is_int(v) and 25 <= v <= 400,
     }
@@ -61,6 +62,7 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
     except (OSError, ValueError) as e:
         settings.warnings.append(f"Einstellungen nicht lesbar ({path}): {e} – Standardwerte aktiv.")
         return settings
+    _migrate_font_size(raw, settings)
     for key, valid in _rules(model).items():
         if key not in raw:
             continue
@@ -71,6 +73,21 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
             settings.warnings.append(f"Einstellung {key!r} ungültig ({value!r}) – "
                                      f"Standardwert {getattr(settings, key)!r} aktiv.")
     return settings
+
+
+def _migrate_font_size(raw: dict, settings: Settings) -> None:
+    """Alte Einstellung ``font_size`` (Druckpunkte bei 300 dpi) einmalig in pt umrechnen."""
+    if "font_size" not in raw or "font_size_pt" in raw:
+        return
+    old = raw.pop("font_size")
+    if old is None:
+        raw["font_size_pt"] = None
+    elif _is_int(old) and old > 0:
+        raw["font_size_pt"] = min(max(round(old * 72 / 300), int(MIN_PT)), int(MAX_PT))
+        settings.warnings.append(f"Schriftgröße von {old} Druckpunkten auf "
+                                 f"{raw['font_size_pt']} pt umgerechnet.")
+    else:
+        settings.warnings.append(f"Einstellung 'font_size' ungültig ({old!r}) – automatisch.")
 
 
 def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
@@ -88,4 +105,5 @@ def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
 def new_document(settings: Settings) -> Document:
     """Neues Etikett mit den Standardwerten aus den Einstellungen."""
     return Document(label_id=settings.label_id, orientation=settings.orientation,
-                    margin_mm=settings.margin_mm, objects=[TextObject(font_size=settings.font_size)])
+                    margin_mm=settings.margin_mm,
+                    objects=[TextObject.plain("", size_pt=settings.font_size_pt)])

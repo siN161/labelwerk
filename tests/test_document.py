@@ -31,7 +31,7 @@ def test_short_auto_length_is_raised_to_minimum():
 def test_too_tall_text_for_fixed_length_raises():
     import pytest
     from labelwerk.render import TextTooLarge
-    doc = Document("62", length_mm=15, objects=[TextObject("A\nB\nC", font_size=100)])
+    doc = Document("62", length_mm=15, objects=[TextObject("A\nB\nC", size_pt=24)])
     with pytest.raises(TextTooLarge):
         render_document(doc)
 
@@ -60,7 +60,7 @@ def test_horizontal_endless_prints_across_full_width_and_grows_with_text():
 
 def test_horizontal_text_reads_along_the_tape():
     img = render_document(Document("62", orientation="horizontal",
-                                   objects=[TextObject("Hallo\n.", font_size=150)]))
+                                   objects=[TextObject("Hallo\n.", size_pt=36)]))
     reading = img.rotate(90, expand=True)              # zurück in Leserichtung
     ink = _ink(reading)
     top = ink.crop((0, 0, reading.width, reading.height // 2)).histogram()[255]
@@ -89,14 +89,14 @@ def test_horizontal_die_cut_keeps_print_size():
 
 def test_margin_extends_auto_length():
     def height(margin):
-        doc = Document("62", margin_mm=margin, objects=[TextObject("A", font_size=200)])
+        doc = Document("62", margin_mm=margin, objects=[TextObject("A", size_pt=48)])
         return render_document(doc).height
     assert height(5) - height(1) == 2 * (59 - 12)        # 5 mm = 59 Punkte, 1 mm = 12
 
 
 def test_margin_is_clamped_to_20_mm():
     def height(margin):
-        doc = Document("62", margin_mm=margin, objects=[TextObject("A", font_size=200)])
+        doc = Document("62", margin_mm=margin, objects=[TextObject("A", size_pt=48)])
         return render_document(doc).height
     assert height(50) == height(20)
     assert height(-3) == height(0)

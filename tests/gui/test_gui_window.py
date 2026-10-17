@@ -38,7 +38,7 @@ def test_too_large_font_shows_hint_in_text_panel(window):
     panel = window.panel("text")
     panel.edit.setPlainText("Sehr langer Text")
     panel.auto.setChecked(False)
-    panel.size.setValue(300)
+    panel.size.setValue(72)
     window.render_now()
     assert not panel.error.isHidden()
     assert "höchstens" in panel.error.text()
@@ -224,7 +224,7 @@ def test_render_error_blocks_print_and_shows_in_status(window, qtbot, monkeypatc
     panel = window.panel("text")
     panel.edit.setPlainText("Sehr langer Text")
     panel.auto.setChecked(False)
-    panel.size.setValue(300)
+    panel.size.setValue(72)
     window.print_label()
     assert "höchstens" in window.result.text()
     assert window.result.property("state") == "error"

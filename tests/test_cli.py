@@ -63,7 +63,7 @@ def test_unknown_label_gives_friendly_error(capsys):
 
 
 def test_font_size_too_large_gives_friendly_error(capsys):
-    rc = main(["print", "Sehr langer Text", "-l", "29", "-s", "200", "--preview", "x.png"])
+    rc = main(["print", "Sehr langer Text", "-l", "29", "-s", "48", "--preview", "x.png"])
     assert rc == 2
     assert "passt nicht" in capsys.readouterr().err
 
@@ -242,7 +242,7 @@ def test_font_size_auto_overrides_saved_size(tmp_path):
     from labelwerk.document import Document, TextObject
     from labelwerk.render import render_document
     _write_settings(font_size=80)
-    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", font_size=None)]))
+    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", size_pt=None)]))
     assert _preview(tmp_path, "-s", "auto") == expected.convert("RGB").tobytes()
 
 
@@ -250,11 +250,11 @@ def test_font_size_option_beats_settings(tmp_path):
     from labelwerk.document import Document, TextObject
     from labelwerk.render import render_document
     _write_settings(font_size=80)
-    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", font_size=100)]))
-    assert _preview(tmp_path, "-s", "100") == expected.convert("RGB").tobytes()
+    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", size_pt=24)]))
+    assert _preview(tmp_path, "-s", "24") == expected.convert("RGB").tobytes()
 
 
-@pytest.mark.parametrize("value", ["7", "401", "abc", "1.5"])
+@pytest.mark.parametrize("value", ["3", "101", "abc", "1.5"])
 def test_font_size_invalid_is_argparse_error(value, capsys):
     with pytest.raises(SystemExit) as e:
         main(["print", "X", "-s", value])

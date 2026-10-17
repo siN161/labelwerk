@@ -81,14 +81,14 @@ def test_dragging_in_horizontal_view_sets_length(window):
 
 
 def test_window_starts_with_settings(qtbot):
-    settings = Settings(label_id="62x29", orientation="horizontal", margin_mm=3, font_size=80,
+    settings = Settings(label_id="62x29", orientation="horizontal", margin_mm=3, font_size_pt=19,
                         start_zoom=150)
     win = MainWindow(settings=settings)
     qtbot.addWidget(win)
     assert (win.doc.label_id, win.doc.orientation, win.doc.margin_mm) == ("62x29", "horizontal", 3)
     assert win.panel("paper").horizontal.isChecked()
     assert win.panel("paper").margin.value() == 3.0
-    assert not win.panel("text").auto.isChecked() and win.panel("text").size.value() == 80
+    assert not win.panel("text").auto.isChecked() and win.panel("text").size.value() == 19
     assert win.canvas.zoom == 150
 
 
