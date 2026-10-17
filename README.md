@@ -7,7 +7,7 @@ Getestet mit: QL-600 (USB). Andere QL-Modelle sollten funktionieren, Rückmeldun
 ## Installation
 
 ```bash
-git clone https://github.com/<dein-user>/labelwerk.git
+git clone https://github.com/siN161/labelwerk.git
 cd labelwerk
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
