@@ -5,6 +5,7 @@ import argparse
 import sys
 
 from . import printer as prn
+from .detect import find_brother_lp
 from .labels import labels_for_model
 from .render import render_text
 
@@ -21,7 +22,8 @@ def _parser() -> argparse.ArgumentParser:
     pr.add_argument("-l", "--label", default="62")
     pr.add_argument("-s", "--font-size", type=int)
     pr.add_argument("--font", help="Pfad zu einer .ttf-Datei")
-    pr.add_argument("-p", "--printer", default=prn.DEFAULT_PRINTER)
+    pr.add_argument("-p", "--printer", default="auto",
+                    help="auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP")
     pr.add_argument("-b", "--backend", default=prn.DEFAULT_BACKEND,
                     choices=["linux_kernel", "pyusb", "network"])
     pr.add_argument("--no-cut", action="store_true")
@@ -46,8 +48,27 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Vorschau: {args.preview} ({img.width}x{img.height} px)")
         return 0
 
-    status = prn.print_image(img, args.label, model=args.model, printer=args.printer,
-                             backend=args.backend, cut=not args.no_cut)
+    if args.printer == "auto":
+        args.printer = find_brother_lp() if args.backend == "linux_kernel" else None
+        if args.printer is None:
+            print("Brother-Drucker unter /dev/usb/lp* nicht gefunden.\n"
+                  "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', 'lsmod | grep usblp'.\n"
+                  "Manuell angeben mit -p file:///dev/usb/lpN",
+                  file=sys.stderr)
+            return 2
+
+    try:
+        status = prn.print_image(img, args.label, model=args.model, printer=args.printer,
+                                 backend=args.backend, cut=not args.no_cut)
+    except FileNotFoundError:
+        print(f"Drucker nicht gefunden: {args.printer}\n"
+              "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', 'lsmod | grep usblp'.",
+              file=sys.stderr)
+        return 2
+    except PermissionError:
+        print(f"Keine Berechtigung für {args.printer} – Benutzer in Gruppe 'lp'?",
+              file=sys.stderr)
+        return 2
     ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
     print(f"Status: {status.get('outcome')}")
     return 0 if ok else 1

@@ -26,7 +26,7 @@ Beim QL-600 muss die **Editor-Lite-LED aus** sein, sonst meldet er sich als USB-
 ```bash
 labelwerk labels                                   # verfügbare Etiketten
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29 --preview vorschau.png
-labelwerk print "X1 -K3\nKlemme 24V" -l 62x29      # drucken
+labelwerk print "X1 -K3\nKlemme 24V" -l 62x29      # drucken (Drucker wird automatisch erkannt)
 ```
 
 Optionen: `-s` Schriftgröße, `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
