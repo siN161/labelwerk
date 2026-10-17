@@ -580,7 +580,7 @@ def test_keyboard_in_font_box_while_editing_stays_in_the_box(qtbot):
     start = family.currentIndex()
     QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Down)
     QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Down)
-    assert family.currentIndex() == start + 2
+    assert family.currentIndex() == min(start + 2, family.count() - 1)   # auch bei wenigen Schriften
     assert editor.textCursor().position() == 3 and not editor.hasFocus()
     family.showPopup()
     family.hidePopup()                                          # Auswahl fertig: weiter tippen
@@ -662,3 +662,91 @@ def test_emoji_positions_for_click_caret_and_selection(qtbot):
     assert rect.right() == pytest.approx(_char_point(win, 0, 2).x(), abs=1)
     QTest.keyClicks(editor, "Z")
     assert win.doc.objects[0].text == "Zb c"
+
+
+# --- Schlussrunde: Einfügen-Knopf, Rollenwechsel, Wiederherstellen, F2/Enter -----------------
+def test_paste_button_follows_the_system_clipboard_in_edit_mode(qtbot):
+    win, editor = _editing(qtbot)
+    QApplication.clipboard().setText("")
+    win._update_edit_actions()
+    assert not win.shortcut_actions["edit.paste"].isEnabled()
+    _double_click(win.canvas, _char_point(win, 0, 1))              # Wort markieren
+    QTest.keyClick(editor, Qt.Key.Key_C, CTRL)
+    assert win.shortcut_actions["edit.paste"].isEnabled()
+    QApplication.clipboard().setText("")
+    assert not win.shortcut_actions["edit.paste"].isEnabled()
+
+
+def test_clipboard_change_after_closing_the_window_does_not_crash(qtbot):
+    win = _window(qtbot)
+    win.close()
+    win.deleteLater()
+    QApplication.sendPostedEvents(None, 0)                         # DeferredDelete
+    QApplication.clipboard().setText("nach dem Schließen")
+
+
+def test_media_result_during_editing_is_its_own_undo_step(qtbot):
+    from labelwerk.media import Media
+    win, editor = _editing(qtbot, pos=3)
+    QTest.keyClicks(editor, "X")
+    win._media_found(Media(29, 0, "endless"), "29")
+    assert win.doc.label_id == "29"
+    QTest.keyClick(editor, Qt.Key.Key_Escape)
+    win.shortcut_actions["edit.undo"].trigger()
+    assert win.doc.objects[0].text == "Max Mustermann" and win.doc.label_id == "29"
+    win.shortcut_actions["edit.undo"].trigger()
+    assert win.doc.label_id == "62"
+    win.shortcut_actions["edit.redo"].trigger()
+    win.shortcut_actions["edit.redo"].trigger()
+    assert win.doc.objects[0].text == "MaxX Mustermann" and win.doc.label_id == "29"
+
+
+def test_redo_falls_through_to_the_document_like_undo(qtbot):
+    win, editor = _editing(qtbot, pos=3)
+    QTest.keyClicks(editor, "X")
+    QTest.keyClick(editor, Qt.Key.Key_Escape)
+    win.shortcut_actions["edit.undo"].trigger()                    # Text zurück, Wiederherstellen offen
+    assert win.doc.objects[0].text == "Max Mustermann"
+    _double_click(win.canvas, _char_point(win, 0, 3))
+    assert _session(win).active
+    redo = win.shortcut_actions["edit.redo"]
+    assert redo.isEnabled()                                        # Knopf: im Dokument weiter
+    QTest.keyClick(editor, Qt.Key.Key_Z, CTRL | SHIFT)
+    assert not _session(win).active
+    assert win.doc.objects[0].text == "MaxX Mustermann"
+
+
+def test_redo_in_edit_mode_with_nothing_to_redo_keeps_editing(qtbot):
+    win, editor = _editing(qtbot, pos=3)
+    assert not win.shortcut_actions["edit.redo"].isEnabled()
+    QTest.keyClick(editor, Qt.Key.Key_Z, CTRL | SHIFT)
+    assert _session(win).active
+
+
+@pytest.mark.parametrize("key", [Qt.Key.Key_F2, Qt.Key.Key_Return, Qt.Key.Key_Enter])
+def test_f2_and_enter_start_edit_mode_with_caret_at_the_end(window, qtbot, key):
+    window.canvas.set_selection([0])
+    window.canvas.setFocus()
+    qtbot.waitUntil(window.canvas.hasFocus, timeout=1000)
+    QTest.keyClick(window.canvas, key)
+    assert _session(window).index == 0
+    editor = window.panel("text").edit
+    assert editor.textCursor().position() == len("Eins")
+
+
+def test_f2_needs_exactly_one_selected_object(window, qtbot):
+    start = window.shortcut_actions["text.start_edit"]
+    window.canvas.set_selection([0, 1])
+    assert not start.isEnabled()
+    window.canvas.set_selection([])
+    assert not start.isEnabled()
+    window.canvas.set_selection([1])
+    assert start.isEnabled()
+
+
+def test_start_edit_shortcuts_are_in_the_directory():
+    from labelwerk import shortcuts
+    assert shortcuts.action("text.start_edit").default == "F2"
+    assert shortcuts.action("text.start_edit").scope == "canvas"
+    enter = shortcuts.action("text.start_edit_enter")
+    assert enter.fixed and enter.default == "Return"

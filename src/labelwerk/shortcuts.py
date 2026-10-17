@@ -6,7 +6,9 @@ Bereiche: ``global`` (überall), ``canvas`` (Arbeitsfläche hat den Fokus),
 ``edit`` (Schreibmodus: der Editor im Text-Panel hat den Fokus – Fett/Kursiv/Unterstrichen
 wirken auch, solange ein anderes Feld des Panels ihn hat). Arbeitsfläche und Schreibmodus
 sind nie gleichzeitig aktiv, ein globales Kürzel kollidiert dagegen mit jedem Bereich.
-Feste Kürzel (``fixed``, z. B. Esc beendet den Schreibmodus) lassen sich nicht ändern.
+Feste Kürzel (``fixed``, z. B. Esc beendet den Schreibmodus, Enter startet ihn für das
+gewählte Textobjekt) lassen sich nicht ändern; Enter ist sonst nicht belegbar, F2 ist die
+änderbare Alternative.
 """
 from __future__ import annotations
 
@@ -68,6 +70,9 @@ ACTIONS: tuple[Action, ...] = (
     Action("size.same", "Gleiche Größe", "", "canvas"),
     Action("size.width", "Gleiche Breite", "", "canvas"),
     Action("size.height", "Gleiche Höhe", "", "canvas"),
+    Action("text.start_edit", "Schreibmodus starten (Text der Auswahl)", "F2", "canvas"),
+    Action("text.start_edit_enter", "Schreibmodus starten (Enter)", "Return", "canvas",
+           fixed=True),
     Action("text.end_edit", "Schreibmodus beenden", "Esc", "edit", fixed=True),
     Action("text.bold", "Fett", "Ctrl+B", "edit"),
     Action("text.italic", "Kursiv", "Ctrl+I", "edit"),

@@ -34,7 +34,10 @@ def apply_shortcuts(actions: dict[str, QAction], mapping: dict[str, str]) -> Non
     """Kürzel (z. B. nach dem Speichern der Einstellungen) setzen; Tooltip nennt das Kürzel."""
     for action_id, action in actions.items():
         sequence = QKeySequence(mapping.get(action_id, ""))
-        action.setShortcut(sequence)
+        if sequence.toString() == "Return":           # Enter auf dem Ziffernblock gilt mit
+            action.setShortcuts([sequence, QKeySequence("Enter")])
+        else:
+            action.setShortcut(sequence)
         name = shortcuts.action(action_id).name
         keys = sequence.toString(QKeySequence.SequenceFormat.NativeText)
         action.setToolTip(f"{name} ({keys})" if keys else name)

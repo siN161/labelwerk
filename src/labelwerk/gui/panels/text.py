@@ -42,11 +42,10 @@ _ALIGN_TO_QT = {"left": Qt.AlignmentFlag.AlignLeft, "center": Qt.AlignmentFlag.A
 class PlainPasteEdit(QTextEdit):
     """Rich-Text-Editor, der aus der Zwischenablage nur reinen Text übernimmt."""
 
-    focus_left = Signal()            # Tippen ist abgeschlossen (ein Schritt für Rückgängig)
-
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setTabChangesFocus(True)      # Tab springt weiter, statt "\t" einzufügen
+        self.setTabChangesFocus(True)      # nie "\t" einfügen (im Schreibmodus fängt es
+                                           # zusätzlich ein Filter ab, Fokus bleibt im Text)
         # eine Zeile je Absatz wie auf dem Etikett: Pos1/Ende gelten für den ganzen Absatz
         self.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         # Schreibmodus: Lage der Schreibmarke auf dem Etikett für Eingabemethoden (→ QRect)
@@ -67,10 +66,6 @@ class PlainPasteEdit(QTextEdit):
     def insertFromMimeData(self, source) -> None:
         if source.hasText():
             self.textCursor().insertText(source.text())
-
-    def focusOutEvent(self, event) -> None:
-        super().focusOutEvent(event)
-        self.focus_left.emit()
 
 
 def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
@@ -204,7 +199,6 @@ class TextPanel(Panel):
         self.layout_.addStretch()
 
         self.refresh()
-        self.edit.focus_left.connect(self.edited)
         self.edit.document().contentsChanged.connect(self._apply)
         self.edit.currentCharFormatChanged.connect(self._sync_buttons)
         self.edit.cursorPositionChanged.connect(self._sync_buttons)

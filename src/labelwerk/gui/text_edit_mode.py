@@ -9,8 +9,9 @@ beim Tippen. Positionen: Editor in UTF-16-Einheiten, Zeilensatz in Zeichen
 
 Im Schreibmodus wirken die Tasten des Editors (Pfeile, Pos1/Ende, Entf, Strg+A/C/X/V/Z …);
 Auf/Ab folgen den Zeilen auf dem Etikett, Tab bleibt ohne Wirkung (Tabulatoren druckt
-labelwerk nicht, und der Fokus soll den Text nicht verlassen). Strg+Z geht wie der Knopf
-im Dokument weiter, wenn im Editor nichts mehr zurückzunehmen ist. Ein Rahmen ohne feste Größe wächst an der Kante
+labelwerk nicht, und der Fokus soll den Text nicht verlassen). Strg+Z und Strg+Umschalt+Z
+gehen wie die Knöpfe im Dokument weiter, wenn im Editor nichts mehr zurück- bzw.
+wiederherzustellen ist. Ein Rahmen ohne feste Größe wächst an der Kante
 seiner Textposition (``layout.anchor_after_edit``). Start und Ende samt Rückgängig-Schritt
 (eine Bearbeitung = ein Schritt) steuert das Hauptfenster (``MainWindow.edit_text``,
 ``finish_editing``).
@@ -287,6 +288,10 @@ class TextEditSession(QObject):
                     and not self._editor.document().isUndoAvailable()):
                 self._window.undo()                     # wie der Knopf: weiter im Dokument
                 return True
+            if (event.matches(QKeySequence.StandardKey.Redo)
+                    and not self._editor.document().isRedoAvailable()):
+                self._window.redo()                     # ebenso Wiederherstellen
+                return True
             if (event.key() in _VERTICAL
                     and not event.modifiers() & ~Qt.KeyboardModifier.ShiftModifier):
                 self._vertical(_VERTICAL[event.key()],
@@ -302,7 +307,7 @@ def editor_text(document: QTextDocument) -> str:
     lines = []
     block = document.begin()
     while block.isValid():
-        lines.append(block.text().replace("\t", " ").replace(" ", "\n"))
+        lines.append(block.text().replace("\t", " ").replace("\u2028", "\n"))
         block = block.next()
     return "\n".join(lines)
 

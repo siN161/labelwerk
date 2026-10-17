@@ -12,7 +12,7 @@ Automatischer Zeilenumbruch, Rechtschreibprüfung, Suchen/Ersetzen, Bearbeiten m
 
 ## Bedienung
 
-- **Neuer Text:** Werkzeug „Text anlegen“ (A) + Klick aufs Etikett → neuer Rahmen an der Klickstelle, **sofort im Schreibmodus**, **linksbündig**: Schreibmarke am Klickpunkt, der Text wächst nach rechts (wie P-touch/Textverarbeitung); die Textposition lässt sich danach ändern.
+- **Neuer Text:** Werkzeug „Text anlegen“ (Knopf „A“ bzw. Taste T) + Klick aufs Etikett → neuer Rahmen an der Klickstelle, **sofort im Schreibmodus**, **linksbündig**: Schreibmarke am Klickpunkt, der Text wächst nach rechts (wie P-touch/Textverarbeitung); die Textposition lässt sich danach ändern.
 - **Bestehender Text:** 1. Klick wählt den Rahmen (verschieben, Anfasser wie bisher). **Doppelklick** startet den Schreibmodus mit der Schreibmarke an der Klickstelle. Ein Klick in einen schon gewählten Rahmen startet ihn nicht.
 - **Im Schreibmodus:**
   - Ziehen markiert Text, Doppelklick markiert ein Wort, Umschalt+Klick erweitert die Markierung.
@@ -51,14 +51,14 @@ Das bestehende `QTextEdit` des Text-Panels (inkl. Grundformat, zeichenweiser For
 - `TextLayout.selection_rects(a, b) -> list[tuple[x, y, w, h]]`: ein Rechteck je betroffener Zeile.
 - **Positionen** zählen wie im `QTextDocument`: Zeichen der Absätze hintereinander, jeder Absatzwechsel zählt als ein Zeichen.
 - `layout.to_object(point, rendered, rotation)` / `layout.from_object(...)`: Umrechnung zwischen Etikettkoordinaten und ungedrehten Objektkoordinaten (0/90/180/270°).
-- `layout.anchor_after_edit(old_rect, new_size, align, rotation) -> (x_mm, y_mm)`: neue Position nach dem Wachsen gemäß Abschnitt „Rahmen wächst“.
+- `layout.anchor_after_edit(obj, old, new) -> (x_mm, y_mm)` (`old`/`new`: `RenderedObject` vor/nach dem Tippen): neue Position nach dem Wachsen gemäß Abschnitt „Rahmen wächst“.
 
 ### GUI
 
 - `gui/text_edit_mode.py`: `TextEditSession` – Start/Ende des Schreibmodus, Zuordnung Maus → Editor-Position (über `TextLayout.hit`), Synchronisation Editor-Markierung ↔ Anzeige, Abschluss als ein Verlaufsschritt, Anker-Regel beim Wachsen.
 - `canvas.py`: Signale für Doppelklick/Ziehen im Schreibmodus; zeichnet Schreibmarke (blinkend), Markierung und durchgezogenen Rahmen in `drawForeground`; im Schreibmodus keine Objekt-Verschiebung im bearbeiteten Rahmen.
 - `panels/text.py`: Feld INHALT entfällt aus dem Layout; der Editor bleibt als unsichtbares Kind-Widget (fokussierbar, Größe 0) bestehen.
-- `shortcuts.py`: neuer Bereich `"edit"` („Schreibmodus“) für die Kürzel, die nur im Schreibmodus gelten; Esc/Enter fest. Konfliktprüfung: `edit` kollidiert nur mit `global`.
+- `shortcuts.py`: neuer Bereich `"edit"` („Schreibmodus“) für die Kürzel, die nur im Schreibmodus gelten; nur Esc ist fest (Enter bleibt reserviert). Zum Einstieg per Tastatur: `text.start_edit` (Arbeitsfläche, Standard F2, änderbar) und `text.start_edit_enter` (Return, fest, Ziffernblock-Enter gilt mit) starten den Schreibmodus für das einzige gewählte Textobjekt, Schreibmarke am Textende. Konfliktprüfung: `edit` kollidiert nur mit `global`.
 
 ## Fehlerfälle
 

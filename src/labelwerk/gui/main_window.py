@@ -7,7 +7,8 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
+                               QMessageBox,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
@@ -248,10 +249,12 @@ class MainWindow(QMainWindow):
                     "edit.paste": self.paste, "edit.duplicate": self.duplicate_selected,
                     "tool.select": lambda: self._choose_tool("select"),
                     "tool.text": lambda: self._choose_tool("text")}
+        handlers["text.start_edit"] = handlers["text.start_edit_enter"] = self.edit_selected
         for key, handler in handlers.items():
             self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
             self.canvas.addAction(self.shortcut_actions[key])
-        # global: wirkt überall – außer im Textfeld, das Strg+Z selbst nutzt (eigenes Rückgängig)
+        # global: wirkt überall; im Schreibmodus nutzt der Editor Strg+Z selbst (eigenes Rückgängig)
+        # und gibt an das Dokument weiter, wenn er nichts mehr hat
         self.shortcut_actions["edit.undo"].triggered.connect(self.undo)
         self.shortcut_actions["edit.redo"].triggered.connect(self.redo)
         self.addActions([self.shortcut_actions["edit.undo"], self.shortcut_actions["edit.redo"]])
@@ -267,6 +270,9 @@ class MainWindow(QMainWindow):
         editor = self.panel("text").edit
         for signal in (editor.copyAvailable, editor.undoAvailable, editor.redoAvailable):
             signal.connect(self._update_edit_actions)
+        # Einfügen-Knopf folgt der Zwischenablage des Systems (PySide trennt die Verbindung
+        # mit dem Fenster, ein späteres Ändern der Zwischenablage trifft nichts Gelöschtes)
+        QApplication.clipboard().dataChanged.connect(self._update_edit_actions)
 
     def _connect_layout_actions(self) -> None:
         """Reiter „Layout“: Ausrichten, Größe angleichen, Drehen, Reihenfolge (auch per Kürzel)."""
@@ -411,11 +417,17 @@ class MainWindow(QMainWindow):
                        "edit.duplicate": False, "edit.delete": False,
                        "edit.undo": (editor.document().isUndoAvailable()
                                      or self.history.can_undo(self.doc)),
-                       "edit.redo": editor.document().isRedoAvailable(), "text.end_edit": True}
+                       "edit.redo": (editor.document().isRedoAvailable()
+                                     or self.history.can_redo(self.doc)),
+                       "text.end_edit": True, "text.start_edit": False,
+                       "text.start_edit_enter": False}
             for key, value in enabled.items():
                 self.shortcut_actions[key].setEnabled(value)
             return
         self.shortcut_actions["text.end_edit"].setEnabled(False)
+        single = len(self.canvas.selection()) == 1
+        for key in ("text.start_edit", "text.start_edit_enter"):
+            self.shortcut_actions[key].setEnabled(single)
         selected = bool(self.canvas.selection())
         for key in _SELECTION_ACTIONS:
             self.shortcut_actions[key].setEnabled(selected)
@@ -523,11 +535,10 @@ class MainWindow(QMainWindow):
     def _commit(self, merge=None) -> None:
         """Stand nach einer abgeschlossenen Aktion festhalten (ohne Änderung kein Schritt).
 
-        Vor jeder Aktion aufgerufen, wird noch nicht Festgehaltenes (Getipptes) ein eigener
-        Schritt. Tippen im Textfeld wird ein Schritt, sobald der Fokus das Feld verlässt –
-        nicht, während die Auswahl intern umgestellt wird (z. B. Textfeld gesperrt, weil ein
-        leerer Rahmen entfällt); das hält der Aufrufer selbst fest. Im Schreibmodus gehört alles
-        zur laufenden Bearbeitung – sie wird beim Beenden ein Schritt (``finish_editing``)."""
+        Vor jeder Aktion aufgerufen, wird noch nicht Festgehaltenes ein eigener Schritt. Nicht
+        während die Auswahl intern umgestellt wird (z. B. ein leerer Rahmen entfällt); das hält
+        der Aufrufer selbst fest. Im Schreibmodus gehört alles zur laufenden Bearbeitung – sie
+        wird beim Beenden ein Schritt (``finish_editing``)."""
         if self._arranging or self.edit_session.active:
             return
         self.history.push(self.doc, merge, self.canvas.selection())
@@ -555,9 +566,16 @@ class MainWindow(QMainWindow):
         self._restore(self.history.undo(self.doc, self.canvas.selection()))
 
     def redo(self) -> None:
+        """Wiederherstellen – im Schreibmodus im Editor; hat er nichts mehr, endet der
+        Schreibmodus und es geht im Dokument weiter (wie bei ``undo``)."""
         if self.edit_session.active:
-            self.panel("text").edit.redo()
-            return
+            editor = self.panel("text").edit
+            if editor.document().isRedoAvailable():
+                editor.redo()
+                return
+            if not self.history.can_redo(self.doc):
+                return                              # nichts zu wiederholen: weiter schreiben
+            self.finish_editing()
         self._restore(self.history.redo(self.doc, self.canvas.selection()))
 
     def _restore(self, snapshot: Document | None) -> None:
@@ -646,6 +664,12 @@ class MainWindow(QMainWindow):
             self._arranging = False
         self.canvas.set_selection([index])
         self.edit_text(index)                       # Anlegen und Schreiben: ein Schritt
+
+    def edit_selected(self) -> None:
+        """F2/Enter: Schreibmodus für das einzige gewählte Objekt, Schreibmarke am Textende."""
+        selection = self.canvas.selection()
+        if not self.edit_session.active and len(selection) == 1:
+            self.edit_text(selection[0])
 
     def edit_text(self, index: int, point=None) -> None:
         """Schreibmodus für ein Objekt: auswählen, Text-Panel zeigen, Schreibmarke an
@@ -765,6 +789,7 @@ class MainWindow(QMainWindow):
         im Schreibmodus den markierten Text in die Zwischenablage des Systems."""
         if self.edit_session.active:
             self.panel("text").edit.copy()
+            self._update_edit_actions()             # Einfügen ist jetzt möglich
             return
         indices = sorted(self.canvas.selection())
         if indices:
@@ -923,10 +948,18 @@ class MainWindow(QMainWindow):
         self._media_finished()
         adjusted = label_id is not None and label_id != self.doc.label_id
         if adjusted:
+            editing = self.edit_session.active
+            if editing:     # Stand vor der Bearbeitung mit neuer Rolle: eigener Schritt davor
+                before = self.history.current()
+                before.label_id = label_id
             self.doc.label_id = label_id
             self.panel("paper").refresh()
             self.schedule_render()
-            self._commit()
+            if editing:
+                self.history.push(before, selection=self.history.selection)
+                self._update_edit_actions()
+            else:
+                self._commit()
         self.panel("paper").show_media(media, label_id, adjusted)
 
     def _media_failed(self, message: str) -> None:
