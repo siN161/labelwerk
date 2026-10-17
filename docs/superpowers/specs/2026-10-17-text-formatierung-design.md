@@ -58,7 +58,7 @@ class TextObject:
 - **Automatisch** (`size_pt is None`): effektive Größe = (`span.size_pt` oder Referenz 12 pt) × Faktor f; f per Halbierung so groß wie möglich, sodass der Block passt; Obergrenze: Referenzgröße × f ≤ 1/5 der Bandbreite (wie bisher).
 - **Fest**: Spans ohne Größe nutzen `size_pt` des Objekts; passt es nicht → `TextTooLarge` mit größter passender Grundgröße in pt („höchstens 14 pt“).
 - Ränder, Ausrichtung horizontal/vertikal, Längengrenzen wie Etappe 1.
-- Ersatzschriften: `render_document` sammelt Hinweise „Schrift X nicht gefunden – ersetzt durch Y“ (`RenderResult`/Liste über eine neue Funktion `font_warnings(doc)`), die GUI zeigt sie in der Statusleiste, die CLI auf stderr.
+- Ersatzschriften: neue Funktion `font_warnings(doc) -> list[str]` liefert Hinweise „Schrift X nicht gefunden – ersetzt durch Y“ (je Familie einmal); `render_document` bleibt unverändert in der Signatur. Die GUI zeigt die Hinweise in der Statusleiste, die CLI auf stderr.
 
 ### CLI
 
