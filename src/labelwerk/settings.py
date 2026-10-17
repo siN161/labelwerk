@@ -10,6 +10,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import shortcuts as _shortcuts
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .fonts import DEFAULT_FAMILY
 from .labels import labels_for_model
@@ -27,6 +28,7 @@ class Settings:
     check_media_on_start: bool = True
     start_zoom: int = 200
     theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
+    shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
 
@@ -49,7 +51,7 @@ def _rules(model: str) -> dict:
     }
 
 
-_KEYS = tuple(_rules("QL-600"))
+_KEYS = (*_rules("QL-600"), "shortcuts")
 
 
 def settings_path() -> Path:
@@ -81,6 +83,9 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
         else:
             settings.warnings.append(f"Einstellung {key!r} ungültig ({value!r}) – "
                                      f"Standardwert {getattr(settings, key)!r} aktiv.")
+    if "shortcuts" in raw:                 # eigene Prüfung je Kürzel: gültige bleiben erhalten
+        settings.shortcuts, warnings = _shortcuts.validate(raw["shortcuts"])
+        settings.warnings.extend(warnings)
     return settings
 
 

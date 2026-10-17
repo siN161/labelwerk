@@ -140,3 +140,11 @@ def test_saving_dialog_applies_theme_and_icons(qtbot, qapp, monkeypatch):
         assert win.panel("text").dark_checked_icons is False
     finally:
         qapp.setStyleSheet("")
+
+
+def test_dialog_keeps_shortcuts_when_saving(qtbot, tmp_path):
+    path = tmp_path / "settings.json"
+    dialog = SettingsDialog(Settings(shortcuts={"file.print": "Ctrl+Shift+P"}), path=path)
+    qtbot.addWidget(dialog)
+    dialog.accept()
+    assert load_settings(path).shortcuts == {"file.print": "Ctrl+Shift+P"}

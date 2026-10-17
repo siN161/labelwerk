@@ -129,3 +129,42 @@ def test_invalid_theme_falls_back_with_warning(tmp_path):
     path.write_text(json.dumps({"theme": "neon"}))
     s = load_settings(path)
     assert s.theme == "rawblock" and any("theme" in w for w in s.warnings)
+
+
+# --- Tastenkürzel -------------------------------------------------------------------
+def test_shortcuts_default_empty(tmp_path):
+    assert load_settings(tmp_path / "fehlt.json").shortcuts == {}
+    assert Settings().shortcuts == {}
+
+
+def test_shortcuts_roundtrip(tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings(Settings(shortcuts={"file.print": "Ctrl+Shift+P", "edit.delete": ""}), path)
+    assert json.loads(path.read_text())["shortcuts"] == {"file.print": "Ctrl+Shift+P",
+                                                          "edit.delete": ""}
+    s = load_settings(path)
+    assert s.shortcuts == {"file.print": "Ctrl+Shift+P", "edit.delete": ""}
+    assert s.warnings == []
+
+
+def test_invalid_shortcuts_dropped_with_warning(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"shortcuts": {"file.print": "Strg+P", "gibt.es_nicht": "Ctrl+Q",
+                                              "edit.copy": "Ctrl+Shift+C"}}))
+    s = load_settings(path)
+    assert s.shortcuts == {"edit.copy": "Ctrl+Shift+C"}
+    assert len(s.warnings) == 2
+
+
+def test_shortcuts_not_a_dict_gives_defaults_and_warning(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"shortcuts": ["Ctrl+P"], "start_zoom": 150}))
+    s = load_settings(path)
+    assert s.shortcuts == {} and s.start_zoom == 150
+    assert len(s.warnings) == 1 and "shortcuts" in s.warnings[0]
+
+
+def test_settings_default_shortcuts_not_shared():
+    a, b = Settings(), Settings()
+    a.shortcuts["file.print"] = "F2"
+    assert b.shortcuts == {}

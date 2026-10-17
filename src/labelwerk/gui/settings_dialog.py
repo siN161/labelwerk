@@ -25,6 +25,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Einstellungen")
         self.path = path
         self.saved: Settings | None = None
+        self._shortcuts = dict(settings.shortcuts)     # hier (noch) nicht bearbeitet – bleibt erhalten
         layout = QVBoxLayout(self)
 
         form = self._section(layout, "Neues Etikett")
@@ -119,6 +120,7 @@ class SettingsDialog(QDialog):
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
             theme=self.theme.currentData(),
+            shortcuts=dict(self._shortcuts),
         )
 
     def accept(self) -> None:
