@@ -199,3 +199,12 @@ def test_media_status_lives_in_footer_not_in_panel(window, qtbot, monkeypatch):
         window.statusBar().isAncestorOf(window.media_status)
     assert window.media_status.text() == "Rolle: 62 mm endlos ✓"
     assert not hasattr(window.panel("paper"), "media_status")
+
+
+def test_long_media_error_is_elided_in_footer(window):
+    from labelwerk.detect import BUSY_MESSAGE
+    window.panel("paper").show_media_error(BUSY_MESSAGE)
+    label = window.media_status
+    assert label.sizeHint().width() <= 360
+    assert label.text().endswith("…")
+    assert "belegt" in label.toolTip()

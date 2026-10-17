@@ -285,7 +285,7 @@ def test_theme_arrows_resolve_to_existing_files():
     from pathlib import Path
     theme = load_theme()
     assert "@THEME@" not in theme
-    urls = re.findall(r"url\(([^)]+)\)", theme)
+    urls = [u.strip('"') for u in re.findall(r"url\(([^)]+)\)", theme)]
     assert urls and all(Path(u).exists() for u in urls)
 
 
@@ -297,3 +297,8 @@ def test_number_fields_keep_text_clear_of_frame(window):
     spins = window.findChildren(QAbstractSpinBox) + dialog.findChildren(QAbstractSpinBox)
     assert len(spins) >= 6
     assert all(s.lineEdit().textMargins().left() >= 8 for s in spins)
+
+
+def test_theme_urls_are_quoted():
+    import re
+    assert all(u.startswith('"') for u in re.findall(r"url\(([^)]+)\)", load_theme()))

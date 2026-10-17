@@ -22,6 +22,7 @@ from .settings_dialog import SettingsDialog
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
+MEDIA_STATUS_MAX_PX = 360   # Rollen-Hinweis in der Fußzeile; Rest per „…“ und Tooltip
 PRINTER_POLL_MS = 2000     # Druckererkennung: nur Blick in /sys, kein USB-Zugriff
 
 
@@ -158,7 +159,11 @@ class MainWindow(QMainWindow):
     def _show_media_status(self, text: str, state: str) -> None:
         self.media_status.setProperty("state", state)
         self.media_status.style().polish(self.media_status)
-        self.media_status.setText(text)
+        # lange Meldungen kürzen, damit das Druckergebnis daneben sichtbar bleibt
+        metrics = self.media_status.fontMetrics()
+        self.media_status.setText(metrics.elidedText(text, Qt.TextElideMode.ElideRight,
+                                                     MEDIA_STATUS_MAX_PX - 24))
+        self.media_status.setToolTip(text)
         self.media_status.setVisible(bool(text))
 
     def _set_result(self, text: str, state: str) -> None:
