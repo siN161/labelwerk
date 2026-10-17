@@ -1,6 +1,6 @@
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["QT_QPA_PLATFORM"] = "offscreen"   # immer, auch wenn die Sitzung wayland/xcb vorgibt
 
 try:
     import PySide6  # noqa: F401
