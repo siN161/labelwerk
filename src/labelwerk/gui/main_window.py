@@ -18,6 +18,7 @@ from ..settings import Settings, load_settings, new_document
 from .canvas import Canvas
 from .media_worker import MediaWorker
 from .print_worker import PrintWorker
+from .settings_dialog import SettingsDialog
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
@@ -66,6 +67,9 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(spacer)
+        self.settings_action = QAction(QIcon.fromTheme("preferences-system"), "EINSTELLUNGEN", self)
+        self.settings_action.triggered.connect(self.open_settings)
+        toolbar.addAction(self.settings_action)
         self.print_action = QAction(QIcon.fromTheme("document-print"), "DRUCKEN", self)
         self.print_action.triggered.connect(self.print_label)
         toolbar.addAction(self.print_action)
@@ -170,6 +174,13 @@ class MainWindow(QMainWindow):
         if not present and self._printer_present:
             self.panel("paper").clear_media()
         self._printer_present = present
+
+    # --- Einstellungen ----------------------------------------------------
+    def open_settings(self) -> None:
+        dialog = SettingsDialog(self.settings, model=self.model, parent=self)
+        if dialog.exec() == SettingsDialog.DialogCode.Accepted and dialog.saved is not None:
+            self.settings = dialog.saved
+            self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
 
     # --- Medium prüfen ----------------------------------------------------
     def is_printing(self) -> bool:

@@ -1,0 +1,65 @@
+import json
+import os
+from pathlib import Path
+
+from PySide6.QtWidgets import QDialog
+
+from labelwerk.gui.main_window import MainWindow
+from labelwerk.gui.settings_dialog import SettingsDialog
+from labelwerk.settings import Settings, load_settings
+
+
+def test_dialog_shows_current_settings(qtbot):
+    dialog = SettingsDialog(Settings(label_id="62x29", orientation="horizontal", margin_mm=3,
+                                     font_size=80, check_media_on_start=False, start_zoom=150))
+    qtbot.addWidget(dialog)
+    assert dialog.values() == Settings(label_id="62x29", orientation="horizontal", margin_mm=3.0,
+                                       font_size=80, check_media_on_start=False, start_zoom=150)
+
+
+def test_dialog_saves_to_file(qtbot, tmp_path):
+    path = tmp_path / "settings.json"
+    dialog = SettingsDialog(Settings(), path=path)
+    qtbot.addWidget(dialog)
+    dialog.orientation.setCurrentIndex(dialog.orientation.findData("horizontal"))
+    dialog.font_auto.setChecked(False)
+    dialog.font_size.setValue(80)
+    dialog.accept()
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    saved = load_settings(path)
+    assert (saved.orientation, saved.font_size) == ("horizontal", 80)
+    assert dialog.saved == saved
+
+
+def test_dialog_save_error_keeps_dialog_open(qtbot, tmp_path):
+    blocker = tmp_path / "datei"
+    blocker.write_text("x")
+    dialog = SettingsDialog(Settings(), path=blocker / "settings.json")
+    qtbot.addWidget(dialog)
+    dialog.accept()
+    assert dialog.saved is None
+    assert not dialog.error.isHidden() and "nicht gespeichert" in dialog.error.text()
+
+
+def test_window_opens_dialog_and_takes_new_settings(qtbot, monkeypatch):
+    win = MainWindow()
+    qtbot.addWidget(win)
+
+    def fake_exec(dialog):
+        dialog.check_media.setChecked(False)
+        dialog.accept()                       # speichert in XDG_CONFIG_HOME (Test-Ordner)
+        return QDialog.DialogCode.Accepted
+    monkeypatch.setattr(SettingsDialog, "exec", fake_exec)
+    win.settings_action.trigger()
+    assert win.settings.check_media_on_start is False
+    path = Path(os.environ["XDG_CONFIG_HOME"]) / "labelwerk" / "settings.json"
+    assert json.loads(path.read_text())["check_media_on_start"] is False
+    assert "gespeichert" in win.result.text()
+
+
+def test_qt_dialog_buttons_are_german(qapp):
+    from PySide6.QtWidgets import QDialogButtonBox
+    from labelwerk.gui.app import install_translations
+    install_translations(qapp)
+    box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+    assert sorted(b.text() for b in box.buttons()) == ["Abbrechen", "Speichern"]

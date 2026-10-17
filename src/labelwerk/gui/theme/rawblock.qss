@@ -49,6 +49,7 @@ QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
 }
 QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover { background: #E8E8E8; }
 QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus { border-width: 5px; }
+QSpinBox, QDoubleSpinBox { padding-left: 12px; }
 QSpinBox:disabled, QDoubleSpinBox:disabled { border-color: #CCCCCC; background: #F5F5F5; color: #999999; }
 QComboBox QAbstractItemView { border: 3px solid #000000; selection-background-color: #000000; selection-color: #FFFFFF; }
 
