@@ -11,10 +11,11 @@ from . import desktop
 from . import printer as prn
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
 from .files import crop, fit_to_label, load_file
-from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
+from .fonts import DEFAULT_FAMILY, families
+from .document import ALIGNMENTS, MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .labels import format_mm, labels_for_model
 from .media import MediaError, label_for_media, read_media
-from .render import render_document
+from .render import font_warnings, render_document
 from .settings import load_settings
 
 
@@ -63,9 +64,17 @@ def _parser() -> argparse.ArgumentParser:
 
     pr = sub.add_parser("print", help="Text drucken")
     pr.add_argument("text", help="Text, Zeilenumbruch mit \\n")
-    pr.add_argument("-s", "--font-size", type=_font_size, default=_UNSET, metavar="GRÖSSE",
-                    help="'auto' oder 8–400 (Standard aus den Einstellungen)")
+    pr.add_argument("-s", "--font-size", type=_font_size, default=_UNSET, metavar="PT",
+                    help="'auto' oder 4–100 pt (Standard aus den Einstellungen)")
     pr.add_argument("--font", help="Pfad zu einer .ttf-Datei")
+    pr.add_argument("--font-family", metavar="NAME",
+                    help="Schriftfamilie, z. B. 'Liberation Sans' (siehe 'labelwerk fonts')")
+    pr.add_argument("--align", choices=ALIGNMENTS, default="center",
+                    help="Textposition: left, center (Standard), right, justify")
+    pr.add_argument("--bold", action=argparse.BooleanOptionalAction, default=True,
+                    help="fett (Standard) bzw. --no-bold")
+    pr.add_argument("--italic", action="store_true", help="kursiv")
+    pr.add_argument("--underline", action="store_true", help="unterstrichen")
     pr.add_argument("--orientation", choices=ORIENTATIONS,
                     help="vertical: Text quer zum Band, horizontal: längs (Standard aus den Einstellungen)")
     pr.add_argument("--margin", type=_margin, metavar="MM",
@@ -82,6 +91,7 @@ def _parser() -> argparse.ArgumentParser:
     _add_output_options(pf)
 
     sub.add_parser("media", help="eingelegte Rolle vom Drucker abfragen (druckt nichts)")
+    sub.add_parser("fonts", help="installierte Schriftfamilien auflisten")
 
     di = sub.add_parser("install-desktop", help="labelwerk-gui im Starter (Super-Taste) eintragen")
     di.add_argument("--remove", action="store_true", help="Eintrag und Icon wieder entfernen")
@@ -113,8 +123,12 @@ def _make_image(args: argparse.Namespace) -> Image.Image:
         rotate = args.rotate if args.rotate == "auto" else int(args.rotate)
         return fit_to_label(img, args.label, fit=args.fit, model=args.model, rotate=rotate)
     text = args.text.replace("\\n", "\n")
-    doc = Document(args.label, orientation=args.orientation, margin_mm=args.margin,
-                   objects=[TextObject.plain(text, size_pt=args.font_size, font_path=args.font)])
+    obj = TextObject.plain(text, size_pt=args.font_size, align=args.align,
+                           family=args.font_family, bold=args.bold, italic=args.italic,
+                           underline=args.underline, font_path=args.font)
+    doc = Document(args.label, orientation=args.orientation, margin_mm=args.margin, objects=[obj])
+    for warning in font_warnings(doc):
+        print(warning, file=sys.stderr)
     return render_document(doc, args.model)
 
 
@@ -165,6 +179,8 @@ def _apply_settings(args: argparse.Namespace) -> None:
         args.margin = settings.margin_mm if args.margin is None else args.margin
         if args.font_size is _UNSET:
             args.font_size = settings.font_size_pt
+        if args.font_family is None and settings.font_family != DEFAULT_FAMILY:
+            args.font_family = settings.font_family
 
 
 def _install_desktop(remove: bool) -> int:
@@ -197,6 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         return _install_desktop(args.remove)
     if args.cmd == "media":
         return _show_media()
+    if args.cmd == "fonts":
+        print("\n".join(families()))
+        return 0
 
     _apply_settings(args)
 

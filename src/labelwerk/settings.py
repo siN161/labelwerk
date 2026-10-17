@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
+from .fonts import DEFAULT_FAMILY
 from .labels import labels_for_model
 
 
@@ -20,6 +21,7 @@ class Settings:
     orientation: str = "vertical"
     margin_mm: float = 1.0
     font_size_pt: float | None = None      # None = automatisch
+    font_family: str = DEFAULT_FAMILY
     check_media_on_start: bool = True
     start_zoom: int = 200
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
@@ -37,6 +39,7 @@ def _rules(model: str) -> dict:
         "margin_mm": lambda v: (_is_int(v) or isinstance(v, float)) and 0 <= v <= MAX_MARGIN_MM,
         "font_size_pt": lambda v: v is None or ((_is_int(v) or isinstance(v, float))
                                                 and MIN_PT <= v <= MAX_PT),
+        "font_family": lambda v: isinstance(v, str) and bool(v.strip()),
         "check_media_on_start": lambda v: isinstance(v, bool),
         "start_zoom": lambda v: _is_int(v) and 25 <= v <= 400,
     }
@@ -104,6 +107,7 @@ def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
 
 def new_document(settings: Settings) -> Document:
     """Neues Etikett mit den Standardwerten aus den Einstellungen."""
+    family = None if settings.font_family == DEFAULT_FAMILY else settings.font_family
     return Document(label_id=settings.label_id, orientation=settings.orientation,
                     margin_mm=settings.margin_mm,
-                    objects=[TextObject.plain("", size_pt=settings.font_size_pt)])
+                    objects=[TextObject.plain("", size_pt=settings.font_size_pt, family=family)])

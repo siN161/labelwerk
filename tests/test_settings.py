@@ -94,3 +94,18 @@ def test_old_font_size_in_dots_is_converted_to_pt(tmp_path):
     save_settings(s, path)
     assert "font_size" not in json.loads(path.read_text()) and \
         json.loads(path.read_text())["font_size_pt"] == 19
+
+
+def test_font_family_setting(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"font_family": "Liberation Sans"}))
+    assert load_settings(path).font_family == "Liberation Sans"
+    path.write_text(json.dumps({"font_family": 42}))
+    s = load_settings(path)
+    assert s.font_family == "DejaVu Sans" and s.warnings
+
+
+def test_new_document_uses_font_family():
+    doc = new_document(Settings(font_family="Liberation Sans"))
+    assert doc.objects[0].paragraphs[0].spans[0].family == "Liberation Sans"
+    assert new_document(Settings()).objects[0].paragraphs[0].spans[0].family is None

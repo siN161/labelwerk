@@ -268,3 +268,47 @@ def test_margin_invalid_is_argparse_error(value, capsys):
         main(["print", "X", f"--margin={value}"])
     assert e.value.code == 2
     assert "Rand" in capsys.readouterr().err
+
+
+def _rich_expected(**plain):
+    from labelwerk.document import Document, TextObject
+    from labelwerk.render import render_document
+    obj = TextObject.plain("Hallo\nWelt", **plain)
+    return render_document(Document("62", objects=[obj])).convert("RGB").tobytes()
+
+
+def _rich_preview(tmp_path, *args):
+    out = tmp_path / "v.png"
+    assert main(["print", "Hallo\\nWelt", *args, "--preview", str(out)]) == 0
+    return Image.open(out).convert("RGB").tobytes()
+
+
+def test_align_option(tmp_path):
+    assert _rich_preview(tmp_path, "--align", "left") == _rich_expected(align="left")
+
+
+def test_style_options(tmp_path):
+    assert _rich_preview(tmp_path, "--no-bold", "--italic", "--underline") == \
+        _rich_expected(bold=False, italic=True, underline=True)
+
+
+def test_font_family_option_and_warning(tmp_path, capsys):
+    assert _rich_preview(tmp_path, "--font-family", "GibtsGarNicht 4711") == \
+        _rich_expected(family="GibtsGarNicht 4711")
+    assert "GibtsGarNicht 4711" in capsys.readouterr().err
+
+
+def test_default_font_family_from_settings(tmp_path):
+    _write_settings(font_family="DejaVu Sans")
+    assert _rich_preview(tmp_path) == _rich_expected()
+
+
+def test_fonts_command_lists_families(capsys):
+    assert main(["fonts"]) == 0
+    assert "DejaVu Sans" in capsys.readouterr().out.splitlines()
+
+
+def test_align_invalid_is_argparse_error():
+    with pytest.raises(SystemExit) as e:
+        main(["print", "X", "--align", "mittig"])
+    assert e.value.code == 2
