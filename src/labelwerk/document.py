@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 
 ORIENTATIONS = ("vertical", "horizontal")
 ALIGNMENTS = ("left", "center", "right", "justify")
+ROTATIONS = (0, 90, 180, 270)      # Grad im Uhrzeigersinn
 MAX_MARGIN_MM = 20.0
 MIN_PT, MAX_PT = 4.0, 100.0
 
@@ -38,6 +39,17 @@ class TextObject:
     size_pt: float | None = None    # Grundgröße; None = automatisch
     font_path: str | None = None    # feste TTF-Datei für Stücke ohne Familie (CLI --font)
     fit: bool = False               # „Feste Rahmengröße“: Grundgröße + Verhältnisse, gemeinsam skaliert
+    # Rahmen in mm in Leserichtung, Ursprung = linke obere Ecke des Etiketts
+    x_mm: float | None = None       # linke obere Ecke; None = mittig auf dem Etikett
+    y_mm: float | None = None
+    w_mm: float | None = None       # Rahmengröße nur bei fit; None = bedruckbarer Bereich
+    h_mm: float | None = None
+    rotation: int = 0               # 0 | 90 | 180 | 270
+
+    @property
+    def positioned(self) -> bool:
+        """Frei platziert (sonst mittig auf dem Etikett wie bisher)."""
+        return self.x_mm is not None or self.y_mm is not None
 
     @property
     def auto(self) -> bool:
