@@ -42,3 +42,9 @@ def test_uninstall_removes_files(tmp_path, gui_exe):
     assert set(uninstall(data)) == set(installed)
     assert not any(p.exists() for p in installed)
     assert uninstall(data) == []                       # zweites Mal: nichts zu tun
+
+
+def test_display_name_comes_from_app_name(tmp_path, gui_exe, monkeypatch):
+    import labelwerk.desktop as desktop
+    monkeypatch.setattr(desktop, "APP_NAME", "Neuer Name")
+    assert "Name=Neuer Name\n" in desktop.desktop_entry(gui_exe)

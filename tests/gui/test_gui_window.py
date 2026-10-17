@@ -270,3 +270,11 @@ def test_app_identity_sets_icon_and_desktop_name(qapp):
     apply_identity(qapp)
     assert qapp.desktopFileName() == "labelwerk"
     assert not qapp.windowIcon().isNull()
+
+
+def test_window_title_and_app_name_use_app_name(window, qapp):
+    from labelwerk.desktop import APP_NAME
+    from labelwerk.gui.app import apply_identity
+    apply_identity(qapp)
+    assert window.windowTitle() == APP_NAME
+    assert qapp.applicationName() == APP_NAME

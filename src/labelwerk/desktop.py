@@ -5,7 +5,8 @@ import os
 from importlib import resources
 from pathlib import Path
 
-APP_ID = "labelwerk"   # muss zu QGuiApplication.setDesktopFileName passen
+APP_NAME = "labelwerk"  # angezeigter Name (Fenster, Starter, Hilfe) – Umbenennen: CLAUDE.md, Roadmap 7
+APP_ID = "labelwerk"    # technische ID; muss zu QGuiApplication.setDesktopFileName passen
 
 
 def data_home() -> Path:
@@ -25,7 +26,7 @@ def desktop_entry(gui_exe: Path) -> str:
     return (
         "[Desktop Entry]\n"
         "Type=Application\n"
-        "Name=labelwerk\n"
+        f"Name={APP_NAME}\n"
         "GenericName=Etikettendruck\n"
         "Comment=Etiketten gestalten und drucken (Brother QL)\n"
         f"Exec={gui_exe}\n"

@@ -7,7 +7,7 @@ from importlib import resources
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from ..desktop import APP_ID
+from ..desktop import APP_ID, APP_NAME
 
 from .main_window import MainWindow
 
@@ -19,7 +19,7 @@ def load_theme(name: str = "rawblock") -> str:
 
 def apply_identity(app: QApplication) -> None:
     """Name, App-ID (Wayland: Zuordnung zum Starter-Eintrag) und Fenstersymbol setzen."""
-    app.setApplicationName("labelwerk")
+    app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)
     icon = resources.files("labelwerk.gui") / "icons" / f"{APP_ID}.svg"
     app.setWindowIcon(QIcon(str(icon)))

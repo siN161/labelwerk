@@ -26,7 +26,7 @@ def _add_output_options(p: argparse.ArgumentParser) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="labelwerk")
+    p = argparse.ArgumentParser(prog=desktop.APP_NAME)
     p.add_argument("-m", "--model", default=prn.DEFAULT_MODEL)
     sub = p.add_subparsers(dest="cmd", required=True)
 
