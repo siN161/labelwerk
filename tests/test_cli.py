@@ -19,3 +19,21 @@ def test_auto_printer_without_device_gives_friendly_error(monkeypatch, capsys):
     rc = main(["print", "Hallo", "-l", "62"])
     assert rc == 2
     assert "nicht gefunden" in capsys.readouterr().err
+
+
+def test_auto_printer_with_pyusb_uses_usb_discovery(monkeypatch):
+    monkeypatch.setattr("labelwerk.cli.find_brother_usb", lambda: "usb://0x04f9:0x20c0")
+    sent = {}
+    def fake_print(img, label, **kw):
+        sent.update(kw)
+        return {"outcome": "printed", "did_print": True}
+    monkeypatch.setattr("labelwerk.cli.prn.print_image", fake_print)
+    rc = main(["print", "Hallo", "-l", "62", "-b", "pyusb"])
+    assert rc == 0
+    assert sent["printer"] == "usb://0x04f9:0x20c0"
+
+
+def test_auto_printer_with_network_asks_for_address(capsys):
+    rc = main(["print", "Hallo", "-l", "62", "-b", "network"])
+    assert rc == 2
+    assert "tcp://" in capsys.readouterr().err

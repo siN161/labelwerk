@@ -5,7 +5,7 @@ import argparse
 import sys
 
 from . import printer as prn
-from .detect import find_brother_lp
+from .detect import find_brother_lp, find_brother_usb
 from .labels import labels_for_model
 from .render import render_text
 
@@ -31,6 +31,27 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
+_HARDWARE_HINT = "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb'"
+_NOT_DETECTED = {
+    "linux_kernel": "Brother-Drucker unter /dev/usb/lp* nicht gefunden.\n"
+                    f"{_HARDWARE_HINT}, 'lsmod | grep usblp'.\n"
+                    "Manuell angeben mit -p file:///dev/usb/lpN",
+    "pyusb": "Brother-Drucker per USB (pyusb) nicht gefunden.\n"
+             f"{_HARDWARE_HINT}, Zugriff auf den USB-Bus (udev-Regel).\n"
+             "Manuell angeben mit -p usb://0x04f9:0xPID",
+    "network": "Netzwerkdrucker werden nicht automatisch erkannt.\n"
+               "Adresse angeben mit -p tcp://IP",
+}
+
+
+def _detect_printer(backend: str) -> str | None:
+    if backend == "linux_kernel":
+        return find_brother_lp()
+    if backend == "pyusb":
+        return find_brother_usb()
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
 
@@ -49,12 +70,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.printer == "auto":
-        args.printer = find_brother_lp() if args.backend == "linux_kernel" else None
+        args.printer = _detect_printer(args.backend)
         if args.printer is None:
-            print("Brother-Drucker unter /dev/usb/lp* nicht gefunden.\n"
-                  "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', 'lsmod | grep usblp'.\n"
-                  "Manuell angeben mit -p file:///dev/usb/lpN",
-                  file=sys.stderr)
+            print(_NOT_DETECTED[args.backend], file=sys.stderr)
             return 2
 
     try:
