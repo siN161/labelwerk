@@ -1,9 +1,10 @@
 """Panel „Text“: Inhalt und Schriftgröße des Textobjekts."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPlainTextEdit, QSpinBox
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPlainTextEdit
 
 from ...document import Document, TextObject
+from ..widgets import SpinBox
 from . import Panel
 
 
@@ -21,7 +22,7 @@ class TextPanel(Panel):
         self.section("Schriftgröße")
         row = QHBoxLayout()
         self.auto = QCheckBox("Automatisch")
-        self.size = QSpinBox()
+        self.size = SpinBox()
         self.size.setRange(8, 400)
         self.size.setValue(60)
         row.addWidget(self.auto)

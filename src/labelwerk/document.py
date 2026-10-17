@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+ORIENTATIONS = ("vertical", "horizontal")
+MAX_MARGIN_MM = 20.0
+
 
 @dataclass
 class TextObject:
@@ -18,6 +21,8 @@ class TextObject:
 class Document:
     label_id: str = "62"
     length_mm: float | None = None    # nur Endlosband; None = automatisch
+    orientation: str = "vertical"     # "vertical" (Text quer zum Band) | "horizontal" (längs)
+    margin_mm: float = 1.0            # Rand in Bandlaufrichtung (vorne/hinten)
     objects: list[TextObject] = field(default_factory=list)
 
     def is_empty(self) -> bool:

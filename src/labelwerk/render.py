@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .document import Document, TextObject
+from .document import MAX_MARGIN_MM, ORIENTATIONS, Document, TextObject
 from .labels import DPI, get_label, length_limits
 
 MARGIN = 12  # Punkte, ca. 1 mm
@@ -34,7 +34,8 @@ def _load_font(size: int, font_path: str | None):
 
 def _text_box(text: str, font) -> tuple[int, int, int, int]:
     probe = ImageDraw.Draw(Image.new("1", (1, 1)))
-    return probe.multiline_textbbox((0, 0), text, font=font, align="center")
+    box = probe.multiline_textbbox((0, 0), text, font=font, align="center")
+    return tuple(round(v) for v in box)        # Pillow liefert teils Kommazahlen
 
 
 def render_text(
@@ -48,34 +49,64 @@ def render_text(
 
 
 def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
-    """Dokument als Bild in exakter Druckauflösung (Vorschau = Druck)."""
+    """Dokument als Druckbild in exakter Auflösung (Vorschau = Druck).
+
+    Gerendert wird in Leserichtung; bei Ausrichtung „horizontal“ (Text längs zum Band)
+    wird das Bild danach für den Drucker um 90° im Uhrzeigersinn gedreht – so kommt der
+    Textanfang zuerst aus dem Drucker und das veränderliche Ende liegt in Leserichtung rechts.
+    """
+    if doc.orientation not in ORIENTATIONS:
+        raise ValueError(f"Unbekannte Ausrichtung {doc.orientation!r} – erlaubt: horizontal, vertical")
+    horizontal = doc.orientation == "horizontal"
     label = get_label(doc.label_id)
     min_len, max_len = length_limits(model)
-    height = label.height
-    if height is None and doc.length_mm is not None:
-        height = min(max(round(doc.length_mm * DPI / 25.4), min_len), max_len)
+    margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)
+    across = label.width                      # quer zum Band (fest)
+    feed = label.height                       # in Bandlaufrichtung; None = automatisch
+    if feed is None and doc.length_mm is not None:
+        feed = min(max(round(doc.length_mm * DPI / 25.4), min_len), max_len)
+    if feed is not None:                      # feste Länge: Rand darf nicht alles aufbrauchen
+        margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
     obj = doc.objects[0] if doc.objects else TextObject()
-    text, font_size, font_path = obj.text, obj.font_size, obj.font_path
 
-    max_w = label.width - 2 * MARGIN
-    max_h = (height - 2 * MARGIN) if height else None
-
-    size = font_size or max(10, label.width // 5)
-    while True:
-        font = _load_font(size, font_path)
-        l, t, r, b = _text_box(text, font)
-        fits_w = (r - l) <= max_w
-        fits_h = max_h is None or (b - t) <= max_h
-        if (fits_w and fits_h) or size <= 8:
-            break
-        size -= 2
-    if font_size is not None and size != font_size:
-        raise TextTooLarge(font_size, size, doc.label_id)
+    across_room = across - 2 * MARGIN
+    feed_room = (feed if feed else max_len) - 2 * margin
+    max_w, max_h = (feed_room, across_room) if horizontal else (across_room, feed_room)
+    start = obj.font_size or max(10, across // 5)   # automatisch: höchstens 1/5 der Bandbreite
+    font, (l, t, r, b) = _fit_font(obj, start, max_w, max_h, doc.label_id)
 
     text_w, text_h = r - l, b - t
-    height = height or min(max(text_h + 2 * MARGIN, min_len), max_len)
-    img = Image.new("RGB", (label.width, height), "white")
-    x = (label.width - text_w) // 2 - l
+    if feed is None:
+        feed = min(max((text_w if horizontal else text_h) + 2 * margin, min_len), max_len)
+    width, height = (feed, across) if horizontal else (across, feed)
+    img = Image.new("RGB", (width, height), "white")
+    x = (width - text_w) // 2 - l
     y = (height - text_h) // 2 - t
-    ImageDraw.Draw(img).multiline_text((x, y), text, fill="black", font=font, align="center")
-    return img
+    ImageDraw.Draw(img).multiline_text((x, y), obj.text, fill="black", font=font, align="center")
+    return img.rotate(-90, expand=True) if horizontal else img
+
+
+def _fit_font(obj: TextObject, start: int, max_w: int, max_h: int, label_id: str):
+    """Größte Schrift ≤ start, mit der der Text in max_w × max_h passt (Halbierungssuche)."""
+    def attempt(size):
+        font = _load_font(size, obj.font_path)
+        box = _text_box(obj.text, font)
+        return (box[2] - box[0]) <= max_w and (box[3] - box[1]) <= max_h, font, box
+
+    ok, font, box = attempt(start)
+    if ok:
+        return font, box
+    best, lo, hi = None, 8, start - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        ok, f, bx = attempt(mid)
+        if ok:
+            best, lo = (mid, f, bx), mid + 1
+        else:
+            hi = mid - 1
+    if obj.font_size is not None:
+        raise TextTooLarge(obj.font_size, best[0] if best else 8, label_id)
+    if best is None:                          # passt nicht einmal in 8 – kleinste Größe zeigen
+        _, f, bx = attempt(8)
+        return f, bx
+    return best[1], best[2]

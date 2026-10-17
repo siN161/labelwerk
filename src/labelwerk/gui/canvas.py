@@ -42,6 +42,8 @@ class Canvas(QGraphicsView):
         min_len, max_len = length_limits(model)
         self.min_mm, self.max_mm = min_len / MM, max_len / MM
         self.zoom = START_ZOOM
+        self.orientation = "vertical"
+        self._scale = 1.0
         self.label: Label | None = None
         self.outline = self.printable = self.handle = None
         self._caption = ""
@@ -51,8 +53,15 @@ class Canvas(QGraphicsView):
         self._apply_zoom()
 
     # --- Inhalt -----------------------------------------------------------
-    def set_document(self, label: Label, image: Image.Image) -> None:
-        """Etikett (physische Form) und Druckbild darin anzeigen."""
+    def set_document(self, label: Label, image: Image.Image, orientation: str = "vertical") -> None:
+        """Etikett (physische Form) und Druckbild darin anzeigen.
+
+        Die Szene ist immer in Druckkoordinaten; bei „horizontal“ dreht die Ansicht um −90°,
+        damit das Etikett in Leserichtung erscheint.
+        """
+        if orientation != self.orientation:
+            self.orientation = orientation
+            self._apply_zoom()
         scene = self.scene()
         scene.clear()
         self.label = label
@@ -82,13 +91,10 @@ class Canvas(QGraphicsView):
             scene.addLine(-2 * MM, th, tw + 2 * MM, th, dashed)
             self.handle = scene.addRect(QRectF(tw / 2 - 5 * MM, th + MM, 10 * MM, 2 * MM),
                                         QPen(Qt.PenStyle.NoPen), QBrush(Qt.GlobalColor.black))
-            self.handle.setCursor(Qt.CursorShape.SizeVerCursor)
+            self.handle.setCursor(Qt.CursorShape.SizeHorCursor if self.orientation == "horizontal"
+                                  else Qt.CursorShape.SizeVerCursor)
             self.handle.setToolTip("Ziehen: Länge festlegen · Doppelklick: automatisch")
-            self._caption = f"{label.size_mm[0]} × {format_mm(th)} mm"
-        elif label.shape == "round":
-            self._caption = f"Ø {label.size_mm[0]} mm"
-        else:
-            self._caption = f"{label.size_mm[0]} × {label.size_mm[1]} mm"
+        self._caption = self._caption_for(th)
         scene.setSceneRect(-_MARGIN, -_MARGIN, tw + 2 * _MARGIN, th + 2 * _MARGIN)
 
     # --- Zoom -------------------------------------------------------------
@@ -98,9 +104,19 @@ class Canvas(QGraphicsView):
         self.zoom_changed.emit(self.zoom)
 
     def _apply_zoom(self) -> None:
-        f = self.zoom / 100 * self.logicalDpiX() / DPI   # 100 % = echte Größe
+        self._scale = self.zoom / 100 * self.logicalDpiX() / DPI   # 100 % = echte Größe
         self.resetTransform()
-        self.scale(f, f)
+        self.scale(self._scale, self._scale)
+        if self.orientation == "horizontal":
+            self.rotate(-90)                                       # Leserichtung
+
+    def _caption_for(self, length_dots: float) -> str:
+        """Größenangabe in Leserichtung (Breite × Höhe)."""
+        w, h = self.label.size_mm
+        if self.label.shape == "round":
+            return f"Ø {w} mm"
+        along = format_mm(round(length_dots)) if self.label.shape == "endless" else str(h)
+        return f"{along} × {w} mm" if self.orientation == "horizontal" else f"{w} × {along} mm"
 
     def wheelEvent(self, event) -> None:
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -134,7 +150,7 @@ class Canvas(QGraphicsView):
             mm = self.snap_length(
                 self.mapToScene(event.position().toPoint()).y() - self._grab_offset)
             self.handle.setY(mm * MM - self.label_height())
-            self._caption = f"{self.label.size_mm[0]} × {format_mm(round(mm * MM))} mm"
+            self._caption = self._caption_for(mm * MM)
             self.viewport().update()
             self._moved = True
             self.length_changed.emit(mm)
@@ -164,22 +180,25 @@ class Canvas(QGraphicsView):
         painter.resetTransform()
         vw, vh = self.viewport().width(), self.viewport().height()
         if self.outline is not None:
-            top = self.mapFromScene(QPointF(self.label_width() / 2, 0))
+            box = self.label_view_rect()
             painter.setPen(Qt.GlobalColor.black)
             font = QFont(painter.font())
             font.setBold(True)
             painter.setFont(font)
-            painter.drawText(QRectF(top.x() - 150, top.y() - 26, 300, 20),
+            painter.drawText(QRectF(box.center().x() - 150, box.top() - 26, 300, 20),
                              Qt.AlignmentFlag.AlignCenter, self._caption)
         self._draw_rulers(painter, vw, vh)
         painter.restore()
 
-    def label_width(self) -> float:
-        return self.outline.path().boundingRect().width() if self.outline else 0.0
+    def label_view_rect(self) -> QRectF:
+        """Etikett in Ansichtskoordinaten (berücksichtigt Zoom und Drehung)."""
+        if self.outline is None:
+            return QRectF()
+        return QRectF(self.mapFromScene(self.outline.path().boundingRect()).boundingRect())
 
     def _draw_rulers(self, painter: QPainter, vw: int, vh: int) -> None:
-        origin = self.mapFromScene(QPointF(0, 0))
-        ppm = self.transform().m11() * MM                 # Pixel pro mm
+        origin = self.label_view_rect().topLeft() if self.outline else self.mapFromScene(QPointF(0, 0))
+        ppm = self._scale * MM                            # Pixel pro mm
         small = QFont(painter.font())
         small.setPointSize(7)
         small.setBold(False)

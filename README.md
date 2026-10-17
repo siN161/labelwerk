@@ -28,9 +28,11 @@ labelwerk labels                                   # verfügbare Etiketten
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29 --preview vorschau.png
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29      # drucken (Drucker wird automatisch erkannt)
 labelwerk print-file internetmarke.pdf -l 62       # PDF/PNG/JPG 1:1 drucken
+labelwerk media                                            # eingelegte Rolle anzeigen (druckt nichts)
+labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation horizontal -s 80
 ```
 
-Optionen: `-s` Schriftgröße, `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
+Optionen: `-s` Schriftgröße (`auto` oder 8–400), `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
 `print-file` schneidet auf den Inhalt zu (Schnittmarken, z. B. der Internetmarke, und Leerraum fallen weg), dreht bei Bedarf und druckt 1:1; `--rotate 0|90|180|270` legt die Drehung fest (Grad im Uhrzeigersinn), `--fit` verkleinert zu große Motive, `--page N` wählt die PDF-Seite. Internetmarke quer wie im PDF: `--rotate 0 --fit`.
 
 ## Grafische Oberfläche
@@ -43,6 +45,8 @@ labelwerk install-desktop    # im Starter (Super-Taste) eintragen; --remove entf
 
 Aufbau wie im P-touch Editor: Werkzeugleiste (Papier, Text), Eigenschaften links, Etikett in echter Größe und Form mit mm-Linealen. Bei Endlosband lässt sich die Länge am Anfasser unter dem Etikett ziehen (Doppelklick = automatisch). Zoom mit Strg+Mausrad oder −/+ unten rechts.
 
+Papier: Etikett, Länge, Ränder und Ausrichtung (Horizontal = Text längs zum Band, z. B. Versandetikett; Vertikal = quer). „Medium prüfen“ liest die eingelegte Rolle vom Drucker und wählt das passende Etikett. Der Drucker wird live erkannt (Einschalten genügt). Unter „Einstellungen“ legst du Standardwerte für neue Etiketten fest (gilt auch für die CLI); gespeichert in `~/.config/labelwerk/settings.json`.
+
 ## Architektur
 
 ```
@@ -52,6 +56,8 @@ labels.py   Etikettentypen je Modell
 printer.py  Bild → Brother-Rasterdaten → Drucker (via brother_ql)
 cli.py      Kommandozeile
 document.py Etikett-Dokument (Etikett, Länge, Objekte)
+settings.py Einstellungen (JSON)
+media.py    Medium prüfen (Statusabfrage des Druckers)
 gui/        PySide6-Oberfläche (nur Anzeige/Bearbeitung, kein Druckcode)
 ```
 
