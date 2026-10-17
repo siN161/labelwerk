@@ -1,4 +1,4 @@
-"""Kommandozeile: labelwerk labels | print "Text" | print-file datei.pdf | media | install-desktop"""
+"""Kommandozeile: labelwerk labels | print "Text" | print-file datei.pdf | media | fonts | install-desktop"""
 from __future__ import annotations
 
 import argparse
@@ -179,7 +179,7 @@ def _apply_settings(args: argparse.Namespace) -> None:
         args.margin = settings.margin_mm if args.margin is None else args.margin
         if args.font_size is _UNSET:
             args.font_size = settings.font_size_pt
-        if args.font_family is None and settings.font_family != DEFAULT_FAMILY:
+        if args.font is None and args.font_family is None and settings.font_family != DEFAULT_FAMILY:
             args.font_family = settings.font_family
 
 
@@ -217,6 +217,9 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(families()))
         return 0
 
+    if args.cmd == "print" and args.font and args.font_family:
+        print("--font (Schriftdatei) und --font-family schließen sich aus.", file=sys.stderr)
+        return 2
     _apply_settings(args)
 
     try:

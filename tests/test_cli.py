@@ -299,8 +299,20 @@ def test_font_family_option_and_warning(tmp_path, capsys):
 
 
 def test_default_font_family_from_settings(tmp_path):
-    _write_settings(font_family="DejaVu Sans")
-    assert _rich_preview(tmp_path) == _rich_expected()
+    _write_settings(font_family="Liberation Sans")
+    assert _rich_preview(tmp_path) == _rich_expected(family="Liberation Sans")
+
+
+def test_font_path_beats_font_family_from_settings(tmp_path):
+    from labelwerk import fonts
+    path = fonts.resolve(None, False, False).path          # DejaVu Sans normal als Datei
+    _write_settings(font_family="Liberation Sans")
+    assert _rich_preview(tmp_path, "--font", path) == _rich_expected(font_path=path)
+
+
+def test_font_path_and_font_family_together_is_error(capsys):
+    assert main(["print", "X", "--font", "/x.ttf", "--font-family", "Y", "--preview", "/tmp/x.png"]) == 2
+    assert "--font" in capsys.readouterr().err
 
 
 def test_fonts_command_lists_families(capsys):
