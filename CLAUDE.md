@@ -68,6 +68,10 @@ Umsetzung:
 1. Text 90° drehen (Text längs zum Endlosband, wichtig für 12–29 mm)
 2. Eingelegte Rolle automatisch aus dem Druckerstatus auslesen → `-l` optional, Vorauswahl in der GUI
 3. Barcodes und QR-Codes
-4. Vorlagen (YAML/JSON) und Serien aus CSV (z. B. Klemmen-/Betriebsmittelkennzeichnung)
-5. Paketierung: AppImage und/oder Flatpak (USB-Zugriff bei Flatpak beachten)
-6. Vor Veröffentlichung: README/Kommentare auf Englisch, LICENSE (GPLv3) prüfen, Repo öffentlich schalten
+4. Vorlagen (YAML/JSON) und Serien aus CSV/Excel (.xlsx) (z. B. Klemmen-/Betriebsmittelkennzeichnung)
+5. Importe:
+   - Bilder (PNG/JPG/SVG) als Objekt aufs Etikett, Umwandlung in Schwarz/Weiß
+   - Fertiges Bild/PDF 1:1 drucken, ohne Editor (auch per CLI)
+   - P-touch-Etiketten (.lbx = ZIP mit XML): Text, Rahmen, Barcodes, Bilder übernehmen
+6. Paketierung: AppImage und/oder Flatpak (USB-Zugriff bei Flatpak beachten)
+7. Vor Veröffentlichung: README/Kommentare auf Englisch, LICENSE (GPLv3) prüfen, Repo öffentlich schalten
