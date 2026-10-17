@@ -16,8 +16,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["PySide6>=6.6"]
-dev = ["pytest>=8", "pytest-qt>=4", "PySide6>=6.6"]
+# PySide6 6.12.0 verliert unter Python < 3.12 Referenzen auf None/True/False → Absturz (6.11.2 ok)
+gui = ["PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'"]
+dev = ["pytest>=8", "pytest-qt>=4", "PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'"]
 
 [project.scripts]
 labelwerk = "labelwerk.cli:main"
