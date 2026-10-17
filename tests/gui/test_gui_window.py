@@ -289,11 +289,12 @@ def test_theme_arrows_resolve_to_existing_files():
     assert urls and all(Path(u).exists() for u in urls)
 
 
-def test_number_fields_keep_text_clear_of_frame(window):
+def test_number_fields_keep_text_clear_of_frame(window, qtbot):
     from PySide6.QtWidgets import QAbstractSpinBox
     from labelwerk.gui.settings_dialog import SettingsDialog
     from labelwerk.settings import Settings
     dialog = SettingsDialog(Settings())
+    qtbot.addWidget(dialog)          # sonst lebt der Dialog bis nach dem Ende der QApplication
     spins = window.findChildren(QAbstractSpinBox) + dialog.findChildren(QAbstractSpinBox)
     assert len(spins) >= 5
     assert all(s.lineEdit().textMargins().left() >= 8 for s in spins)
