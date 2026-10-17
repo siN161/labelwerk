@@ -1,10 +1,13 @@
 """Bearbeitungsleiste: Text anlegen, Zwischenablage, Rückgängig (Etappe 3d-1)."""
+from importlib import resources
+
 import pytest
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QMouseEvent
+from PySide6.QtCore import QPointF, QSize, Qt
+from PySide6.QtGui import QIcon, QMouseEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QToolBar
 
+from labelwerk import shortcuts
 from labelwerk.document import Document, TextObject
 from labelwerk.gui.canvas import MM
 from labelwerk.gui.main_window import MainWindow
@@ -86,8 +89,60 @@ def test_edit_bar_holds_tools_clipboard_and_history(window):
                    "|", "edit.undo", "edit.redo"]
     assert window.toolBarBreak(bar)                         # eigene Zeile unter den Werkzeugen
     assert "Ctrl+Z" in window.actions["edit.undo"].toolTip()
-    text_button = bar.widgetForAction(window.actions["tool.text"])
-    assert text_button.text() == "A"
+
+
+def test_edit_bar_buttons_show_own_icons_only(window):
+    folder = resources.files("labelwerk.gui") / "icons"
+    for action in window.edit_bar.actions():
+        if action.isSeparator():
+            continue
+        button = window.edit_bar.widgetForAction(action)
+        assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
+        assert not action.icon().isNull()
+        name = shortcuts.action(action.objectName()).name
+        assert action.toolTip().startswith(name)
+    for name in ("tool-select", "tool-text", "edit-cut", "edit-copy", "edit-paste",
+                 "edit-undo", "edit-redo"):
+        for color in ("black", "white"):
+            assert (folder / f"{name}-{color}.svg").is_file()
+    assert "(T)" in window.actions["tool.text"].toolTip()
+
+
+def _ink(icon, mode=QIcon.Mode.Normal, state=QIcon.State.Off):
+    image = icon.pixmap(QSize(16, 16), mode, state).toImage()
+    pixels = [image.pixelColor(x, y) for x in range(16) for y in range(16)]
+    return {(c.red(), c.green(), c.blue()) for c in pixels if c.alpha() > 200}
+
+
+def test_edit_bar_icons_follow_theme(qtbot):
+    win = _window(qtbot, settings=Settings(check_media_on_start=False, theme="rawblock"))
+    icon = win.actions["tool.select"].icon()
+    assert _ink(icon) == {(0, 0, 0)}
+    assert _ink(icon, state=QIcon.State.On) == {(255, 255, 255)}      # gewählt: weiß auf schwarz
+    assert _ink(icon, QIcon.Mode.Active) == {(255, 255, 255)}         # darüber: weiß auf schwarz
+    win.settings = Settings(check_media_on_start=False, theme="classic")
+    win.apply_theme_icons()
+    icon = win.actions["tool.select"].icon()
+    assert _ink(icon, state=QIcon.State.On) == {(0, 0, 0)}
+
+
+def test_click_on_selected_object_leaves_paper_tab_but_not_layout(window):
+    window.canvas.set_selection([0])
+    window.tool_actions["paper"].trigger()
+    _click(window.canvas, window.canvas.view_rect(0).center())
+    assert window.panels.currentWidget() is window.panel("text")
+    window.tool_actions["layout"].trigger()
+    _click(window.canvas, window.canvas.view_rect(0).center())
+    assert window.panels.currentWidget() is window.panel("layout")
+    assert window.tool_actions["layout"].isChecked()
+
+
+def test_select_all_ends_text_tool(window, qtbot):
+    window.actions["tool.text"].trigger()
+    _focus_canvas(window, qtbot)
+    QTest.keyClick(window.canvas, Qt.Key.Key_A, CTRL)
+    assert window.canvas.selection() == [0, 1]
+    assert window.canvas.tool() == "select" and window.actions["tool.select"].isChecked()
 
 
 def test_tool_modes_are_exclusive(window):

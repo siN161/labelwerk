@@ -91,6 +91,7 @@ class Canvas(QGraphicsView):
     object_resized = Signal(int, object, str)  # Index, neuer Rahmen (Rect, mm), Anfasser („tl“ …)
     text_requested = Signal(float, float)      # „Text anlegen“: Klick aufs Etikett (mm, Leserichtung)
     edit_requested = Signal(int)               # Text eines Objekts bearbeiten (Doppelklick)
+    object_clicked = Signal(int)               # Klick auf ein Objekt (auch ein schon gewähltes)
     tool_changed = Signal(str)                 # Werkzeug: "select" | "text"
 
     def __init__(self, model: str = DEFAULT_MODEL):
@@ -215,6 +216,8 @@ class Canvas(QGraphicsView):
             self.selection_changed.emit(self.selection())
 
     def select_all(self) -> None:
+        """Alle Objekte wählen; „Text anlegen“ endet dabei (zurück zum Auswahl-Pfeil)."""
+        self.set_tool("select")
         self.set_selection(list(range(len(self.objects))))
 
     def _selectable(self, index: int) -> bool:
@@ -376,6 +379,7 @@ class Canvas(QGraphicsView):
         else:
             if item.index not in self._selection:
                 self.set_selection([item.index])
+            self.object_clicked.emit(item.index)
             self._drag = "move"
             self._grabbed = item.index
             self._start = {i: self.objects[i].pos() for i in self._selection}

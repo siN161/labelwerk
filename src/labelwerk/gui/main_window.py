@@ -30,6 +30,7 @@ from .media_worker import MediaWorker
 from .panels.text import DEFAULT_PT
 from .print_worker import PrintWorker
 from .settings_dialog import SettingsDialog
+from .symbols import SIZE, line_icon
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
@@ -40,11 +41,10 @@ NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit U
 _DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
 OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
 PASTE_OFFSET_MM = 2.0      # Einfügen/Duplizieren: versetzt nach rechts und unten
-# Bearbeitungsleiste: Aktion, Symbol im Freedesktop-Theme, Text ohne Symbol; None = Trenner
-EDIT_BAR = (("tool.select", "edit-select", "↖"), ("tool.text", None, "A"), None,
-            ("edit.cut", "edit-cut", "AUSSCHNEIDEN"), ("edit.copy", "edit-copy", "KOPIEREN"),
-            ("edit.paste", "edit-paste", "EINFÜGEN"), None,
-            ("edit.undo", "edit-undo", "↶"), ("edit.redo", "edit-redo", "↷"))
+# Bearbeitungsleiste: Aktion und eigenes Symbol (gui/icons); None = Trenner
+EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
+            ("edit.cut", "edit-cut"), ("edit.copy", "edit-copy"), ("edit.paste", "edit-paste"),
+            None, ("edit.undo", "edit-undo"), ("edit.redo", "edit-redo"))
 _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
 SELECTION_PANELS = ("text", "layout")   # arbeiten mit der Auswahl: Wählen wechselt nicht weg
 
@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
         self.canvas.text_requested.connect(self.create_text)
         self.canvas.edit_requested.connect(self.edit_text)
         self.canvas.selection_changed.connect(self._update_edit_actions)
+        self.canvas.object_clicked.connect(self._show_object_panel)
         self.history = History(self.doc)
         self.history.changed.connect(self._update_edit_actions)
         self.actions = build_actions(self, effective(self.settings.shortcuts))
@@ -237,6 +238,8 @@ class MainWindow(QMainWindow):
         bar = QToolBar("Bearbeiten")
         bar.setObjectName("editBar")
         bar.setMovable(False)
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        bar.setIconSize(SIZE)
         self.addToolBarBreak()
         self.addToolBar(bar)
         self.edit_bar = bar
@@ -249,20 +252,8 @@ class MainWindow(QMainWindow):
         for entry in EDIT_BAR:
             if entry is None:
                 bar.addSeparator()
-                continue
-            key, icon_name, fallback = entry
-            action = self.actions[key]
-            icon = QIcon.fromTheme(icon_name) if icon_name else QIcon()
-            action.setIcon(icon)
-            action.setIconText(fallback)
-            bar.addAction(action)
-            button = bar.widgetForAction(action)
-            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly if icon.isNull()
-                                      else Qt.ToolButtonStyle.ToolButtonIconOnly)
-            if key == "tool.text":                 # „A“ wie im P-touch Editor, auch ohne Stylesheet
-                font = button.font()
-                font.setBold(True)
-                button.setFont(font)
+            else:
+                bar.addAction(self.actions[entry[0]])   # Symbol setzt apply_theme_icons
 
     def _show_tool(self, key: str) -> None:
         """Panel eines Werkzeugs zeigen (wie ein Klick auf seinen Knopf)."""
@@ -283,6 +274,7 @@ class MainWindow(QMainWindow):
             self._show_object_panel()
 
     def _show_object_panel(self) -> None:
+        """Vom Papier-Reiter zum Panel des Objekts (auch beim Klick auf ein schon gewähltes)."""
         if not any(self.panels.currentWidget() is self.panel(key) for key in SELECTION_PANELS):
             self._show_tool("text")
 
@@ -620,6 +612,9 @@ class MainWindow(QMainWindow):
         dark = self.settings.theme == "rawblock"
         for panel in self._panel_by_key.values():
             panel.set_icon_style(dark)
+        for entry in EDIT_BAR:
+            if entry is not None:
+                self.actions[entry[0]].setIcon(line_icon(entry[1], dark, hover=True))
 
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, model=self.model, parent=self)
