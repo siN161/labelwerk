@@ -109,6 +109,18 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     return img.rotate(-90, expand=True) if sheet.horizontal else img
 
 
+def label_size(doc: Document, model: str = "QL-600") -> tuple[int, int]:
+    """Etikettgröße (Breite, Höhe) in Druckpunkten in Leserichtung – wie ``render_document``."""
+    sheet = _sheet(doc, model)
+    return _label_size(sheet, [_prepare(obj, sheet) for obj in doc.objects or [TextObject("")]])
+
+
+def label_margins(doc: Document, model: str = "QL-600") -> tuple[int, int]:
+    """Ränder (links/rechts, oben/unten) in Druckpunkten in Leserichtung."""
+    sheet = _sheet(doc, model)
+    return (sheet.margin, MARGIN) if sheet.horizontal else (MARGIN, sheet.margin)
+
+
 # --- Etikett und Objekte ------------------------------------------------------------
 @dataclass
 class _Sheet:
