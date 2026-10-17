@@ -334,3 +334,7 @@ def test_unloadable_font_gives_friendly_error(tmp_path, capsys):
     err = capsys.readouterr().err
     assert rc == 2
     assert "kann nicht geladen werden" in err and "Traceback" not in err
+
+
+def test_align_left_changes_preview(tmp_path):
+    assert _rich_preview(tmp_path, "--align", "left") != _rich_preview(tmp_path, "--align", "center")

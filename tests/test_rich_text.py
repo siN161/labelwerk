@@ -237,3 +237,62 @@ def test_fit_never_raises_text_too_large():
     obj = TextObject.plain("Sehr langer Text", size_pt=60)
     obj.fit = True
     render_document(Document("29", objects=[obj]))          # schrumpft statt Fehler
+
+
+# --- Textrahmen über die volle Breite (Abnahme-Fix) ---------------------------
+def _bbox(img):
+    return _ink(img).getbbox()
+
+
+def _one(align, **doc_kw):
+    obj = TextObject([Paragraph([Span("Test")], align)], size_pt=12)
+    return render_document(Document("62", objects=[obj], **doc_kw))
+
+
+def test_single_line_left_sits_at_left_margin():
+    from labelwerk.render import MARGIN
+    left, center = _bbox(_one("left")), _bbox(_one("center"))
+    assert left[0] <= MARGIN + 8
+    assert left[0] < center[0] - 50
+
+
+def test_single_line_right_sits_at_right_margin():
+    from labelwerk.render import MARGIN
+    img = _one("right")
+    assert _bbox(img)[2] >= img.width - MARGIN - 8
+    assert _bbox(img)[2] <= img.width
+
+
+def test_center_single_line_stays_centered():
+    img = _one("center")
+    l, _, r, _ = _bbox(img)
+    assert abs(l - (img.width - r)) <= 2
+
+
+def test_mixed_left_and_right_paragraphs_use_full_width():
+    from labelwerk.render import MARGIN
+    obj = TextObject([Paragraph([Span("Aa")], "left"), Paragraph([Span("Bb")], "right")],
+                     size_pt=12)
+    img = render_document(Document("62", objects=[obj]))
+    half = img.height // 2
+    top = _ink(img.crop((0, 0, img.width, half))).getbbox()
+    bottom = _ink(img.crop((0, half, img.width, img.height))).getbbox()
+    assert top[0] <= MARGIN + 8
+    assert bottom[2] >= img.width - MARGIN - 8
+
+
+def test_horizontal_fixed_length_left_starts_at_label_start():
+    obj = TextObject([Paragraph([Span("Test")], "left")], size_pt=12)
+    img = render_document(Document("62", objects=[obj], orientation="horizontal", length_mm=100))
+    # gedreht um 90° im Uhrzeigersinn: Textanfang liegt oben
+    assert _bbox(img)[1] <= 20
+    obj = TextObject([Paragraph([Span("Test")], "right")], size_pt=12)
+    img = render_document(Document("62", objects=[obj], orientation="horizontal", length_mm=100))
+    assert _bbox(img)[3] >= img.height - 20
+
+
+def test_aligned_ink_stays_inside_image():
+    obj = TextObject([Paragraph([Span("Sehr langer Text der schrumpft")], "right")])
+    img = render_document(Document("62", objects=[obj]))
+    l, _, r, _ = _bbox(img)
+    assert l >= 0 and r <= img.width

@@ -101,7 +101,16 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
         feed = min(max((text_w if horizontal else text_h) + 2 * margin, min_len), max_len)
     width, height = (feed, across) if horizontal else (across, feed)
     img = Image.new("RGB", (width, height), "white")
-    _draw(img, lines, (width - text_w) // 2 - l, (height - text_h) // 2 - t)
+    x0 = (width - text_w) // 2 - l
+    if any(para.align != "center" for para in obj.paragraphs):
+        # Textrahmen über die volle Breite in Leserichtung: Absätze richten sich am Rahmen aus
+        start = margin if horizontal else MARGIN
+        frame = width - 2 * start
+        lines = _shape(obj, base, frame=frame)
+        fl, ft, fr, fb = _block_box(lines)
+        x0 = min(max(start, -fl), width - fr)            # Tinte bleibt im Bild
+        t, text_h = ft, fb - ft
+    _draw(img, lines, x0, (height - text_h) // 2 - t)
     return img.rotate(-90, expand=True) if horizontal else img
 
 
@@ -157,8 +166,12 @@ def _font_for(obj: TextObject, span: Span, dots: int):
     return fonts.load(match.path, dots), span.italic and not match.italic
 
 
-def _shape(obj: TextObject, base: int, mode: str = "L") -> list[list[_Piece]]:
-    """Stücke mit Position im Block (mode „1“ zum Messen, „L“ zum Zeichnen – wie Pillow)."""
+def _shape(obj: TextObject, base: int, mode: str = "L",
+           frame: float | None = None) -> list[list[_Piece]]:
+    """Stücke mit Position im Block (mode „1“ zum Messen, „L“ zum Zeichnen – wie Pillow).
+
+    Ohne ``frame`` richten sich die Zeilen an der breitesten Zeile aus; mit ``frame``
+    (Rahmenbreite) an dieser Breite – Blocksatz dehnt weiter auf die breiteste Zeile."""
     rows = []
     for para in obj.paragraphs:
         spans = para.spans or [Span("")]
@@ -173,6 +186,7 @@ def _shape(obj: TextObject, base: int, mode: str = "L") -> list[list[_Piece]]:
     # Unterlängen großer Stücke brauchen Platz unter der Zeile; bei einheitlicher Schrift 0
     min_descent = min(p.font.getmetrics()[1] for _, pieces in rows for p in pieces)
     max_width = max(widths, default=0)
+    ref = max_width if frame is None else frame
     top = 0.0
     lines = []
     for (para, pieces), width in zip(rows, widths):
@@ -181,8 +195,8 @@ def _shape(obj: TextObject, base: int, mode: str = "L") -> list[list[_Piece]]:
         if para.align == "justify":
             pieces = _justify(pieces, max_width, mode)
         else:
-            x = {"left": 0.0, "center": (max_width - width) / 2.0,
-                 "right": max_width - width}[para.align]
+            x = {"left": 0.0, "center": (ref - width) / 2.0,
+                 "right": ref - width}[para.align]
             for p in pieces:
                 p.x = x
                 x += p.font.getlength(p.text, mode)
