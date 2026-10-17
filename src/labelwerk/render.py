@@ -120,7 +120,7 @@ def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str
         l, t, r, b = _block_box(_shape(obj, base, mode="1"))
         return (r - l) <= max_w and (b - t) <= max_h
 
-    start = round(obj.size_pt * PT) if obj.size_pt else auto_start
+    start = auto_start if obj.auto else round(obj.size_pt * PT)
     if fits(start):
         return start
     best, lo, hi = None, MIN_DOTS, start - 1
@@ -130,7 +130,7 @@ def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str
             best, lo = mid, mid + 1
         else:
             hi = mid - 1
-    if obj.size_pt is not None:
+    if not obj.auto:
         max_pt = int(best / PT) if best else None
         if max_pt is not None and max_pt < MIN_PT:
             max_pt = None                      # kleiner als erlaubt: zählt als „passt nicht“

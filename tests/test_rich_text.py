@@ -222,3 +222,18 @@ def test_italic_with_font_path_is_slanted():
     italic = render_document(Document("62", objects=[
         TextObject.plain("Hallo", size_pt=30, italic=True, font_path=DEJAVU_BOLD)]))
     assert upright.tobytes() != italic.tobytes()
+
+
+def test_fit_scales_relative_to_base_size():
+    """Feste Rahmengröße mit Grundgröße 20 pt: ein 10-pt-Stück bleibt halb so groß."""
+    obj = TextObject([Paragraph([Span("H", size_pt=10)], "left"),
+                      Paragraph([Span("H")], "left")], size_pt=20, fit=True)
+    top, bottom = _line_boxes(_ink(render_document(Document("62", objects=[obj]))))
+    ratio = (bottom[3] - bottom[1]) / (top[3] - top[1])
+    assert 1.8 < ratio < 2.2
+
+
+def test_fit_never_raises_text_too_large():
+    obj = TextObject.plain("Sehr langer Text", size_pt=60)
+    obj.fit = True
+    render_document(Document("29", objects=[obj]))          # schrumpft statt Fehler

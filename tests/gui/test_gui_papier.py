@@ -88,7 +88,7 @@ def test_window_starts_with_settings(qtbot):
     assert (win.doc.label_id, win.doc.orientation, win.doc.margin_mm) == ("62x29", "horizontal", 3)
     assert win.panel("paper").horizontal.isChecked()
     assert win.panel("paper").margin.value() == 3.0
-    assert not win.panel("text").auto.isChecked() and win.panel("text").size.value() == 19
+    assert not win.panel("text").fit.isChecked() and win.panel("text").size.currentText() == "19"
     assert win.canvas.zoom == 150
 
 

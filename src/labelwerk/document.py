@@ -35,8 +35,14 @@ class Paragraph:
 class TextObject:
     """Formatierter Text. ``TextObject("Zeile 1\\nZeile 2")`` legt reinen Text an."""
     paragraphs: list[Paragraph] | str = field(default_factory=list)
-    size_pt: float | None = None    # Grundgröße; None = automatisch („feste Rahmengröße“)
+    size_pt: float | None = None    # Grundgröße; None = automatisch
     font_path: str | None = None    # feste TTF-Datei für Stücke ohne Familie (CLI --font)
+    fit: bool = False               # „Feste Rahmengröße“: Grundgröße + Verhältnisse, gemeinsam skaliert
+
+    @property
+    def auto(self) -> bool:
+        """Größe wird automatisch angepasst (keine feste Grundgröße oder feste Rahmengröße)."""
+        return self.size_pt is None or self.fit
 
     def __post_init__(self) -> None:
         if isinstance(self.paragraphs, str):

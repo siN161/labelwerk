@@ -69,3 +69,14 @@ def test_qt_dialog_buttons_are_german(qapp):
         assert sorted(b.text() for b in box.buttons()) == ["Abbrechen", "Speichern"]
     finally:
         qapp.removeTranslator(translator)
+
+
+def test_dialog_font_family_roundtrip(qtbot, tmp_path):
+    from PySide6.QtGui import QFont
+    path = tmp_path / "settings.json"
+    dialog = SettingsDialog(Settings(font_family="Liberation Sans"), path=path)
+    qtbot.addWidget(dialog)
+    assert dialog.values().font_family == "Liberation Sans"
+    dialog.font_family.setCurrentFont(QFont("DejaVu Sans"))
+    dialog.accept()
+    assert load_settings(path).font_family == "DejaVu Sans"

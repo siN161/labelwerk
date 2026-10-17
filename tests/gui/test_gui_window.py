@@ -37,8 +37,8 @@ def test_typing_updates_preview(window, qtbot):
 def test_too_large_font_shows_hint_in_text_panel(window):
     panel = window.panel("text")
     panel.edit.setPlainText("Sehr langer Text")
-    panel.auto.setChecked(False)
-    panel.size.setValue(72)
+    panel.fit.setChecked(False)
+    panel.set_size_pt(72)
     window.render_now()
     assert not panel.error.isHidden()
     assert "höchstens" in panel.error.text()
@@ -223,13 +223,13 @@ def test_render_error_blocks_print_and_shows_in_status(window, qtbot, monkeypatc
                         lambda *a, **kw: pytest.fail("darf nicht drucken"))
     panel = window.panel("text")
     panel.edit.setPlainText("Sehr langer Text")
-    panel.auto.setChecked(False)
-    panel.size.setValue(72)
+    panel.fit.setChecked(False)
+    panel.set_size_pt(72)
     window.print_label()
     assert "höchstens" in window.result.text()
     assert window.result.property("state") == "error"
     assert window.print_action.isEnabled()
-    panel.auto.setChecked(True)
+    panel.fit.setChecked(True)
     window.render_now()
     assert panel.error.isHidden()
     assert window.result.text() == ""
@@ -295,7 +295,7 @@ def test_number_fields_keep_text_clear_of_frame(window):
     from labelwerk.settings import Settings
     dialog = SettingsDialog(Settings())
     spins = window.findChildren(QAbstractSpinBox) + dialog.findChildren(QAbstractSpinBox)
-    assert len(spins) >= 6
+    assert len(spins) >= 5
     assert all(s.lineEdit().textMargins().left() >= 8 for s in spins)
 
 

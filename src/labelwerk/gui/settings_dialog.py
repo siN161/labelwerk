@@ -6,7 +6,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFontComboBox,
+                               QFormLayout,
                                QGroupBox, QHBoxLayout, QLabel, QVBoxLayout)
 
 from ..document import MAX_MARGIN_MM, MAX_PT, MIN_PT
@@ -55,6 +57,9 @@ class SettingsDialog(QDialog):
         row.addWidget(self.font_auto)
         row.addWidget(self.font_size)
         form.addRow("Schriftgröße", row)
+        self.font_family = QFontComboBox()
+        self.font_family.setCurrentFont(QFont(settings.font_family))
+        form.addRow("Schriftart", self.font_family)
 
         form = self._section(layout, "Drucker")
         self.check_media = QCheckBox("Rolle beim Start und beim Einschalten prüfen")
@@ -95,6 +100,7 @@ class SettingsDialog(QDialog):
             orientation=self.orientation.currentData(),
             margin_mm=self.margin.value(),
             font_size_pt=None if self.font_auto.isChecked() else self.font_size.value(),
+            font_family=self.font_family.currentFont().family(),
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
         )
