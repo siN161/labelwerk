@@ -29,6 +29,10 @@ QToolBar QToolButton:hover, QToolBar QToolButton:checked {
     background: #000000;
     color: #FFFFFF;
 }
+/* Bearbeitungsleiste: kleinere Knöpfe, Trenner als schwarzer Strich */
+QToolBar#editBar { padding: 4px 6px; }
+QToolBar#editBar QToolButton { padding: 3px 10px; letter-spacing: 1px; }
+QToolBar#editBar::separator { background: #000000; width: 3px; margin: 2px 8px 5px 8px; }
 QToolBar QToolButton#print { background: #000000; color: #FFFFFF; }
 QToolBar QToolButton#print:hover { background: #FFFFFF; color: #000000; }
 QToolBar QToolButton:disabled, QToolBar QToolButton#print:disabled {

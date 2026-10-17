@@ -8,9 +8,14 @@ from ...document import Document
 
 
 class Panel(QWidget):
-    """Basis: hält das Dokument, sendet changed nach jeder Änderung."""
+    """Basis: hält das Dokument, sendet changed nach jeder Änderung.
+
+    ``edited`` meldet einen abgeschlossenen Stand für Rückgängig (das Hauptfenster hält ihn
+    fest; ohne Änderung seit dem letzten Stand ist das kein neuer Schritt).
+    """
 
     changed = Signal()
+    edited = Signal()
 
     def __init__(self, doc: Document, title: str):
         super().__init__()

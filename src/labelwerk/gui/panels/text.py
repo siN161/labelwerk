@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from importlib import resources
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import (QFont, QIcon, QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QHBoxLayout, QLabel,
@@ -30,6 +30,8 @@ _ALIGN_TO_QT = {"left": Qt.AlignmentFlag.AlignLeft, "center": Qt.AlignmentFlag.A
 class PlainPasteEdit(QTextEdit):
     """Rich-Text-Editor, der aus der Zwischenablage nur reinen Text übernimmt."""
 
+    focus_left = Signal()            # Tippen ist abgeschlossen (ein Schritt für Rückgängig)
+
     def __init__(self):
         super().__init__()
         self.setTabChangesFocus(True)      # Tab springt weiter, statt "\t" einzufügen
@@ -44,6 +46,10 @@ class PlainPasteEdit(QTextEdit):
     def insertFromMimeData(self, source) -> None:
         if source.hasText():
             self.textCursor().insertText(source.text())
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.focus_left.emit()
 
 
 def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
@@ -147,21 +153,24 @@ class TextPanel(Panel):
         self.layout_.addStretch()
 
         self.refresh()
+        self.edit.focus_left.connect(self.edited)
         self.edit.document().contentsChanged.connect(self._apply)
         self.edit.currentCharFormatChanged.connect(self._sync_buttons)
         self.edit.cursorPositionChanged.connect(self._sync_buttons)
         self.edit.selectionChanged.connect(self._sync_buttons)
-        self.family.currentFontChanged.connect(lambda font: self._format(family=font.family()))
-        self.size.activated.connect(lambda _: self._size_entered())
-        self.size.lineEdit().editingFinished.connect(self._size_entered)
-        self.grow.clicked.connect(lambda: self._step_size(+1))
-        self.shrink.clicked.connect(lambda: self._step_size(-1))
-        self.bold.clicked.connect(lambda on: self._format(bold=on))
-        self.italic.clicked.connect(lambda on: self._format(italic=on))
-        self.underline.clicked.connect(lambda on: self._format(underline=on))
+        step = self._step     # Knöpfe und Felder: jede Änderung ein eigener Schritt
+        self.family.currentFontChanged.connect(
+            lambda font: step(self._format, family=font.family()))
+        self.size.activated.connect(lambda _: step(self._size_entered))
+        self.size.lineEdit().editingFinished.connect(lambda: step(self._size_entered))
+        self.grow.clicked.connect(lambda: step(self._step_size, +1))
+        self.shrink.clicked.connect(lambda: step(self._step_size, -1))
+        self.bold.clicked.connect(lambda on: step(self._format, bold=on))
+        self.italic.clicked.connect(lambda on: step(self._format, italic=on))
+        self.underline.clicked.connect(lambda on: step(self._format, underline=on))
         for key, button in self.align_buttons.items():
-            button.clicked.connect(lambda _=False, k=key: self._align(k))
-        self.fit.toggled.connect(lambda _: self._apply())
+            button.clicked.connect(lambda _=False, k=key: step(self._align, k))
+        self.fit.toggled.connect(lambda _: step(self._apply))
         for keys, button in ((QKeySequence.StandardKey.Bold, self.bold),
                              (QKeySequence.StandardKey.Italic, self.italic),
                              (QKeySequence.StandardKey.Underline, self.underline)):
@@ -171,6 +180,14 @@ class TextPanel(Panel):
     @property
     def obj(self) -> TextObject:
         return self.doc.objects[0]
+
+    def _step(self, change, *args, **kwargs) -> None:
+        """Änderung als eigener Rückgängig-Schritt: vorher Getipptes festhalten, danach das Neue."""
+        if self._updating:
+            return
+        self.edited.emit()
+        change(*args, **kwargs)
+        self.edited.emit()
 
     # --- Formatieren ------------------------------------------------------
     def _target(self) -> QTextCursor:
@@ -380,6 +397,7 @@ class TextPanel(Panel):
                           "italic": first.italic if first else False,
                           "underline": first.underline if first else False}
             document = self.edit.document()
+            document.setUndoRedoEnabled(False)     # Aufbau ist kein Schritt im Editor
             document.clear()
             cursor = QTextCursor(document)
             cursor.setCharFormat(_char_format_of(self._base))
@@ -397,6 +415,7 @@ class TextPanel(Panel):
                            else _char_format_of(self._base))
                     cursor.setBlockCharFormat(fmt)
                     cursor.setCharFormat(fmt)
+            document.setUndoRedoEnabled(True)
             self.edit.setTextCursor(cursor)
             self.edit.setCurrentCharFormat(_char_format_of(self._props(cursor.charFormat())))
             self.fit.setChecked(obj.auto)

@@ -1,5 +1,5 @@
 """Arbeitsfläche: Etikett in echter Größe und Form, Objekte (auswählen, ziehen, einrasten,
-an Anfassern skalieren), mm-Lineale, Zoom, Längen-Anfasser."""
+an Anfassern skalieren, Text anlegen), mm-Lineale, Zoom, Längen-Anfasser."""
 from __future__ import annotations
 
 import math
@@ -14,7 +14,7 @@ from .. import layout
 from ..labels import DPI, Label, format_mm, length_limits
 from ..layout import Rect
 from ..printer import DEFAULT_MODEL
-from ..render import RenderedObject
+from ..render import PT, RenderedObject
 
 MM = DPI / 25.4          # Szene-Einheiten (Druckpunkte) pro mm
 RULER = 22               # Linealbreite in Pixeln
@@ -33,6 +33,7 @@ _HANDLE_CURSORS = {
     "l": Qt.CursorShape.SizeHorCursor, "r": Qt.CursorShape.SizeHorCursor,
 }
 _GUIDE_COLOR = QColor("#E53935")
+TOOL_MODES = ("select", "text")   # Auswahl-Pfeil, „Text anlegen“
 
 
 def to_qimage(img: Image.Image) -> QImage:
@@ -65,9 +66,16 @@ class ObjectItem(QGraphicsPixmapItem):
     def is_empty(self) -> bool:
         return self.rendered.w == 0 or self.rendered.h == 0
 
+    def size(self) -> tuple[float, float]:
+        """Rahmengröße in Druckpunkten; ein leerer Text zeigt einen Platzhalter (eine Zeile hoch)."""
+        if self.is_empty():
+            line = self.rendered.base_pt * PT
+            return line / 2, line
+        return self.rendered.w, self.rendered.h
+
     def frame(self) -> QRectF:
         """Rahmen in Druckpunkten in Leserichtung (beim Ziehen samt Vorschau-Streckung)."""
-        return self.mapRectToParent(QRectF(0, 0, self.rendered.w, self.rendered.h))
+        return self.mapRectToParent(QRectF(0, 0, *self.size()))
 
     def frame_mm(self) -> Rect:
         f = self.frame()
@@ -81,6 +89,9 @@ class Canvas(QGraphicsView):
     selection_changed = Signal(list)  # Indizes der ausgewählten Objekte in der Reihenfolge der Wahl
     objects_moved = Signal(list, list)         # Indizes, neue Rahmen (Rect, mm) nach dem Loslassen
     object_resized = Signal(int, object, str)  # Index, neuer Rahmen (Rect, mm), Anfasser („tl“ …)
+    text_requested = Signal(float, float)      # „Text anlegen“: Klick aufs Etikett (mm, Leserichtung)
+    edit_requested = Signal(int)               # Text eines Objekts bearbeiten (Doppelklick)
+    tool_changed = Signal(str)                 # Werkzeug: "select" | "text"
 
     def __init__(self, model: str = DEFAULT_MODEL):
         super().__init__()
@@ -115,6 +126,7 @@ class Canvas(QGraphicsView):
         self._start_frame = QRectF()
         self._handle_offset = QPointF()
         self._handle_cursor = False
+        self._tool = "select"
         self._apply_zoom()
 
     # --- Inhalt -----------------------------------------------------------
@@ -206,13 +218,44 @@ class Canvas(QGraphicsView):
         self.set_selection(list(range(len(self.objects))))
 
     def _selectable(self, index: int) -> bool:
-        return 0 <= index < len(self.objects) and not self.objects[index].is_empty()
+        return 0 <= index < len(self.objects)
 
     def nudge(self, dx_mm: float, dy_mm: float) -> None:
         """Ausgewählte Objekte um dx/dy mm verschieben (Pfeiltasten)."""
         if self._selection:
             frames = [self.objects[i].frame_mm().moved(dx_mm, dy_mm) for i in self._selection]
             self.objects_moved.emit(self.selection(), frames)
+
+    # --- Werkzeug ---------------------------------------------------------
+    def tool(self) -> str:
+        return self._tool
+
+    def set_tool(self, tool: str) -> None:
+        """Werkzeug wählen: Auswahl-Pfeil oder „Text anlegen“ (Klick aufs Etikett legt Text an)."""
+        if tool not in TOOL_MODES:
+            raise ValueError(f"Unbekanntes Werkzeug {tool!r}")
+        if tool != self._tool:
+            self._tool = tool
+            if tool == "text":
+                self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
+            else:
+                self.viewport().unsetCursor()
+            self.tool_changed.emit(tool)
+
+    def _create_text(self, pos: QPointF) -> None:
+        """„Text anlegen“: Klick auf ein Objekt wählt es, Klick aufs Etikett legt dort Text an."""
+        item = self._object_at(pos)
+        if item is not None:
+            self.set_selection([item.index])
+            self.set_tool("select")
+            self.edit_requested.emit(item.index)
+            return
+        point = self._reading(pos)
+        x, y = point.x() / MM, point.y() / MM
+        label = self._label_rect
+        if label.x <= x <= label.right and label.y <= y <= label.bottom:
+            self.set_tool("select")
+            self.text_requested.emit(x, y)
 
     # --- Geometrie --------------------------------------------------------
     def px_per_mm(self) -> float:
@@ -253,6 +296,8 @@ class Canvas(QGraphicsView):
     def _handle_at(self, pos: QPointF) -> tuple[int, str] | None:
         reach = HANDLE_PX / 2 + 1
         for index in reversed(self._selection):            # zuletzt gewähltes zuerst
+            if self.objects[index].is_empty():
+                continue                                   # Platzhalter hat keine Anfasser
             for key, point in self.handle_points(index).items():
                 if abs(point.x() - pos.x()) <= reach and abs(point.y() - pos.y()) <= reach:
                     return index, key
@@ -312,6 +357,9 @@ class Canvas(QGraphicsView):
             return
         if self.sheet is None:
             return
+        if self._tool == "text":
+            self._create_text(pos)
+            return
         hit = self._handle_at(pos)
         if hit is not None:
             self._begin_resize(*hit, pos)
@@ -366,10 +414,12 @@ class Canvas(QGraphicsView):
         hit = self._handle_at(pos) if self.sheet is not None else None
         if self._handle_cursor and hit is None:
             self.viewport().unsetCursor()
+            if self._tool == "text":
+                self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
         super().mouseMoveEvent(event)
-        if hit is not None:                                # Anfasser zeigt seine Richtung
+        if hit is not None and self._tool == "select":     # Anfasser zeigt seine Richtung
             self.viewport().setCursor(_HANDLE_CURSORS[hit[1]])
-        self._handle_cursor = hit is not None
+        self._handle_cursor = hit is not None and self._tool == "select"
 
     def _drag_move(self, pos: QPointF, snapping: bool) -> None:
         """Ausgewählte Bilder verschieben (Modell erst beim Loslassen), dabei einrasten."""
@@ -388,8 +438,8 @@ class Canvas(QGraphicsView):
             self.objects[index].setPos(start + delta)
 
     def _start_rect(self, index: int) -> Rect:
-        start, rendered = self._start[index], self.objects[index].rendered
-        return Rect(start.x() / MM, start.y() / MM, rendered.w / MM, rendered.h / MM)
+        start, (w, h) = self._start[index], self.objects[index].size()
+        return Rect(start.x() / MM, start.y() / MM, w / MM, h / MM)
 
     def _drag_resize(self, pos: QPointF) -> None:
         """Vorschau beim Ziehen an einem Anfasser: Bild gestreckt, gerendert wird beim Loslassen."""
@@ -430,6 +480,11 @@ class Canvas(QGraphicsView):
         if self._on_handle(event):
             self.length_changed.emit(None)
             return
+        item = self._object_at(event.position()) if self.sheet is not None else None
+        if item is not None and event.button() == Qt.MouseButton.LeftButton:
+            self.set_selection([item.index])
+            self.edit_requested.emit(item.index)
+            return
         super().mouseDoubleClickEvent(event)
 
     def label_height(self) -> float:
@@ -462,6 +517,8 @@ class Canvas(QGraphicsView):
             painter.setPen(frame)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(self.view_rect(index))
+            if self.objects[index].is_empty():
+                continue                                   # leerer Text: nur der Platzhalter
             painter.setPen(border)
             painter.setBrush(Qt.GlobalColor.white)
             for point in self.handle_points(index).values():

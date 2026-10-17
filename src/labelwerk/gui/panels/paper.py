@@ -101,6 +101,7 @@ class PaperPanel(Panel):
         self._update_visibility()
         self._update_media_status()
         self.changed.emit()
+        self.edited.emit()           # jede Papier-Änderung ist ein eigener Schritt
 
     def refresh(self) -> None:
         for w in self._widgets():

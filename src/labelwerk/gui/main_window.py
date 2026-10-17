@@ -1,4 +1,4 @@
-"""Hauptfenster: Werkzeugleiste, Panel-Stapel, Arbeitsfläche, Statusleiste."""
+"""Hauptfenster: Werkzeugleiste, Bearbeitungsleiste, Panel-Stapel, Arbeitsfläche, Statusleiste."""
 from __future__ import annotations
 
 import copy
@@ -13,15 +13,18 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox, QS
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
 from ..document import Document, TextObject
+from ..fonts import DEFAULT_FAMILY
 from ..labels import get_label
-from ..layout import Rect, move, objects_outside, printable_area, resize
+from ..layout import Rect, move, object_rect, objects_outside, printable_area, resize
 from ..printer import DEFAULT_MODEL
 from ..render import RenderedObject, compose, font_warnings, label_size, render_object
 from ..settings import Settings, load_settings, new_document
 from ..shortcuts import effective
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
+from .history import History, restore
 from .media_worker import MediaWorker
+from .panels.text import DEFAULT_PT
 from .print_worker import PrintWorker
 from .settings_dialog import SettingsDialog
 from .tools import TOOLS, Tool
@@ -32,6 +35,13 @@ PRINTER_POLL_MS = 2000     # Druckererkennung: nur Blick in /sys, kein USB-Zugri
 NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit Umschalt
 _DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
 OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
+PASTE_OFFSET_MM = 2.0      # Einfügen/Duplizieren: versetzt nach rechts und unten
+# Bearbeitungsleiste: Aktion, Symbol im Freedesktop-Theme, Text ohne Symbol; None = Trenner
+EDIT_BAR = (("tool.select", "edit-select", "↖"), ("tool.text", None, "A"), None,
+            ("edit.cut", "edit-cut", "AUSSCHNEIDEN"), ("edit.copy", "edit-copy", "KOPIEREN"),
+            ("edit.paste", "edit-paste", "EINFÜGEN"), None,
+            ("edit.undo", "edit-undo", "↶"), ("edit.redo", "edit-redo", "↷"))
+_SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
 
 
 @dataclass
@@ -62,6 +72,8 @@ class MainWindow(QMainWindow):
         self._printer_present = False
         self._printing = False
         self._media_check_pending = False
+        self._clipboard: list[TextObject] = []      # interne Zwischenablage (Kopien)
+        self._merge_next = None                     # Pfeiltasten: Schritte zusammenfassen
 
         # Werkzeugleiste + Panels aus der Registry
         toolbar = QToolBar("Werkzeuge")
@@ -77,6 +89,8 @@ class MainWindow(QMainWindow):
         for index, tool in enumerate(tools):
             panel = tool.panel(self.doc)
             panel.changed.connect(self.schedule_render)
+            panel.changed.connect(self._update_edit_actions)
+            panel.edited.connect(self._commit)
             self.panels.addWidget(panel)
             self._panel_by_key[tool.key] = panel
             action = QAction(QIcon.fromTheme(tool.icon), tool.title.upper(), self)
@@ -102,11 +116,17 @@ class MainWindow(QMainWindow):
         self.canvas.set_zoom(self.settings.start_zoom)
         self.apply_theme_icons()
         self.canvas.length_changed.connect(self._on_length_dragged)
-        self.canvas.drag_finished.connect(self.render_now)
+        self.canvas.drag_finished.connect(self._length_drag_finished)
         self.canvas.objects_moved.connect(self._move_objects)
         self.canvas.object_resized.connect(self._resize_object)
+        self.canvas.text_requested.connect(self.create_text)
+        self.canvas.edit_requested.connect(self.edit_text)
+        self.canvas.selection_changed.connect(self._update_edit_actions)
+        self.history = History(self.doc)
+        self.history.changed.connect(self._update_edit_actions)
         self.actions = build_actions(self, effective(self.settings.shortcuts))
         self._connect_canvas_actions()
+        self._build_edit_bar()
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -147,6 +167,7 @@ class MainWindow(QMainWindow):
         self._printer_timer.start()
 
         self.render_now()
+        self._update_edit_actions()
         self.refresh_printer()
         if self.settings.warnings:
             self._set_result(" · ".join(self.settings.warnings), "error")
@@ -155,16 +176,70 @@ class MainWindow(QMainWindow):
         return self._panel_by_key[key]
 
     def _connect_canvas_actions(self) -> None:
-        """Kürzel der Arbeitsfläche: Pfeiltasten, Löschen, Alles auswählen."""
+        """Kürzel der Arbeitsfläche (Pfeiltasten, Zwischenablage, Werkzeug) und Rückgängig."""
         for direction, (sx, sy) in _DIRECTIONS.items():
             for suffix, step in NUDGE_MM.items():
                 action = self.actions[f"object.nudge_{direction}{suffix}"]
                 action.triggered.connect(
-                    lambda _=False, dx=sx * step, dy=sy * step: self.canvas.nudge(dx, dy))
+                    lambda _=False, dx=sx * step, dy=sy * step: self.nudge(dx, dy))
                 self.canvas.addAction(action)
-        self.actions["edit.delete"].triggered.connect(self.delete_selected)
-        self.actions["edit.select_all"].triggered.connect(self.canvas.select_all)
-        self.canvas.addActions([self.actions["edit.delete"], self.actions["edit.select_all"]])
+        handlers = {"edit.delete": self.delete_selected, "edit.select_all": self.canvas.select_all,
+                    "edit.cut": self.cut_selected, "edit.copy": self.copy_selected,
+                    "edit.paste": self.paste, "edit.duplicate": self.duplicate_selected,
+                    "tool.select": lambda: self.canvas.set_tool("select"),
+                    "tool.text": lambda: self.canvas.set_tool("text")}
+        for key, handler in handlers.items():
+            self.actions[key].triggered.connect(lambda _=False, h=handler: h())
+            self.canvas.addAction(self.actions[key])
+        # global: wirkt überall – außer im Textfeld, das Strg+Z selbst nutzt (eigenes Rückgängig)
+        self.actions["edit.undo"].triggered.connect(self.undo)
+        self.actions["edit.redo"].triggered.connect(self.redo)
+        self.addActions([self.actions["edit.undo"], self.actions["edit.redo"]])
+
+    def _build_edit_bar(self) -> None:
+        """Bearbeitungsleiste unter der Werkzeugleiste: Werkzeug, Zwischenablage, Rückgängig."""
+        bar = QToolBar("Bearbeiten")
+        bar.setObjectName("editBar")
+        bar.setMovable(False)
+        self.addToolBarBreak()
+        self.addToolBar(bar)
+        self.edit_bar = bar
+        modes = QActionGroup(self)                 # Auswahl-Pfeil oder „Text anlegen“
+        for key in ("tool.select", "tool.text"):
+            self.actions[key].setCheckable(True)
+            modes.addAction(self.actions[key])
+        self.actions["tool.select"].setChecked(True)
+        self.canvas.tool_changed.connect(lambda tool: self.actions[f"tool.{tool}"].setChecked(True))
+        for entry in EDIT_BAR:
+            if entry is None:
+                bar.addSeparator()
+                continue
+            key, icon_name, fallback = entry
+            action = self.actions[key]
+            icon = QIcon.fromTheme(icon_name) if icon_name else QIcon()
+            action.setIcon(icon)
+            action.setIconText(fallback)
+            bar.addAction(action)
+            button = bar.widgetForAction(action)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly if icon.isNull()
+                                      else Qt.ToolButtonStyle.ToolButtonIconOnly)
+            if key == "tool.text":                 # „A“ wie im P-touch Editor, auch ohne Stylesheet
+                font = button.font()
+                font.setBold(True)
+                button.setFont(font)
+
+    def _show_tool(self, key: str) -> None:
+        """Panel eines Werkzeugs zeigen (wie ein Klick auf seinen Knopf)."""
+        self.tool_actions[key].setChecked(True)
+        self.panels.setCurrentWidget(self.panel(key))
+
+    def _update_edit_actions(self) -> None:
+        selected = bool(self.canvas.selection())
+        for key in _SELECTION_ACTIONS:
+            self.actions[key].setEnabled(selected)
+        self.actions["edit.paste"].setEnabled(bool(self._clipboard))
+        self.actions["edit.undo"].setEnabled(self.history.can_undo(self.doc))
+        self.actions["edit.redo"].setEnabled(self.history.can_redo(self.doc))
 
     # --- Rendern ----------------------------------------------------------
     def schedule_render(self) -> None:
@@ -220,30 +295,133 @@ class MainWindow(QMainWindow):
         self._cache = cache
         return [cache[id(obj)].rendered for obj in doc.objects]
 
+    # --- Rückgängig -------------------------------------------------------
+    def _commit(self, merge=None) -> None:
+        """Stand nach einer abgeschlossenen Aktion festhalten (ohne Änderung kein Schritt).
+
+        Vor jeder Aktion aufgerufen, wird noch nicht Festgehaltenes (Getipptes) ein eigener
+        Schritt. Tippen im Textfeld wird ein Schritt, sobald der Fokus das Feld verlässt."""
+        self.history.push(self.doc, merge)
+        self._update_edit_actions()
+
+    def undo(self) -> None:
+        self._restore(self.history.undo(self.doc))
+
+    def redo(self) -> None:
+        self._restore(self.history.redo(self.doc))
+
+    def _restore(self, snapshot: Document | None) -> None:
+        if snapshot is None:
+            return
+        restore(self.doc, snapshot)
+        for panel in self._panel_by_key.values():
+            panel.refresh()
+        self.render_now()                       # Auswahl bleibt, soweit es die Objekte noch gibt
+        self._update_edit_actions()
+
     # --- Objekte auf der Arbeitsfläche ------------------------------------
+    def nudge(self, dx_mm: float, dy_mm: float) -> None:
+        """Pfeiltasten: Auswahl verschieben; mehrere Schritte hintereinander = ein Rückgängig."""
+        self._merge_next = ("nudge", tuple(self.canvas.selection()))
+        try:
+            self.canvas.nudge(dx_mm, dy_mm)
+        finally:
+            self._merge_next = None
+
     def _move_objects(self, indices: list[int], rects: list[Rect]) -> None:
+        self._commit()
         for index, rect in zip(indices, rects):
             if index < len(self.rendered):
                 self.doc.objects[index] = move(self.doc.objects[index], rect, self.rendered[index])
         self._objects_changed(indices)
+        self._commit(self._merge_next)
 
     def _resize_object(self, index: int, rect: Rect, handle: str) -> None:
+        self._commit()
         if index < len(self.rendered):
             self.doc.objects[index] = resize(self.doc.objects[index], rect, self.rendered[index],
                                              corner=len(handle) == 2)
         self._objects_changed([index])
+        self._commit()
+
+    def create_text(self, x_mm: float, y_mm: float) -> None:
+        """Neuer leerer Textrahmen an x/y (mm, Leserichtung), ausgewählt, Schreibmarke ins Textfeld.
+
+        Schrift aus den Einstellungen (automatische Größe → 19 pt). Andere leere Texte sind
+        unsichtbar und drucken nicht – sie entfallen dabei."""
+        self._commit()
+        family = None if self.settings.font_family == DEFAULT_FAMILY else self.settings.font_family
+        obj = TextObject.plain("", size_pt=self.settings.font_size_pt or DEFAULT_PT, family=family)
+        obj.x_mm, obj.y_mm = round(x_mm, 1), round(y_mm, 1)
+        self.canvas.set_selection([])
+        self.doc.objects[:] = [o for o in self.doc.objects if not o.is_empty()]
+        self.doc.objects.append(obj)
+        index = len(self.doc.objects) - 1
+        self._objects_changed(list(range(len(self.doc.objects))))
+        self.canvas.set_selection([index])
+        self._commit()
+        self.edit_text(index)
+
+    def edit_text(self, index: int) -> None:
+        """Text eines Objekts bearbeiten: auswählen, Text-Panel zeigen, Schreibmarke hinein."""
+        if index not in self.canvas.selection():
+            self.canvas.set_selection([index])
+        self._show_tool("text")
+        self.panel("text").edit.setFocus()
 
     def delete_selected(self) -> None:
         """Ausgewählte Objekte löschen; ein leerer Text bleibt, damit das Text-Panel etwas hat."""
         indices = self.canvas.selection()
         if not indices:
             return
+        self._commit()
         self.canvas.set_selection([])
         for index in sorted(indices, reverse=True):
             del self.doc.objects[index]
         if not self.doc.objects:
             self.doc.objects.append(new_document(self.settings).objects[0])
         self._objects_changed([0])
+        self._commit()
+
+    # --- Zwischenablage ---------------------------------------------------
+    def copy_selected(self) -> None:
+        """Ausgewählte Objekte (in Zeichenreihenfolge) in die interne Zwischenablage kopieren."""
+        indices = sorted(self.canvas.selection())
+        if indices:
+            self._clipboard = [self._placed_copy(i) for i in indices]
+            self._update_edit_actions()
+
+    def cut_selected(self) -> None:
+        self.copy_selected()
+        self.delete_selected()
+
+    def paste(self) -> None:
+        """Zwischenablage einfügen – jedes Mal 2 mm weiter versetzt; Eingefügtes ist ausgewählt."""
+        if self._clipboard:
+            self._clipboard = [_offset(obj) for obj in self._clipboard]
+            self._insert(copy.deepcopy(self._clipboard))
+
+    def duplicate_selected(self) -> None:
+        """Auswahl 2 mm versetzt verdoppeln; die Zwischenablage bleibt unberührt."""
+        indices = sorted(self.canvas.selection())
+        if indices:
+            self._insert([_offset(self._placed_copy(i)) for i in indices])
+
+    def _placed_copy(self, index: int) -> TextObject:
+        """Kopie mit Position: ein mittiges Objekt bekommt seine Lage und Schriftgröße fest."""
+        obj = self.doc.objects[index]
+        if obj.positioned or index >= len(self.rendered):
+            return copy.deepcopy(obj)
+        rendered = self.rendered[index]
+        return move(obj, object_rect(rendered), rendered)
+
+    def _insert(self, objects: list[TextObject]) -> None:
+        self._commit()
+        start = len(self.doc.objects)
+        self.doc.objects.extend(objects)
+        self._objects_changed(list(range(start, len(self.doc.objects))))
+        self.canvas.set_selection(list(range(start, len(self.doc.objects))))
+        self._commit()
 
     def _objects_changed(self, indices: list[int]) -> None:
         if 0 in indices:
@@ -255,6 +433,11 @@ class MainWindow(QMainWindow):
         self.panel("paper").refresh()
         if not self.canvas.is_dragging():   # beim Ziehen erst nach dem Loslassen rendern
             self.schedule_render()
+            self._commit()                  # Doppelklick: automatische Länge
+
+    def _length_drag_finished(self) -> None:
+        self.render_now()
+        self._commit()
 
     def _show_media_status(self, text: str, state: str) -> None:
         self.media_status.setProperty("state", state)
@@ -345,6 +528,7 @@ class MainWindow(QMainWindow):
             self.doc.label_id = label_id
             self.panel("paper").refresh()
             self.schedule_render()
+            self._commit()
         self.panel("paper").show_media(media, label_id, adjusted)
 
     def _media_failed(self, message: str) -> None:
@@ -406,3 +590,11 @@ class MainWindow(QMainWindow):
         self.result.style().polish(self.result)
         self._set_printing(False)
         self.refresh_printer()
+
+
+def _offset(obj: TextObject) -> TextObject:
+    """Kopie, um ``PASTE_OFFSET_MM`` nach rechts und unten versetzt."""
+    moved = copy.deepcopy(obj)
+    moved.x_mm = round((obj.x_mm or 0.0) + PASTE_OFFSET_MM, 3)
+    moved.y_mm = round((obj.y_mm or 0.0) + PASTE_OFFSET_MM, 3)
+    return moved
