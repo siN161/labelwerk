@@ -14,8 +14,8 @@ def test_die_cut_label_matches_exact_size():
 
 
 def test_multiline_text_makes_endless_label_longer():
-    one = render_text("A", "62", font_size=120)
-    two = render_text("A\nB", "62", font_size=120)
+    one = render_text("A", "62", size_pt=29)
+    two = render_text("A\nB", "62", size_pt=29)
     assert two.height > one.height
 
 
@@ -28,13 +28,13 @@ def test_long_text_is_shrunk_to_fit_width():
 
 
 def test_fixed_font_size_too_large_raises_with_max_size():
-    with pytest.raises(TextTooLarge, match=r"Schriftgröße 200 .*höchstens \d+") as exc:
-        render_text("Sehr langer Text", "29", font_size=200)
+    with pytest.raises(TextTooLarge, match=r"Schriftgröße 48 pt .*höchstens \d+ pt") as exc:
+        render_text("Sehr langer Text", "29", size_pt=48)
     assert isinstance(exc.value, ValueError)
-    render_text("Sehr langer Text", "29", font_size=exc.value.max_size)  # passt
+    render_text("Sehr langer Text", "29", size_pt=exc.value.max_pt)  # passt
 
 
 def test_fixed_font_size_is_not_shrunk():
-    small = render_text("A", "62", font_size=100)
-    large = render_text("A", "62", font_size=300)
+    small = render_text("A", "62", size_pt=24)
+    large = render_text("A", "62", size_pt=72)
     assert large.height > small.height

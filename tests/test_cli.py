@@ -63,7 +63,7 @@ def test_unknown_label_gives_friendly_error(capsys):
 
 
 def test_font_size_too_large_gives_friendly_error(capsys):
-    rc = main(["print", "Sehr langer Text", "-l", "29", "-s", "200", "--preview", "x.png"])
+    rc = main(["print", "Sehr langer Text", "-l", "29", "-s", "48", "--preview", "x.png"])
     assert rc == 2
     assert "passt nicht" in capsys.readouterr().err
 
@@ -242,7 +242,7 @@ def test_font_size_auto_overrides_saved_size(tmp_path):
     from labelwerk.document import Document, TextObject
     from labelwerk.render import render_document
     _write_settings(font_size=80)
-    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", font_size=None)]))
+    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", size_pt=None)]))
     assert _preview(tmp_path, "-s", "auto") == expected.convert("RGB").tobytes()
 
 
@@ -250,11 +250,11 @@ def test_font_size_option_beats_settings(tmp_path):
     from labelwerk.document import Document, TextObject
     from labelwerk.render import render_document
     _write_settings(font_size=80)
-    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", font_size=100)]))
-    assert _preview(tmp_path, "-s", "100") == expected.convert("RGB").tobytes()
+    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", size_pt=24)]))
+    assert _preview(tmp_path, "-s", "24") == expected.convert("RGB").tobytes()
 
 
-@pytest.mark.parametrize("value", ["7", "401", "abc", "1.5"])
+@pytest.mark.parametrize("value", ["3", "101", "abc", "1.5"])
 def test_font_size_invalid_is_argparse_error(value, capsys):
     with pytest.raises(SystemExit) as e:
         main(["print", "X", "-s", value])
@@ -268,3 +268,73 @@ def test_margin_invalid_is_argparse_error(value, capsys):
         main(["print", "X", f"--margin={value}"])
     assert e.value.code == 2
     assert "Rand" in capsys.readouterr().err
+
+
+def _rich_expected(**plain):
+    from labelwerk.document import Document, TextObject
+    from labelwerk.render import render_document
+    obj = TextObject.plain("Hallo\nWelt", **plain)
+    return render_document(Document("62", objects=[obj])).convert("RGB").tobytes()
+
+
+def _rich_preview(tmp_path, *args):
+    out = tmp_path / "v.png"
+    assert main(["print", "Hallo\\nWelt", *args, "--preview", str(out)]) == 0
+    return Image.open(out).convert("RGB").tobytes()
+
+
+def test_align_option(tmp_path):
+    assert _rich_preview(tmp_path, "--align", "left") == _rich_expected(align="left")
+
+
+def test_style_options(tmp_path):
+    assert _rich_preview(tmp_path, "--no-bold", "--italic", "--underline") == \
+        _rich_expected(bold=False, italic=True, underline=True)
+
+
+def test_font_family_option_and_warning(tmp_path, capsys):
+    assert _rich_preview(tmp_path, "--font-family", "GibtsGarNicht 4711") == \
+        _rich_expected(family="GibtsGarNicht 4711")
+    assert "GibtsGarNicht 4711" in capsys.readouterr().err
+
+
+def test_default_font_family_from_settings(tmp_path):
+    _write_settings(font_family="Liberation Sans")
+    assert _rich_preview(tmp_path) == _rich_expected(family="Liberation Sans")
+
+
+def test_font_path_beats_font_family_from_settings(tmp_path):
+    from labelwerk import fonts
+    path = fonts.resolve(None, False, False).path          # DejaVu Sans normal als Datei
+    _write_settings(font_family="Liberation Sans")
+    assert _rich_preview(tmp_path, "--font", path) == _rich_expected(font_path=path)
+
+
+def test_font_path_and_font_family_together_is_error(capsys):
+    assert main(["print", "X", "--font", "/x.ttf", "--font-family", "Y", "--preview", "/tmp/x.png"]) == 2
+    assert "--font" in capsys.readouterr().err
+
+
+def test_fonts_command_lists_families(capsys):
+    assert main(["fonts"]) == 0
+    assert "DejaVu Sans" in capsys.readouterr().out.splitlines()
+
+
+def test_align_invalid_is_argparse_error():
+    with pytest.raises(SystemExit) as e:
+        main(["print", "X", "--align", "mittig"])
+    assert e.value.code == 2
+
+
+def test_unloadable_font_gives_friendly_error(tmp_path, capsys):
+    broken = tmp_path / "kaputt.ttf"
+    broken.write_text("keine Schrift")
+    rc = main(["print", "Hallo", "-l", "62", "--font", str(broken), "--preview",
+               str(tmp_path / "v.png")])
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "kann nicht geladen werden" in err and "Traceback" not in err
+
+
+def test_align_left_changes_preview(tmp_path):
+    assert _rich_preview(tmp_path, "--align", "left") != _rich_preview(tmp_path, "--align", "center")

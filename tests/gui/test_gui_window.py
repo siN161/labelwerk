@@ -37,8 +37,8 @@ def test_typing_updates_preview(window, qtbot):
 def test_too_large_font_shows_hint_in_text_panel(window):
     panel = window.panel("text")
     panel.edit.setPlainText("Sehr langer Text")
-    panel.auto.setChecked(False)
-    panel.size.setValue(300)
+    panel.fit.setChecked(False)
+    panel.set_size_pt(72)
     window.render_now()
     assert not panel.error.isHidden()
     assert "höchstens" in panel.error.text()
@@ -223,13 +223,13 @@ def test_render_error_blocks_print_and_shows_in_status(window, qtbot, monkeypatc
                         lambda *a, **kw: pytest.fail("darf nicht drucken"))
     panel = window.panel("text")
     panel.edit.setPlainText("Sehr langer Text")
-    panel.auto.setChecked(False)
-    panel.size.setValue(300)
+    panel.fit.setChecked(False)
+    panel.set_size_pt(72)
     window.print_label()
     assert "höchstens" in window.result.text()
     assert window.result.property("state") == "error"
     assert window.print_action.isEnabled()
-    panel.auto.setChecked(True)
+    panel.fit.setChecked(True)
     window.render_now()
     assert panel.error.isHidden()
     assert window.result.text() == ""
@@ -289,13 +289,14 @@ def test_theme_arrows_resolve_to_existing_files():
     assert urls and all(Path(u).exists() for u in urls)
 
 
-def test_number_fields_keep_text_clear_of_frame(window):
+def test_number_fields_keep_text_clear_of_frame(window, qtbot):
     from PySide6.QtWidgets import QAbstractSpinBox
     from labelwerk.gui.settings_dialog import SettingsDialog
     from labelwerk.settings import Settings
     dialog = SettingsDialog(Settings())
+    qtbot.addWidget(dialog)          # sonst lebt der Dialog bis nach dem Ende der QApplication
     spins = window.findChildren(QAbstractSpinBox) + dialog.findChildren(QAbstractSpinBox)
-    assert len(spins) >= 6
+    assert len(spins) >= 5
     assert all(s.lineEdit().textMargins().left() >= 8 for s in spins)
 
 
@@ -330,3 +331,33 @@ def test_toolbar_buttons_have_equal_space_above_and_below(qtbot, qapp):
         assert top_gap == bottom_gap
     finally:
         qapp.setStyleSheet("")
+
+
+def test_unloadable_font_shows_error_in_panel_and_status(window, monkeypatch):
+    from PIL import ImageFont
+
+    from labelwerk import fonts
+
+    def broken(path, size):
+        raise OSError("invalid pixel size")
+    monkeypatch.setattr(ImageFont, "truetype", broken)
+    fonts.load.cache_clear()
+    try:
+        window.panel("text").edit.setPlainText("Hallo")
+        window.render_now()
+        assert "kann nicht geladen werden" in window.panel("text").error.text()
+        assert "kann nicht geladen werden" in window.result.text()
+    finally:
+        monkeypatch.undo()
+        fonts.load.cache_clear()
+
+
+def test_font_replacement_hint_in_status_bar(window):
+    from labelwerk.document import Paragraph, Span, TextObject
+    window.doc.objects[0] = TextObject([Paragraph([Span("Hallo", family="GibtsGarNicht 4711")])])
+    window.render_now()
+    assert "GibtsGarNicht 4711" in window.result.text()
+    assert window.result.property("state") == "error"
+    window.doc.objects[0] = TextObject([Paragraph([Span("Hallo")])])
+    window.render_now()
+    assert window.result.text() == ""

@@ -13,7 +13,7 @@ from ..detect import brother_busy, find_brother_lp
 from ..document import Document
 from ..labels import get_label
 from ..printer import DEFAULT_MODEL
-from ..render import render_document
+from ..render import font_warnings, render_document
 from ..settings import Settings, load_settings, new_document
 from .canvas import Canvas
 from .media_worker import MediaWorker
@@ -37,6 +37,7 @@ class MainWindow(QMainWindow):
         self.model = model
         self.image = None
         self._render_error: str | None = None
+        self._font_warning: str | None = None
         self._print_signals = None
         self._media_signals = None
         self._printer_present = False
@@ -146,6 +147,13 @@ class MainWindow(QMainWindow):
         if self._render_error is not None and self.result.text() == self._render_error:
             self._set_result("", "")   # nur den Renderfehler löschen, kein Druckergebnis
         self._render_error = None
+        if self._font_warning is not None and self.result.text() == self._font_warning:
+            self._set_result("", "")   # alten Schrifthinweis nur löschen, wenn er noch dasteht
+        self._font_warning = None
+        warnings = font_warnings(self.doc)
+        if warnings and not self.result.text():
+            self._font_warning = " · ".join(warnings)
+            self._set_result(self._font_warning, "error")
         self.panel("text").show_error(None)
         self.image = image
         self.canvas.set_document(get_label(self.doc.label_id), image, self.doc.orientation)

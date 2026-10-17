@@ -29,7 +29,9 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62x29 --preview vorschau.png
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29      # drucken (Drucker wird automatisch erkannt)
 labelwerk print-file internetmarke.pdf -l 62       # PDF/PNG/JPG 1:1 drucken
 labelwerk media                                            # eingelegte Rolle anzeigen (druckt nichts)
-labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation horizontal -s 80
+labelwerk fonts                                            # installierte Schriften
+labelwerk print "Max Mustermann\nMusterstr. 5" --align left --font-family "Liberation Sans" -s 14
+labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation horizontal -s 19
 ```
 
 Optionen: `-s` Schriftgröße (`auto` oder 8–400), `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
@@ -47,6 +49,8 @@ Aufbau wie im P-touch Editor: Werkzeugleiste (Papier, Text), Eigenschaften links
 
 Papier: Etikett, Länge, Ränder und Ausrichtung (Horizontal = Text längs zum Band, z. B. Versandetikett; Vertikal = quer). „Medium prüfen“ liest die eingelegte Rolle vom Drucker und wählt das passende Etikett. Der Drucker wird live erkannt (Einschalten genügt). Unter „Einstellungen“ legst du Standardwerte für neue Etiketten fest (gilt auch für die CLI); gespeichert in `~/.config/labelwerk/settings.json`.
 
+Text: Schriftart, Größe (pt), fett/kursiv/unterstrichen und Textposition – zeichenweise wie im P-touch Editor. Ohne Markierung gilt die Formatierung für den ganzen Text. „Feste Rahmengröße“ skaliert den Text passend aufs Etikett.
+
 ## Architektur
 
 ```
@@ -57,6 +61,7 @@ printer.py  Bild → Brother-Rasterdaten → Drucker (via brother_ql)
 cli.py      Kommandozeile
 document.py Etikett-Dokument (Etikett, Länge, Objekte)
 settings.py Einstellungen (JSON)
+fonts.py    Schriften (fontconfig)
 media.py    Medium prüfen (Statusabfrage des Druckers)
 gui/        PySide6-Oberfläche (nur Anzeige/Bearbeitung, kein Druckcode)
 ```

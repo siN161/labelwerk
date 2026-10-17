@@ -11,10 +11,10 @@ from labelwerk.settings import Settings, load_settings
 
 def test_dialog_shows_current_settings(qtbot):
     dialog = SettingsDialog(Settings(label_id="62x29", orientation="horizontal", margin_mm=3,
-                                     font_size=80, check_media_on_start=False, start_zoom=150))
+                                     font_size_pt=19, check_media_on_start=False, start_zoom=150))
     qtbot.addWidget(dialog)
     assert dialog.values() == Settings(label_id="62x29", orientation="horizontal", margin_mm=3.0,
-                                       font_size=80, check_media_on_start=False, start_zoom=150)
+                                       font_size_pt=19, check_media_on_start=False, start_zoom=150)
 
 
 def test_dialog_saves_to_file(qtbot, tmp_path):
@@ -23,11 +23,11 @@ def test_dialog_saves_to_file(qtbot, tmp_path):
     qtbot.addWidget(dialog)
     dialog.orientation.setCurrentIndex(dialog.orientation.findData("horizontal"))
     dialog.font_auto.setChecked(False)
-    dialog.font_size.setValue(80)
+    dialog.font_size.setValue(19)
     dialog.accept()
     assert dialog.result() == QDialog.DialogCode.Accepted
     saved = load_settings(path)
-    assert (saved.orientation, saved.font_size) == ("horizontal", 80)
+    assert (saved.orientation, saved.font_size_pt) == ("horizontal", 19)
     assert dialog.saved == saved
 
 
@@ -69,3 +69,35 @@ def test_qt_dialog_buttons_are_german(qapp):
         assert sorted(b.text() for b in box.buttons()) == ["Abbrechen", "Speichern"]
     finally:
         qapp.removeTranslator(translator)
+
+
+def test_dialog_font_family_roundtrip(qtbot, tmp_path):
+    from PySide6.QtGui import QFont
+    path = tmp_path / "settings.json"
+    dialog = SettingsDialog(Settings(font_family="Liberation Sans"), path=path)
+    qtbot.addWidget(dialog)
+    assert dialog.values().font_family == "Liberation Sans"
+    dialog.font_family.setCurrentFont(QFont("DejaVu Sans"))
+    dialog.accept()
+    assert load_settings(path).font_family == "DejaVu Sans"
+
+
+def test_unknown_font_family_survives_unchanged_dialog(qtbot):
+    dlg = SettingsDialog(Settings(font_family="GibtsGarNicht 4711"))
+    qtbot.addWidget(dlg)
+    assert dlg.values().font_family == "GibtsGarNicht 4711"
+
+
+def test_changed_font_family_is_taken_over(qtbot):
+    from PySide6.QtGui import QFont
+    dlg = SettingsDialog(Settings(font_family="GibtsGarNicht 4711"))
+    qtbot.addWidget(dlg)
+    dlg.font_family.setCurrentIndex(0)
+    dlg.font_family.setCurrentIndex(1)
+    assert dlg.values().font_family == dlg.font_family.currentFont().family() != "GibtsGarNicht 4711"
+
+
+def test_dialog_keeps_fractional_font_size(qtbot):
+    dialog = SettingsDialog(Settings(font_size_pt=10.5))
+    qtbot.addWidget(dialog)
+    assert dialog.values().font_size_pt == 10.5
