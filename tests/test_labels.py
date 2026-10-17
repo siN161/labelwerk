@@ -1,5 +1,5 @@
 import pytest
-from labelwerk.labels import get_label, labels_for_model
+from labelwerk.labels import format_mm, get_label, labels_for_model, length_limits
 
 
 def test_62mm_endless_has_696_printable_dots():
@@ -36,3 +36,11 @@ def test_ql600_excludes_two_color_labels():
 
 def test_round_label_description():
     assert get_label("d24").description == "Ø 24 mm rund"
+
+
+def test_format_mm_uses_decimal_comma():
+    assert format_mm(696) == "58,9"
+
+
+def test_length_limits_for_ql600():
+    assert length_limits("QL-600") == (150, 11811)

@@ -1,7 +1,7 @@
 import pytest
 from PIL import Image
 
-from labelwerk.files import crop, load_file
+from labelwerk.files import crop, fit_to_label, load_file
 
 
 def _page(w=600, h=300):
@@ -109,3 +109,52 @@ def test_logo_in_corner_is_not_a_mark():
 def test_crop_empty_page():
     with pytest.raises(ValueError, match="keinen druckbaren Inhalt"):
         crop(Image.new("L", (100, 100), 255))
+
+
+def _motif(w_mm, h_mm):
+    img = Image.new("L", (round(w_mm * 300 / 25.4), round(h_mm * 300 / 25.4)), 0)
+    return img
+
+
+def test_wide_motif_is_rotated_onto_endless_tape():
+    out = fit_to_label(_motif(90, 47), "62")
+    assert out.size == (696, 1063 + 2 * 12)
+
+
+def test_small_motif_is_not_rotated():
+    out = fit_to_label(_motif(40, 20), "62")
+    assert out.size == (696, 236 + 2 * 12)
+
+
+def test_motif_is_centered_and_not_scaled():
+    out = fit_to_label(_motif(40, 20), "62")
+    bbox = out.point(lambda v: 255 if v < 128 else 0).getbbox()
+    assert (bbox[2] - bbox[0], bbox[3] - bbox[1]) == (472, 236)
+    assert bbox[0] == (696 - 472) // 2
+
+
+def test_short_motif_gets_minimum_length():
+    assert fit_to_label(_motif(40, 2), "62").height == 150
+
+
+def test_too_large_motif_raises_with_mm():
+    with pytest.raises(ValueError, match=r"120,0 × 70,0 mm.*--fit"):
+        fit_to_label(_motif(120, 70), "62")
+
+
+def test_fit_shrinks_and_keeps_aspect_ratio():
+    out = fit_to_label(_motif(120, 70), "62", fit=True)
+    bbox = out.point(lambda v: 255 if v < 128 else 0).getbbox()
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    assert out.width == 696 and w == 696
+    assert abs(h / w - 120 / 70) < 0.01          # gedreht, da so größer
+
+
+def test_die_cut_label_has_exact_size():
+    assert fit_to_label(_motif(40, 20), "62x29").size == (696, 271)
+
+
+def test_result_is_accepted_by_printer_driver():
+    from labelwerk.printer import build_instructions
+    data = build_instructions(fit_to_label(_motif(90, 47), "62"), "62")
+    assert data.endswith(b"\x1a")
