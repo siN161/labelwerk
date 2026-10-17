@@ -303,3 +303,14 @@ def test_refresh_keeps_size_ratio_with_unset_base(window):
     spans = panel.to_text_object().paragraphs[0].spans
     sizes = {s.text: (s.size_pt or panel.to_text_object().size_pt) for s in spans}
     assert sizes["a"] / sizes["b"] == 2.0
+
+
+def test_align_buttons_have_line_icons(window):
+    from importlib import resources
+    panel = window.panel("text")
+    for key, button in panel.align_buttons.items():
+        assert not button.icon().isNull()
+        assert button.text() == ""
+        assert button.toolTip() and button.accessibleName() == button.toolTip()
+        for color in ("black", "white"):
+            assert (resources.files("labelwerk.gui") / "icons" / f"align-{key}-{color}.svg").is_file()

@@ -6,9 +6,10 @@ Formatierung auf den ganzen Text; sonst nur auf die Markierung.
 from __future__ import annotations
 
 import math
+from importlib import resources
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import (QFont, QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QTextFormat,
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import (QFont, QIcon, QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QHBoxLayout, QLabel,
                                QPushButton, QTextEdit)
@@ -51,6 +52,16 @@ def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
     button.setCheckable(checkable)
     button.setObjectName("formatButton")
     return button
+
+
+def _align_icon(key: str) -> QIcon:
+    """Liniensymbol: schwarz im Normalzustand, weiß auf dem schwarzen Hintergrund gewählter Knöpfe."""
+    folder = resources.files("labelwerk.gui") / "icons"
+    icon = QIcon()
+    for color, state in (("black", QIcon.State.Off), ("white", QIcon.State.On)):
+        path = str(folder / f"align-{key}-{color}.svg")
+        icon.addFile(path, QSize(), QIcon.Mode.Normal, state)
+    return icon
 
 
 class TextPanel(Panel):
@@ -103,9 +114,12 @@ class TextPanel(Panel):
         row = QHBoxLayout()
         self.align_group = QButtonGroup(self)
         self.align_buttons = {}
-        for key, text, tip in (("left", "⯇", "Linksbündig"), ("center", "≡", "Zentriert"),
-                               ("right", "⯈", "Rechtsbündig"), ("justify", "☰", "Blocksatz")):
-            button = _button(text, tip)
+        for key, tip in (("left", "Linksbündig"), ("center", "Zentriert"),
+                         ("right", "Rechtsbündig"), ("justify", "Blocksatz")):
+            button = _button("", tip)
+            button.setIcon(_align_icon(key))
+            button.setIconSize(QSize(16, 16))
+            button.setAccessibleName(tip)
             self.align_group.addButton(button)
             self.align_buttons[key] = button
             row.addWidget(button)
