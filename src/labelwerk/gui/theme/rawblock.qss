@@ -49,7 +49,32 @@ QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
 }
 QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover { background: #E8E8E8; }
 QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus { border-width: 5px; }
-QSpinBox, QDoubleSpinBox { padding-left: 12px; }
+/* Zahlenfelder: eigene Hoch/Runter-Knöpfe – mit eigenem Rahmen zeichnet Qt sonst keine Pfeile */
+QSpinBox, QDoubleSpinBox { padding: 4px 32px 4px 8px; min-height: 26px; }
+QSpinBox::up-button, QDoubleSpinBox::up-button,
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: padding;
+    width: 26px;
+    background: #FFFFFF;
+    border-left: 3px solid #000000;
+}
+QSpinBox::up-button, QDoubleSpinBox::up-button { subcontrol-position: top right; border-bottom: 1px solid #000000; }
+QSpinBox::down-button, QDoubleSpinBox::down-button { subcontrol-position: bottom right; }
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover { background: #000000; }
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url(@THEME@/arrow-up-black.svg); width: 10px; height: 7px; }
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url(@THEME@/arrow-down-black.svg); width: 10px; height: 7px; }
+QSpinBox::up-arrow:hover, QDoubleSpinBox::up-arrow:hover { image: url(@THEME@/arrow-up-white.svg); }
+QSpinBox::down-arrow:hover, QDoubleSpinBox::down-arrow:hover { image: url(@THEME@/arrow-down-white.svg); }
+QSpinBox::up-arrow:disabled, QDoubleSpinBox::up-arrow:disabled { image: url(@THEME@/arrow-up-gray.svg); }
+QSpinBox::down-arrow:disabled, QDoubleSpinBox::down-arrow:disabled { image: url(@THEME@/arrow-down-gray.svg); }
+QSpinBox::up-button:disabled, QDoubleSpinBox::up-button:disabled,
+QSpinBox::down-button:disabled, QDoubleSpinBox::down-button:disabled { border-left-color: #CCCCCC; background: #F5F5F5; }
+QComboBox { padding: 4px 32px 4px 8px; min-height: 26px; }
+QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 26px; border-left: 3px solid #000000; background: #FFFFFF; }
+QComboBox::drop-down:hover { background: #000000; }
+QComboBox::down-arrow { image: url(@THEME@/arrow-down-black.svg); width: 10px; height: 7px; }
+QComboBox::down-arrow:hover { image: url(@THEME@/arrow-down-white.svg); }
 QSpinBox:disabled, QDoubleSpinBox:disabled { border-color: #CCCCCC; background: #F5F5F5; color: #999999; }
 QComboBox QAbstractItemView { border: 3px solid #000000; selection-background-color: #000000; selection-color: #FFFFFF; }
 
@@ -57,7 +82,7 @@ QCheckBox::indicator { width: 16px; height: 16px; border: 3px solid #000000; bac
 QCheckBox::indicator:checked { background: #000000; }
 
 QLabel#error { color: #FF0000; border: 3px solid #FF0000; padding: 6px; }
-QLabel#mediaStatus { border: 2px solid #000000; padding: 4px 6px; }
+QLabel#mediaStatus { padding: 0 10px; border-left: 2px solid #000000; font-weight: 700; }
 QLabel#mediaStatus[state="ok"] { color: #008000; border-color: #008000; }
 QLabel#mediaStatus[state="warn"] { color: #CC7A00; border-color: #FFA500; }
 QLabel#mediaStatus[state="error"] { color: #FF0000; border-color: #FF0000; }

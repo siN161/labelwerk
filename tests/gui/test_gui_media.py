@@ -29,8 +29,8 @@ def test_check_media_selects_matching_label(window, qtbot, monkeypatch):
     paper.check.click()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
     assert window.doc.label_id == "62x29"
-    assert paper.media_status.text() == "Eingelegt: 62 × 29 mm gestanzt ✓ – Etikett angepasst"
-    assert paper.media_status.property("state") == "ok"
+    assert window.media_status.text() == "Rolle: 62 × 29 mm gestanzt ✓ – Etikett angepasst"
+    assert window.media_status.property("state") == "ok"
     assert paper.check.isEnabled()
 
 
@@ -40,17 +40,17 @@ def test_mismatch_warning_after_changing_label(window, qtbot, monkeypatch):
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
     paper = window.panel("paper")
     paper.combo.setCurrentIndex(paper.combo.findData("62x29"))
-    assert paper.media_status.property("state") == "warn"
-    assert "passt nicht" in paper.media_status.text()
+    assert window.media_status.property("state") == "warn"
+    assert "passt nicht" in window.media_status.text()
     paper.combo.setCurrentIndex(paper.combo.findData("62"))
-    assert paper.media_status.property("state") == "ok"
+    assert window.media_status.property("state") == "ok"
 
 
 def test_check_media_error_is_shown(window, qtbot, monkeypatch):
     _printer_with(monkeypatch, error="Keine Antwort vom Drucker auf die Statusabfrage.")
     window.check_media()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
-    status = window.panel("paper").media_status
+    status = window.media_status
     assert "Keine Antwort" in status.text() and status.property("state") == "error"
 
 
@@ -93,10 +93,10 @@ def test_printer_disconnect_clears_media_status(window, qtbot, monkeypatch):
     _printer_with(monkeypatch, Media(62, 0, "endless"))
     window.check_media()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
-    assert window.panel("paper").media_status.isVisibleTo(window.panel("paper"))
+    assert not window.media_status.isHidden()
     monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: None)
     window.refresh_printer()
-    assert window.panel("paper").media_status.isHidden()
+    assert window.media_status.isHidden()
     assert window.printer_status.text() == "○ kein Drucker"
 
 
@@ -150,14 +150,14 @@ def test_adjusted_label_is_mentioned(window, qtbot, monkeypatch):
     _printer_with(monkeypatch, Media(62, 29, "die_cut"))
     window.check_media()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
-    assert "angepasst" in window.panel("paper").media_status.text()
+    assert "angepasst" in window.media_status.text()
 
 
 def test_matching_label_not_mentioned_as_adjusted(window, qtbot, monkeypatch):
     _printer_with(monkeypatch, Media(62, 0, "endless"))
     window.check_media()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
-    assert "angepasst" not in window.panel("paper").media_status.text()
+    assert "angepasst" not in window.media_status.text()
 
 
 def test_media_check_is_caught_up_after_print(qtbot, monkeypatch):
@@ -189,3 +189,13 @@ def test_close_stops_printer_timer(window):
     assert window._printer_timer.isActive()
     window.close()
     assert not window._printer_timer.isActive()
+
+
+def test_media_status_lives_in_footer_not_in_panel(window, qtbot, monkeypatch):
+    _printer_with(monkeypatch, Media(62, 0, "endless"))
+    window.check_media()
+    qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
+    assert window.media_status.parent() is window.statusBar() or \
+        window.statusBar().isAncestorOf(window.media_status)
+    assert window.media_status.text() == "Rolle: 62 mm endlos ✓"
+    assert not hasattr(window.panel("paper"), "media_status")

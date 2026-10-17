@@ -6,13 +6,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox,
-                               QFormLayout, QGroupBox, QHBoxLayout, QLabel, QSpinBox, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+                               QGroupBox, QHBoxLayout, QLabel, QVBoxLayout)
 
 from ..document import MAX_MARGIN_MM
 from ..labels import labels_for_model
 from ..printer import DEFAULT_MODEL
 from ..settings import Settings, save_settings
+from .widgets import DoubleSpinBox, SpinBox
 
 
 class SettingsDialog(QDialog):
@@ -35,7 +36,7 @@ class SettingsDialog(QDialog):
         self.orientation.addItem("Vertikal (Text quer zum Band)", "vertical")
         self.orientation.setCurrentIndex(self.orientation.findData(settings.orientation))
         form.addRow("Ausrichtung", self.orientation)
-        self.margin = QDoubleSpinBox()
+        self.margin = DoubleSpinBox()
         self.margin.setSuffix(" mm")
         self.margin.setDecimals(1)
         self.margin.setSingleStep(0.5)
@@ -44,7 +45,7 @@ class SettingsDialog(QDialog):
         form.addRow("Ränder", self.margin)
         row = QHBoxLayout()
         self.font_auto = QCheckBox("Automatisch")
-        self.font_size = QSpinBox()
+        self.font_size = SpinBox()
         self.font_size.setRange(8, 400)
         self.font_size.setValue(settings.font_size or 80)
         self.font_auto.setChecked(settings.font_size is None)
@@ -60,7 +61,7 @@ class SettingsDialog(QDialog):
         form.addRow(self.check_media)
 
         form = self._section(layout, "Ansicht")
-        self.zoom = QSpinBox()
+        self.zoom = SpinBox()
         self.zoom.setSuffix(" %")
         self.zoom.setRange(25, 400)
         self.zoom.setSingleStep(10)

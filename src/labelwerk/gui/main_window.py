@@ -93,6 +93,10 @@ class MainWindow(QMainWindow):
         self.printer_status = QLabel()
         self.result = QLabel()
         self.statusBar().addWidget(self.printer_status)
+        self.media_status = QLabel()            # Rolle im Drucker (Medium prüfen)
+        self.media_status.setObjectName("mediaStatus")
+        self.media_status.hide()
+        self.statusBar().addWidget(self.media_status)
         self.statusBar().addWidget(self.result, 1)
         self.zoom_label = QLabel()
         for text, delta in (("−", -10), ("+", 10)):
@@ -110,6 +114,7 @@ class MainWindow(QMainWindow):
         self._timer.setInterval(RENDER_DELAY_MS)
         self._timer.timeout.connect(self.render_now)
         self.panel("paper").check_media_requested.connect(self.check_media)
+        self.panel("paper").media_status_changed.connect(self._show_media_status)
         self._printer_timer = QTimer(self)
         self._printer_timer.setInterval(PRINTER_POLL_MS)
         self._printer_timer.timeout.connect(self.refresh_printer)
@@ -149,6 +154,12 @@ class MainWindow(QMainWindow):
         self.panel("paper").refresh()
         if not self.canvas.is_dragging():   # beim Ziehen erst nach dem Loslassen rendern
             self.schedule_render()
+
+    def _show_media_status(self, text: str, state: str) -> None:
+        self.media_status.setProperty("state", state)
+        self.media_status.style().polish(self.media_status)
+        self.media_status.setText(text)
+        self.media_status.setVisible(bool(text))
 
     def _set_result(self, text: str, state: str) -> None:
         self.result.setProperty("state", state)

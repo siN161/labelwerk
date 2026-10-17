@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout,
+from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QHBoxLayout,
                                QLabel, QPushButton, QRadioButton, QWidget)
 
 from ...document import MAX_MARGIN_MM, Document
 from ...labels import DPI, get_label, labels_for_model, length_limits
 from ...media import Media
 from ...printer import DEFAULT_MODEL
+from ..widgets import DoubleSpinBox
 from . import Panel
 
 _GROUPS = (("endless", "Endlos"), ("die_cut", "Gestanzt"), ("round", "Rund"))
@@ -16,6 +17,7 @@ _GROUPS = (("endless", "Endlos"), ("die_cut", "Gestanzt"), ("round", "Rund"))
 
 class PaperPanel(Panel):
     check_media_requested = Signal()
+    media_status_changed = Signal(str, str)   # Text, Zustand (ok/warn/error/"") für die Fußzeile
 
     def __init__(self, doc: Document, model: str = DEFAULT_MODEL):
         super().__init__(doc, "Papier")
@@ -39,18 +41,13 @@ class PaperPanel(Panel):
         self.check.setToolTip("Eingelegte Rolle vom Drucker abfragen (druckt nichts)")
         self.check.clicked.connect(self.check_media_requested)
         self.layout_.addWidget(self.check)
-        self.media_status = QLabel()
-        self.media_status.setObjectName("mediaStatus")
-        self.media_status.setWordWrap(True)
-        self.media_status.hide()
-        self.layout_.addWidget(self.media_status)
 
         self.length_title = self.section("Länge")
         self.length_box = QWidget()
         row = QHBoxLayout(self.length_box)
         row.setContentsMargins(0, 0, 0, 0)
         self.length_auto = QCheckBox("Automatisch")
-        self.length = QDoubleSpinBox()
+        self.length = DoubleSpinBox()
         self.length.setSuffix(" mm")
         self.length.setDecimals(1)
         self.length.setSingleStep(0.5)
@@ -66,7 +63,7 @@ class PaperPanel(Panel):
         self.layout_.addWidget(self.fixed_size)
 
         self.section("Ränder")
-        self.margin = QDoubleSpinBox()
+        self.margin = DoubleSpinBox()
         self.margin.setSuffix(" mm")
         self.margin.setDecimals(1)
         self.margin.setSingleStep(0.5)
@@ -140,21 +137,17 @@ class PaperPanel(Panel):
         if self.media is None:
             return
         if self.media.kind == "none":
-            self._set_media_status("Keine Rolle eingelegt.", "warn")
+            self._set_media_status("Rolle: keine eingelegt", "warn")
         elif self.media_label is None:
-            self._set_media_status(f"Eingelegt: {self.media.describe()} – kein passendes Etikett.", "warn")
+            self._set_media_status(f"Rolle: {self.media.describe()} – kein passendes Etikett", "warn")
         elif self.media_label == self.doc.label_id:
             hint = " – Etikett angepasst" if self.media_adjusted else ""
-            self._set_media_status(f"Eingelegt: {self.media.describe()} ✓{hint}", "ok")
+            self._set_media_status(f"Rolle: {self.media.describe()} ✓{hint}", "ok")
         else:
-            self._set_media_status(f"Eingelegt ist {self.media.describe()} – Auswahl passt nicht.",
-                                   "warn")
+            self._set_media_status(f"Rolle: {self.media.describe()} – Auswahl passt nicht", "warn")
 
     def _set_media_status(self, text: str, state: str) -> None:
-        self.media_status.setProperty("state", state)
-        self.media_status.style().polish(self.media_status)
-        self.media_status.setText(text)
-        self.media_status.setVisible(bool(text))
+        self.media_status_changed.emit(text, state)
 
     def _update_visibility(self) -> None:
         label = get_label(self.doc.label_id)

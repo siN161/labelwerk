@@ -14,8 +14,10 @@ from .main_window import MainWindow
 
 
 def load_theme(name: str = "rawblock") -> str:
-    """Stylesheet aus labelwerk/gui/theme/<name>.qss."""
-    return (resources.files("labelwerk.gui") / "theme" / f"{name}.qss").read_text(encoding="utf-8")
+    """Stylesheet aus labelwerk/gui/theme/<name>.qss; @THEME@ wird zum Theme-Ordner (für Grafiken)."""
+    folder = resources.files("labelwerk.gui") / "theme"
+    qss = (folder / f"{name}.qss").read_text(encoding="utf-8")
+    return qss.replace("@THEME@", str(folder).replace("\\", "/"))
 
 
 def apply_identity(app: QApplication) -> None:

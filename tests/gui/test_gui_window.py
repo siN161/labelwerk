@@ -278,3 +278,22 @@ def test_window_title_and_app_name_use_app_name(window, qapp):
     apply_identity(qapp)
     assert window.windowTitle() == APP_NAME
     assert qapp.applicationName() == APP_NAME
+
+
+def test_theme_arrows_resolve_to_existing_files():
+    import re
+    from pathlib import Path
+    theme = load_theme()
+    assert "@THEME@" not in theme
+    urls = re.findall(r"url\(([^)]+)\)", theme)
+    assert urls and all(Path(u).exists() for u in urls)
+
+
+def test_number_fields_keep_text_clear_of_frame(window):
+    from PySide6.QtWidgets import QAbstractSpinBox
+    from labelwerk.gui.settings_dialog import SettingsDialog
+    from labelwerk.settings import Settings
+    dialog = SettingsDialog(Settings())
+    spins = window.findChildren(QAbstractSpinBox) + dialog.findChildren(QAbstractSpinBox)
+    assert len(spins) >= 6
+    assert all(s.lineEdit().textMargins().left() >= 8 for s in spins)
