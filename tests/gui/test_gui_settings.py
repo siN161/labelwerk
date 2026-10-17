@@ -80,3 +80,18 @@ def test_dialog_font_family_roundtrip(qtbot, tmp_path):
     dialog.font_family.setCurrentFont(QFont("DejaVu Sans"))
     dialog.accept()
     assert load_settings(path).font_family == "DejaVu Sans"
+
+
+def test_unknown_font_family_survives_unchanged_dialog(qtbot):
+    dlg = SettingsDialog(Settings(font_family="GibtsGarNicht 4711"))
+    qtbot.addWidget(dlg)
+    assert dlg.values().font_family == "GibtsGarNicht 4711"
+
+
+def test_changed_font_family_is_taken_over(qtbot):
+    from PySide6.QtGui import QFont
+    dlg = SettingsDialog(Settings(font_family="GibtsGarNicht 4711"))
+    qtbot.addWidget(dlg)
+    dlg.font_family.setCurrentIndex(0)
+    dlg.font_family.setCurrentIndex(1)
+    assert dlg.values().font_family == dlg.font_family.currentFont().family() != "GibtsGarNicht 4711"

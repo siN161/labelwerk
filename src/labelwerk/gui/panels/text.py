@@ -5,6 +5,8 @@ Formatierung auf den ganzen Text; sonst nur auf die Markierung.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import (QFont, QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
@@ -45,6 +47,8 @@ class TextPanel(Panel):
         if not doc.objects:
             doc.objects.append(TextObject(""))
         self._updating = False
+        self._formatting = False        # während einer Formatierung: contentsChanged nicht doppelt anwenden
+        self._shown_pt = float(DEFAULT_PT)   # Größe, die das Feld zuletzt angezeigt hat
         # Grundformat: gilt für alles, was nicht ausdrücklich formatiert ist (nicht Qts Widget-Schrift)
         self._base = {"family": DEFAULT_FAMILY, "pt": float(DEFAULT_PT), "bold": True,
                       "italic": False, "underline": False}
@@ -62,6 +66,7 @@ class TextPanel(Panel):
         row = QHBoxLayout()
         self.size = QComboBox()
         self.size.setEditable(True)
+        self.size.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)   # Eingaben nicht an die Liste anhängen
         self.size.addItems([str(s) for s in SIZES_PT])
         self.size.setToolTip("Schriftgröße in pt")
         self.grow = _button("A⁺", "Schrift größer", checkable=False)
@@ -122,7 +127,8 @@ class TextPanel(Panel):
         for keys, button in ((QKeySequence.StandardKey.Bold, self.bold),
                              (QKeySequence.StandardKey.Italic, self.italic),
                              (QKeySequence.StandardKey.Underline, self.underline)):
-            QShortcut(keys, self.edit, activated=button.click)
+            QShortcut(keys, self, context=Qt.ShortcutContext.WidgetWithChildrenShortcut,
+                      activated=button.click)
 
     @property
     def obj(self) -> TextObject:
@@ -157,8 +163,13 @@ class TextPanel(Panel):
                                ("italic", italic), ("underline", underline)):
                 if value is not None:
                     self._base[key] = value
-        self._target().mergeCharFormat(fmt)
-        self.edit.mergeCurrentCharFormat(fmt)       # Weitertippen in gleicher Formatierung
+        self._formatting = True
+        try:
+            self._target().mergeCharFormat(fmt)
+            if not self.edit.textCursor().hasSelection():
+                self.edit.mergeCurrentCharFormat(fmt)   # Weitertippen in gleicher Formatierung
+        finally:
+            self._formatting = False
         self._apply()
 
     def set_size_pt(self, size: float) -> None:
@@ -168,18 +179,67 @@ class TextPanel(Panel):
 
     def _size_entered(self) -> None:
         try:
-            self.set_size_pt(float(self.size.currentText().replace(",", ".")))
+            size = float(self.size.currentText().replace(",", "."))
         except ValueError:
             self._sync_buttons()
+            return
+        if not math.isfinite(size):
+            self._sync_buttons()
+            return
+        # Fokusverlust mit unverändertem Wert darf nichts vereinheitlichen (Qt meldet ihn teils
+        # auch als „activated“, daher gilt die Prüfung für beide Wege)
+        if abs(size - self._shown_pt) < 0.01:
+            return
+        self.set_size_pt(size)
 
-    def _step_size(self, direction: int) -> None:
-        current = self._props(self.edit.currentCharFormat())["pt"]
+    @staticmethod
+    def _step_pt(current: float, direction: int) -> float:
         if direction > 0:
             bigger = [s for s in SIZES_PT if s > current + 0.01]
-            self.set_size_pt(bigger[0] if bigger else min(current + 12, MAX_PT))
-        else:
-            smaller = [s for s in SIZES_PT if s < current - 0.01]
-            self.set_size_pt(smaller[-1] if smaller else MIN_PT)
+            return bigger[0] if bigger else min(current + 12, MAX_PT)
+        smaller = [s for s in SIZES_PT if s < current - 0.01]
+        return smaller[-1] if smaller else MIN_PT
+
+    def _step_size(self, direction: int) -> None:
+        """Jedes Textstück in der Markierung (sonst im ganzen Text) auf seine eigene nächste Stufe."""
+        if self._updating:
+            return
+        selected = self.edit.textCursor().hasSelection()
+        cursor = self._target()
+        start, end = cursor.selectionStart(), cursor.selectionEnd()
+        document = self.edit.document()
+        pieces = []
+        block = document.begin()
+        while block.isValid():
+            it = block.begin()
+            while not it.atEnd():
+                fragment = it.fragment()
+                if fragment.isValid():
+                    a = max(start, fragment.position())
+                    b = min(end, fragment.position() + fragment.length())
+                    if a < b:
+                        pieces.append((a, b, self._props(fragment.charFormat())["pt"]))
+                it += 1
+            block = block.next()
+        editor = QTextCursor(document)
+        self._formatting = True
+        try:
+            editor.beginEditBlock()
+            for a, b, pt in pieces:
+                editor.setPosition(a)
+                editor.setPosition(b, QTextCursor.MoveMode.KeepAnchor)
+                fmt = QTextCharFormat()
+                fmt.setFontPointSize(min(max(self._step_pt(pt, direction), MIN_PT), MAX_PT))
+                editor.mergeCharFormat(fmt)
+            editor.endEditBlock()
+            if not selected:
+                self._base["pt"] = min(max(self._step_pt(self._base["pt"], direction), MIN_PT), MAX_PT)
+                fmt = QTextCharFormat()
+                fmt.setFontPointSize(self._base["pt"])
+                self.edit.mergeCurrentCharFormat(fmt)
+        finally:
+            self._formatting = False
+        self._apply()
 
     def _align(self, key: str) -> None:
         cursor = self.edit.textCursor()
@@ -246,7 +306,7 @@ class TextPanel(Panel):
                           fit=self.fit.isChecked())
 
     def _apply(self) -> None:
-        if self._updating:
+        if self._updating or self._formatting:
             return
         self._updating = True
         try:
@@ -280,6 +340,12 @@ class TextPanel(Panel):
                 cursor.setBlockFormat(block_fmt)
                 for span in para.spans:
                     cursor.insertText(span.text, _char_format(span, obj.size_pt or DEFAULT_PT))
+                if not any(span.text for span in para.spans):
+                    # leerer Absatz: insertText("") tut nichts, Format am Absatz selbst ablegen
+                    fmt = (_char_format(para.spans[0], obj.size_pt or DEFAULT_PT) if para.spans
+                           else _char_format_of(self._base))
+                    cursor.setBlockCharFormat(fmt)
+                    cursor.setCharFormat(fmt)
             self.edit.setTextCursor(cursor)
             self.edit.setCurrentCharFormat(_char_format_of(self._props(cursor.charFormat())))
             self.fit.setChecked(obj.auto)
@@ -290,6 +356,7 @@ class TextPanel(Panel):
     def _sync_buttons(self) -> None:
         """Knöpfe zeigen die Formatierung an der Schreibmarke."""
         props = self._props(self.edit.currentCharFormat())
+        self._shown_pt = props["pt"]
         widgets = (self.family, self.size, self.bold, self.italic, self.underline,
                    *self.align_buttons.values())
         for w in widgets:

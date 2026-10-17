@@ -142,3 +142,103 @@ def test_partial_size_change_keeps_rest_at_base(window):
     assert paras[1].spans[0].size_pt is None
     window.render_now()
     assert window.panel("text").error.isHidden()
+
+
+# --- Fix nach Review ---------------------------------------------------------
+def _mixed(panel):
+    """„klein gross“: klein 10 pt, gross 36 pt."""
+    panel.edit.setPlainText("klein gross")
+    _select(panel, 0, 5)
+    panel.set_size_pt(10)
+    _select(panel, 6, 11)
+    panel.set_size_pt(36)
+
+
+def _cursor_to(panel, pos):
+    cursor = panel.edit.textCursor()
+    cursor.setPosition(pos)
+    panel.edit.setTextCursor(cursor)
+
+
+def _sizes(window):
+    return [s.size_pt for s in window.doc.objects[0].paragraphs[0].spans if s.text.strip()]
+
+
+def test_size_field_focus_out_keeps_mixed_sizes(window):
+    panel = window.panel("text")
+    _mixed(panel)
+    _cursor_to(panel, 8)                        # in „gross“, ohne Markierung
+    panel.size.lineEdit().editingFinished.emit()
+    spans = window.doc.objects[0].paragraphs[0].spans
+    assert len({s.size_pt for s in spans if s.text.strip()}) == 2
+
+
+def test_size_field_rejects_nan(window):
+    panel = window.panel("text")
+    panel.edit.setPlainText("abc")
+    panel.size.setEditText("nan")
+    panel.size.lineEdit().editingFinished.emit()
+    assert panel._base["pt"] == 19.0
+    assert panel.size.currentText() == "19"
+
+
+def test_size_combo_does_not_append_entries(window):
+    from labelwerk.gui.panels.text import SIZES_PT
+    panel = window.panel("text")
+    panel.edit.setPlainText("abc")
+    for text in ("abc", "19"):
+        panel.size.setEditText(text)
+        panel.size.lineEdit().editingFinished.emit()
+    assert panel.size.count() == len(SIZES_PT)
+    from PySide6.QtWidgets import QComboBox
+    assert panel.size.insertPolicy() == QComboBox.InsertPolicy.NoInsert
+
+
+def test_refresh_keeps_format_of_empty_paragraph(window):
+    from labelwerk.document import Paragraph, Span, TextObject
+    panel = window.panel("text")
+    window.doc.objects[0] = TextObject([Paragraph([Span("A", size_pt=10)]),
+                                        Paragraph([Span("", size_pt=40)]),
+                                        Paragraph([Span("B")])])
+    panel.refresh()
+    paragraphs = panel.to_text_object().paragraphs
+    assert paragraphs[1].spans[0].size_pt == 40
+
+
+def test_shortcuts_are_scoped_to_panel(window):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QShortcut
+    panel = window.panel("text")
+    shortcuts = panel.findChildren(QShortcut)
+    assert len(shortcuts) == 3
+    assert all(s.context() == Qt.ShortcutContext.WidgetWithChildrenShortcut for s in shortcuts)
+
+
+def test_format_change_is_one_undo_step(window):
+    panel = window.panel("text")
+    panel.edit.setPlainText("aaa bbb")
+    panel.edit.document().clearUndoRedoStacks()
+    _select(panel, 0, 3)
+    panel.italic.click()
+    document = panel.edit.document()
+    steps = 0
+    while document.isUndoAvailable():
+        document.undo()
+        steps += 1
+    assert steps == 1
+
+
+def test_grow_without_selection_steps_each_fragment(window):
+    panel = window.panel("text")
+    _mixed(panel)
+    _cursor_to(panel, 0)
+    panel.grow.click()
+    assert _sizes(window) == [11, 48]
+
+
+def test_grow_with_selection_steps_each_fragment(window):
+    panel = window.panel("text")
+    _mixed(panel)
+    _select(panel, 0, 11)
+    panel.grow.click()
+    assert _sizes(window) == [11, 48]

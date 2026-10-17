@@ -59,6 +59,10 @@ class SettingsDialog(QDialog):
         form.addRow("Schriftgröße", row)
         self.font_family = QFontComboBox()
         self.font_family.setCurrentFont(QFont(settings.font_family))
+        # Nicht installierte Schrift nicht stillschweigend durch Ersatz überschreiben
+        self._orig_family = settings.font_family
+        self._family_touched = False
+        self.font_family.currentFontChanged.connect(self._family_changed)
         form.addRow("Schriftart", self.font_family)
 
         form = self._section(layout, "Drucker")
@@ -94,13 +98,17 @@ class SettingsDialog(QDialog):
         layout.addWidget(box)
         return form
 
+    def _family_changed(self, _font) -> None:
+        self._family_touched = True
+
     def values(self) -> Settings:
         return Settings(
             label_id=self.label.currentData(),
             orientation=self.orientation.currentData(),
             margin_mm=self.margin.value(),
             font_size_pt=None if self.font_auto.isChecked() else self.font_size.value(),
-            font_family=self.font_family.currentFont().family(),
+            font_family=(self.font_family.currentFont().family() if self._family_touched
+                         else self._orig_family),
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
         )
