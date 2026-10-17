@@ -28,3 +28,19 @@ def find_brother_usb(discover=_discover) -> str | None:
     except Exception:  # pyusb/libusb fehlt oder kein Zugriff auf den USB-Bus
         return None
     return devices[0]["identifier"] if devices else None
+
+
+def brother_busy(devices_root: str | Path = "/sys/bus/usb/devices") -> bool:
+    """True, wenn ein Brother-Drucker angeschlossen ist, aber ein anderes Programm sein
+    Druckerinterface direkt belegt (Treiber usbfs, z. B. VM mit USB-Durchreichung)."""
+    for dev in Path(devices_root).iterdir():
+        vendor = dev / "idVendor"
+        if not vendor.exists() or vendor.read_text().strip() != BROTHER_VENDOR_ID:
+            continue
+        for iface in dev.glob(f"{dev.name}:*"):
+            cls = iface / "bInterfaceClass"
+            driver = iface / "driver"
+            if (cls.exists() and cls.read_text().strip() == "07"
+                    and driver.exists() and driver.resolve().name == "usbfs"):
+                return True
+    return False

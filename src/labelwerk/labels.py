@@ -4,10 +4,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from brother_ql.labels import Color, FormFactor, LabelsManager
+from brother_ql.models import ModelsManager
 
 # Maximale Bandbreite in mm je Modell (QL-5xx/6xx/7xx/8xx: 62 mm)
 MAX_TAPE_MM = {"QL-600": 62}
 TWO_COLOR_MODELS = {"QL-800", "QL-810W", "QL-820NWB"}
+
+DPI = 300  # Druckauflösung der QL-Drucker
 
 
 @dataclass(frozen=True)
@@ -56,3 +59,16 @@ def labels_for_model(model: str) -> list[Label]:
             continue
         result.append(_convert(raw))
     return result
+
+
+def format_mm(dots: int) -> str:
+    """Punkte (300 dpi) als mm-Angabe mit Dezimalkomma, z. B. "58,9"."""
+    return f"{dots * 25.4 / DPI:.1f}".replace(".", ",")
+
+
+def length_limits(model: str) -> tuple[int, int]:
+    """Erlaubte Etikettlänge (Endlosband) in Punkten, z. B. (150, 11811) für den QL-600."""
+    for m in ModelsManager().iter_elements():
+        if m.identifier == model:
+            return m.min_max_length_dots
+    raise ValueError(f"Unbekanntes Druckermodell: {model!r}")
