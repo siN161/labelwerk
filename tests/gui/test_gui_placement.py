@@ -5,7 +5,7 @@ from PySide6.QtGui import QImage, QKeySequence, QMouseEvent
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from labelwerk import layout
+from labelwerk import layout, render
 from labelwerk.document import Document, TextObject
 from labelwerk.gui.canvas import ObjectItem, to_qimage
 from labelwerk.gui.main_window import MainWindow
@@ -97,20 +97,66 @@ def test_horizontal_view_shows_objects_in_reading_direction(qtbot):
     assert first.width() > first.height()                  # Text liegt waagrecht
 
 
-def test_only_changed_objects_are_rendered_again(window, monkeypatch):
+def _count_rendering(monkeypatch):
+    """Zählt das Messen (``_prepare``) und Zeichnen (``_finish``) je Objekttext – alle Wege
+    zum Rendern (Etikettgröße, Objekte, „ragt hinaus“, Fläche) laufen darüber."""
     calls = []
-    real = render_object
+    for name in ("_prepare", "_finish"):
+        real = getattr(render, name)
 
-    def counting(obj, doc, model="QL-600"):
-        calls.append(obj.text)
-        return real(obj, doc, model)
+        def counting(item, *args, _real=real, _name=name, **kwargs):
+            calls.append((_name, getattr(item, "obj", item).text))
+            return _real(item, *args, **kwargs)
+        monkeypatch.setattr(render, name, counting)
+    return calls
 
-    monkeypatch.setattr("labelwerk.gui.main_window.render_object", counting)
+
+def test_render_without_change_renders_nothing(window, monkeypatch):
+    calls = _count_rendering(monkeypatch)
+    image = window.image
     window.render_now()
     assert calls == []
-    window.doc.objects[1] = layout.place(window.doc.objects[1], layout.Rect(10, 25, 0, 0))
-    window.render_now()
-    assert calls == ["Zwei"]
+    assert window.image is image                            # Druckbild nicht neu zusammengesetzt
+
+
+def test_only_changed_objects_are_rendered_again(qtbot, monkeypatch):
+    doc = _doc()
+    doc.objects.append(TextObject("Mitte"))                 # ohne Position: hängt an der Größe
+    win = _window(qtbot, doc)
+    calls = _count_rendering(monkeypatch)
+    win.doc.objects[1] = layout.place(win.doc.objects[1], layout.Rect(10, 25, 0, 0))
+    win.render_now()
+    assert calls == [("_prepare", "Zwei"), ("_finish", "Zwei")]
+    assert win.image.tobytes() == render_document(win.doc).tobytes()
+
+
+def test_growing_label_redraws_centered_objects_without_measuring_again(qtbot, monkeypatch):
+    doc = _doc(length_mm=None)
+    doc.objects.append(TextObject("Mitte"))
+    win = _window(qtbot, doc)
+    calls = _count_rendering(monkeypatch)
+    win.doc.objects[1] = layout.place(win.doc.objects[1], layout.Rect(4, 80, 0, 0))
+    win.render_now()
+    assert sorted(calls) == [("_finish", "Mitte"), ("_finish", "Zwei"), ("_prepare", "Zwei")]
+    assert win.image.tobytes() == render_document(win.doc).tobytes()
+
+
+def test_nudge_renders_only_the_moved_object(window, monkeypatch):
+    window.canvas.set_selection([0])
+    calls = _count_rendering(monkeypatch)
+    window.nudge(0.1, 0)
+    assert calls == [("_prepare", "Eins"), ("_finish", "Eins")]
+
+
+def test_outside_hint_and_area_come_from_the_rendered_objects(qtbot, monkeypatch):
+    doc = _doc()
+    doc.objects[1] = TextObject("Zwei", size_pt=14, x_mm=55, y_mm=20)
+    win = _window(qtbot, doc)
+    calls = _count_rendering(monkeypatch)
+    win.canvas.set_selection([1])
+    win.align_selected("left", paper=True)                  # Fläche ohne neues Messen
+    assert calls == [("_prepare", "Zwei"), ("_finish", "Zwei")]
+    assert win.doc.objects[1].x_mm == pytest.approx(layout.printable_area(win.doc).x)
 
 
 # --- Auswahl ----------------------------------------------------------------------
@@ -340,3 +386,65 @@ def test_object_outside_label_shows_status_hint(qtbot):
     win.canvas.set_selection([1])
     win.canvas.nudge(-30, 0)
     assert "ragt" not in win.result.text()
+
+
+def test_no_snapping_to_moving_end_of_auto_length_label(qtbot):
+    doc = _doc(length_mm=None)
+    doc.margin_mm = 5                                       # Bandende 5 mm hinter „Zwei“
+    win = _window(qtbot, doc)
+    canvas = win.canvas
+    ppm = canvas.px_per_mm()
+    label = layout.label_rect(win.doc)
+    rect = layout.object_rect(canvas.objects[0].rendered)
+    dy = round((label.bottom - rect.bottom) * ppm) - 2      # 2 px vor dem Bandende
+    start = _center(canvas, 0)
+    _press_move(canvas, start, start + QPointF(0, dy))
+    guides = canvas.guides()
+    _send(canvas, QMouseEvent.Type.MouseButtonRelease, start + QPointF(0, dy),
+          Qt.MouseButton.NoButton)
+    assert not any(axis == "y" and value == pytest.approx(label.bottom) for axis, value in guides)
+    moved = layout.object_rect(canvas.objects[0].rendered)
+    assert moved.bottom == pytest.approx(label.bottom - 2 / ppm, abs=0.1)
+
+
+# --- Änderungen während des Ziehens -------------------------------------------------
+def _release(canvas, pos, modifiers=ALT):
+    _send(canvas, QMouseEvent.Type.MouseButtonRelease, pos, Qt.MouseButton.NoButton, modifiers)
+
+
+def test_delete_while_dragging_cancels_the_drag(window, qtbot):
+    canvas = window.canvas
+    start = _center(canvas, 1)
+    end = start + QPointF(30, 10)
+    _press_move(canvas, start, end, ALT)
+    assert canvas.is_dragging() and canvas.selection() == [1]
+    window.delete_selected()                                # z. B. Entf während des Ziehens
+    assert not canvas.is_dragging()
+    assert len(canvas.objects) == 1                         # gleich neu gezeichnet
+    _release(canvas, end)
+    assert [(o.text, o.x_mm, o.y_mm) for o in window.doc.objects] == [("Eins", 4, 4)]
+
+
+@pytest.mark.parametrize("change", ["undo", "paste", "reorder", "create"])
+def test_structure_change_while_dragging_cancels_the_drag(window, change):
+    canvas = window.canvas
+    canvas.set_selection([0])
+    window.nudge(1, 0)                                      # ein Schritt zum Rückgängigmachen
+    window.copy_selected()
+    start = _center(canvas, 1)
+    end = start + QPointF(30, 10)
+    _press_move(canvas, start, end, ALT)
+    {"undo": window.undo, "paste": window.paste,
+     "reorder": lambda: window.reorder_selected(-1),
+     "create": lambda: window.create_text(40, 30)}[change]()
+    assert not canvas.is_dragging()
+    after = [(o.text, o.x_mm, o.y_mm) for o in window.doc.objects]
+    _release(canvas, end)
+    assert [(o.text, o.x_mm, o.y_mm) for o in window.doc.objects] == after
+    assert ("Zwei", 4, 20) in after                         # das gezogene Objekt blieb
+
+
+def test_moved_signal_with_stale_indices_is_ignored(window):
+    window.canvas.objects_moved.emit([5], [layout.Rect(1, 1, 1, 1)])
+    window.canvas.object_resized.emit(7, layout.Rect(1, 1, 1, 1), "br")
+    assert [(o.x_mm, o.y_mm) for o in window.doc.objects] == [(4, 4), (4, 20)]

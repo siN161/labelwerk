@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, replace
 
 from .document import MAX_PT, MIN_PT, Document, TextObject
 from .labels import DPI, get_label
-from .render import (PT, REF_PT, RenderedObject, _span_dots, label_margins, label_size,
+from .render import (PT, REF_PT, RenderedObject, span_dots, label_margins, label_size,
                      render_object)
 
 ALIGN_MODES = ("left", "hcenter", "right", "top", "vcenter", "bottom")
@@ -86,9 +86,13 @@ def growing_axis(doc: Document) -> str | None:
     return "x" if doc.orientation == "horizontal" else "y"
 
 
-def printable_area(doc: Document, model: str = "QL-600") -> Rect:
-    """Bedruckbarer Bereich: Etikett minus Rand in Bandlaufrichtung bzw. quer dazu."""
-    w, h = label_size(doc, model)
+def printable_area(doc: Document, model: str = "QL-600",
+                   size: tuple[int, int] | None = None) -> Rect:
+    """Bedruckbarer Bereich: Etikett minus Rand in Bandlaufrichtung bzw. quer dazu.
+
+    ``size``: schon bekannte Etikettgröße (``render.label_size``) – dann wird nichts gerendert.
+    """
+    w, h = size if size is not None else label_size(doc, model)
     mx, my = label_margins(doc, model)
     return Rect(_mm(mx), _mm(my), _mm(w - 2 * mx), _mm(h - 2 * my))
 
@@ -214,10 +218,10 @@ def fix_size(obj: TextObject, base_pt: float) -> TextObject:
                         (s for p in fixed.paragraphs for s in p.spans)):
         if old.size_pt is None:
             continue
-        dots = _span_dots(obj, old, base_dots)
+        dots = span_dots(obj, old, base_dots)
         exact = old.size_pt * fixed.size_pt / (obj.size_pt or REF_PT)
         new.size_pt = next((value for value in (round(exact, d) for d in range(1, 7))
-                            if _span_dots(fixed, replace(new, size_pt=value), base_dots) == dots),
+                            if span_dots(fixed, replace(new, size_pt=value), base_dots) == dots),
                            exact)
     return fixed
 

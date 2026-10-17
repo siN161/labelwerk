@@ -164,3 +164,49 @@ def test_select_updates_current_state_only_without_pending_change():
     history.push(_doc("B"), selection=[1])
     history.undo(_doc("B"), selection=[1])
     assert history.selection == [0]
+
+
+def test_merged_series_back_to_start_leaves_no_step():
+    history = History(_doc("A"))
+    history.push(_doc("B"))
+    history.push(_doc("C"), merge="nudge")
+    history.push(_doc("B"), merge="nudge", selection=[0])   # Pfeile hin und zurück
+    assert history.selection == [0]
+    assert _texts(history.undo(_doc("B"))) == ["A"]          # nur der Schritt davor
+    assert history.undo(_doc("A")) is None
+
+
+def test_after_dropped_series_same_merge_key_starts_new_step():
+    history = History(_doc("A"))
+    history.push(_doc("B"), merge="nudge")
+    history.push(_doc("A"), merge="nudge")
+    assert not history.can_undo()
+    history.push(_doc("C"), merge="nudge")
+    assert _texts(history.undo(_doc("C"))) == ["A"]
+
+
+def test_is_current():
+    history = History(_doc("A"))
+    assert history.is_current(_doc("A")) and not history.is_current(_doc("B"))
+
+
+def test_amend_replaces_current_state_without_step():
+    history = History(_doc("A"))
+    history.push(_doc("B"))
+    history.amend(_doc("B2"), [0])
+    assert history.is_current(_doc("B2")) and history.selection == [0]
+    assert _texts(history.undo(_doc("B2"))) == ["A"]
+    assert _texts(history.redo(_doc("A"))) == ["B2"]
+
+
+def test_amend_back_to_previous_state_drops_the_step():
+    """Leerer Textrahmen angelegt und wieder verlassen: kein Schritt bleibt übrig."""
+    history = History(_doc("A"))
+    history.push(_doc("X"), merge="nudge")
+    history.push(_doc("A+leer"))
+    history.amend(_doc("X"), [1])
+    assert history.is_current(_doc("X")) and history.selection == [1]
+    assert _texts(history.undo(_doc("X"))) == ["A"]
+    history.redo(_doc("A"))
+    history.push(_doc("Y"), merge="nudge")                  # keine Zusammenfassung über den Wegfall
+    assert _texts(history.undo(_doc("Y"))) == ["X"]

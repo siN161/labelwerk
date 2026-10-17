@@ -59,7 +59,8 @@ class History(QObject):
 
         ``selection`` ist die Auswahl dazu – ohne Änderung am Dokument wird nur sie für den
         aktuellen Stand übernommen. Aufeinanderfolgende Schritte mit gleichem ``merge``
-        (z. B. Pfeiltasten auf dieselbe Auswahl) werden zu einem Schritt zusammengefasst.
+        (z. B. Pfeiltasten auf dieselbe Auswahl) werden zu einem Schritt zusammengefasst;
+        führt die Serie zurück zum Stand davor, entfällt der Schritt.
         """
         state = _State(self._states[self._pos].doc, list(selection))
         if doc == state.doc:
@@ -69,12 +70,39 @@ class History(QObject):
         if (merge is not None and merge == self._merge and self._pos > 0
                 and self._pos == len(self._states) - 1):
             self._states[self._pos] = state
+            if self._drop_if_unchanged():
+                return True
         else:
             del self._states[self._pos + 1:]        # Wiederherstellen verfällt
             self._states.append(state)
             del self._states[:-(self.limit + 1)]
             self._pos = len(self._states) - 1
         self._merge = merge
+        self.changed.emit()
+        return True
+
+    def is_current(self, doc: Document) -> bool:
+        """``doc`` entspricht dem aktuellen Stand (nichts noch nicht Festgehaltenes)."""
+        return not self._pending(doc)
+
+    def amend(self, doc: Document, selection: list[int] = ()) -> None:
+        """Aktuellen Stand ohne eigenen Schritt ersetzen (z. B. ein leerer Textrahmen entfällt).
+
+        Gleicht er danach dem Stand davor, entfällt der Schritt, der ihn erzeugt hat."""
+        self._states[self._pos] = _State(copy.deepcopy(doc), list(selection))
+        if not self._drop_if_unchanged():
+            self._merge = None
+            self.changed.emit()
+
+    def _drop_if_unchanged(self) -> bool:
+        """Aktuellen Stand verwerfen, wenn er dem vorigen gleicht (seine Auswahl gilt dann
+        dort); eine Serie mit ``merge`` beginnt danach neu."""
+        if self._pos == 0 or self._states[self._pos].doc != self._states[self._pos - 1].doc:
+            return False
+        self._states[self._pos - 1].selection = self._states[self._pos].selection
+        del self._states[self._pos]
+        self._pos -= 1
+        self._merge = None
         self.changed.emit()
         return True
 

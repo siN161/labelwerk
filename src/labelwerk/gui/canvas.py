@@ -116,6 +116,7 @@ class Canvas(QGraphicsView):
         self._pixmaps: dict[int, tuple[RenderedObject, QPixmap]] = {}
         self._selection: list[int] = []
         self._area = self._label_rect = Rect(0, 0, 0, 0)
+        self._grow: str | None = None                      # mitwachsende Achse (Endlosband)
         self._guides: list[tuple[str, float]] = []
         self._caption = ""
         self._drag: str | None = None                      # "length" | "move" | "resize"
@@ -134,19 +135,21 @@ class Canvas(QGraphicsView):
     # --- Inhalt -----------------------------------------------------------
     def set_document(self, label: Label, size: tuple[int, int],
                      rendered: list[RenderedObject], orientation: str = "vertical",
-                     area: Rect | None = None, keep_ratio: list[bool] | None = None) -> None:
+                     area: Rect | None = None, keep_ratio: list[bool] | None = None,
+                     grow: str | None = None) -> None:
         """Etikett (physische Form) und die einzeln gerenderten Objekte darin anzeigen.
 
         ``size``: Etikett in Druckpunkten in Leserichtung (wie ``render.label_size``);
         ``area``: bedruckbarer Bereich in mm (Einrasten); ``keep_ratio`` je Objekt: Ecken
-        skalieren die Schrift (ohne feste Rahmengröße). Die Szene ist immer in
+        skalieren die Schrift (ohne feste Rahmengröße); ``grow``: Achse, in der das Etikett
+        mitwächst (``layout.growing_axis``) – dort rastet nur der Anfang ein. Die Szene ist immer in
         Druckkoordinaten; bei „horizontal“ dreht die Ansicht um −90°, damit das Etikett in
         Leserichtung erscheint – die Objekte liegen in ``sheet``, das in Leserichtung zählt.
         """
         if orientation != self.orientation:
             self.orientation = orientation
             self._apply_zoom()
-        self._cancel_object_drag()
+        self.cancel_object_drag()
         scene = self.scene()
         scene.clear()
         self.label = label
@@ -177,6 +180,7 @@ class Canvas(QGraphicsView):
                         for i, (obj, ratio) in enumerate(zip(rendered, ratios))]
         self._label_rect = Rect(0, 0, width / MM, height / MM)
         self._area = area if area is not None else self._label_rect
+        self._grow = grow
         dotted = QPen(QColor("#888888"), 1, Qt.PenStyle.DotLine)
         dotted.setCosmetic(True)
         self.printable = scene.addRect(QRectF(ox, oy, pw, ph), dotted)
@@ -225,8 +229,8 @@ class Canvas(QGraphicsView):
         return 0 <= index < len(self.objects)
 
     def nudge(self, dx_mm: float, dy_mm: float) -> None:
-        """Ausgewählte Objekte um dx/dy mm verschieben (Pfeiltasten)."""
-        if self._selection:
+        """Ausgewählte Objekte um dx/dy mm verschieben (Pfeiltasten; nicht während des Ziehens)."""
+        if self._selection and self._drag not in ("move", "resize"):
             frames = [self.objects[i].frame_mm().moved(dx_mm, dy_mm) for i in self._selection]
             self.objects_moved.emit(self.selection(), frames)
 
@@ -436,7 +440,8 @@ class Canvas(QGraphicsView):
             targets = [item.frame_mm() for item in self.objects
                        if item.index not in self._start and not item.is_empty()]
             snap = layout.snap(layout.bounds(frames), targets, self._area,
-                               SNAP_PX / self.px_per_mm(), label=self._label_rect)
+                               SNAP_PX / self.px_per_mm(), label=self._label_rect,
+                               grow=self._grow)
             delta += QPointF(snap.dx * MM, snap.dy * MM)
             self._guides = snap.guides
         for index, start in self._start.items():
@@ -475,11 +480,13 @@ class Canvas(QGraphicsView):
             return
         super().mouseReleaseEvent(event)
 
-    def _cancel_object_drag(self) -> None:
-        """Neuer Inhalt während des Ziehens: Ziehen am alten Element abbrechen."""
+    def cancel_object_drag(self) -> None:
+        """Ziehen eines Objekts abbrechen (neuer Inhalt, Objektliste geändert): Das Modell
+        bleibt unverändert, das Loslassen bewirkt nichts mehr."""
         if self._drag in ("move", "resize"):
             self._drag = None
             self._guides = []
+            self.viewport().update()
 
     def mouseDoubleClickEvent(self, event) -> None:
         if self._on_handle(event):

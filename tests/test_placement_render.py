@@ -5,7 +5,8 @@ from PIL import Image
 import _render_before_3d as before
 from labelwerk.document import ROTATIONS, Document, Paragraph, Span, TextObject
 from labelwerk.labels import DPI, length_limits
-from labelwerk.render import RenderedObject, render_document, render_object
+from labelwerk.render import (RenderedObject, finish_object, label_size, prepare_object,
+                             render_document, render_object)
 
 
 def _dots(mm):
@@ -314,3 +315,39 @@ def test_one_coordinate_positions_object_other_is_zero(kw, frame):
     assert obj.positioned
     ro = render_object(obj, Document("62", length_mm=40, objects=[obj]))
     assert (ro.x, ro.y) == (_dots(frame[0]), _dots(frame[1]))
+
+
+# --- Leere Rahmen, schrittweises Rendern (Arbeitsfläche) ----------------------------
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+@pytest.mark.parametrize("text", ["", "   "])
+def test_empty_positioned_object_does_not_lengthen_auto_label(orientation, text):
+    doc = Document("62", orientation=orientation,
+                   objects=[TextObject("Hallo", size_pt=14, x_mm=2, y_mm=2)])
+    size = label_size(doc)
+    doc.objects.append(TextObject.plain(text, size_pt=14))
+    doc.objects[-1].x_mm, doc.objects[-1].y_mm = 80, 80
+    assert label_size(doc) == size
+
+
+_STEPWISE = [
+    Document("62", objects=[TextObject("Mitte"), TextObject("Pos", size_pt=14, x_mm=3, y_mm=60),
+                            TextObject("Rahmen", fit=True, x_mm=5, y_mm=5, w_mm=30, h_mm=8,
+                                       rotation=90)]),
+    Document("62", orientation="horizontal",
+             objects=[TextObject.plain("links\nzwei", align="left"),
+                      TextObject("weit", size_pt=20, x_mm=90, y_mm=3)]),
+    Document("62x29", objects=[TextObject("Mitte", rotation=270), TextObject("")]),
+    Document("62", objects=[]),
+]
+
+
+@pytest.mark.parametrize("doc", _STEPWISE)
+def test_prepared_objects_give_same_size_and_images(doc):
+    prepared = [prepare_object(obj, doc) for obj in doc.objects]
+    size = label_size(doc, prepared=prepared)
+    assert size == label_size(doc)
+    for obj, prep in zip(doc.objects, prepared):
+        a, b = finish_object(prep, doc, size), render_object(obj, doc)
+        assert (a.x, a.y, a.w, a.h, a.base_pt, a.image_dx, a.image_dy) == \
+               (b.x, b.y, b.w, b.h, b.base_pt, b.image_dx, b.image_dy)
+        assert a.image.tobytes() == b.image.tobytes()

@@ -1,7 +1,7 @@
 """Platzier-Logik ohne Qt: Einrasten, Ausrichten, Größe angleichen, Skalieren (Etappe 3d-1)."""
 import pytest
 
-from labelwerk import layout
+from labelwerk import layout, render
 from labelwerk.document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
 from labelwerk.labels import DPI
 from labelwerk.layout import Rect, Snap
@@ -72,6 +72,13 @@ def test_printable_area_vertical_margins():
     area = layout.printable_area(doc)
     assert _t(area) == _approx(Rect(_mm(MARGIN), feed, label.w - 2 * _mm(MARGIN),
                                       label.h - 2 * feed))
+
+
+def test_printable_area_from_known_size_renders_nothing(monkeypatch):
+    doc = Document("62", margin_mm=2, objects=[TextObject("A", size_pt=20, x_mm=3, y_mm=50)])
+    size, expected = render.label_size(doc), layout.printable_area(doc)
+    monkeypatch.setattr(render, "_prepare", lambda *a: pytest.fail("misst neu"))
+    assert layout.printable_area(doc, size=size) == expected
 
 
 def test_printable_area_horizontal_swaps_margins():

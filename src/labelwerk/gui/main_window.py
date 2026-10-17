@@ -16,11 +16,12 @@ from ..detect import brother_busy, find_brother_lp
 from ..document import Document, TextObject
 from ..fonts import DEFAULT_FAMILY
 from ..labels import get_label
-from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, match_objects,
-                      maximize_object, move, object_rect, objects_outside, printable_area,
-                      reorder, resize, rotate, set_frame)
+from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, growing_axis,
+                      match_objects, maximize_object, move, object_rect, outside_indices,
+                      printable_area, reorder, resize, rotate, set_frame)
 from ..printer import DEFAULT_MODEL
-from ..render import RenderedObject, compose, font_warnings, label_size, render_object
+from ..render import (Prepared, RenderedObject, compose, finish_object, font_warnings,
+                      label_size, prepare_object)
 from ..settings import Settings, load_settings, new_document
 from ..shortcuts import effective
 from .actions import apply_shortcuts, build_actions
@@ -52,11 +53,16 @@ SELECTION_PANELS = ("text", "layout")   # arbeiten mit der Auswahl: Wählen wech
 
 @dataclass
 class _Cached:
-    """Gerendertes Objekt samt Stand, aus dem es entstand (Neu-Rendern nur bei Änderung)."""
+    """Gemessenes und gerendertes Objekt samt Stand, aus dem es entstand.
+
+    Gemessen wird nur bei Änderung des Objekts bzw. des Etiketts; gezeichnet zusätzlich,
+    wenn sich bei einem Objekt ohne Position (steht mittig) die Etikettgröße ändert."""
     obj: TextObject            # hält das Objekt fest, damit seine id nicht neu vergeben wird
     snapshot: TextObject
-    key: tuple
-    rendered: RenderedObject
+    context: tuple
+    prepared: Prepared
+    size: tuple | None = None                  # Etikettgröße des Bilds (None = mit Position)
+    rendered: RenderedObject | None = None
 
 
 class MainWindow(QMainWindow):
@@ -81,7 +87,10 @@ class MainWindow(QMainWindow):
         self._clipboard: list[TextObject] = []      # interne Zwischenablage (Kopien)
         self._merge_next = None                     # Pfeiltasten: Schritte zusammenfassen
         self._restoring = False                     # Rückgängig setzt gerade die Auswahl
+        self._arranging = False                     # Auswahl wird intern umgestellt (Anlegen …)
         self._outside: list[int] = []               # Objekte, die über das Etikett ragen
+        self._area = Rect(0, 0, 0, 0)               # bedruckbarer Bereich (mm), mit dem Bild
+        self._composed: tuple = (None, [], None)    # Druckbild und woraus es entstand
         # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar
         self.actions = build_actions(self, effective(self.settings.shortcuts))
 
@@ -283,20 +292,65 @@ class MainWindow(QMainWindow):
         self.panels.setCurrentWidget(self.panel(key))
 
     def _tool_triggered(self, key: str) -> None:
-        """Werkzeug-Reiter: Panel zeigen; Text ohne Auswahl heißt „Text anlegen“."""
+        """Werkzeug-Reiter: Panel zeigen; Text ohne Auswahl heißt „Text anlegen“, jedes
+        andere Panel arbeitet mit dem Auswahl-Pfeil."""
         self.panels.setCurrentWidget(self.panel(key))
-        if key == "text" and not self.canvas.selection():
+        if key == "text":
+            self._sync_tool()
+        else:
+            self.canvas.set_tool("select")
+
+    def _sync_tool(self) -> None:
+        """Werkzeug passend zur Auswahl: Text-Panel ohne Auswahl = „Text anlegen“ (Hinweis
+        im Panel); mit Auswahl der Auswahl-Pfeil – wie nach einem Klick auf ein Objekt."""
+        if self.canvas.selection():
+            self.canvas.set_tool("select")
+        elif self.panels.currentWidget() is self.panel("text"):
             self.canvas.set_tool("text")
 
     def _on_selection(self, indices: list[int]) -> None:
         """Auswahl auf der Arbeitsfläche: Panel des Objekts zeigen – außer ein Panel, das mit
-        der Auswahl arbeitet (Text, Layout), ist schon zu sehen."""
+        der Auswahl arbeitet (Text, Layout), ist schon zu sehen. Ein leerer Textrahmen, den
+        die Auswahl verlässt, entfällt."""
+        if self._arranging:                         # Anlegen, Umnummerieren: nur mitführen
+            self._follow_selection(indices)
+            return
+        if not self._restoring:
+            indices = self._drop_empty_frames(indices)
         self._follow_selection(indices)
         if self._restoring:                         # Rückgängig wechselt nicht den Reiter
             return
         self.history.select(self.doc, indices)
         if indices:
             self._show_object_panel()
+        self._sync_tool()
+
+    def _drop_empty_frames(self, indices: list[int]) -> list[int]:
+        """Leere Textrahmen (mit Position), die nicht mehr ausgewählt sind, entfernen; die
+        Auswahl wird umnummeriert. Unsichtbar und nicht anklickbar, sollen sie weder liegen
+        bleiben noch das Etikett verlängern.
+
+        Kein eigener Rückgängig-Schritt: Ist nichts anderes offen, ersetzt das den aktuellen
+        Stand (das Anlegen entfällt dann ganz), sonst gehört es zum laufenden Schritt."""
+        empty = [i for i, obj in enumerate(self.doc.objects)
+                 if obj.positioned and obj.is_empty() and i not in indices]
+        if not empty:
+            return indices
+        recorded = self.history.is_current(self.doc)
+        self._structure_changing()
+        for index in reversed(empty):
+            del self.doc.objects[index]
+        indices = [i - sum(e < i for e in empty) for i in indices]
+        self._arranging = True
+        try:
+            self.canvas.set_selection(indices)     # vor dem Neuzeichnen: Indizes passen
+            self._follow_selection(indices)        # Text-Panel nicht auf dem entfernten Rahmen
+            self.render_now()
+        finally:
+            self._arranging = False
+        if recorded:
+            self.history.amend(self.doc, indices)
+        return indices
 
     def _show_object_panel(self) -> None:
         """Vom Papier-Reiter zum Panel des Objekts (auch beim Klick auf ein schon gewähltes)."""
@@ -337,11 +391,12 @@ class MainWindow(QMainWindow):
             self._timer.start()
             return
         try:
-            size = label_size(self.doc, self.model)
-            rendered = self._render_objects(size)
-            image = compose(rendered, size, self.doc.orientation)
-            area = printable_area(self.doc, self.model)
-            outside = objects_outside(self.doc, self.model)
+            # jedes Objekt höchstens einmal messen und zeichnen; Größe, Fläche und
+            # „ragt hinaus“ folgen aus den gerenderten Objekten
+            entries = self._prepare_objects()
+            size = label_size(self.doc, self.model, prepared=[e.prepared for e in entries])
+            rendered = self._render_objects(entries, size)
+            image = self._compose(rendered, size)
         except ValueError as e:
             # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
             self._render_error = str(e)
@@ -354,6 +409,8 @@ class MainWindow(QMainWindow):
         if self._hint is not None and self.result.text() == self._hint:
             self._set_result("", "")   # alten Hinweis nur löschen, wenn er noch dasteht
         self._hint = None
+        area = printable_area(self.doc, self.model, size)
+        outside = outside_indices(rendered, size, self.doc.objects)
         hints = ([OUTSIDE_HINT] if outside else []) + font_warnings(self.doc)
         if hints and not self.result.text():
             self._hint = " · ".join(hints)
@@ -362,33 +419,56 @@ class MainWindow(QMainWindow):
         self.image = image
         self.rendered = rendered
         self._outside = outside
+        self._area = area
         self.canvas.set_document(get_label(self.doc.label_id), size, rendered, self.doc.orientation,
-                                 area, keep_ratio=[not obj.fit for obj in self.doc.objects])
+                                 area, keep_ratio=[not obj.fit for obj in self.doc.objects],
+                                 grow=growing_axis(self.doc))
         self._update_frame()
 
-    def _render_objects(self, size: tuple[int, int]) -> list[RenderedObject]:
-        """Objekte einzeln rendern; unveränderte kommen aus dem Cache.
-
-        Ein Objekt ohne Position steht mittig und hängt deshalb auch von der Etikettgröße ab.
-        """
+    def _prepare_objects(self) -> list[_Cached]:
+        """Objekte messen; unveränderte kommen aus dem Cache."""
         doc = self.doc
         context = (self.model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm)
         cache: dict[int, _Cached] = {}
         for obj in doc.objects:
-            key = (context, None if obj.positioned else size)
             entry = self._cache.get(id(obj))
-            if entry is None or entry.obj is not obj or entry.key != key or entry.snapshot != obj:
-                entry = _Cached(obj, copy.deepcopy(obj), key, render_object(obj, doc, self.model))
+            if (entry is None or entry.obj is not obj or entry.context != context
+                    or entry.snapshot != obj):
+                entry = _Cached(obj, copy.deepcopy(obj), context,
+                                prepare_object(obj, doc, self.model))
             cache[id(obj)] = entry
         self._cache = cache
-        return [cache[id(obj)].rendered for obj in doc.objects]
+        return [cache[id(obj)] for obj in doc.objects]
+
+    def _render_objects(self, entries: list[_Cached], size: tuple[int, int]) -> list[RenderedObject]:
+        """Gemessene Objekte zeichnen; ein Objekt ohne Position steht mittig und wird deshalb
+        auch neu gezeichnet, wenn sich die Etikettgröße ändert."""
+        for entry in entries:
+            key = None if entry.obj.positioned else size
+            if entry.rendered is None or entry.size != key:
+                entry.rendered = finish_object(entry.prepared, self.doc, size, self.model)
+                entry.size = key
+        return [entry.rendered for entry in entries]
+
+    def _compose(self, rendered: list[RenderedObject], size: tuple[int, int]):
+        """Druckbild – unverändert, solange dieselben Objektbilder auf derselben Größe liegen."""
+        key = (size, self.doc.orientation)
+        if (self.image is None or key != self._composed[0]
+                or len(rendered) != len(self._composed[1])
+                or any(a is not b for a, b in zip(rendered, self._composed[1]))):
+            self._composed = (key, list(rendered), compose(rendered, size, self.doc.orientation))
+        return self._composed[2]
 
     # --- Rückgängig -------------------------------------------------------
     def _commit(self, merge=None) -> None:
         """Stand nach einer abgeschlossenen Aktion festhalten (ohne Änderung kein Schritt).
 
         Vor jeder Aktion aufgerufen, wird noch nicht Festgehaltenes (Getipptes) ein eigener
-        Schritt. Tippen im Textfeld wird ein Schritt, sobald der Fokus das Feld verlässt."""
+        Schritt. Tippen im Textfeld wird ein Schritt, sobald der Fokus das Feld verlässt –
+        nicht, während die Auswahl intern umgestellt wird (z. B. Textfeld gesperrt, weil ein
+        leerer Rahmen entfällt); das hält der Aufrufer selbst fest."""
+        if self._arranging:
+            return
         self.history.push(self.doc, merge, self.canvas.selection())
         self._update_edit_actions()
 
@@ -403,6 +483,7 @@ class MainWindow(QMainWindow):
         if snapshot is None:
             return
         selection = self.history.selection
+        self._structure_changing()
         self._restoring = True       # Auswahl, die beim Neuzeichnen entfällt, nicht festhalten
         try:
             restore(self.doc, snapshot)
@@ -412,6 +493,7 @@ class MainWindow(QMainWindow):
             self.canvas.set_selection(selection)        # ungültige Indizes entfallen
         finally:
             self._restoring = False
+        self._sync_tool()
         self._update_edit_actions()
 
     # --- Objekte auf der Arbeitsfläche ------------------------------------
@@ -423,19 +505,31 @@ class MainWindow(QMainWindow):
         finally:
             self._merge_next = None
 
+    def _valid(self, index: int) -> bool:
+        """Index passt zum Dokument und zu den gerenderten Objekten (nicht veraltet)."""
+        return 0 <= index < min(len(self.doc.objects), len(self.rendered))
+
+    def _structure_changing(self) -> None:
+        """Objektliste ändert sich (Löschen, Einfügen, Rückgängig, Reihenfolge …): laufendes
+        Ziehen abbrechen – seine Indizes gälten nicht mehr – und gleich neu zeichnen lassen."""
+        self.canvas.cancel_object_drag()
+
     def _move_objects(self, indices: list[int], rects: list[Rect]) -> None:
+        indices_rects = [(i, r) for i, r in zip(indices, rects) if self._valid(i)]
+        if not indices_rects:
+            return
         self._commit()
-        for index, rect in zip(indices, rects):
-            if index < len(self.rendered):
-                self.doc.objects[index] = move(self.doc.objects[index], rect, self.rendered[index])
+        for index, rect in indices_rects:
+            self.doc.objects[index] = move(self.doc.objects[index], rect, self.rendered[index])
         self._objects_changed(indices)
         self._commit(self._merge_next)
 
     def _resize_object(self, index: int, rect: Rect, handle: str) -> None:
+        if not self._valid(index):
+            return
         self._commit()
-        if index < len(self.rendered):
-            self.doc.objects[index] = resize(self.doc.objects[index], rect, self.rendered[index],
-                                             corner=len(handle) == 2)
+        self.doc.objects[index] = resize(self.doc.objects[index], rect, self.rendered[index],
+                                         corner=len(handle) == 2)
         self._objects_changed([index])
         self._commit()
 
@@ -444,15 +538,20 @@ class MainWindow(QMainWindow):
 
         Schrift aus den Einstellungen (automatische Größe → 19 pt). Andere leere Texte sind
         unsichtbar und drucken nicht – sie entfallen dabei."""
+        self._structure_changing()
         self._commit()
         family = None if self.settings.font_family == DEFAULT_FAMILY else self.settings.font_family
         obj = TextObject.plain("", size_pt=self.settings.font_size_pt or DEFAULT_PT, family=family)
         obj.x_mm, obj.y_mm = round(x_mm, 1), round(y_mm, 1)
         self.doc.objects[:] = [o for o in self.doc.objects if not o.is_empty()]
         self.doc.objects.append(obj)
-        self.canvas.set_selection([])     # erst nach der Änderung: Auswahl davor bleibt im Stand
         index = len(self.doc.objects) - 1
-        self._objects_changed(list(range(len(self.doc.objects))))
+        self._arranging = True            # der neue, noch leere Rahmen bleibt
+        try:
+            self.canvas.set_selection([])  # erst nach der Änderung: Auswahl davor bleibt im Stand
+            self._objects_changed(list(range(len(self.doc.objects))))
+        finally:
+            self._arranging = False
         self.canvas.set_selection([index])
         self._commit()
         self.edit_text(index)
@@ -469,6 +568,7 @@ class MainWindow(QMainWindow):
         indices = self.canvas.selection()
         if not indices:
             return
+        self._structure_changing()
         self._commit()
         for index in sorted(indices, reverse=True):
             del self.doc.objects[index]
@@ -479,7 +579,7 @@ class MainWindow(QMainWindow):
     def _edit_frame(self, key: str, value: float) -> None:
         """Zahl im Bereich „Position“ geändert: Objekt verschieben bzw. Rahmen ändern."""
         index = self.panel("text").index
-        if index is None or index >= len(self.rendered):
+        if index is None or not self._valid(index):
             return
         self._commit()
         obj = self.doc.objects[index]
@@ -491,18 +591,19 @@ class MainWindow(QMainWindow):
     # --- Reiter „Layout“ ---------------------------------------------------
     def align_selected(self, mode: str, paper: bool = False) -> None:
         """Auswahl aneinander bzw. am bedruckbaren Bereich ausrichten."""
-        area = printable_area(self.doc, self.model) if paper else None
-        self._change_selected(lambda objs, rendered: align_objects(objs, rendered, mode, area))
+        self._change_selected(lambda objs, rendered: align_objects(
+            objs, rendered, mode, self._area if paper else None))
 
     def match_selected(self, mode: str) -> None:
         """Größe, Breite oder Höhe an das zuerst gewählte Objekt angleichen."""
         self._change_selected(lambda objs, rendered: match_objects(objs, rendered, mode))
 
     def maximize_selected(self) -> None:
-        """Jedes gewählte Objekt so groß wie möglich mittig in den bedruckbaren Bereich."""
-        area = printable_area(self.doc, self.model)
+        """Jedes gewählte Objekt so groß wie möglich mittig in den bedruckbaren Bereich
+        (auf Endlosband mit automatischer Länge nur quer – ``maximize_object``)."""
         self._change_selected(lambda objs, rendered: [
-            maximize_object(obj, r, area, self.doc, self.model) for obj, r in zip(objs, rendered)])
+            maximize_object(obj, r, self._area, self.doc, self.model)
+            for obj, r in zip(objs, rendered)])
 
     def rotate_selected(self, degrees: int) -> None:
         """Auswahl um 90° drehen (−90 = links); die Mitte jedes Objekts bleibt."""
@@ -510,10 +611,12 @@ class MainWindow(QMainWindow):
             rotate(obj, r, degrees) for obj, r in zip(objs, rendered)])
 
     def _change_selected(self, change) -> None:
-        """Gewählte Objekte durch ``change(objekte, gerendert)`` ersetzen – ein Schritt."""
+        """Gewählte Objekte durch ``change(objekte, gerendert)`` ersetzen – ein Schritt.
+
+        ``change`` läuft nach dem Rendern: Rahmen und ``self._area`` sind aktuell."""
         if self._timer.isActive():
             self.render_now()                   # z. B. eben Getipptes: aktuelle Rahmen
-        indices = [i for i in self.canvas.selection() if i < len(self.rendered)]
+        indices = [i for i in self.canvas.selection() if self._valid(i)]
         if not indices:
             return
         self._commit()
@@ -528,6 +631,7 @@ class MainWindow(QMainWindow):
         indices = self.canvas.selection()
         if not indices:
             return
+        self._structure_changing()
         self._commit()
         self.doc.objects[:], moved = reorder(self.doc.objects, indices, step)
         self.render_now()
@@ -567,6 +671,7 @@ class MainWindow(QMainWindow):
         return move(obj, object_rect(rendered), rendered)
 
     def _insert(self, objects: list[TextObject]) -> None:
+        self._structure_changing()
         self._commit()
         start = len(self.doc.objects)
         self.doc.objects.extend(objects)

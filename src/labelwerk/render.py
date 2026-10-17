@@ -125,10 +125,33 @@ def compose(rendered: list[RenderedObject], size: tuple[int, int],
     return img.rotate(-90, expand=True) if orientation == "horizontal" else img
 
 
-def label_size(doc: Document, model: str = "QL-600") -> tuple[int, int]:
-    """Etikettgröße (Breite, Höhe) in Druckpunkten in Leserichtung – wie ``render_document``."""
+def label_size(doc: Document, model: str = "QL-600",
+               prepared: list[Prepared] | None = None) -> tuple[int, int]:
+    """Etikettgröße (Breite, Höhe) in Druckpunkten in Leserichtung – wie ``render_document``.
+
+    ``prepared``: schon gemessene Objekte (``prepare_object``, je Objekt in ``doc``) – dann
+    wird nichts neu gemessen.
+    """
     sheet = _sheet(doc, model)
-    return _label_size(sheet, [_prepare(obj, sheet) for obj in doc.objects or [TextObject("")]])
+    if prepared is None or not doc.objects:
+        prepared = [_prepare(obj, sheet) for obj in doc.objects or [TextObject("")]]
+    return _label_size(sheet, prepared)
+
+
+def prepare_object(obj: TextObject, doc: Document, model: str = "QL-600") -> Prepared:
+    """Objekt messen (Grundgröße, Zeilen, Rahmengröße) – unabhängig von der Etikettgröße.
+
+    Zusammen mit ``label_size(..., prepared=)`` und ``finish_object`` rendert die
+    Arbeitsfläche nur geänderte Objekte neu (``render_object`` misst alle anderen mit).
+    """
+    return _prepare(obj, _sheet(doc, model))
+
+
+def finish_object(prep: Prepared, doc: Document, size: tuple[int, int],
+                  model: str = "QL-600") -> RenderedObject:
+    """Gemessenes Objekt auf dem Etikett ``size`` (wie ``label_size``) rendern – dasselbe
+    Ergebnis wie ``render_object``."""
+    return _finish(prep, _sheet(doc, model), *size)
 
 
 def label_margins(doc: Document, model: str = "QL-600") -> tuple[int, int]:
@@ -176,7 +199,7 @@ def _dots(mm: float) -> int:
 
 
 @dataclass
-class _Prepared:
+class Prepared:
     """Gemessenes Objekt: Grundgröße, Zeilen (an der breitesten Zeile ausgerichtet), Tintenbox."""
     obj: TextObject
     base: int
@@ -191,7 +214,7 @@ class _Prepared:
         return (h, w) if self.obj.rotation in (90, 270) else (w, h)
 
 
-def _prepare(obj: TextObject, sheet: _Sheet) -> _Prepared:
+def _prepare(obj: TextObject, sheet: _Sheet) -> Prepared:
     for para in obj.paragraphs:
         if para.align not in ALIGNMENTS:
             raise ValueError(f"Unbekannte Textposition {para.align!r} – erlaubt: links, zentriert, "
@@ -216,21 +239,23 @@ def _prepare(obj: TextObject, sheet: _Sheet) -> _Prepared:
         lines = _shape(obj, base)
         l, t, r, b = box = _block_box(lines)
         frame = (r - l if frame_w is None else frame_w, b - t if frame_h is None else frame_h)
-        return _Prepared(obj, base, lines, box, frame)
+        return Prepared(obj, base, lines, box, frame)
     if obj.positioned and not obj.auto:
         base = round(obj.size_pt * PT)         # darf hinausragen – kein TextTooLarge
     else:
         base = _fit(obj, auto_start, max_w, max_h, sheet.label_id)
     lines = _shape(obj, base)
-    return _Prepared(obj, base, lines, _block_box(lines), None)
+    return Prepared(obj, base, lines, _block_box(lines), None)
 
 
-def _label_size(sheet: _Sheet, preps: list[_Prepared]) -> tuple[int, int]:
+def _label_size(sheet: _Sheet, preps: list[Prepared]) -> tuple[int, int]:
     """Etikettgröße in Leserichtung; automatische Länge aus dem Platzbedarf der Objekte."""
     feed = sheet.feed
     if feed is None:
         needed = 0
         for prep in preps:
+            if prep.obj.positioned and prep.obj.is_empty():
+                continue                       # leerer Rahmen druckt nicht, verlängert nicht
             w, h = prep.size()
             size = w if sheet.horizontal else h
             if prep.obj.positioned:
@@ -242,7 +267,7 @@ def _label_size(sheet: _Sheet, preps: list[_Prepared]) -> tuple[int, int]:
     return (feed, sheet.across) if sheet.horizontal else (sheet.across, feed)
 
 
-def _finish(prep: _Prepared, sheet: _Sheet, width: int, height: int) -> RenderedObject:
+def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedObject:
     """Objektbild zeichnen und auf dem Etikett (``width`` × ``height``) platzieren.
 
     Gerechnet wird ungedreht in einer Fläche ``area`` (positioniert: der eigene Rahmen,
@@ -341,7 +366,7 @@ def _paint(lines: list, x0: int, y0: int, width: int, height: int,
 
 
 # --- Schriftgrößen ----------------------------------------------------------
-def _span_dots(obj: TextObject, span: Span, base: int) -> int:
+def span_dots(obj: TextObject, span: Span, base: int) -> int:
     """Größe eines Stücks in Druckpunkten bei Grundgröße ``base`` (gemeinsam skaliert)."""
     if span.size_pt is None:
         return base
@@ -406,7 +431,7 @@ def _shape(obj: TextObject, base: int, mode: str = "L",
         spans = para.spans or [Span("")]
         pieces = []
         for span in spans:
-            dots = _span_dots(obj, span, base)
+            dots = span_dots(obj, span, base)
             font, slant = _font_for(obj, span, dots)
             pieces.append(_Piece(span.text, font, dots, span.underline, slant))
         rows.append((para, pieces))

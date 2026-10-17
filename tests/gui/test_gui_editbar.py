@@ -355,6 +355,8 @@ def test_undo_create_delete_paste_duplicate(window):
     steps = []
     window.create_text(30, 12)
     steps.append(3)
+    window.panel("text").edit.setPlainText("Neu")            # Getipptes: eigener Schritt
+    steps.append(3)
     window.canvas.set_selection([0])
     window.delete_selected()
     steps.append(2)
@@ -458,3 +460,127 @@ def test_undo_restores_selection_of_the_state(window):
     window.delete_selected()
     _undo(window)
     assert window.canvas.selection() == [0]                 # Gelöschtes ist wieder gewählt
+
+
+# --- Leere Textrahmen -------------------------------------------------------------
+def _empty_area(canvas):
+    return canvas.view_rect(1).bottomRight() + QPointF(40, 40)
+
+
+def test_empty_frame_is_removed_when_clicking_away(window):
+    window.create_text(30, 12)
+    assert len(window.doc.objects) == 3
+    _click(window.canvas, _empty_area(window.canvas))
+    assert [o.text for o in window.doc.objects] == ["Eins", "Zwei"]
+    assert len(window.canvas.objects) == 2
+    assert not window.actions["edit.undo"].isEnabled()       # kein leerer Schritt übrig
+
+
+def test_empty_frame_is_removed_when_selecting_another_object(window):
+    window.create_text(30, 12)
+    _click(window.canvas, window.canvas.view_rect(1).center())
+    assert [o.text for o in window.doc.objects] == ["Eins", "Zwei"]
+    assert window.canvas.selection() == [1]
+    assert window.panel("text").edit.toPlainText() == "Zwei"
+
+
+def test_selection_is_renumbered_when_empty_frame_before_it_goes(qtbot):
+    doc = _doc()
+    frame = TextObject.plain("", size_pt=14)
+    frame.x_mm, frame.y_mm = 30, 12
+    doc.objects.insert(0, frame)
+    win = _window(qtbot, doc)
+    win.canvas.set_selection([0])
+    win.canvas.set_selection([2])
+    assert [o.text for o in win.doc.objects] == ["Eins", "Zwei"]
+    assert win.canvas.selection() == [1]
+    assert win.panel("text").edit.toPlainText() == "Zwei"
+
+
+def test_frame_with_text_stays(window):
+    window.create_text(30, 12)
+    window.panel("text").edit.setPlainText("Neu")
+    _click(window.canvas, _empty_area(window.canvas))
+    assert [o.text for o in window.doc.objects] == ["Eins", "Zwei", "Neu"]
+
+
+def test_empty_frame_removed_while_pasting_is_part_of_the_paste_step(window):
+    window.canvas.set_selection([0])
+    window.copy_selected()
+    window.create_text(30, 12)
+    window.paste()
+    assert [o.text for o in window.doc.objects] == ["Eins", "Zwei", "Eins"]
+    assert window.canvas.selection() == [2]
+    _undo(window)
+    assert [o.text for o in window.doc.objects] == ["Eins", "Zwei", ""]
+
+
+def test_empty_frame_does_not_lengthen_auto_label(qtbot):
+    doc = _doc()
+    doc.length_mm = None
+    win = _window(qtbot, doc)
+    length = win.canvas.label_height()
+    win.create_text(10, 80)
+    assert len(win.doc.objects) == 3 and win.canvas.selection() == [2]
+    assert win.canvas.label_height() == length
+
+
+# --- Werkzeug folgt dem Panel -------------------------------------------------------
+def test_text_panel_without_selection_activates_text_tool(window):
+    _click(window.canvas, window.canvas.view_rect(0).center())
+    assert window.panels.currentWidget() is window.panel("text")
+    assert window.canvas.tool() == "select"
+    _click(window.canvas, _empty_area(window.canvas))
+    assert window.canvas.selection() == []
+    assert window.canvas.tool() == "text" and window.actions["tool.text"].isChecked()
+
+
+def test_paper_panel_without_selection_keeps_select_tool(window):
+    window.canvas.set_selection([0])
+    window.tool_actions["paper"].trigger()
+    _click(window.canvas, _empty_area(window.canvas))
+    assert window.canvas.tool() == "select"
+
+
+@pytest.mark.parametrize("other", ["paper", "layout"])
+def test_switching_from_text_panel_returns_to_select_tool(window, other):
+    window.tool_actions["text"].trigger()
+    assert window.canvas.tool() == "text"
+    window.tool_actions[other].trigger()
+    assert window.canvas.tool() == "select" and window.actions["tool.select"].isChecked()
+
+
+def test_undo_and_redo_set_tool_by_restored_selection(window):
+    _click(window.canvas, window.canvas.view_rect(0).center())
+    window.actions["edit.cut"].trigger()
+    assert window.canvas.selection() == [] and window.canvas.tool() == "text"
+    _undo(window)                                            # Auswahl wieder [0]
+    assert window.canvas.selection() == [0] and window.canvas.tool() == "select"
+    _redo(window)                                            # Stand ohne Auswahl
+    assert window.canvas.selection() == [] and window.canvas.tool() == "text"
+    assert window.panels.currentWidget() is window.panel("text")
+
+
+# --- Rückgängig: Kleinigkeiten ------------------------------------------------------
+def test_nudges_back_to_start_leave_no_undo_step(window, qtbot):
+    window.canvas.set_selection([1])
+    _focus_canvas(window, qtbot)
+    for key in (Qt.Key.Key_Right, Qt.Key.Key_Right, Qt.Key.Key_Left, Qt.Key.Key_Left):
+        QTest.keyClick(window.canvas, key)
+    assert window.doc.objects[1].x_mm == pytest.approx(4)
+    assert not window.actions["edit.undo"].isEnabled()
+
+
+@pytest.mark.parametrize("step", ["paste", "create", "duplicate"])
+def test_undo_on_paper_tab_stays_on_paper_tab(window, step):
+    window.canvas.set_selection([0])
+    window.copy_selected()
+    {"paste": window.paste, "create": lambda: window.create_text(30, 12),
+     "duplicate": window.duplicate_selected}[step]()
+    if step == "create":
+        window.panel("text").edit.setPlainText("Neu")
+    window.tool_actions["paper"].trigger()
+    _undo(window)
+    assert window.panels.currentWidget() is window.panel("paper")
+    _redo(window)
+    assert window.panels.currentWidget() is window.panel("paper")
