@@ -37,3 +37,19 @@ def test_auto_printer_with_network_asks_for_address(capsys):
     rc = main(["print", "Hallo", "-l", "62", "-b", "network"])
     assert rc == 2
     assert "tcp://" in capsys.readouterr().err
+
+
+def test_print_error_gives_friendly_message(monkeypatch, capsys):
+    from labelwerk.printer import PrintError
+    def fail(*a, **kw):
+        raise PrintError("Eingelegte Rolle passt nicht")
+    monkeypatch.setattr("labelwerk.cli.prn.print_image", fail)
+    rc = main(["print", "Hallo", "-l", "62", "-p", "file:///dev/usb/lp0"])
+    assert rc == 2
+    assert "Rolle passt nicht" in capsys.readouterr().err
+
+
+def test_unknown_label_gives_friendly_error(capsys):
+    rc = main(["print", "Hallo", "-l", "99", "--preview", "x.png"])
+    assert rc == 2
+    assert "Unbekanntes Etikett" in capsys.readouterr().err

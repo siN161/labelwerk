@@ -62,7 +62,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     text = args.text.replace("\\n", "\n")
-    img = render_text(text, args.label, font_size=args.font_size, font_path=args.font)
+    try:
+        img = render_text(text, args.label, font_size=args.font_size, font_path=args.font)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
 
     if args.preview:
         img.save(args.preview)
@@ -78,14 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         status = prn.print_image(img, args.label, model=args.model, printer=args.printer,
                                  backend=args.backend, cut=not args.no_cut)
-    except FileNotFoundError:
-        print(f"Drucker nicht gefunden: {args.printer}\n"
-              "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', 'lsmod | grep usblp'.",
-              file=sys.stderr)
-        return 2
-    except PermissionError:
-        print(f"Keine Berechtigung für {args.printer} – Benutzer in Gruppe 'lp'?",
-              file=sys.stderr)
+    except prn.PrintError as e:
+        print(e, file=sys.stderr)
         return 2
     ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
     print(f"Status: {status.get('outcome')}")
