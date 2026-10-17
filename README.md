@@ -38,6 +38,7 @@ Optionen: `-s` Schriftgröße, `--font` eigene TTF, `-b pyusb` alternatives USB-
 ```bash
 pip install -e ".[gui]"
 labelwerk-gui
+labelwerk install-desktop    # im Starter (Super-Taste) eintragen; --remove entfernt den Eintrag wieder
 ```
 
 Aufbau wie im P-touch Editor: Werkzeugleiste (Papier, Text), Eigenschaften links, Etikett in echter Größe und Form mit mm-Linealen. Bei Endlosband lässt sich die Länge am Anfasser unter dem Etikett ziehen (Doppelklick = automatisch). Zoom mit Strg+Mausrad oder −/+ unten rechts.
