@@ -1,7 +1,7 @@
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from labelwerk.gui.app import load_theme
 from labelwerk.gui.canvas import MM
@@ -106,3 +106,55 @@ def test_double_click_on_handle_resets_to_automatic(window):
     _mouse(window.canvas, QMouseEvent.Type.MouseButtonDblClick, center, Qt.MouseButton.LeftButton)
     assert window.doc.length_mm is None
     assert window.panel("paper").length_auto.isChecked()
+
+
+def test_print_success_shows_status_and_reenables_button(window, qtbot, monkeypatch):
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp",
+                        lambda: "file:///dev/usb/lp0")
+    sent = {}
+
+    def fake_print(image, label_id, **kw):
+        sent["size"] = image.size
+        return {"outcome": "printed", "did_print": True}
+
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image", fake_print)
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert window.result.text() == "Gedruckt ✓"
+    assert sent["size"][0] == 696
+
+
+def test_print_error_is_shown(window, qtbot, monkeypatch):
+    from labelwerk.printer import PrintError
+
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp",
+                        lambda: "file:///dev/usb/lp0")
+
+    def fail(*a, **kw):
+        raise PrintError("Eingelegte Rolle passt nicht zum Etikett '62'")
+
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image", fail)
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert "Rolle passt nicht" in window.result.text()
+
+
+def test_no_printer_message(window, qtbot):
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert "nicht gefunden" in window.result.text()
+
+
+def test_empty_label_asks_and_cancel_does_not_print(window, monkeypatch):
+    asked = []
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.Cancel)
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: pytest.fail("darf nicht drucken"))
+    window.print_label()
+    assert asked
+    assert window.print_action.isEnabled()
+    assert window.result.text() == ""

@@ -1,16 +1,20 @@
 """Hauptfenster: Werkzeugleiste, Panel-Stapel, Arbeitsfläche, Statusleiste."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QSizePolicy, QStackedWidget,
-                               QToolBar, QToolButton, QWidget)
+from pathlib import Path
 
+from PySide6.QtCore import Qt, QThreadPool, QTimer
+from PySide6.QtGui import QAction, QActionGroup, QIcon
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox, QSizePolicy,
+                               QStackedWidget, QToolBar, QToolButton, QWidget)
+
+from ..detect import brother_busy, find_brother_lp
 from ..document import Document, TextObject
 from ..labels import get_label
 from ..printer import DEFAULT_MODEL
 from ..render import render_document
 from .canvas import Canvas
+from .print_worker import PrintWorker
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
@@ -52,7 +56,10 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(spacer)
-        self.toolbar = toolbar
+        self.print_action = QAction(QIcon.fromTheme("document-print"), "DRUCKEN", self)
+        self.print_action.triggered.connect(self.print_label)
+        toolbar.addAction(self.print_action)
+        toolbar.widgetForAction(self.print_action).setObjectName("print")
 
         # Arbeitsfläche
         self.canvas = Canvas(model)
@@ -65,7 +72,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.canvas, 1)
         self.setCentralWidget(central)
 
-        # Statusleiste: Zoom
+        # Statusleiste: Drucker, Ergebnis, Zoom
+        self.printer_status = QLabel()
+        self.result = QLabel()
+        self.statusBar().addWidget(self.printer_status)
+        self.statusBar().addWidget(self.result, 1)
         self.zoom_label = QLabel()
         for text, delta in (("−", -10), ("+", 10)):
             button = QToolButton()
@@ -82,6 +93,7 @@ class MainWindow(QMainWindow):
         self._timer.setInterval(RENDER_DELAY_MS)
         self._timer.timeout.connect(self.render_now)
         self.render_now()
+        self.refresh_printer()
 
     def panel(self, key: str):
         return self._panel_by_key[key]
@@ -105,3 +117,51 @@ class MainWindow(QMainWindow):
         self.doc.length_mm = length_mm
         self.panel("paper").refresh()
         self.schedule_render()
+
+    # --- Drucken ----------------------------------------------------------
+    def refresh_printer(self) -> None:
+        printer = find_brother_lp()
+        if printer:
+            text = f"● {self.model} · {Path(printer).name}"
+        elif brother_busy():
+            text = "● Drucker belegt (andere Anwendung)"
+        else:
+            text = "○ kein Drucker"
+        self.printer_status.setText(text)
+
+    def confirm_empty(self) -> bool:
+        answer = QMessageBox.question(
+            self, "Leeres Etikett", "Das Etikett ist leer. Trotzdem drucken?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel)
+        return answer == QMessageBox.StandardButton.Yes
+
+    def print_label(self) -> None:
+        if self._timer.isActive():
+            self.render_now()
+        if self.image is None:
+            return
+        if self.doc.is_empty() and not self.confirm_empty():
+            return
+        self.print_action.setEnabled(False)
+        self.result.setText("Drucke …")
+        worker = PrintWorker(self.image, self.doc.label_id, self.model)
+        worker.signals.done.connect(self._print_done)
+        worker.signals.failed.connect(self._print_failed)
+        QThreadPool.globalInstance().start(worker)
+
+    def _print_done(self, status: dict) -> None:
+        ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
+        self.result.setProperty("state", "ok" if ok else "error")
+        self.result.setText("Gedruckt ✓" if ok else f"Status: {status.get('outcome')}")
+        self._print_finished()
+
+    def _print_failed(self, message: str) -> None:
+        self.result.setProperty("state", "error")
+        self.result.setText(message.replace("\n", " "))
+        self._print_finished()
+
+    def _print_finished(self) -> None:
+        self.result.style().polish(self.result)
+        self.print_action.setEnabled(True)
+        self.refresh_printer()

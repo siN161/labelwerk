@@ -7,6 +7,13 @@ from brother_ql.backends.helpers import discover as _discover
 
 BROTHER_VENDOR_ID = "04f9"
 
+# Meldungen für CLI und GUI
+PRINTER_NOT_FOUND = ("Brother-Drucker unter /dev/usb/lp* nicht gefunden.\n"
+                     "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', 'lsmod | grep usblp'.")
+BUSY_MESSAGE = ("Brother-Drucker ist per USB angeschlossen, aber von einem anderen Programm belegt\n"
+                "(z. B. VM mit USB-Durchreichung). Dort freigeben und den Drucker kurz aus- und\n"
+                "wieder einschalten.")
+
 
 def find_brother_lp(sys_root: str | Path = "/sys/class/usbmisc",
                     dev_root: str = "/dev/usb") -> str | None:
