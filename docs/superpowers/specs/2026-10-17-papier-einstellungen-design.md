@@ -71,7 +71,7 @@ Ungültige `orientation` → `ValueError` beim Rendern. `margin_mm` wird beim Re
 
 ### `media.py` (neu) – Medium prüfen
 
-- `read_media(printer: str, backend="linux_kernel") -> Media`: öffnet den Drucker über `brother_ql.backends.helpers.get_printer`, sendet die Statusabfrage (`get_status`, Befehl `ESC i S` – **druckt nichts**) und liefert `Media(width_mm: int, length_mm: int, kind: str)`; `kind` ∈ `"endless"`, `"die_cut"`, `"none"`.
+- `read_media(printer: str) -> Media` (nur `file:///dev/usb/lpN`): öffnet das Gerät **nicht blockierend**, sendet „Invalidate“ (200 × `0x00`), `ESC @` und die Statusabfrage `ESC i S` – **druckt nichts** – und liest per `select` mit festem Zeitlimit (2 s) die 32-Byte-Antwort, ausgewertet mit `brother_ql.reader.interpret_response`. (Eigene Leseroutine statt brother_ql-Backend, weil dessen letzter Leseversuch ohne Zeitlimit blockieren kann. Am echten QL-600 geprüft: Antwort sofort, „Continuous length tape“, 62 mm.) Ergebnis: `Media(width_mm: int, length_mm: int, kind: str)`; `kind` ∈ `"endless"`, `"die_cut"`, `"none"`.
 - `label_for_media(media, model) -> str | None`: passende Etikett-ID aus `labels_for_model(model)` (Endlos: Breite; gestanzt/rund: Breite × Länge; rund erkennt man an gleicher Breite und Länge und Formfaktor rund). Keine Rolle oder unbekannt → `None`.
 - Fehler (kein Zugriff, keine Antwort, Drucker meldet Fehler) → `MediaError` (Unterklasse von `ValueError`) mit deutscher Meldung. Keine Rolle → `Media(kind="none")`.
 - Tests mit nachgebauten 32-Byte-Statusantworten (über `brother_ql.reader.interpret_response`-kompatible Bytes) und einem Fake-Printer-Objekt; keine Hardware.
