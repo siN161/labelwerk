@@ -31,7 +31,7 @@ def desktop_entry(gui_exe: Path) -> str:
         f"Exec={gui_exe}\n"
         f"Icon={APP_ID}\n"
         "Terminal=false\n"
-        "Categories=Office;Graphics;\n"
+        "Categories=Office;\n"
         "Keywords=Etikett;Label;Brother;QL;Drucker;P-touch;\n"
         f"StartupWMClass={APP_ID}\n"
     )
