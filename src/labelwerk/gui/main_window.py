@@ -8,6 +8,7 @@ from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox, QSizePolicy,
                                QStackedWidget, QToolBar, QToolButton, QWidget)
 
+from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
 from ..document import Document, TextObject
 from ..labels import get_label
@@ -24,7 +25,7 @@ class MainWindow(QMainWindow):
     def __init__(self, doc: Document | None = None, tools: list[Tool] = TOOLS,
                  model: str = DEFAULT_MODEL):
         super().__init__()
-        self.setWindowTitle("labelwerk")
+        self.setWindowTitle(APP_NAME)
         self.resize(1100, 700)
         self.doc = doc if doc is not None else Document(objects=[TextObject()])
         self.model = model

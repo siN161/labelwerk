@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from PIL import Image
 
+from . import desktop
 from . import printer as prn
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
 from .files import crop, fit_to_label, load_file
@@ -24,7 +26,7 @@ def _add_output_options(p: argparse.ArgumentParser) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="labelwerk")
+    p = argparse.ArgumentParser(prog=desktop.APP_NAME)
     p.add_argument("-m", "--model", default=prn.DEFAULT_MODEL)
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -44,6 +46,9 @@ def _parser() -> argparse.ArgumentParser:
     pf.add_argument("--rotate", default="auto", choices=["auto", "0", "90", "180", "270"],
                     help="auto (Standard: nur drehen wenn nötig) oder Grad im Uhrzeigersinn")
     _add_output_options(pf)
+
+    di = sub.add_parser("install-desktop", help="labelwerk-gui im Starter (Super-Taste) eintragen")
+    di.add_argument("--remove", action="store_true", help="Eintrag und Icon wieder entfernen")
     return p
 
 
@@ -94,6 +99,23 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _install_desktop(remove: bool) -> int:
+    if remove:
+        removed = desktop.uninstall()
+        print("\n".join(f"Entfernt: {p}" for p in removed) or "Nichts zu entfernen.")
+        return 0
+    gui_exe = Path(sys.executable).parent / "labelwerk-gui"
+    try:
+        paths = desktop.install(gui_exe)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
+    for path in paths:
+        print(f"Installiert: {path}")
+    print("labelwerk erscheint jetzt im Starter (ggf. kurz warten oder neu anmelden).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
 
@@ -102,6 +124,9 @@ def main(argv: list[str] | None = None) -> int:
             size = f"{lbl.width}x{lbl.height}" if lbl.height else f"{lbl.width}"
             print(f"{lbl.id:<10} {size:<10} {lbl.description}")
         return 0
+
+    if args.cmd == "install-desktop":
+        return _install_desktop(args.remove)
 
     try:
         img = _make_image(args)

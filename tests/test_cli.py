@@ -143,3 +143,13 @@ def test_busy_printer_gives_specific_hint(monkeypatch, capsys):
     rc = main(["print", "Hallo", "-l", "62"])
     assert rc == 2
     assert "von einem anderen Programm belegt" in capsys.readouterr().err
+
+
+def test_install_desktop_uses_xdg_data_home(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    rc = main(["install-desktop"])
+    assert rc == 0
+    assert (tmp_path / "applications" / "labelwerk.desktop").exists()
+    assert "labelwerk.desktop" in capsys.readouterr().out
+    assert main(["install-desktop", "--remove"]) == 0
+    assert not (tmp_path / "applications" / "labelwerk.desktop").exists()
