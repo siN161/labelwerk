@@ -2,20 +2,22 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox, QSizePolicy,
-                               QStackedWidget, QToolBar, QToolButton, QWidget)
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
+                               QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
+                               QWidget)
 
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
 from ..document import Document, TextObject
 from ..fonts import DEFAULT_FAMILY
 from ..labels import get_label
-from ..layout import Rect, move, object_rect, objects_outside, printable_area, resize
+from ..layout import (Rect, exact_rect, move, object_rect, objects_outside, printable_area,
+                      resize, set_frame)
 from ..printer import DEFAULT_MODEL
 from ..render import RenderedObject, compose, font_warnings, label_size, render_object
 from ..settings import Settings, load_settings, new_document
@@ -30,6 +32,7 @@ from .settings_dialog import SettingsDialog
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
+PANEL_WIDTH = 280          # Eigenschaften-Panels; bei wenig Höhe rollbar
 MEDIA_STATUS_MAX_PX = 360   # Rollen-Hinweis in der Fußzeile; Rest per „…“ und Tooltip
 PRINTER_POLL_MS = 2000     # Druckererkennung: nur Blick in /sys, kein USB-Zugriff
 NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit Umschalt
@@ -82,7 +85,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         self.panels = QStackedWidget()
         self.panels.setObjectName("panels")
-        self.panels.setFixedWidth(280)
+        self.panels.setFixedWidth(PANEL_WIDTH)
         self.tool_actions: dict[str, QAction] = {}
         self._panel_by_key = {}
         group = QActionGroup(self)
@@ -95,7 +98,7 @@ class MainWindow(QMainWindow):
             self._panel_by_key[tool.key] = panel
             action = QAction(QIcon.fromTheme(tool.icon), tool.title.upper(), self)
             action.setCheckable(True)
-            action.triggered.connect(lambda _=False, i=index: self.panels.setCurrentIndex(i))
+            action.triggered.connect(lambda _=False, key=tool.key: self._tool_triggered(key))
             group.addAction(action)
             toolbar.addAction(action)
             self.tool_actions[tool.key] = action
@@ -131,7 +134,14 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(self.panels)
+        scroll = QScrollArea()                  # kleine Bildschirme: Panel rollt statt Fenster wächst
+        scroll.setObjectName("panelScroll")
+        scroll.setWidget(self.panels)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFixedWidth(PANEL_WIDTH + scroll.verticalScrollBar().sizeHint().width())
+        layout.addWidget(scroll)
         layout.addWidget(self.canvas, 1)
         self.setCentralWidget(central)
 
@@ -167,6 +177,11 @@ class MainWindow(QMainWindow):
         self._printer_timer.start()
 
         self.render_now()
+        if len(self.doc.objects) == 1:     # einziges Objekt: gleich bearbeitbar (Start wie bisher)
+            self.canvas.set_selection([0])
+            self._follow_selection([0])
+        self.canvas.selection_changed.connect(self._on_selection)
+        self.panel("text").frame_edited.connect(self._edit_frame)
         self._update_edit_actions()
         self.refresh_printer()
         if self.settings.warnings:
@@ -233,6 +248,32 @@ class MainWindow(QMainWindow):
         self.tool_actions[key].setChecked(True)
         self.panels.setCurrentWidget(self.panel(key))
 
+    def _tool_triggered(self, key: str) -> None:
+        """Werkzeug-Reiter: Panel zeigen; Text ohne Auswahl heißt „Text anlegen“."""
+        self.panels.setCurrentWidget(self.panel(key))
+        if key == "text" and not self.canvas.selection():
+            self.canvas.set_tool("text")
+
+    def _on_selection(self, indices: list[int]) -> None:
+        """Auswahl auf der Arbeitsfläche: Panel des Objekts zeigen (Papier-Reiter behält sie)."""
+        self._follow_selection(indices)
+        if indices:
+            self._show_tool("text")
+
+    def _follow_selection(self, indices: list[int]) -> None:
+        """Text-Panel bearbeitet das zuletzt gewählte Objekt."""
+        self.panel("text").set_object(indices[-1] if indices else None)
+        self._update_frame()
+
+    def _update_frame(self) -> None:
+        """Bereich „Position“: Rahmen des bearbeiteten Objekts, wie er gerendert ist."""
+        panel = self.panel("text")
+        index = panel.index
+        if index is None or index >= len(self.rendered) or index >= len(self.doc.objects):
+            panel.show_frame(None)
+        else:
+            panel.show_frame(exact_rect(self.doc.objects[index], self.rendered[index]))
+
     def _update_edit_actions(self) -> None:
         selected = bool(self.canvas.selection())
         for key in _SELECTION_ACTIONS:
@@ -277,6 +318,7 @@ class MainWindow(QMainWindow):
         self.rendered = rendered
         self.canvas.set_document(get_label(self.doc.label_id), size, rendered, self.doc.orientation,
                                  area, keep_ratio=[not obj.fit for obj in self.doc.objects])
+        self._update_frame()
 
     def _render_objects(self, size: tuple[int, int]) -> list[RenderedObject]:
         """Objekte einzeln rendern; unveränderte kommen aus dem Cache.
@@ -370,7 +412,7 @@ class MainWindow(QMainWindow):
         self.panel("text").edit.setFocus()
 
     def delete_selected(self) -> None:
-        """Ausgewählte Objekte löschen; ein leerer Text bleibt, damit das Text-Panel etwas hat."""
+        """Ausgewählte Objekte löschen (auch das letzte – das Etikett ist dann leer)."""
         indices = self.canvas.selection()
         if not indices:
             return
@@ -378,9 +420,19 @@ class MainWindow(QMainWindow):
         self.canvas.set_selection([])
         for index in sorted(indices, reverse=True):
             del self.doc.objects[index]
-        if not self.doc.objects:
-            self.doc.objects.append(new_document(self.settings).objects[0])
-        self._objects_changed([0])
+        self.render_now()
+        self._commit()
+
+    def _edit_frame(self, key: str, value: float) -> None:
+        """Zahl im Bereich „Position“ geändert: Objekt verschieben bzw. Rahmen ändern."""
+        index = self.panel("text").index
+        if index is None or index >= len(self.rendered):
+            return
+        self._commit()
+        obj = self.doc.objects[index]
+        rect = replace(exact_rect(obj, self.rendered[index]), **{key: round(value, 3)})
+        self.doc.objects[index] = set_frame(obj, rect, self.rendered[index])
+        self._objects_changed([index])
         self._commit()
 
     # --- Zwischenablage ---------------------------------------------------
@@ -424,8 +476,8 @@ class MainWindow(QMainWindow):
         self._commit()
 
     def _objects_changed(self, indices: list[int]) -> None:
-        if 0 in indices:
-            self.panel("text").refresh()   # Text-Panel bearbeitet (noch) das erste Objekt
+        if self.panel("text").index in indices:
+            self.panel("text").refresh()   # z. B. Anfasser schaltet feste Rahmengröße ein
         self.render_now()
 
     def _on_length_dragged(self, length_mm) -> None:

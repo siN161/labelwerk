@@ -454,3 +454,34 @@ def test_resize_edge_turns_fixed_frame_on():
     assert resized.fit
     assert (resized.x_mm, resized.y_mm, resized.w_mm, resized.h_mm) == \
         pytest.approx((1, 1, old.h + 8, old.w), abs=0.001)             # ungedreht gespeichert
+
+
+# --- Zahlen im Panel „Position“ -----------------------------------------------------
+def test_set_frame_moves_object_without_fixed_frame():
+    obj = TextObject("A", size_pt=12, x_mm=4, y_mm=5)
+    placed = layout.set_frame(obj, Rect(10, 6, 99, 99), _rendered(4, 5, 10, 3))
+    assert (placed.x_mm, placed.y_mm, placed.w_mm, placed.h_mm) == (10, 6, None, None)
+    assert (placed.size_pt, placed.fit, obj.x_mm) == (12, False, 4)
+
+
+def test_set_frame_positions_automatic_object_with_its_effective_size():
+    rendered = _rendered(20, 8, 10, 3, base_pt=23.04)
+    placed = layout.set_frame(TextObject("Hallo"), Rect(10, 6, 10, 3), rendered)
+    assert placed.positioned and (placed.x_mm, placed.y_mm) == (10, 6)
+    assert placed.size_pt == 23 and not placed.fit
+
+
+@pytest.mark.parametrize("positioned", [True, False])
+def test_set_frame_changes_fixed_frame(positioned):
+    obj = TextObject("A", size_pt=12, fit=True, w_mm=20 if positioned else None,
+                     h_mm=8 if positioned else None,
+                     x_mm=1 if positioned else None, y_mm=1 if positioned else None)
+    placed = layout.set_frame(obj, Rect(2, 3, 25, 12), _rendered(1, 1, 20, 8))
+    assert (placed.x_mm, placed.y_mm, placed.w_mm, placed.h_mm) == (2, 3, 25, 12)
+    assert placed.fit and placed.size_pt == 12
+
+
+def test_set_frame_stores_rotated_frame_unrotated():
+    obj = TextObject("A", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=20, h_mm=8, rotation=90)
+    placed = layout.set_frame(obj, Rect(1, 1, 10, 30), _rendered(1, 1, 8, 20))
+    assert (placed.w_mm, placed.h_mm) == (30, 10)

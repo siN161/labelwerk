@@ -306,16 +306,16 @@ def test_delete_removes_selected_objects(window, qtbot):
     QTest.keyClick(window.canvas, Qt.Key.Key_Delete)
     assert [o.text for o in window.doc.objects] == ["Zwei"]
     assert window.canvas.selection() == []
-    assert window.panel("text").edit.toPlainText() == "Zwei"
+    assert window.panel("text").index is None              # nichts mehr ausgewählt
     assert len(window.canvas.objects) == 1
 
 
-def test_select_all_and_delete_leaves_an_empty_text(window, qtbot):
+def test_select_all_and_delete_leaves_no_object(window, qtbot):
     _focus(window, qtbot)
     QTest.keyClick(window.canvas, Qt.Key.Key_A, CTRL)
     assert window.canvas.selection() == [0, 1]
     QTest.keyClick(window.canvas, Qt.Key.Key_Delete)
-    assert len(window.doc.objects) == 1 and window.doc.objects[0].is_empty()
+    assert window.doc.objects == [] and window.canvas.objects == []
     assert window.panel("text").edit.toPlainText() == ""
 
 

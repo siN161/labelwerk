@@ -227,6 +227,17 @@ def move(obj: TextObject, rect: Rect, rendered: RenderedObject) -> TextObject:
     return moved
 
 
+def set_frame(obj: TextObject, rect: Rect, rendered: RenderedObject) -> TextObject:
+    """Kopie mit dem Rahmen ``rect`` in mm, wie er im Modell steht (Zahlen im Panel „Position“).
+
+    Mit fester Rahmengröße gelten Lage und Größe, sonst nur die Lage. Ein automatisch großes
+    Objekt bekommt dabei seine wirksame Größe (``rendered.base_pt``) als feste Schriftgröße.
+    """
+    if not obj.fit and obj.size_pt is None:
+        obj = fix_size(obj, rendered.base_pt)
+    return place(obj, rect)
+
+
 def resize(obj: TextObject, rect: Rect, rendered: RenderedObject, corner: bool) -> TextObject:
     """Kopie nach Ziehen an einem Anfasser: gerenderter Rahmen → ``rect``.
 
