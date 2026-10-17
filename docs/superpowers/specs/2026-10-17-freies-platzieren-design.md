@@ -102,7 +102,7 @@ Ohne Auswahl sind die Knöpfe gesperrt.
 
 ### Rückgängig
 
-Dokument-Schnappschüsse (`copy.deepcopy(doc)`) nach jeder abgeschlossenen Aktion (Verschieben, Anfasser, Anlegen, Löschen, Einfügen, Ausrichten, Drehen, Reihenfolge, Panel-Änderung – Tippen wird zu einem Schritt zusammengefasst, wenn der Fokus das Textfeld verlässt), höchstens 100. Im Textfeld gilt das Rückgängig des Editors.
+Dokument-Schnappschüsse (`copy.deepcopy(doc)`) nach jeder abgeschlossenen Aktion (Verschieben, Anfasser, Anlegen, Löschen, Einfügen, Ausrichten, Drehen, Reihenfolge, Panel-Änderung – Tippen wird zu einem Schritt zusammengefasst, wenn der Fokus das Textfeld verlässt), höchstens 100. Im Textfeld gilt das Rückgängig des Editors. Mit jedem Stand wird die Auswahl gespeichert, die zuletzt zu ihm galt; Rückgängig/Wiederherstellen stellt sie wieder her (dieselben Objekte, auch nach „Reihenfolge“) und wechselt dabei nicht den Reiter.
 
 ### Einstellungen: Reiter
 

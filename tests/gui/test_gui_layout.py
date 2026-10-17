@@ -262,6 +262,31 @@ def test_bring_forward_and_send_backward_follow_selection(window):
     assert window.panel("text").edit.toPlainText() == "Eins"   # Panel folgt dem Objekt
 
 
+def test_undo_and_redo_of_reorder_keep_selection_on_same_objects(window):
+    window.canvas.set_selection([0])
+    _press(window, "object.bring_forward")
+    assert window.canvas.selection() == [1]
+    window.actions["edit.undo"].trigger()
+    assert [o.text for o in window.doc.objects] == ["Eins", "Zweiter", "Drei"]
+    assert [window.doc.objects[i].text for i in window.canvas.selection()] == ["Eins"]
+    assert window.panel("text").edit.toPlainText() == "Eins"
+    window.actions["edit.redo"].trigger()
+    assert [window.doc.objects[i].text for i in window.canvas.selection()] == ["Eins"]
+
+
+def test_undo_keeps_panel(window):
+    """Rückgängig wechselt nicht vom Reiter Layout weg, auch wenn sich die Auswahl ändert."""
+    window.canvas.set_selection([0])
+    window.tool_actions["layout"].trigger()
+    window.canvas.set_selection([])
+    window.canvas.set_selection([2])
+    _press(window, "object.send_backward")
+    window._show_tool("paper")
+    window.actions["edit.undo"].trigger()
+    assert window.panels.currentWidget() is window.panel("paper")
+    assert [window.doc.objects[i].text for i in window.canvas.selection()] == ["Drei"]
+
+
 def test_order_of_several_selected(window):
     window.canvas.set_selection([1, 0])
     _press(window, "object.bring_forward")

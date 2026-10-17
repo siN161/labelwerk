@@ -128,3 +128,39 @@ def test_restore_keeps_the_document_object():
     restore(doc, snapshot)
     assert doc == snapshot and doc is not snapshot
     assert (doc.label_id, doc.length_mm, doc.orientation) == ("29", None, "horizontal")
+
+
+# --- Auswahl je Stand -------------------------------------------------------------
+def test_undo_and_redo_restore_selection_of_each_state():
+    history = History(_doc("A"))
+    history.push(_doc("A"), selection=[0])          # nur Auswahl geändert: kein Schritt
+    assert not history.can_undo()
+    history.push(_doc("B"), selection=[1])
+    history.undo(_doc("B"), selection=[1])
+    assert history.selection == [0]
+    history.redo(_doc("A"), selection=[0])
+    assert history.selection == [1]
+
+
+def test_selection_is_a_copy():
+    history = History(_doc("A"))
+    chosen = [0]
+    history.push(_doc("B"), selection=chosen)
+    chosen.append(1)
+    assert history.selection == [0]
+
+
+def test_reset_clears_selection():
+    history = History(_doc("A"))
+    history.push(_doc("B"), selection=[0])
+    history.reset(_doc("C"))
+    assert history.selection == []
+
+
+def test_select_updates_current_state_only_without_pending_change():
+    history = History(_doc("A"))
+    history.select(_doc("A"), [0])
+    history.select(_doc("A geändert"), [5])         # gehört schon zum nächsten Schritt
+    history.push(_doc("B"), selection=[1])
+    history.undo(_doc("B"), selection=[1])
+    assert history.selection == [0]

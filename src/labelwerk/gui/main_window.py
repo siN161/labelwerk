@@ -80,6 +80,8 @@ class MainWindow(QMainWindow):
         self._media_check_pending = False
         self._clipboard: list[TextObject] = []      # interne Zwischenablage (Kopien)
         self._merge_next = None                     # Pfeiltasten: Schritte zusammenfassen
+        self._restoring = False                     # Rückgängig setzt gerade die Auswahl
+        self._outside: list[int] = []               # Objekte, die über das Etikett ragen
         # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar
         self.actions = build_actions(self, effective(self.settings.shortcuts))
 
@@ -290,6 +292,9 @@ class MainWindow(QMainWindow):
         """Auswahl auf der Arbeitsfläche: Panel des Objekts zeigen – außer ein Panel, das mit
         der Auswahl arbeitet (Text, Layout), ist schon zu sehen."""
         self._follow_selection(indices)
+        if self._restoring:                         # Rückgängig wechselt nicht den Reiter
+            return
+        self.history.select(self.doc, indices)
         if indices:
             self._show_object_panel()
 
@@ -356,6 +361,7 @@ class MainWindow(QMainWindow):
         self.panel("text").show_error(None)
         self.image = image
         self.rendered = rendered
+        self._outside = outside
         self.canvas.set_document(get_label(self.doc.label_id), size, rendered, self.doc.orientation,
                                  area, keep_ratio=[not obj.fit for obj in self.doc.objects])
         self._update_frame()
@@ -383,22 +389,29 @@ class MainWindow(QMainWindow):
 
         Vor jeder Aktion aufgerufen, wird noch nicht Festgehaltenes (Getipptes) ein eigener
         Schritt. Tippen im Textfeld wird ein Schritt, sobald der Fokus das Feld verlässt."""
-        self.history.push(self.doc, merge)
+        self.history.push(self.doc, merge, self.canvas.selection())
         self._update_edit_actions()
 
     def undo(self) -> None:
-        self._restore(self.history.undo(self.doc))
+        self._restore(self.history.undo(self.doc, self.canvas.selection()))
 
     def redo(self) -> None:
-        self._restore(self.history.redo(self.doc))
+        self._restore(self.history.redo(self.doc, self.canvas.selection()))
 
     def _restore(self, snapshot: Document | None) -> None:
+        """Stand zurückholen – samt der Auswahl, die zu ihm gehörte (dieselben Objekte)."""
         if snapshot is None:
             return
-        restore(self.doc, snapshot)
-        for panel in self._panel_by_key.values():
-            panel.refresh()
-        self.render_now()                       # Auswahl bleibt, soweit es die Objekte noch gibt
+        selection = self.history.selection
+        self._restoring = True       # Auswahl, die beim Neuzeichnen entfällt, nicht festhalten
+        try:
+            restore(self.doc, snapshot)
+            for panel in self._panel_by_key.values():
+                panel.refresh()
+            self.render_now()
+            self.canvas.set_selection(selection)        # ungültige Indizes entfallen
+        finally:
+            self._restoring = False
         self._update_edit_actions()
 
     # --- Objekte auf der Arbeitsfläche ------------------------------------
@@ -435,9 +448,9 @@ class MainWindow(QMainWindow):
         family = None if self.settings.font_family == DEFAULT_FAMILY else self.settings.font_family
         obj = TextObject.plain("", size_pt=self.settings.font_size_pt or DEFAULT_PT, family=family)
         obj.x_mm, obj.y_mm = round(x_mm, 1), round(y_mm, 1)
-        self.canvas.set_selection([])
         self.doc.objects[:] = [o for o in self.doc.objects if not o.is_empty()]
         self.doc.objects.append(obj)
+        self.canvas.set_selection([])     # erst nach der Änderung: Auswahl davor bleibt im Stand
         index = len(self.doc.objects) - 1
         self._objects_changed(list(range(len(self.doc.objects))))
         self.canvas.set_selection([index])
@@ -457,9 +470,9 @@ class MainWindow(QMainWindow):
         if not indices:
             return
         self._commit()
-        self.canvas.set_selection([])
         for index in sorted(indices, reverse=True):
             del self.doc.objects[index]
+        self.canvas.set_selection([])     # erst nach der Änderung: Auswahl davor bleibt im Stand
         self.render_now()
         self._commit()
 
@@ -686,6 +699,14 @@ class MainWindow(QMainWindow):
         self.panel("paper").set_checking(False)
         self._run_pending_media_check()
 
+    def confirm_outside(self) -> bool:
+        answer = QMessageBox.question(
+            self, "Objekt ragt hinaus",
+            "Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        return answer == QMessageBox.StandardButton.Yes
+
     def confirm_empty(self) -> bool:
         answer = QMessageBox.question(
             self, "Leeres Etikett", "Das Etikett ist leer. Trotzdem drucken?",
@@ -704,6 +725,9 @@ class MainWindow(QMainWindow):
         # Druck sperrt die Medium-Prüfung schon vor dem Dialog (Timer läuft währenddessen weiter)
         self._set_printing(True)
         if self.doc.is_empty() and not self.confirm_empty():
+            self._set_printing(False)
+            return
+        if self._outside and not self.confirm_outside():
             self._set_printing(False)
             return
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen

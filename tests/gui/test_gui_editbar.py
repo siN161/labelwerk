@@ -445,11 +445,16 @@ def test_ctrl_z_in_editor_uses_editor_undo(window, qtbot):
     assert editor.toPlainText() == "Eins"                   # Aufbau des Editors ist kein Schritt
 
 
-def test_undo_keeps_valid_selection(window):
+def test_undo_restores_selection_of_the_state(window):
     window.canvas.set_selection([1])
     window.canvas.nudge(1, 0)
     _undo(window)
     assert window.canvas.selection() == [1]
     window.create_text(30, 12)
+    assert window.canvas.selection() == [2]
     _undo(window)
-    assert window.canvas.selection() == []
+    assert window.canvas.selection() == [1]                 # Auswahl vor dem Anlegen
+    window.canvas.set_selection([0])
+    window.delete_selected()
+    _undo(window)
+    assert window.canvas.selection() == [0]                 # Gelöschtes ist wieder gewählt
