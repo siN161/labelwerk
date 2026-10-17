@@ -21,6 +21,7 @@ class PaperPanel(Panel):
         super().__init__(doc, "Papier")
         self.media: Media | None = None          # zuletzt erkannte Rolle
         self.media_label: str | None = None      # passendes Etikett dazu
+        self.media_adjusted = False              # Etikett wurde automatisch angepasst
 
         self.section("Etikett")
         self.combo = QComboBox()
@@ -96,6 +97,7 @@ class PaperPanel(Panel):
 
     def _apply(self) -> None:
         self.doc.label_id = self.combo.currentData()
+        self.media_adjusted = False   # Auswahl ist jetzt vom Nutzer
         self.doc.length_mm = None if self.length_auto.isChecked() else self.length.value()
         self.doc.margin_mm = self.margin.value()
         self.doc.orientation = "horizontal" if self.horizontal.isChecked() else "vertical"
@@ -122,8 +124,8 @@ class PaperPanel(Panel):
         self.check.setEnabled(not running)
         self.check.setText("PRÜFE …" if running else "MEDIUM PRÜFEN")
 
-    def show_media(self, media: Media, label_id: str | None) -> None:
-        self.media, self.media_label = media, label_id
+    def show_media(self, media: Media, label_id: str | None, adjusted: bool = False) -> None:
+        self.media, self.media_label, self.media_adjusted = media, label_id, adjusted
         self._update_media_status()
 
     def show_media_error(self, message: str) -> None:
@@ -142,7 +144,8 @@ class PaperPanel(Panel):
         elif self.media_label is None:
             self._set_media_status(f"Eingelegt: {self.media.describe()} – kein passendes Etikett.", "warn")
         elif self.media_label == self.doc.label_id:
-            self._set_media_status(f"Eingelegt: {self.media.describe()} ✓", "ok")
+            hint = " – Etikett angepasst" if self.media_adjusted else ""
+            self._set_media_status(f"Eingelegt: {self.media.describe()} ✓{hint}", "ok")
         else:
             self._set_media_status(f"Eingelegt ist {self.media.describe()} – Auswahl passt nicht.",
                                    "warn")

@@ -29,7 +29,7 @@ def test_check_media_selects_matching_label(window, qtbot, monkeypatch):
     paper.check.click()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
     assert window.doc.label_id == "62x29"
-    assert paper.media_status.text() == "Eingelegt: 62 × 29 mm gestanzt ✓"
+    assert paper.media_status.text() == "Eingelegt: 62 × 29 mm gestanzt ✓ – Etikett angepasst"
     assert paper.media_status.property("state") == "ok"
     assert paper.check.isEnabled()
 
@@ -55,7 +55,7 @@ def test_check_media_error_is_shown(window, qtbot, monkeypatch):
 
 
 def test_no_media_check_while_printing(window, monkeypatch):
-    window.print_action.setEnabled(False)          # Druck läuft
+    window._printing = True                        # Druck läuft
     window.check_media()
     assert not window.is_checking_media()
 
@@ -98,3 +98,61 @@ def test_printer_disconnect_clears_media_status(window, qtbot, monkeypatch):
     window.refresh_printer()
     assert window.panel("paper").media_status.isHidden()
     assert window.printer_status.text() == "○ kein Drucker"
+
+
+# --- Druck und Medium-Prüfung schließen sich aus ----------------------------
+def test_no_media_check_during_empty_dialog_and_print_proceeds(window, qtbot, monkeypatch):
+    _printer_with(monkeypatch, Media(62, 0, "endless"))
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: {"did_print": True})
+    seen = {}
+
+    def dialog():
+        window.check_media()                      # Timer feuert während des Dialogs
+        seen["checking"] = window.is_checking_media()
+        return True
+    monkeypatch.setattr(MainWindow, "confirm_empty", lambda self: dialog())
+    window.print_label()
+    assert seen["checking"] is False
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert "Gedruckt" in window.result.text()
+
+
+def test_cancelled_empty_dialog_resets_printing(window, monkeypatch):
+    monkeypatch.setattr(MainWindow, "confirm_empty", lambda self: False)
+    window.print_label()
+    assert not window.is_printing()
+    assert window.print_action.isEnabled()
+
+
+def test_check_button_disabled_while_printing(window, qtbot, monkeypatch):
+    import threading
+    release = threading.Event()
+
+    def blocking(*a, **kw):
+        release.wait(5)
+        return {"did_print": True}
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image", blocking)
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    try:
+        assert not window.panel("paper").check.isEnabled()
+    finally:
+        release.set()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert window.panel("paper").check.isEnabled()
+
+
+def test_adjusted_label_is_mentioned(window, qtbot, monkeypatch):
+    _printer_with(monkeypatch, Media(62, 29, "die_cut"))
+    window.check_media()
+    qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
+    assert "angepasst" in window.panel("paper").media_status.text()
+
+
+def test_matching_label_not_mentioned_as_adjusted(window, qtbot, monkeypatch):
+    _printer_with(monkeypatch, Media(62, 0, "endless"))
+    window.check_media()
+    qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
+    assert "angepasst" not in window.panel("paper").media_status.text()

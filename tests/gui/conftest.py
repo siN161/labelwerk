@@ -17,6 +17,12 @@ else:
             monkeypatch.setattr(f"{module}.find_brother_lp", lambda: None)
             monkeypatch.setattr(f"{module}.brother_busy", lambda: False)
 
+        calls = []
+
         def no_hardware(printer):
-            raise AssertionError("Test darf den Drucker nicht abfragen")
+            # Der Worker schluckt Exceptions, daher Aufruf merken und im Teardown scheitern
+            calls.append(printer)
+            raise RuntimeError("Test darf den Drucker nicht abfragen")
         monkeypatch.setattr("labelwerk.gui.media_worker.read_media", no_hardware)
+        yield
+        assert not calls, "Test hat den Drucker abgefragt"

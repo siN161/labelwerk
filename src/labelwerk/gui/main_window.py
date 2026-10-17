@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         self._print_signals = None
         self._media_signals = None
         self._printer_present = False
+        self._printing = False
 
         # Werkzeugleiste + Panels aus der Registry
         toolbar = QToolBar("Werkzeuge")
@@ -172,7 +173,7 @@ class MainWindow(QMainWindow):
 
     # --- Medium prüfen ----------------------------------------------------
     def is_printing(self) -> bool:
-        return not self.print_action.isEnabled()
+        return self._printing
 
     def is_checking_media(self) -> bool:
         return self._media_signals is not None
@@ -189,11 +190,12 @@ class MainWindow(QMainWindow):
 
     def _media_found(self, media, label_id) -> None:
         self._media_finished()
-        if label_id is not None and label_id != self.doc.label_id:
+        adjusted = label_id is not None and label_id != self.doc.label_id
+        if adjusted:
             self.doc.label_id = label_id
             self.panel("paper").refresh()
             self.schedule_render()
-        self.panel("paper").show_media(media, label_id)
+        self.panel("paper").show_media(media, label_id, adjusted)
 
     def _media_failed(self, message: str) -> None:
         self._media_finished()
@@ -218,9 +220,11 @@ class MainWindow(QMainWindow):
         if self.is_checking_media():
             self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
             return
+        # Druck sperrt die Medium-Prüfung schon vor dem Dialog (Timer läuft währenddessen weiter)
+        self._set_printing(True)
         if self.doc.is_empty() and not self.confirm_empty():
+            self._set_printing(False)
             return
-        self.print_action.setEnabled(False)
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
         self.result.style().polish(self.result)
         self.result.setText("Drucke …")
@@ -229,6 +233,11 @@ class MainWindow(QMainWindow):
         worker.signals.done.connect(self._print_done)
         worker.signals.failed.connect(self._print_failed)
         QThreadPool.globalInstance().start(worker)
+
+    def _set_printing(self, printing: bool) -> None:
+        self._printing = printing
+        self.print_action.setEnabled(not printing)
+        self.panel("paper").check.setEnabled(not printing)
 
     def _print_done(self, status: dict) -> None:
         ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
@@ -244,5 +253,5 @@ class MainWindow(QMainWindow):
     def _print_finished(self) -> None:
         self._print_signals = None
         self.result.style().polish(self.result)
-        self.print_action.setEnabled(True)
+        self._set_printing(False)
         self.refresh_printer()
