@@ -373,14 +373,20 @@ def align_objects(objs: list[TextObject], rendered: list[RenderedObject], mode: 
 
     Gerechnet wird mit den Rahmen, wie sie im Modell stehen (``exact_rect``); ein Objekt ohne
     Position bekommt seine Lage und wirksame Schriftgröße fest.
-    ``grow`` (``growing_axis``): Am Papier bleibt die Ausrichtung in dieser Achse aus – das
-    Etikett wüchse bzw. schrumpfte mit dem Objekt und es wanderte bei jedem Aufruf weiter.
+    ``grow`` (``growing_axis``): Am Papier sitzt die Auswahl in dieser Achse bei jedem Modus
+    (Anfang, Mitte, Ende) mit ihrem Umriss am Anfang des Bereichs (Rand in Bandrichtung) –
+    das Etikett wächst bis Inhalt plus Rand, die Ränder an beiden Enden sind dann gleich.
     """
-    if area is not None and grow == ("x" if mode in ("left", "hcenter", "right") else "y"):
-        return list(objs)
     rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
-    return [set_frame(o, _rounded(rect), r)
-            for o, r, rect in zip(objs, rendered, align(rects, mode, area))]
+    if area is not None and grow == ("x" if mode in ("left", "hcenter", "right") else "y"):
+        if not rects:
+            return []
+        box = bounds(rects)
+        shift = (area.x - box.x, 0.0) if grow == "x" else (0.0, area.y - box.y)
+        moved = [r.at(r.x + shift[0], r.y + shift[1]) for r in rects]
+    else:
+        moved = align(rects, mode, area)
+    return [set_frame(o, _rounded(rect), r) for o, r, rect in zip(objs, rendered, moved)]
 
 
 def match_objects(objs: list[TextObject], rendered: list[RenderedObject],

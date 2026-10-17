@@ -12,6 +12,7 @@ def window(qtbot):
     win = MainWindow(settings=Settings(check_media_on_start=False))
     qtbot.addWidget(win)
     win.show()
+    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
     return win
 
 
@@ -113,6 +114,7 @@ def test_start_uses_settings_family_and_size(qtbot):
     win = MainWindow(settings=Settings(check_media_on_start=False, font_size_pt=24,
                                        font_family="Liberation Sans"))
     qtbot.addWidget(win)
+    win.canvas.set_selection([0])
     panel = win.panel("text")
     assert panel.size.currentText() == "24"
     assert panel.family.currentFont().family() == "Liberation Sans"

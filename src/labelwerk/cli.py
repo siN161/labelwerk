@@ -76,7 +76,7 @@ def _parser() -> argparse.ArgumentParser:
     pr.add_argument("--italic", action="store_true", help="kursiv")
     pr.add_argument("--underline", action="store_true", help="unterstrichen")
     pr.add_argument("--orientation", choices=ORIENTATIONS,
-                    help="vertical: Text quer zum Band, horizontal: längs (Standard aus den Einstellungen)")
+                    help="vertical: Hochformat (Leserichtung quer zum Band), horizontal: Querformat (längs zum Band); Standard aus den Einstellungen")
     pr.add_argument("--margin", type=_margin, metavar="MM",
                     help="Rand in Bandlaufrichtung in mm (Standard aus den Einstellungen)")
     _add_output_options(pr)

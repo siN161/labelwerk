@@ -844,14 +844,45 @@ def test_edge_resize_of_auto_size_text_then_move_keeps_frame():
     assert moved.h_mm == pytest.approx(framed.h_mm)
 
 
-@pytest.mark.parametrize("grow, along, across", [
-    ("y", ("top", "vcenter", "bottom"), ("left", "hcenter", "right")),
-    ("x", ("left", "hcenter", "right"), ("top", "vcenter", "bottom"))])
-def test_align_to_paper_is_noop_along_growing_axis(grow, along, across):
+@pytest.mark.parametrize("orientation, modes", [
+    ("vertical", ("top", "vcenter", "bottom")), ("horizontal", ("left", "hcenter", "right"))])
+def test_align_to_paper_along_growing_axis_puts_group_at_start_margin(orientation, modes):
+    vertical = orientation == "vertical"
+    objs = [TextObject("A\nB", size_pt=14, x_mm=7, y_mm=9),
+            TextObject("Zweiter", size_pt=10, x_mm=12, y_mm=20)]
+    for mode in modes:
+        doc = Document("62", orientation=orientation, margin_mm=3, objects=objs)
+        rendered = [render_object(o, doc) for o in doc.objects]
+        area = layout.printable_area(doc)
+        moved = layout.align_objects(doc.objects, rendered, mode, area,
+                                     grow=layout.growing_axis(doc))
+        doc.objects = moved
+        rects = [layout.object_rect(render_object(o, doc)) for o in moved]
+        old = [layout.object_rect(r) for r in rendered]
+        box = layout.bounds(rects)
+        start, end = (box.y, box.bottom) if vertical else (box.x, box.right)
+        assert start == pytest.approx(area.y if vertical else area.x, abs=0.1)
+        w, h = layout.label_size(doc)
+        length = _mm(h if vertical else w)
+        assert length - end == pytest.approx(start, abs=2 * 25.4 / DPI)   # gleicher Rand beidseitig
+        gap = (lambda r: r[1].y - r[0].y) if vertical else (lambda r: r[1].x - r[0].x)
+        assert gap(rects) == pytest.approx(gap(old), abs=0.1)             # Abstand bleibt
+
+
+@pytest.mark.parametrize("grow, across", [
+    ("y", ("left", "hcenter", "right")), ("x", ("top", "vcenter", "bottom"))])
+def test_align_to_paper_across_still_works_on_growing_label(grow, across):
     objs = [TextObject("A", size_pt=12, x_mm=3, y_mm=4)]
     rendered = [_rendered(3, 4, 10, 5)]
     area = Rect(2, 2, 50, 50)
-    for mode in along:
-        assert layout.align_objects(objs, rendered, mode, area, grow=grow) == objs
     for mode in across:
         assert layout.align_objects(objs, rendered, mode, area, grow=grow) != objs
+
+
+@pytest.mark.parametrize("grow, moving", [("y", Rect(10, 1.4, 10, 6)), ("x", Rect(1.4, 10, 6, 10))])
+def test_snap_to_start_margin_on_auto_length(grow, moving):
+    area, label = Rect(1, 1, 60, 80), Rect(0, 0, 62, 82)
+    s = layout.snap(moving, [], area, 1, label=label, grow=grow)
+    axis = "y" if grow == "y" else "x"
+    assert (s.dy if grow == "y" else s.dx) == pytest.approx(-0.4)
+    assert (axis, 1.0) in s.guides

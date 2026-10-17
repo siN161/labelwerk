@@ -65,11 +65,16 @@ def test_panel_edits_last_selected_of_several(window):
     assert panel.edit.toPlainText() == "Zwei"
 
 
-def test_single_object_is_selected_at_start(qtbot):
+def test_nothing_is_selected_at_start_and_no_frame_is_drawn(qtbot):
     win = MainWindow(settings=Settings(check_media_on_start=False))
     qtbot.addWidget(win)
-    assert win.canvas.selection() == [0] and win.panel("text").index == 0
-    assert win.panels.currentWidget() is win.panel("paper")        # Start wie bisher
+    assert win.canvas.selection() == [] and win.panel("text").index is None
+    assert win.panels.currentWidget() is win.panel("paper")
+    win.tool_actions["text"].trigger()                       # TEXT-Reiter: Text anlegen
+    assert win.canvas.tool() == "text"
+    assert win.shortcut_actions["tool.text"].isChecked()
+    win.create_text(5, 5)
+    assert len(win.doc.objects) == 1 and win.doc.objects[0].positioned
 
 
 def test_selecting_switches_to_text_panel_and_paper_tab_keeps_selection(window):
@@ -125,6 +130,7 @@ def test_position_shows_frame_of_selected_object(window):
 
 def test_position_of_centered_object_is_computed(qtbot):
     win = _window(qtbot, Document("62", length_mm=40, objects=[TextObject("Mitte")]))
+    win.canvas.set_selection([0])
     shown = win.canvas.objects[0].frame_mm()
     x, y, _, _ = _values(win.panel("text"))
     assert (x, y) == pytest.approx((shown.x, shown.y), abs=0.05)
@@ -146,6 +152,7 @@ def test_editing_x_and_y_moves_object(window):
 
 def test_editing_position_of_centered_object_positions_it(qtbot):
     win = _window(qtbot, Document("62", length_mm=40, objects=[TextObject("Mitte")]))
+    win.canvas.set_selection([0])
     base_pt = win.canvas.objects[0].rendered.base_pt
     win.panel("text").pos_y.setValue(3)
     obj = win.doc.objects[0]

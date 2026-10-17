@@ -367,23 +367,37 @@ def test_render_error_then_delete_keeps_canvas_in_step(qtbot):
     assert win.doc.objects[0].x_mm == before                    # nichts verschoben
 
 
-@pytest.mark.parametrize("orientation, blocked", [
+@pytest.mark.parametrize("orientation, growing", [
     ("vertical", ("top", "vcenter", "bottom")), ("horizontal", ("left", "hcenter", "right"))])
-def test_paper_align_along_growing_axis_is_disabled(qtbot, orientation, blocked):
+def test_paper_align_along_growing_axis_is_enabled_with_hint(qtbot, orientation, growing):
     doc = Document("62", length_mm=None, orientation=orientation, objects=[
         TextObject("A", size_pt=14, x_mm=2, y_mm=2)])
     win = _window(qtbot, doc)
     win.canvas.set_selection([0])
     panel = _panel(win)
+    hint = "gleichem Rand an beiden Enden"
     for mode in ("left", "hcenter", "right", "top", "vcenter", "bottom"):
         button = panel.buttons[f"align.paper_{mode}"]
-        assert button.isEnabled() == (mode not in blocked), mode
-        if mode in blocked:
-            assert "Länge festlegen" in button.defaultAction().toolTip()
-    win.doc.length_mm = 40                            # feste Länge: alles wieder frei
+        assert button.isEnabled(), mode
+        assert (hint in button.defaultAction().toolTip()) == (mode in growing), mode
+    win.doc.length_mm = 40                            # feste Länge: kein Hinweis mehr
     win.render_now()
-    assert all(panel.buttons[f"align.paper_{m}"].isEnabled() for m in blocked)
-    assert "Länge festlegen" not in panel.buttons[f"align.paper_{blocked[0]}"].defaultAction().toolTip()
+    assert hint not in panel.buttons[f"align.paper_{growing[0]}"].defaultAction().toolTip()
+
+
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+def test_paper_align_along_growing_axis_gives_equal_margins(qtbot, orientation):
+    vertical = orientation == "vertical"
+    doc = Document("62", length_mm=None, orientation=orientation, margin_mm=3, objects=[
+        TextObject("Zeile 1\nZeile 2", size_pt=14, x_mm=5, y_mm=6)])
+    win = _window(qtbot, doc)
+    win.canvas.set_selection([0])
+    win.shortcut_actions["align.paper_vcenter" if vertical else "align.paper_hcenter"].trigger()
+    r = layout.object_rect(win.rendered[0])
+    w, h = win._shown_size
+    length = (h if vertical else w) * DOT_MM
+    start, end = (r.y, r.bottom) if vertical else (r.x, r.right)
+    assert abs(start - (length - end)) <= 2 * DOT_MM
 
 
 def test_canvas_grabbed_is_not_stale_after_selection_drops(qtbot):

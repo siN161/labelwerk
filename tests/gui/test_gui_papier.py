@@ -16,6 +16,7 @@ def window(qtbot):
     win = MainWindow()
     qtbot.addWidget(win)
     win.show()
+    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
     win.panel("text").edit.setPlainText("Max Mustermann")
     win.render_now()
     return win
@@ -89,6 +90,7 @@ def test_window_starts_with_settings(qtbot):
     assert (win.doc.label_id, win.doc.orientation, win.doc.margin_mm) == ("62x29", "horizontal", 3)
     assert win.panel("paper").horizontal.isChecked()
     assert win.panel("paper").margin.value() == 3.0
+    win.canvas.set_selection([0])
     assert not win.panel("text").fit.isChecked() and win.panel("text").size.currentText() == "19"
     assert win.canvas.zoom == 150
 

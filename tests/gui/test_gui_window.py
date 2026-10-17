@@ -14,6 +14,7 @@ def window(qtbot):
     win = MainWindow()
     qtbot.addWidget(win)
     win.show()
+    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
     return win
 
 

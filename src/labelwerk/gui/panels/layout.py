@@ -32,8 +32,8 @@ MIN_SELECTED = {key: 2 if key in _FROM_TWO else 1 for key in _ICONS}
 _PAPER_AXIS = {f"align.paper_{mode}": axis for axis, modes in
                (("x", ("left", "hcenter", "right")), ("y", ("top", "vcenter", "bottom")))
                for mode in modes}
-GROWING_HINT = ("Bei automatischer Länge wächst das Etikett mit – Länge festlegen, "
-                "um in Bandrichtung auszurichten")
+GROWING_HINT = ("Bei automatischer Länge wächst das Etikett mit – "
+                "das Objekt sitzt mit gleichem Rand an beiden Enden")
 
 
 class LayoutPanel(Panel):
@@ -72,8 +72,8 @@ class LayoutPanel(Panel):
         self._enable()
 
     def set_growing(self, axis: str | None) -> None:
-        """Achse, in der das Etikett mitwächst (``layout.growing_axis``): dort ist das
-        Ausrichten am Papier gesperrt."""
+        """Achse, in der das Etikett mitwächst (``layout.growing_axis``): dort sitzt das
+        Objekt beim Ausrichten am Papier am Randanfang (Hinweis im Tooltip)."""
         if axis != self._grow:
             self._grow = axis
             self._enable()
@@ -81,11 +81,11 @@ class LayoutPanel(Panel):
     def _enable(self) -> None:
         for key, button in self.buttons.items():
             target = button.defaultAction() or button
-            blocked = _PAPER_AXIS.get(key) == self._grow and self._grow is not None
-            target.setEnabled(self._count >= MIN_SELECTED[key] and not blocked)
+            growing = _PAPER_AXIS.get(key) == self._grow and self._grow is not None
+            target.setEnabled(self._count >= MIN_SELECTED[key])
             if key in _PAPER_AXIS and button.defaultAction() is not None:
                 name = target.toolTip().split("\n")[0]
-                target.setToolTip(f"{name}\n{GROWING_HINT}" if blocked else name)
+                target.setToolTip(f"{name}\n{GROWING_HINT}" if growing else name)
 
     def set_icon_style(self, dark_checked: bool) -> None:
         self._dark = dark_checked

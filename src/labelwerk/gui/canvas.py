@@ -33,6 +33,7 @@ _HANDLE_CURSORS = {
     "l": Qt.CursorShape.SizeHorCursor, "r": Qt.CursorShape.SizeHorCursor,
 }
 _GUIDE_COLOR = QColor("#E53935")
+_TAPE_COLOR = QColor("#BDBDBD")    # heller als die Arbeitsfläche, in jedem Design lesbar
 TOOL_MODES = ("select", "text")   # Auswahl-Pfeil, „Text anlegen“
 
 
@@ -110,7 +111,9 @@ class Canvas(QGraphicsView):
         self.orientation = "vertical"
         self._scale = 1.0
         self.label: Label | None = None
-        self.outline = self.printable = self.handle = None
+        self.outline = self.printable = self.handle = self.tape = None
+        self._tape = QRectF()
+        self._cut_edges: list[str] = []
         self.sheet: QGraphicsRectItem | None = None        # Etikett in Leserichtung (Druckpunkte)
         self.objects: list[ObjectItem] = []
         self._pixmaps: dict[int, tuple[RenderedObject, QPixmap]] = {}
@@ -183,13 +186,21 @@ class Canvas(QGraphicsView):
         self._grow = grow
         dotted = QPen(QColor("#888888"), 1, Qt.PenStyle.DotLine)
         dotted.setCosmetic(True)
-        self.printable = scene.addRect(QRectF(ox, oy, pw, ph), dotted)
+        if label.shape != "round" and area is not None:
+            # bedruckbarer Bereich mit allen vier Rändern (auch in Bandrichtung), in Leserichtung
+            self.printable = QGraphicsRectItem(QRectF(area.x * MM, area.y * MM,
+                                                      area.w * MM, area.h * MM), self.sheet)
+            self.printable.setPen(dotted)
+        else:
+            self.printable = scene.addRect(QRectF(ox, oy, pw, ph), dotted)
 
         self.handle = None
+        self._tape = QRectF()
+        self._cut_edges = []
         if label.shape == "endless":
+            self._add_tape(scene, tw, th)
             dashed = QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.DashLine)
             dashed.setCosmetic(True)
-            scene.addLine(-2 * MM, 0, tw + 2 * MM, 0, dashed)
             scene.addLine(-2 * MM, th, tw + 2 * MM, th, dashed)
             self.handle = scene.addRect(QRectF(tw / 2 - 5 * MM, th + MM, 10 * MM, 2 * MM),
                                         QPen(Qt.PenStyle.NoPen), QBrush(Qt.GlobalColor.black))
@@ -199,6 +210,31 @@ class Canvas(QGraphicsView):
         self._caption = self._caption_for(th)
         scene.setSceneRect(-_MARGIN, -_MARGIN, tw + 2 * _MARGIN, th + 2 * _MARGIN)
         self.set_selection([i for i in self._selection if self._selectable(i)])
+
+    def _add_tape(self, scene: QGraphicsScene, tw: float, th: float) -> None:
+        """Endlosband wie im P-touch Editor: Der Anfang des Etiketts in Bandrichtung ist eine
+        geschlossene, durchgezogene Kante; nur das Ende trägt die gestrichelte Schnittlinie,
+        dahinter läuft das Band als hellgrauer Streifen weiter (Szene-y; bei „horizontal“ ist
+        die Ansicht gedreht). Nur Anzeige: reagiert nicht auf die Maus und gehört weder zum
+        Druckbild noch zur Etikettgröße."""
+        self._tape = QRectF(0, th, tw, _MARGIN)
+        self.tape = scene.addRect(self._tape, QPen(Qt.PenStyle.NoPen), QBrush(_TAPE_COLOR))
+        self.tape.setZValue(-1)
+        self.tape.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        edge = QPen(QColor("#555555"), 1)
+        edge.setCosmetic(True)
+        scene.addLine(0, 0, tw, 0, edge)
+        self._cut_edges = ["end"]
+
+    def tape_rect(self) -> QRectF:
+        """Restband in Szene-Koordinaten (Bandrichtung = Szene-y, unterhalb des Etiketts);
+        leer bei gestanzten Etiketten."""
+        return QRectF(self._tape)
+
+    def cut_edges(self) -> list[str]:
+        """Kanten in Bandrichtung mit Schnittlinie: bei Endlosband nur das Ende („end“) –
+        der Anfang ist geschlossen; gestanzte Etiketten behalten ihre Darstellung (leer)."""
+        return list(self._cut_edges)
 
     def _pixmap(self, rendered: RenderedObject) -> QPixmap:
         """Pixmap je Objektbild nur einmal erzeugen (unverändertes Objekt = dasselbe Bild).

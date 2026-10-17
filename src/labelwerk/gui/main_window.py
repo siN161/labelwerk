@@ -201,9 +201,6 @@ class MainWindow(QMainWindow):
         self._printer_timer.start()
 
         self.render_now()
-        if len(self.doc.objects) == 1:     # einziges Objekt: gleich bearbeitbar (Start wie bisher)
-            self.canvas.set_selection([0])
-            self._follow_selection([0])
         self.canvas.selection_changed.connect(self._on_selection)
         self.panel("text").frame_edited.connect(self._edit_frame)
         self._update_edit_actions()
