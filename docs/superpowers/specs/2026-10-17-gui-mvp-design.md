@@ -10,7 +10,7 @@ Langfristig wird labelwerk ein **frei platzierbarer Editor** (mehrere Objekte �
 
 ## Nicht im MVP
 
-Verschieben mit der Maus, Auswahl-Anfasser, mehrere Objekte, Rahmen/Barcode/Bild, Drehen, Speichern/Laden, Modell-/Druckerauswahl (fest QL-600, automatisch erkannt).
+Verschieben von Objekten mit der Maus (die Etikettlänge ist per Maus ziehbar, siehe unten), Auswahl-Anfasser, mehrere Objekte, Rahmen/Barcode/Bild, Drehen, Speichern/Laden, Modell-/Druckerauswahl (fest QL-600, automatisch erkannt).
 
 ## Architektur: Kern rendert, GUI zeigt an
 
@@ -39,6 +39,7 @@ Später kommen Position (`x_mm`, `y_mm`), Drehung, Ausrichtung und weitere Objek
 - `render_document(doc) -> PIL.Image` ist der eigentliche Renderer. Im MVP wird das erste (einzige) `TextObject` wie bisher zentriert und ggf. automatisch verkleinert.
 - `render_text(text, label_id, font_size, font_path)` bleibt als dünne Hülle (`Document` mit einem `TextObject`) – CLI und bestehende Tests bleiben unverändert.
 - **Feste Länge** (`length_mm`, nur Endlosband): Bildhöhe = Länge in Punkten (300 dpi), Text vertikal zentriert. Bei automatischer Schriftgröße schrumpft der Text auch auf die Länge; ist er bei fester Schriftgröße höher als die Länge, wird `TextTooLarge` geworfen.
+- **Längengrenzen** (Endlos): Das Modell erlaubt 12,7–1000 mm (`min_max_length_dots` aus `brother_ql.models`, QL-600: 150–11811 Punkte). Eine automatische Länge wird auf das Minimum angehoben; eine feste Länge außerhalb der Grenzen wird auf die Grenze gesetzt.
 - `length_mm` bei gestanztem oder rundem Etikett wird ignoriert (Größe ist durch das Etikett vorgegeben); die GUI bietet das Feld dann gar nicht an (siehe Papier-Panel).
 - Leeres Dokument / leerer Text: weißes Etikett (Endlos: Mindestlänge = Ränder). `Document.is_empty()` meldet, ob kein Objekt sichtbaren Inhalt hat (Text nur aus Leerzeichen zählt als leer) – Grundlage für die Warnung vor dem Druck.
 
@@ -80,6 +81,7 @@ Wie im P-touch Editor sieht man das Etikett in echter Größe und Form auf einer
 - **Gestanzt:** weißes Rechteck in physischer Größe (`total_width` × `total_height`) mit leicht abgerundeten Ecken (wie die DK-Etiketten), darin der bedruckbare Bereich als gepunktete Linie.
 - **Rund:** weißer Kreis in physischer Größe, bedruckbarer Bereich gepunktet.
 - **Endlos:** weißer Streifen in Bandbreite (`total_width`) und aktueller Länge; Schnittkanten oben und unten als gestrichelte Linie.
+- **Länge per Ziehen (nur Endlos):** Die untere Schnittkante hat einen Anfasser. Ziehen mit der Maus setzt `length_mm` (Raster 0,5 mm, innerhalb der Längengrenzen); während des Ziehens zeigt eine Beschriftung die aktuelle Länge. Das Längenfeld im Papier-Panel springt dabei auf „fest“ und zeigt denselben Wert – beide Wege bearbeiten dasselbe Feld im `Document`. Doppelklick auf den Anfasser stellt wieder auf „automatisch“.
 - Über dem Etikett eine Größenangabe (z. B. „62 × 29 mm“), wie „62mm“ im P-touch Editor.
 
 Die abgerundeten Ecken zeigen das Etikett, nicht die Bedienelemente – das Theme bleibt eckig.
@@ -105,7 +107,7 @@ RawBlock (`docs/design/rawblock-DESIGN.md`) dient als **Inspiration, nicht als R
 
 ## Tests
 
-- **Kern (ohne Qt):** `render_document` liefert für ein Text-Dokument dasselbe Bild wie `render_text`; feste Länge setzt die Bildhöhe; zu hoher Text bei fester Länge und fester Schriftgröße wirft `TextTooLarge`; `length_mm` bei gestanztem Etikett wird ignoriert; `Document.is_empty()` für kein Objekt / leeren Text / nur Leerzeichen / echten Text; `Label.shape` und physische Größe für `62`, `62x29`, `d24`.
+- **Kern (ohne Qt):** `render_document` liefert für ein Text-Dokument dasselbe Bild wie `render_text`; feste Länge setzt die Bildhöhe; zu hoher Text bei fester Länge und fester Schriftgröße wirft `TextTooLarge`; `length_mm` bei gestanztem Etikett wird ignoriert; Längengrenzen (zu kurzer automatischer Text → 150 Punkte, feste Länge 2000 mm → 11811 Punkte); `Document.is_empty()` für kein Objekt / leeren Text / nur Leerzeichen / echten Text; `Label.shape` und physische Größe für `62`, `62x29`, `d24`.
 - **GUI (`pytest-qt`, `QT_QPA_PLATFORM=offscreen`):**
   - Registry erzeugt je Werkzeug eine Schaltfläche und ein Panel.
   - Tippen im Text-Panel aktualisiert die Vorschau.
@@ -113,6 +115,7 @@ RawBlock (`docs/design/rawblock-DESIGN.md`) dient als **Inspiration, nicht als R
   - Zu große feste Schriftgröße zeigt Hinweis im Panel.
   - Papier-Panel: Längenfeld nur bei Endlosband, bei `62x29` stattdessen „62 × 29 mm · gestanzt“.
   - Arbeitsfläche: Etikettumriss hat die physische Größe (z. B. `62x29` → 732 × 341 Punkte) bzw. ist bei `d24` ein Kreis.
+  - Länge ziehen: Anfasser um eine Strecke verschieben setzt `length_mm` (gerastert) und das Panel zeigt „fest“ mit diesem Wert; Ziehen unter 12,7 mm bleibt bei 12,7 mm; Doppelklick setzt auf automatisch.
   - Leeres Etikett: Drucken fragt nach; Abbrechen ruft `print_image` nicht auf.
   - Drucken mit ersetztem `print_image`: Erfolg in der Statusleiste, Knopf wieder frei; `PrintError` erscheint als Meldung.
 - GUI-Tests nutzen `pytest.importorskip("PySide6")`, damit reine CLI-Umgebungen grün bleiben.
