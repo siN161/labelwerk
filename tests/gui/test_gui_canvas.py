@@ -100,3 +100,12 @@ def test_length_handle_does_not_jump_when_grabbed(qtbot, canvas):
     # Schnittkante wandert um 10 mm (nicht zum Cursor, der ~2 mm tiefer liegt);
     # Toleranz = ein Rasterschritt, weil Mauskoordinaten ganze Pixel sind
     assert abs(emitted[-1] - (start_mm + 10)) <= 0.5
+
+
+def test_snap_length_limits_and_raster(canvas):
+    from labelwerk.gui.canvas import MM
+
+    assert canvas.snap_length(1 * MM) == pytest.approx(12.7, abs=0.01)
+    assert canvas.snap_length(10000 * MM) == canvas.max_mm
+    assert canvas.snap_length(40.24 * MM) == 40.0
+    assert canvas.snap_length(40.26 * MM) == 40.5

@@ -26,9 +26,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("labelwerk")
         self.resize(1100, 700)
-        self.doc = doc or Document(objects=[TextObject()])
+        self.doc = doc if doc is not None else Document(objects=[TextObject()])
         self.model = model
         self.image = None
+        self._render_error: str | None = None
+        self._print_signals = None
 
         # Werkzeugleiste + Panels aus der Registry
         toolbar = QToolBar("Werkzeuge")
@@ -64,6 +66,7 @@ class MainWindow(QMainWindow):
         # Arbeitsfläche
         self.canvas = Canvas(model)
         self.canvas.length_changed.connect(self._on_length_dragged)
+        self.canvas.drag_finished.connect(self.render_now)
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -107,8 +110,14 @@ class MainWindow(QMainWindow):
         try:
             image = render_document(self.doc, self.model)
         except ValueError as e:
-            self.panel("text").show_error(str(e))
+            # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
+            self._render_error = str(e)
+            self.panel("text").show_error(self._render_error)
+            self._set_result(self._render_error, "error")
             return
+        if self._render_error is not None and self.result.text() == self._render_error:
+            self._set_result("", "")   # nur den Renderfehler löschen, kein Druckergebnis
+        self._render_error = None
         self.panel("text").show_error(None)
         self.image = image
         self.canvas.set_document(get_label(self.doc.label_id), image)
@@ -116,17 +125,26 @@ class MainWindow(QMainWindow):
     def _on_length_dragged(self, length_mm) -> None:
         self.doc.length_mm = length_mm
         self.panel("paper").refresh()
-        self.schedule_render()
+        if not self.canvas.is_dragging():   # beim Ziehen erst nach dem Loslassen rendern
+            self.schedule_render()
+
+    def _set_result(self, text: str, state: str) -> None:
+        self.result.setProperty("state", state)
+        self.result.style().polish(self.result)
+        self.result.setText(text)
 
     # --- Drucken ----------------------------------------------------------
     def refresh_printer(self) -> None:
-        printer = find_brother_lp()
-        if printer:
-            text = f"● {self.model} · {Path(printer).name}"
-        elif brother_busy():
-            text = "● Drucker belegt (andere Anwendung)"
-        else:
-            text = "○ kein Drucker"
+        try:
+            printer = find_brother_lp()
+            if printer:
+                text = f"● {self.model} · {Path(printer).name}"
+            elif brother_busy():
+                text = "● Drucker belegt (andere Anwendung)"
+            else:
+                text = "○ kein Drucker"
+        except OSError:
+            text = "○ Druckerstatus unbekannt"
         self.printer_status.setText(text)
 
     def confirm_empty(self) -> bool:
@@ -139,8 +157,8 @@ class MainWindow(QMainWindow):
     def print_label(self) -> None:
         if self._timer.isActive():
             self.render_now()
-        if self.image is None:
-            return
+        if self.image is None or self._render_error is not None:
+            return   # Fehler steht bereits in der Statusleiste
         if self.doc.is_empty() and not self.confirm_empty():
             return
         self.print_action.setEnabled(False)

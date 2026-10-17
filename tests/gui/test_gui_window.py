@@ -192,3 +192,74 @@ def test_new_print_resets_result_state(window, qtbot, monkeypatch):
     assert window.result.property("state") == ""
     qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
     assert window.result.property("state") == "ok"
+
+
+def _press_move(window, dy_mm, kind=QMouseEvent.Type.MouseMove, start=None):
+    canvas = window.canvas
+    point = QPointF(start.x(), start.y() + dy_mm * MM)
+    _mouse(canvas, kind, point, Qt.MouseButton.LeftButton)
+
+
+def test_drag_without_motion_does_not_drift_and_renders_only_on_release(window, qtbot):
+    canvas = window.canvas
+    start = canvas.handle.sceneBoundingRect().center()
+    height_before = canvas.label_height()
+    _mouse(canvas, QMouseEvent.Type.MouseButtonPress, start, Qt.MouseButton.LeftButton)
+    _press_move(window, 10, start=start)
+    first = window.doc.length_mm
+    qtbot.wait(300)   # früher: Render mitten im Ziehen verschob das Etikett unter dem Cursor
+    assert canvas.label_height() == height_before
+    _press_move(window, 10, start=start)
+    assert window.doc.length_mm == first
+    end = QPointF(start.x(), start.y() + 10 * MM)
+    _mouse(canvas, QMouseEvent.Type.MouseButtonRelease, end, Qt.MouseButton.NoButton)
+    assert not canvas.is_dragging()
+    assert window.image.height == round(first * MM)
+    assert canvas.label_height() == pytest.approx(round(first * MM))
+
+
+def test_render_error_blocks_print_and_shows_in_status(window, qtbot, monkeypatch):
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: pytest.fail("darf nicht drucken"))
+    panel = window.panel("text")
+    panel.edit.setPlainText("Sehr langer Text")
+    panel.auto.setChecked(False)
+    panel.size.setValue(300)
+    window.print_label()
+    assert "höchstens" in window.result.text()
+    assert window.result.property("state") == "error"
+    assert window.print_action.isEnabled()
+    panel.auto.setChecked(True)
+    window.render_now()
+    assert panel.error.isHidden()
+    assert window.result.text() == ""
+
+
+def test_render_success_keeps_print_result(window, qtbot, monkeypatch):
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp",
+                        lambda: "file:///dev/usb/lp0")
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: {"outcome": "printed", "did_print": True})
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    window.render_now()
+    assert window.result.text() == "Gedruckt ✓"
+
+
+def test_printer_detection_error_at_startup(qtbot, monkeypatch):
+    def broken():
+        raise OSError("kaputt")
+
+    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", broken)
+    win = MainWindow()
+    qtbot.addWidget(win)
+    assert "unbekannt" in win.printer_status.text()
+
+
+def test_busy_printer_message(window, qtbot, monkeypatch):
+    monkeypatch.setattr("labelwerk.gui.print_worker.brother_busy", lambda: True)
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    assert "belegt" in window.result.text()

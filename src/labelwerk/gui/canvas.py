@@ -30,6 +30,7 @@ def to_qimage(img: Image.Image) -> QImage:
 class Canvas(QGraphicsView):
     length_changed = Signal(object)   # neue Länge in mm (float) oder None = automatisch
     zoom_changed = Signal(int)        # Zoom in Prozent
+    drag_finished = Signal()          # Anfasser losgelassen (nach tatsächlichem Ziehen)
 
     def __init__(self, model: str = DEFAULT_MODEL):
         super().__init__()
@@ -45,6 +46,7 @@ class Canvas(QGraphicsView):
         self.outline = self.printable = self.handle = None
         self._caption = ""
         self._dragging = False
+        self._moved = False
         self._grab_offset = 0.0
         self._apply_zoom()
 
@@ -110,6 +112,9 @@ class Canvas(QGraphicsView):
     def _on_handle(self, event) -> bool:
         return self.handle is not None and self.itemAt(event.position().toPoint()) is self.handle
 
+    def is_dragging(self) -> bool:
+        return self._dragging
+
     def snap_length(self, scene_y: float) -> float:
         """Szene-y der Unterkante → Länge in mm (Raster 0,5 mm, innerhalb der Modellgrenzen)."""
         mm = round(scene_y / MM * 2) / 2
@@ -118,6 +123,7 @@ class Canvas(QGraphicsView):
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self._on_handle(event):
             self._dragging = True
+            self._moved = False
             # Versatz zwischen Cursor und Schnittkante merken, damit der Anfasser nicht springt
             self._grab_offset = self.mapToScene(event.position().toPoint()).y() - self.label_height()
             return
@@ -130,6 +136,7 @@ class Canvas(QGraphicsView):
             self.handle.setY(mm * MM - self.label_height())
             self._caption = f"{self.label.size_mm[0]} × {format_mm(round(mm * MM))} mm"
             self.viewport().update()
+            self._moved = True
             self.length_changed.emit(mm)
             return
         super().mouseMoveEvent(event)
@@ -137,6 +144,8 @@ class Canvas(QGraphicsView):
     def mouseReleaseEvent(self, event) -> None:
         if self._dragging:
             self._dragging = False
+            if self._moved:
+                self.drag_finished.emit()
             return
         super().mouseReleaseEvent(event)
 
