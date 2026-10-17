@@ -33,6 +33,15 @@ labelwerk print-file internetmarke.pdf -l 62       # PDF/PNG/JPG 1:1 drucken
 Optionen: `-s` Schriftgröße, `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
 `print-file` schneidet auf den Inhalt zu (Schnittmarken, z. B. der Internetmarke, und Leerraum fallen weg), dreht bei Bedarf und druckt 1:1; `--rotate 0|90|180|270` legt die Drehung fest (Grad im Uhrzeigersinn), `--fit` verkleinert zu große Motive, `--page N` wählt die PDF-Seite. Internetmarke quer wie im PDF: `--rotate 0 --fit`.
 
+## Grafische Oberfläche
+
+```bash
+pip install -e ".[gui]"
+labelwerk-gui
+```
+
+Aufbau wie im P-touch Editor: Werkzeugleiste (Papier, Text), Eigenschaften links, Etikett in echter Größe und Form mit mm-Linealen. Bei Endlosband lässt sich die Länge am Anfasser unter dem Etikett ziehen (Doppelklick = automatisch). Zoom mit Strg+Mausrad oder −/+ unten rechts.
+
 ## Architektur
 
 ```
@@ -41,6 +50,8 @@ files.py    PDF/Bild → zugeschnitten, 1:1 aufs Etikett gesetzt
 labels.py   Etikettentypen je Modell
 printer.py  Bild → Brother-Rasterdaten → Drucker (via brother_ql)
 cli.py      Kommandozeile
+document.py Etikett-Dokument (Etikett, Länge, Objekte)
+gui/        PySide6-Oberfläche (nur Anzeige/Bearbeitung, kein Druckcode)
 ```
 
 Die Kernlogik ist UI-unabhängig – eine GUI setzt nur auf `render`, `files`, `labels`, `printer` und `detect` auf.

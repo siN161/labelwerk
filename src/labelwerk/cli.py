@@ -7,7 +7,7 @@ import sys
 from PIL import Image
 
 from . import printer as prn
-from .detect import brother_busy, find_brother_lp, find_brother_usb
+from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
 from .files import crop, fit_to_label, load_file
 from .labels import format_mm, labels_for_model
 from .render import render_text
@@ -49,18 +49,13 @@ def _parser() -> argparse.ArgumentParser:
 
 _HARDWARE_HINT = "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb'"
 _NOT_DETECTED = {
-    "linux_kernel": "Brother-Drucker unter /dev/usb/lp* nicht gefunden.\n"
-                    f"{_HARDWARE_HINT}, 'lsmod | grep usblp'.\n"
-                    "Manuell angeben mit -p file:///dev/usb/lpN",
+    "linux_kernel": f"{PRINTER_NOT_FOUND}\nManuell angeben mit -p file:///dev/usb/lpN",
     "pyusb": "Brother-Drucker per USB (pyusb) nicht gefunden.\n"
              f"{_HARDWARE_HINT}, Zugriff auf den USB-Bus (udev-Regel).\n"
              "Manuell angeben mit -p usb://0x04f9:0xPID",
     "network": "Netzwerkdrucker werden nicht automatisch erkannt.\n"
                "Adresse angeben mit -p tcp://IP",
 }
-_BUSY = ("Brother-Drucker ist per USB angeschlossen, aber von einem anderen Programm belegt\n"
-         "(z. B. VM mit USB-Durchreichung). Dort freigeben und den Drucker kurz aus- und\n"
-         "wieder einschalten.")
 
 
 def _detect_printer(backend: str) -> str | None:
@@ -85,7 +80,7 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
         args.printer = _detect_printer(args.backend)
         if args.printer is None:
             busy = args.backend == "linux_kernel" and brother_busy()
-            print(_BUSY if busy else _NOT_DETECTED[args.backend], file=sys.stderr)
+            print(BUSY_MESSAGE if busy else _NOT_DETECTED[args.backend], file=sys.stderr)
             return 2
 
     try:

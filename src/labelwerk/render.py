@@ -5,7 +5,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from .labels import get_label
+from .document import Document, TextObject
+from .labels import DPI, get_label, length_limits
 
 MARGIN = 12  # Punkte, ca. 1 mm
 _FONT_CANDIDATES = [
@@ -42,9 +43,22 @@ def render_text(
     font_size: int | None = None,
     font_path: str | None = None,
 ) -> Image.Image:
-    label = get_label(label_id)
+    obj = TextObject(text, font_size=font_size, font_path=font_path)
+    return render_document(Document(label_id, objects=[obj]))
+
+
+def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
+    """Dokument als Bild in exakter Druckauflösung (Vorschau = Druck)."""
+    label = get_label(doc.label_id)
+    min_len, max_len = length_limits(model)
+    height = label.height
+    if height is None and doc.length_mm is not None:
+        height = min(max(round(doc.length_mm * DPI / 25.4), min_len), max_len)
+    obj = doc.objects[0] if doc.objects else TextObject()
+    text, font_size, font_path = obj.text, obj.font_size, obj.font_path
+
     max_w = label.width - 2 * MARGIN
-    max_h = (label.height - 2 * MARGIN) if label.height else None
+    max_h = (height - 2 * MARGIN) if height else None
 
     size = font_size or max(10, label.width // 5)
     while True:
@@ -56,10 +70,10 @@ def render_text(
             break
         size -= 2
     if font_size is not None and size != font_size:
-        raise TextTooLarge(font_size, size, label_id)
+        raise TextTooLarge(font_size, size, doc.label_id)
 
     text_w, text_h = r - l, b - t
-    height = label.height or text_h + 2 * MARGIN
+    height = height or min(max(text_h + 2 * MARGIN, min_len), max_len)
     img = Image.new("RGB", (label.width, height), "white")
     x = (label.width - text_w) // 2 - l
     y = (height - text_h) // 2 - t

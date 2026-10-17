@@ -7,6 +7,13 @@ from brother_ql.backends.helpers import discover as _discover
 
 BROTHER_VENDOR_ID = "04f9"
 
+# Meldungen für CLI und GUI
+PRINTER_NOT_FOUND = ("Brother-Drucker unter /dev/usb/lp* nicht gefunden.\n"
+                     "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', 'lsmod | grep usblp'.")
+BUSY_MESSAGE = ("Brother-Drucker ist per USB angeschlossen, aber von einem anderen Programm belegt\n"
+                "(z. B. VM mit USB-Durchreichung). Dort freigeben und den Drucker kurz aus- und\n"
+                "wieder einschalten.")
+
 
 def find_brother_lp(sys_root: str | Path = "/sys/class/usbmisc",
                     dev_root: str = "/dev/usb") -> str | None:
@@ -33,14 +40,17 @@ def find_brother_usb(discover=_discover) -> str | None:
 def brother_busy(devices_root: str | Path = "/sys/bus/usb/devices") -> bool:
     """True, wenn ein Brother-Drucker angeschlossen ist, aber ein anderes Programm sein
     Druckerinterface direkt belegt (Treiber usbfs, z. B. VM mit USB-Durchreichung)."""
-    for dev in Path(devices_root).iterdir():
-        vendor = dev / "idVendor"
-        if not vendor.exists() or vendor.read_text().strip() != BROTHER_VENDOR_ID:
-            continue
-        for iface in dev.glob(f"{dev.name}:*"):
-            cls = iface / "bInterfaceClass"
-            driver = iface / "driver"
-            if (cls.exists() and cls.read_text().strip() == "07"
-                    and driver.exists() and driver.resolve().name == "usbfs"):
-                return True
+    try:
+        for dev in Path(devices_root).iterdir():
+            vendor = dev / "idVendor"
+            if not vendor.exists() or vendor.read_text().strip() != BROTHER_VENDOR_ID:
+                continue
+            for iface in dev.glob(f"{dev.name}:*"):
+                cls = iface / "bInterfaceClass"
+                driver = iface / "driver"
+                if (cls.exists() and cls.read_text().strip() == "07"
+                        and driver.exists() and driver.resolve().name == "usbfs"):
+                    return True
+    except OSError:  # sysfs fehlt oder nicht lesbar: nicht als belegt melden
+        return False
     return False

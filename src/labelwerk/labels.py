@@ -20,18 +20,24 @@ class Label:
     height: int | None      # None = Endlosband
     tape_mm: int
     description: str
+    shape: str              # "endless", "die_cut" oder "round"
+    size_mm: tuple[int, int]  # Nenngröße laut Etikett, z. B. (62, 29); Endlos: (62, 0)
+    total_width: int        # physische Breite in Punkten (bedruckbarer Bereich liegt mittig)
+    total_height: int | None  # physische Höhe in Punkten; None = Endlosband
 
 
 def _convert(raw) -> Label:
     w, h = raw.dots_printable
     endless = raw.form_factor in (FormFactor.ENDLESS, FormFactor.PTOUCH_ENDLESS)
     if endless:
-        desc = f"{raw.tape_size[0]} mm endlos"
+        desc, shape = f"{raw.tape_size[0]} mm endlos", "endless"
     elif raw.form_factor == FormFactor.ROUND_DIE_CUT:
-        desc = f"Ø {raw.tape_size[0]} mm rund"
+        desc, shape = f"Ø {raw.tape_size[0]} mm rund", "round"
     else:
-        desc = f"{raw.tape_size[0]} x {raw.tape_size[1]} mm gestanzt"
-    return Label(raw.identifier, w, None if endless else h, raw.tape_size[0], desc)
+        desc, shape = f"{raw.tape_size[0]} x {raw.tape_size[1]} mm gestanzt", "die_cut"
+    total_w, total_h = raw.dots_total
+    return Label(raw.identifier, w, None if endless else h, raw.tape_size[0], desc,
+                 shape, tuple(raw.tape_size), total_w, None if endless else total_h)
 
 
 def _all_raw():

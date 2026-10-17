@@ -9,20 +9,29 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - CLI druckt erfolgreich auf dem QL-600 (verifiziert mit `-l 62`).
 - `labelwerk print-file` druckt PDF/PNG/JPG 1:1 (z. B. Internetmarke auf `-l 62`).
 - Druckererkennung automatisch über `/sys/class/usbmisc/lp*` (Vendor-ID `04f9`), Gerät liegt aktuell auf `/dev/usb/lp1`.
-- 77 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- GUI-MVP: `labelwerk-gui` (Papier/Text, Live-Vorschau, Etikettform, Länge ziehen, Drucken im Hintergrund).
+- 116 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
 src/labelwerk/
   labels.py   Etikettentypen je Modell (Daten aus brother_ql.labels.LabelsManager);
               filtert für QL-600: >62 mm, PT-Bänder, Rot/Schwarz-Etiketten
-  render.py   render_text(text, label_id, font_size, font_path) -> PIL.Image
+  render.py   render_text(text, label_id, font_size, font_path) -> PIL.Image; render_document(doc, model) -> PIL.Image
               exakte Druckbreite @300 dpi, Schrift schrumpft automatisch, mehrzeilig zentriert
   files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi)
               crop(img) -> auf Inhalt, ohne Schnittmarken/Leerraum; fit_to_label(img, label_id, fit, rotate) -> 1:1, auto/feste Drehung
   printer.py  build_instructions(image, label_id, model) -> bytes (Brother-Raster)
               print_image(...) -> status-dict von brother_ql.backends.helpers.send
   detect.py   find_brother_lp() -> "file:///dev/usb/lpN" | None
+  document.py Etikett-Dokument (Etikett, Länge, Objekte), UI-unabhängig
+  gui/        PySide6-Oberfläche, nur Anzeige/Bearbeitung:
+    main_window.py  Hauptfenster, Werkzeugleiste, Statusleiste
+    tools.py        Werkzeug-Registry (Papier, Text; neue Werkzeuge als Eintrag)
+    panels/         Eigenschaften-Panels je Werkzeug (paper, text)
+    canvas.py       Etikett in echter Größe, Lineale, Zug-Anfasser, Zoom
+    print_worker.py Drucken im Hintergrund-Thread
+    theme/          QSS-Stylesheet (rawblock.qss)
   cli.py      labelwerk labels | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]
 ```
 Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `detect` auf – keine Drucklogik in der UI.
@@ -52,8 +61,10 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62 --preview vorschau.png
 labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ```
 
-## Nächstes Ziel: GUI (MVP)
+## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
+
+Nächste Schritte: Roadmap 1 (Text drehen) bzw. Werkzeug ‚Bild‘ (Roadmap 5) als neuer Eintrag in `gui/tools.py`.
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld
