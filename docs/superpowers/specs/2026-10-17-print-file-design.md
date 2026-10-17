@@ -29,7 +29,7 @@ Alle Bilder intern bei **300 dpi** (Druckauflösung), Graustufen.
 2. **Schnittmarken erkennen:** In allen vier Ecken des bedruckten Bereichs je ein Kreuz aus einer waagrechten und einer senkrechten dünnen Linie (durchgezogen oder gepunktet). Gefunden in allen vier Ecken → auf das Rechteck zwischen den Kreuzungspunkten zuschneiden (Marken liegen damit außerhalb).
 3. Sonst auf den bedruckten Bereich zuschneiden.
 
-Erkennungsregel für ein Eckkreuz: Im Eckfenster (ca. 10 × 10 mm) gibt es genau eine Zeile und eine Spalte, in denen über eine Strecke von mindestens 3 mm mindestens 40 % der Pixel dunkel sind, und das Fenster ist sonst weitgehend leer. Text in Ecknähe darf nicht als Marke gelten.
+Erkennungsregel für ein Eckkreuz (Ecke des bedruckten Bereichs, Fenster 10 × 10 mm): Es gibt Zeilen, die **am Rand des bedruckten Bereichs beginnen** und auf den ersten 3 mm zu mindestens 40 % dunkel sind (waagrechte Linie, auch gepunktet), und ebenso Spalten (senkrechte Linie). Beide Gruppen sind höchstens 1 mm dick. Zugeschnitten wird an der Innenkante der Linien plus 1 Pixel, damit kein Kantenrest der Marke bleibt. Text oder Logos in Ecknähe gelten so nicht als Marke (beginnen nicht an beiden Rändern bzw. sind dicker als 1 mm). Geprüft am echten Beispiel: 89,9 × 46,8 mm.
 
 ### `fit_to_label(img, label_id, fit=False) -> PIL.Image`
 
