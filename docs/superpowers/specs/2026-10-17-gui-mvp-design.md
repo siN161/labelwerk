@@ -41,7 +41,7 @@ Später kommen Position (`x_mm`, `y_mm`), Drehung, Ausrichtung und weitere Objek
 - **Feste Länge** (`length_mm`, nur Endlosband): Bildhöhe = Länge in Punkten (300 dpi), Text vertikal zentriert. Bei automatischer Schriftgröße schrumpft der Text auch auf die Länge; ist er bei fester Schriftgröße höher als die Länge, wird `TextTooLarge` geworfen.
 - **Längengrenzen** (Endlos): Das Modell erlaubt 12,7–1000 mm (`min_max_length_dots` aus `brother_ql.models`, QL-600: 150–11811 Punkte). Eine automatische Länge wird auf das Minimum angehoben; eine feste Länge außerhalb der Grenzen wird auf die Grenze gesetzt.
 - `length_mm` bei gestanztem oder rundem Etikett wird ignoriert (Größe ist durch das Etikett vorgegeben); die GUI bietet das Feld dann gar nicht an (siehe Papier-Panel).
-- Leeres Dokument / leerer Text: weißes Etikett (Endlos: Mindestlänge = Ränder). `Document.is_empty()` meldet, ob kein Objekt sichtbaren Inhalt hat (Text nur aus Leerzeichen zählt als leer) – Grundlage für die Warnung vor dem Druck.
+- Leeres Dokument / leerer Text: weißes Etikett (Endlos: Mindestlänge 12,7 mm wie jede automatische Länge). `Document.is_empty()` meldet, ob kein Objekt sichtbaren Inhalt hat (Text nur aus Leerzeichen zählt als leer) – Grundlage für die Warnung vor dem Druck.
 
 ### Kern: `labels.py`
 
@@ -90,7 +90,7 @@ Die abgerundeten Ecken zeigen das Etikett, nicht die Bedienelemente – das Them
 
 1. Ist `Document.is_empty()`, fragt ein Dialog „Das Etikett ist leer. Trotzdem drucken?“ (Standardknopf: Abbrechen). Abbrechen → nichts passiert.
 2. Knopf „Drucken“ sperrt sich.
-3. Worker: `find_brother_lp()`; kein Drucker → `failed` mit der Meldung aus der CLI. Sonst `print_image(...)` mit dem zuletzt gerenderten Bild.
+3. Worker: `find_brother_lp()`; kein Drucker → `failed` mit `detect.PRINTER_NOT_FOUND` bzw. `detect.BUSY_MESSAGE` (ohne CLI-Hinweis `-p …`). Sonst `print_image(...)` mit dem zuletzt gerenderten Bild.
 4. `PrintError` → `failed(str(e))`; Erfolg → `done(status)`.
 5. Statusleiste zeigt Ergebnis bzw. Fehler; Knopf wird wieder freigegeben.
 
@@ -102,7 +102,7 @@ RawBlock (`docs/design/rawblock-DESIGN.md`) dient als **Inspiration, nicht als R
 
 ## Abhängigkeiten
 
-- `pyproject.toml`: Extra `gui = ["PySide6>=6.6"]`; `dev` ergänzt um `pytest-qt>=4`; Skript `labelwerk-gui = "labelwerk.gui.app:main"`.
+- `pyproject.toml`: Extra `gui = ["PySide6>=6.6"]`; `dev` ergänzt um `pytest-qt>=4` **und** `PySide6>=6.6` (pytest-qt braucht eine Qt-Bindung, sonst stört es die ganze Suite); Skript `labelwerk-gui = "labelwerk.gui.app:main"`.
 - PySide6 ist LGPL und damit GPL-kompatibel.
 
 ## Tests
