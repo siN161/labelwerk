@@ -16,10 +16,12 @@ from ..printer import DEFAULT_MODEL
 from ..render import render_document
 from ..settings import Settings, load_settings, new_document
 from .canvas import Canvas
+from .media_worker import MediaWorker
 from .print_worker import PrintWorker
 from .tools import TOOLS, Tool
 
 RENDER_DELAY_MS = 150
+PRINTER_POLL_MS = 2000     # Druckererkennung: nur Blick in /sys, kein USB-Zugriff
 
 
 class MainWindow(QMainWindow):
@@ -34,6 +36,8 @@ class MainWindow(QMainWindow):
         self.image = None
         self._render_error: str | None = None
         self._print_signals = None
+        self._media_signals = None
+        self._printer_present = False
 
         # Werkzeugleiste + Panels aus der Registry
         toolbar = QToolBar("Werkzeuge")
@@ -99,6 +103,12 @@ class MainWindow(QMainWindow):
         self._timer.setSingleShot(True)
         self._timer.setInterval(RENDER_DELAY_MS)
         self._timer.timeout.connect(self.render_now)
+        self.panel("paper").check_media_requested.connect(self.check_media)
+        self._printer_timer = QTimer(self)
+        self._printer_timer.setInterval(PRINTER_POLL_MS)
+        self._printer_timer.timeout.connect(self.refresh_printer)
+        self._printer_timer.start()
+
         self.render_now()
         self.refresh_printer()
         if self.settings.warnings:
@@ -141,6 +151,7 @@ class MainWindow(QMainWindow):
 
     # --- Drucken ----------------------------------------------------------
     def refresh_printer(self) -> None:
+        """Statusleiste aktualisieren; beim Erscheinen des Druckers ggf. Medium prüfen."""
         try:
             printer = find_brother_lp()
             if printer:
@@ -150,8 +161,47 @@ class MainWindow(QMainWindow):
             else:
                 text = "○ kein Drucker"
         except OSError:
-            text = "○ Druckerstatus unbekannt"
+            printer, text = None, "○ Druckerstatus unbekannt"
         self.printer_status.setText(text)
+        present = printer is not None
+        if present and not self._printer_present and self.settings.check_media_on_start:
+            self.check_media()
+        if not present and self._printer_present:
+            self.panel("paper").clear_media()
+        self._printer_present = present
+
+    # --- Medium prüfen ----------------------------------------------------
+    def is_printing(self) -> bool:
+        return not self.print_action.isEnabled()
+
+    def is_checking_media(self) -> bool:
+        return self._media_signals is not None
+
+    def check_media(self) -> None:
+        if self.is_printing() or self.is_checking_media():
+            return
+        worker = MediaWorker(self.model)
+        self._media_signals = worker.signals
+        worker.signals.found.connect(self._media_found)
+        worker.signals.failed.connect(self._media_failed)
+        self.panel("paper").set_checking(True)
+        QThreadPool.globalInstance().start(worker)
+
+    def _media_found(self, media, label_id) -> None:
+        self._media_finished()
+        if label_id is not None and label_id != self.doc.label_id:
+            self.doc.label_id = label_id
+            self.panel("paper").refresh()
+            self.schedule_render()
+        self.panel("paper").show_media(media, label_id)
+
+    def _media_failed(self, message: str) -> None:
+        self._media_finished()
+        self.panel("paper").show_media_error(message)
+
+    def _media_finished(self) -> None:
+        self._media_signals = None
+        self.panel("paper").set_checking(False)
 
     def confirm_empty(self) -> bool:
         answer = QMessageBox.question(
@@ -165,6 +215,9 @@ class MainWindow(QMainWindow):
             self.render_now()
         if self.image is None or self._render_error is not None:
             return   # Fehler steht bereits in der Statusleiste
+        if self.is_checking_media():
+            self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
+            return
         if self.doc.is_empty() and not self.confirm_empty():
             return
         self.print_action.setEnabled(False)

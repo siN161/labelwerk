@@ -1,11 +1,13 @@
 """Panel „Papier“: Etikett, Länge (Endlosband), Ränder und Ausrichtung – wie im P-touch Editor."""
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QHBoxLayout,
-                               QLabel, QRadioButton, QWidget)
+                               QLabel, QPushButton, QRadioButton, QWidget)
 
 from ...document import MAX_MARGIN_MM, Document
 from ...labels import DPI, get_label, labels_for_model, length_limits
+from ...media import Media
 from ...printer import DEFAULT_MODEL
 from . import Panel
 
@@ -13,8 +15,12 @@ _GROUPS = (("endless", "Endlos"), ("die_cut", "Gestanzt"), ("round", "Rund"))
 
 
 class PaperPanel(Panel):
+    check_media_requested = Signal()
+
     def __init__(self, doc: Document, model: str = DEFAULT_MODEL):
         super().__init__(doc, "Papier")
+        self.media: Media | None = None          # zuletzt erkannte Rolle
+        self.media_label: str | None = None      # passendes Etikett dazu
 
         self.section("Etikett")
         self.combo = QComboBox()
@@ -28,6 +34,15 @@ class PaperPanel(Panel):
             for lbl in group:
                 self.combo.addItem(lbl.description, lbl.id)
         self.layout_.addWidget(self.combo)
+        self.check = QPushButton("MEDIUM PRÜFEN")
+        self.check.setToolTip("Eingelegte Rolle vom Drucker abfragen (druckt nichts)")
+        self.check.clicked.connect(self.check_media_requested)
+        self.layout_.addWidget(self.check)
+        self.media_status = QLabel()
+        self.media_status.setObjectName("mediaStatus")
+        self.media_status.setWordWrap(True)
+        self.media_status.hide()
+        self.layout_.addWidget(self.media_status)
 
         self.length_title = self.section("Länge")
         self.length_box = QWidget()
@@ -85,6 +100,7 @@ class PaperPanel(Panel):
         self.doc.margin_mm = self.margin.value()
         self.doc.orientation = "horizontal" if self.horizontal.isChecked() else "vertical"
         self._update_visibility()
+        self._update_media_status()
         self.changed.emit()
 
     def refresh(self) -> None:
@@ -99,6 +115,43 @@ class PaperPanel(Panel):
         for w in self._widgets():
             w.blockSignals(False)
         self._update_visibility()
+        self._update_media_status()
+
+    # --- Medium prüfen ----------------------------------------------------
+    def set_checking(self, running: bool) -> None:
+        self.check.setEnabled(not running)
+        self.check.setText("PRÜFE …" if running else "MEDIUM PRÜFEN")
+
+    def show_media(self, media: Media, label_id: str | None) -> None:
+        self.media, self.media_label = media, label_id
+        self._update_media_status()
+
+    def show_media_error(self, message: str) -> None:
+        self.media = self.media_label = None
+        self._set_media_status(message.replace("\n", " "), "error")
+
+    def clear_media(self) -> None:
+        self.media = self.media_label = None
+        self._set_media_status("", "")
+
+    def _update_media_status(self) -> None:
+        if self.media is None:
+            return
+        if self.media.kind == "none":
+            self._set_media_status("Keine Rolle eingelegt.", "warn")
+        elif self.media_label is None:
+            self._set_media_status(f"Eingelegt: {self.media.describe()} – kein passendes Etikett.", "warn")
+        elif self.media_label == self.doc.label_id:
+            self._set_media_status(f"Eingelegt: {self.media.describe()} ✓", "ok")
+        else:
+            self._set_media_status(f"Eingelegt ist {self.media.describe()} – Auswahl passt nicht.",
+                                   "warn")
+
+    def _set_media_status(self, text: str, state: str) -> None:
+        self.media_status.setProperty("state", state)
+        self.media_status.style().polish(self.media_status)
+        self.media_status.setText(text)
+        self.media_status.setVisible(bool(text))
 
     def _update_visibility(self) -> None:
         label = get_label(self.doc.label_id)

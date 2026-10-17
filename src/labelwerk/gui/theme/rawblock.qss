@@ -56,6 +56,13 @@ QCheckBox::indicator { width: 16px; height: 16px; border: 3px solid #000000; bac
 QCheckBox::indicator:checked { background: #000000; }
 
 QLabel#error { color: #FF0000; border: 3px solid #FF0000; padding: 6px; }
+QLabel#mediaStatus { border: 2px solid #000000; padding: 4px 6px; }
+QLabel#mediaStatus[state="ok"] { color: #008000; border-color: #008000; }
+QLabel#mediaStatus[state="warn"] { color: #CC7A00; border-color: #FFA500; }
+QLabel#mediaStatus[state="error"] { color: #FF0000; border-color: #FF0000; }
+QPushButton { background: #FFFFFF; border: 3px solid #000000; border-radius: 0; padding: 6px 10px; font-weight: 700; letter-spacing: 1px; }
+QPushButton:hover { background: #000000; color: #FFFFFF; }
+QPushButton:disabled { border-color: #CCCCCC; color: #999999; background: #F0F0F0; }
 
 QStatusBar { border-top: 3px solid #000000; }
 QStatusBar QLabel[state="ok"] { color: #008000; font-weight: 700; }
