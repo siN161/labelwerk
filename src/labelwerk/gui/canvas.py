@@ -1,5 +1,5 @@
 """Arbeitsfläche: Etikett in echter Größe und Form, Objekte (auswählen, ziehen, einrasten,
-an Anfassern skalieren, Text anlegen), mm-Lineale, Zoom, Längen-Anfasser.
+an Anfassern skalieren, Text anlegen, Bilder ablegen), mm-Lineale, Zoom, Längen-Anfasser.
 
 Schreibmodus (``gui.text_edit_mode``): Der bearbeitete Rahmen ist durchgezogen und ohne
 Anfasser; Schreibmarke und Markierung kommen als Lage in Druckpunkten vom Schreibmodus
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QApplication, QGraphicsPixmapItem, QGraphicsRectI
                                QGraphicsScene, QGraphicsView)
 
 from .. import layout
+from . import image_import
 from ..labels import DPI, Label, format_mm, length_limits
 from ..layout import Rect
 from ..printer import DEFAULT_MODEL
@@ -61,11 +62,12 @@ class ObjectItem(QGraphicsPixmapItem):
     """
 
     def __init__(self, index: int, rendered: RenderedObject, pixmap: QPixmap, keep_ratio: bool,
-                 parent: QGraphicsRectItem):
+                 parent: QGraphicsRectItem, keep_aspect: bool = False):
         super().__init__(pixmap, parent)
         self.index = index
         self.rendered = rendered
         self.keep_ratio = keep_ratio     # Ecken skalieren die Schrift: Seitenverhältnis bleibt
+        self.keep_aspect = keep_aspect   # auch Kanten halten das Verhältnis (Bild)
         self.setShapeMode(QGraphicsPixmapItem.ShapeMode.BoundingRectShape)
         self.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
         self.setPos(rendered.x, rendered.y)
@@ -107,6 +109,8 @@ class Canvas(QGraphicsView):
     edit_left = Signal()                       # Schreibmodus: Klick neben den Rahmen beendet ihn
     object_clicked = Signal(int)               # Klick auf ein Objekt (auch ein schon gewähltes)
     tool_changed = Signal(str)                 # Werkzeug: "select" | "text"
+    dropped = Signal(object, object, float, float)  # abgelegt: Dateien (list[Path]), Bild
+                                               # (PIL oder None), Ablagepunkt (mm, Leserichtung)
 
     def __init__(self, model: str = DEFAULT_MODEL):
         super().__init__()
@@ -117,6 +121,7 @@ class Canvas(QGraphicsView):
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.viewport().setMouseTracking(True)             # Mauszeiger über den Anfassern
+        self.setAcceptDrops(True)                          # Bilder und Bilddateien ablegen
         min_len, max_len = length_limits(model)
         self.min_mm, self.max_mm = min_len / MM, max_len / MM
         self.zoom = START_ZOOM
@@ -159,12 +164,13 @@ class Canvas(QGraphicsView):
     def set_document(self, label: Label, size: tuple[int, int],
                      rendered: list[RenderedObject], orientation: str = "vertical",
                      area: Rect | None = None, keep_ratio: list[bool] | None = None,
-                     grow: str | None = None) -> None:
+                     grow: str | None = None, keep_aspect: list[bool] | None = None) -> None:
         """Etikett (physische Form) und die einzeln gerenderten Objekte darin anzeigen.
 
         ``size``: Etikett in Druckpunkten in Leserichtung (wie ``render.label_size``);
         ``area``: bedruckbarer Bereich in mm (Einrasten); ``keep_ratio`` je Objekt: Ecken
-        skalieren die Schrift (ohne feste Rahmengröße); ``grow``: Achse, in der das Etikett
+        skalieren die Schrift (ohne feste Rahmengröße); ``keep_aspect`` je Objekt: auch
+        Kanten halten das Seitenverhältnis (Bild); ``grow``: Achse, in der das Etikett
         mitwächst (``layout.growing_axis``) – dort rastet nur der Anfang ein. Die Szene ist immer in
         Druckkoordinaten; bei „horizontal“ dreht die Ansicht um −90°, damit das Etikett in
         Leserichtung erscheint – die Objekte liegen in ``sheet``, das in Leserichtung zählt.
@@ -199,8 +205,9 @@ class Canvas(QGraphicsView):
         scene.addItem(self.sheet)
         self._pixmaps = {id(obj): (obj, self._pixmap(obj)) for obj in rendered}
         ratios = keep_ratio if keep_ratio is not None else [True] * len(rendered)
-        self.objects = [ObjectItem(i, obj, self._pixmaps[id(obj)][1], ratio, self.sheet)
-                        for i, (obj, ratio) in enumerate(zip(rendered, ratios))]
+        aspects = keep_aspect if keep_aspect is not None else [False] * len(rendered)
+        self.objects = [ObjectItem(i, obj, self._pixmaps[id(obj)][1], ratio, self.sheet, aspect)
+                        for i, (obj, ratio, aspect) in enumerate(zip(rendered, ratios, aspects))]
         self._show_edit_cursor()
         self._label_rect = Rect(0, 0, width / MM, height / MM)
         self._area = area if area is not None else self._label_rect
@@ -600,7 +607,8 @@ class Canvas(QGraphicsView):
         """Vorschau beim Ziehen an einem Anfasser: Bild gestreckt, gerendert wird beim Loslassen."""
         item = self.objects[self._grabbed]
         frame = resized_frame(self._start_frame, self._resize_key,
-                              self._reading(pos) + self._handle_offset, item.keep_ratio)
+                              self._reading(pos) + self._handle_offset, item.keep_ratio,
+                              item.keep_aspect)
         item.setPos(frame.topLeft())
         item.setTransform(QTransform.fromScale(frame.width() / item.rendered.w,
                                                frame.height() / item.rendered.h))
@@ -651,6 +659,34 @@ class Canvas(QGraphicsView):
 
     def label_height(self) -> float:
         return self.outline.path().boundingRect().height() if self.outline else 0.0
+
+    # --- Ablegen ----------------------------------------------------------
+    def _accepts(self, event) -> bool:
+        mime = event.mimeData()
+        return self.sheet is not None and (mime.hasImage() or any(
+            url.isLocalFile() for url in mime.urls()))
+
+    def dragEnterEvent(self, event) -> None:
+        if self._accepts(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:
+        self.dragEnterEvent(event)          # nicht an die Szene: sie kennt keine Ablageziele
+
+    def dropEvent(self, event) -> None:
+        if not self._accepts(event):
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        point = self._reading(event.position())
+        # Daten jetzt kopieren (QMimeData lebt nur während des Ablegens), verarbeiten erst
+        # danach: ein Dialog (PDF-Seite) im dropEvent hielte die Quelle des Ziehens fest
+        paths = image_import.mime_files(event.mimeData())
+        image = None if paths else image_import.mime_image(event.mimeData())
+        x, y = point.x() / MM, point.y() / MM
+        QTimer.singleShot(0, self, lambda: self.dropped.emit(paths, image, x, y))
 
     # --- Auswahlrahmen, Hilfslinien, Lineale ------------------------------
     def drawForeground(self, painter: QPainter, rect) -> None:
@@ -762,11 +798,13 @@ class Canvas(QGraphicsView):
         painter.fillRect(0, 0, RULER, RULER, Qt.GlobalColor.white)
 
 
-def resized_frame(start: QRectF, key: str, point: QPointF, keep_ratio: bool) -> QRectF:
+def resized_frame(start: QRectF, key: str, point: QPointF, keep_ratio: bool,
+                  keep_aspect: bool = False) -> QRectF:
     """Rahmen nach Ziehen am Anfasser ``key`` auf ``point`` (Druckpunkte in Leserichtung).
 
     Die gegenüberliegende Ecke bzw. Kante bleibt stehen; mindestens 1 mm. ``keep_ratio``:
-    Ecken behalten das Seitenverhältnis (Schrift skalieren).
+    Ecken behalten das Seitenverhältnis (Schrift skalieren); ``keep_aspect``: Ecken und
+    Kanten wie beim Loslassen (``layout.keep_aspect``, Bild).
     """
     left, top, right, bottom = start.left(), start.top(), start.right(), start.bottom()
     if "l" in key:
@@ -777,6 +815,10 @@ def resized_frame(start: QRectF, key: str, point: QPointF, keep_ratio: bool) -> 
         top = min(point.y(), bottom - _MIN_FRAME)
     if "b" in key:
         bottom = max(point.y(), top + _MIN_FRAME)
+    if keep_aspect:
+        old = Rect(start.x(), start.y(), start.width(), start.height())
+        new = layout.keep_aspect(old, Rect(left, top, right - left, bottom - top), key)
+        return QRectF(new.x, new.y, new.w, new.h)
     if keep_ratio and len(key) == 2:
         factor = max((right - left) / start.width(), (bottom - top) / start.height())
         w, h = start.width() * factor, start.height() * factor

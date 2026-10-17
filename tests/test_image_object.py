@@ -83,6 +83,23 @@ def test_repr_leaves_out_png_bytes():
     assert "png=" not in repr(_image()) and "test.png" in repr(_image())
 
 
+def test_limit_resolution_after_shrinking_keeps_natural_size_and_crop():
+    obj = ImageObject.from_image(_source(1200, 600), 300, "foto.jpg", crop=(0, 0, 600, 600))
+    natural = obj.natural_mm()
+    obj.w_mm, obj.h_mm = obj.w_mm / 4, obj.h_mm / 4          # eingepasst: 1200 dpi
+    limited = obj.limit_resolution()
+    assert _decoded(limited).size == (600, 300)               # höchstens 600 dpi
+    assert limited.crop == (0, 0, 300, 300) and limited.dpi == pytest.approx(150)
+    assert limited.natural_mm() == pytest.approx(natural)     # „Originalgröße“ bleibt 1:1
+    assert (limited.w_mm, limited.h_mm) == (obj.w_mm, obj.h_mm)
+    assert obj.limit_resolution().limit_resolution().png == limited.png
+
+
+def test_limit_resolution_leaves_fine_images_alone():
+    obj = _image(w_mm=25.4, h_mm=12.7)                        # 600 dpi: noch in Grenzen
+    assert obj.limit_resolution() is obj
+
+
 def test_document_holds_text_and_images():
     doc = Document("62", objects=[TextObject(""), _image()])
     assert not doc.is_empty()

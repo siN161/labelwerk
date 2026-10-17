@@ -36,6 +36,7 @@ ACTIONS: tuple[Action, ...] = (
     Action("edit.redo", "Wiederherstellen", "Ctrl+Shift+Z", "global"),
     Action("tool.select", "Werkzeug Auswahl", "Esc", "canvas"),
     Action("tool.text", "Werkzeug Text anlegen", "T", "canvas"),
+    Action("image.insert", "Bild einfügen …", "Ctrl+Shift+I", "canvas"),
     Action("edit.cut", "Ausschneiden", "Ctrl+X", "canvas"),
     Action("edit.copy", "Kopieren", "Ctrl+C", "canvas"),
     Action("edit.paste", "Einfügen", "Ctrl+V", "canvas"),

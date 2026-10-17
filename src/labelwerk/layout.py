@@ -14,7 +14,7 @@ import copy
 from dataclasses import dataclass, field, replace
 
 from .document import MAX_PT, MIN_PT, ROTATIONS, Document, ImageObject, TextObject
-from .labels import DPI, get_label
+from .labels import DPI, get_label, length_limits
 from .render import (PT, REF_PT, RenderedObject, span_dots, label_margins, label_size,
                      render_object)
 
@@ -356,6 +356,87 @@ def keep_aspect(old: Rect, new: Rect, handle: str) -> Rect:
 
     return Rect(start(old.x, old.right, w, "l" in handle, "r" in handle),
                 start(old.y, old.bottom, h, "t" in handle, "b" in handle), w, h)
+
+
+# --- Bild-Objekte: einfügen und einstellen ---------------------------------------
+def insert_frame(doc: Document, model: str, area: Rect, size: tuple[float, float],
+                 at: tuple[float, float] | None = None) -> tuple[Rect, float]:
+    """Rahmen für ein neues Objekt der Größe ``size`` (mm) und den Faktor, um den es dafür
+    proportional verkleinert wurde (1 = 1:1).
+
+    Mittig auf ``at`` (Klick-/Ablagepunkt) bzw. in der Mitte von ``area`` (bedruckbarer
+    Bereich), in den Bereich geschoben. In der Achse, in der das Etikett mitwächst
+    (``growing_axis``), begrenzt nur die größte Etikettlänge, und das Objekt beginnt nicht
+    vor dem Anfang des Bereichs.
+    """
+    grow = growing_axis(doc)
+    limit_w, limit_h = area.w, area.h
+    if grow is not None:
+        mx, my = label_margins(doc, model)
+        longest = _mm(length_limits(model)[1] - 2 * (mx if grow == "x" else my))
+        limit_w, limit_h = (longest, area.h) if grow == "x" else (area.w, longest)
+    w, h = size
+    factor = min(1.0, limit_w / w, limit_h / h) if w > 0 and h > 0 else 1.0
+    w, h = w * factor, h * factor
+    cx, cy = at if at is not None else (area.cx, area.cy)
+
+    def inside(start: float, low: float, high: float, open_end: bool) -> float:
+        start = max(start, low)
+        return start if open_end else min(start, max(low, high))
+
+    x = inside(cx - w / 2, area.x, area.right - w, grow == "x")
+    y = inside(cy - h / 2, area.y, area.bottom - h, grow == "y")
+    return _rounded(Rect(x, y, w, h)), factor
+
+
+def _image_point(obj: ImageObject, u: float, v: float) -> tuple[float, float]:
+    """Punkt im ungedrehten Rahmen (mm ab seiner linken oberen Ecke) → Etikett (mm)."""
+    w, h = obj.w_mm, obj.h_mm
+    du, dv = {0: (u, v), 90: (h - v, u), 180: (w - u, h - v), 270: (v, w - u)}[obj.rotation]
+    return obj.x_mm + du, obj.y_mm + dv
+
+
+def set_crop(obj: ImageObject, crop: tuple[int, int, int, int] | None) -> ImageObject:
+    """Kopie mit dem Ausschnitt ``crop`` (None = ganzes Bild). Maßstab und Lage des Inhalts
+    auf dem Etikett bleiben: Der Rahmen schrumpft auf den Ausschnitt bzw. wächst ums Bild."""
+    l, t, r, b = obj.box()
+    nl, nt, nr, nb = crop if crop is not None else replace(obj, crop=None).box()
+    sx, sy = obj.w_mm / (r - l), obj.h_mm / (b - t)          # mm je Pixel (ungedreht)
+    u0, v0 = (nl - l) * sx, (nt - t) * sy
+    w, h = (nr - nl) * sx, (nb - nt) * sy
+    corners = [_image_point(obj, u0, v0), _image_point(obj, u0 + w, v0 + h)]
+    changed = copy.deepcopy(obj)
+    changed.crop = crop
+    changed.x_mm = round(min(p[0] for p in corners), _DECIMALS)
+    changed.y_mm = round(min(p[1] for p in corners), _DECIMALS)
+    changed.w_mm, changed.h_mm = round(w, _DECIMALS), round(h, _DECIMALS)
+    return changed
+
+
+def original_size(obj: ImageObject) -> ImageObject:
+    """Kopie in Größe 1:1 (``ImageObject.natural_mm``); die linke obere Ecke bleibt."""
+    changed = copy.deepcopy(obj)
+    changed.w_mm, changed.h_mm = (round(v, _DECIMALS) for v in obj.natural_mm())
+    return changed
+
+
+def set_keep_ratio(obj: ImageObject, keep: bool) -> ImageObject:
+    """Kopie mit „Seitenverhältnis beibehalten“; beim Einschalten folgt die Höhe der Breite
+    (das Bild füllt seinen Rahmen wieder ganz). Die linke obere Ecke bleibt."""
+    changed = copy.deepcopy(obj)
+    changed.keep_ratio = keep
+    if keep:
+        l, t, r, b = obj.box()
+        changed.h_mm = round(obj.w_mm * (b - t) / (r - l), _DECIMALS)
+    return changed
+
+
+def proportional(rect: Rect, key: str, value: float) -> Rect:
+    """``rect`` mit Breite (``key`` „w“) bzw. Höhe („h“) ``value``, das andere Maß im selben
+    Verhältnis; die linke obere Ecke bleibt (Feld im Bereich „Position“)."""
+    old = rect.w if key == "w" else rect.h
+    factor = value / old if old > 0 else 1.0
+    return _rounded(Rect(rect.x, rect.y, rect.w * factor, rect.h * factor))
 
 
 def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> TextObject:

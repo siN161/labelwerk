@@ -60,6 +60,19 @@ def _file_dpi(src: Image.Image) -> tuple[float, float]:
     return tuple(round(float(v), 2) or float(DPI) for v in dpi[:2])
 
 
+def page_count(path: str | Path) -> int:
+    """Seitenzahl einer PDF-Datei (für die Seitenwahl vor ``load_image``)."""
+    path = _checked(path, (), "PDF", 1)
+    with _readable(path):
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument(path)
+        try:
+            return len(pdf)
+        finally:
+            pdf.close()
+
+
 def _checked(path: str | Path, suffixes: tuple[str, ...], allowed: str, page: int) -> Path:
     """Dateityp, Vorhandensein und Seitenzahl prüfen."""
     path = Path(path)

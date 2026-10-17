@@ -458,8 +458,9 @@ class TextPanel(Panel):
 
     def refresh(self) -> None:
         """Editor aus dem Modell aufbauen (Auswahl, Rückgängig, Ziehen an den Anfassern)."""
-        if self.index is not None and not 0 <= self.index < len(self.doc.objects):
-            self.index = None                      # Objekt gibt es nicht mehr
+        if self.index is not None and not (0 <= self.index < len(self.doc.objects)
+                                           and isinstance(self.obj, TextObject)):
+            self.index = None                      # Objekt gibt es nicht mehr (Rückgängig …)
         editing = self.index is not None
         self.hint.setVisible(not editing)
         for widget in self._editing_widgets():

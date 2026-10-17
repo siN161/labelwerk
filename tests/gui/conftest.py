@@ -17,6 +17,12 @@ else:
         qapp.setStyleSheet("")
 
     @pytest.fixture(autouse=True)
+    def empty_clipboard(qapp):
+        """Jeder Test beginnt mit leerer Zwischenablage des Systems – „Einfügen“ folgt ihr."""
+        qapp.clipboard().clear()
+        yield
+
+    @pytest.fixture(autouse=True)
     def no_printer(monkeypatch):
         """Kein Test liest echte Druckerdaten aus /sys."""
         for module in ("labelwerk.gui.main_window", "labelwerk.gui.print_worker",
