@@ -43,7 +43,7 @@ printer.py  Bild → Brother-Rasterdaten → Drucker (via brother_ql)
 cli.py      Kommandozeile
 ```
 
-Die Kernlogik ist UI-unabhängig – eine GUI setzt nur auf `render` und `printer` auf.
+Die Kernlogik ist UI-unabhängig – eine GUI setzt nur auf `render`, `files`, `labels`, `printer` und `detect` auf.
 
 ## Lizenz
 
