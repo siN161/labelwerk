@@ -370,11 +370,7 @@ def insert_frame(doc: Document, model: str, area: Rect, size: tuple[float, float
     vor dem Anfang des Bereichs.
     """
     grow = growing_axis(doc)
-    limit_w, limit_h = area.w, area.h
-    if grow is not None:
-        mx, my = label_margins(doc, model)
-        longest = _mm(length_limits(model)[1] - 2 * (mx if grow == "x" else my))
-        limit_w, limit_h = (longest, area.h) if grow == "x" else (area.w, longest)
+    limit_w, limit_h = _insert_limits(doc, model, area)
     w, h = size
     factor = min(1.0, limit_w / w, limit_h / h) if w > 0 and h > 0 else 1.0
     w, h = w * factor, h * factor
@@ -387,6 +383,33 @@ def insert_frame(doc: Document, model: str, area: Rect, size: tuple[float, float
     x = inside(cx - w / 2, area.x, area.right - w, grow == "x")
     y = inside(cy - h / 2, area.y, area.bottom - h, grow == "y")
     return _rounded(Rect(x, y, w, h)), factor
+
+
+def insert_placement(doc: Document, model: str, area: Rect, size: tuple[float, float],
+                     at: tuple[float, float] | None = None) -> tuple[Rect, int, float]:
+    """Wie ``insert_frame``, aber lieber gedreht als verkleinert (wie ``print-file
+    --rotate auto``): (Rahmen auf dem Etikett nach dem Drehen, Drehung 0/90, Faktor).
+
+    Passt das Objekt 1:1 nicht in den Bereich, gedreht um 90° aber schon, kommt es gedreht
+    und 1:1; nur wenn es in keiner Lage passt, wird es ungedreht verkleinert. Die Grenzen
+    sind dieselben wie bei ``insert_frame`` (in der mitwachsenden Achse die größte Länge).
+    """
+    limit_w, limit_h = _insert_limits(doc, model, area)
+    w, h = size
+    turn = not (w <= limit_w and h <= limit_h) and h <= limit_w and w <= limit_h
+    rect, factor = insert_frame(doc, model, area, (h, w) if turn else size, at)
+    return rect, 90 if turn else 0, factor
+
+
+def _insert_limits(doc: Document, model: str, area: Rect) -> tuple[float, float]:
+    """Größe (Breite, Höhe in mm), die ein neues Objekt 1:1 höchstens haben darf: der
+    Bereich, in der mitwachsenden Achse (``growing_axis``) die größte Etikettlänge."""
+    grow = growing_axis(doc)
+    if grow is None:
+        return area.w, area.h
+    mx, my = label_margins(doc, model)
+    longest = _mm(length_limits(model)[1] - 2 * (mx if grow == "x" else my))
+    return (longest, area.h) if grow == "x" else (area.w, longest)
 
 
 def _image_point(obj: ImageObject, u: float, v: float) -> tuple[float, float]:

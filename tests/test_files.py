@@ -445,6 +445,33 @@ def test_crop_box_not_white_finds_yellow_logo():
     assert crop_box(logo, ink=NOT_WHITE) == (50, 60, 250, 240)
 
 
+def test_crop_box_not_white_finds_marks_despite_light_elements():
+    """A4-Seite (wie eine Internetmarke): Marken um den Code, weiter unten eine hellgraue
+    Textzeile – die Marken liegen trotzdem außen (gesucht auf der Maske mit ``INK``)."""
+    page = Image.new("RGB", (2480, 3508), "white")
+    d = ImageDraw.Draw(page)
+    x0, y0, x1, y1 = (300, 400, 1363, 955)                 # 90 × 47 mm
+    for x, y in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
+        d.line((x - 30, y, x + 30, y), fill="black")
+        d.line((x, y - 30, x, y + 30), fill="black")
+    for row in range(10):                                  # Code (Schachbrett)
+        for col in range(10):
+            if (row + col) % 2 == 0:
+                d.rectangle((500 + 20 * col, 600 + 20 * row, 519 + 20 * col, 619 + 20 * row),
+                            fill="black")
+    d.rectangle((300, 2000, 1800, 2030), fill=(200, 200, 200))   # hellgraue Textzeile
+    code = (500, 600, 700, 800)
+    assert crop_box(page) == code
+    assert crop_box(page, ink=NOT_WHITE) == code
+
+
+def test_crop_box_not_white_keeps_light_parts_between_marks():
+    img = _with_marks().convert("RGB")
+    ImageDraw.Draw(img).rectangle((200, 500, 249, 549), fill=(220, 220, 220))   # hell, innen
+    assert crop_box(img) == (300, 300, 701, 401)
+    assert crop_box(img, ink=NOT_WHITE) == (200, 300, 701, 550)
+
+
 @pytest.mark.parametrize("ink", [128, NOT_WHITE])
 def test_crop_box_flattens_transparency_first(ink):
     rgba = Image.new("RGBA", (100, 100), (0, 0, 0, 0))     # durchsichtiges Schwarz

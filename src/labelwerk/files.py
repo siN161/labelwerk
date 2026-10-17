@@ -167,7 +167,8 @@ def crop_box(img: Image.Image, dpi: float = DPI,
     Marken und den Leerraum dazwischen – None, wenn das Bild keinen Inhalt hat.
 
     Inhalt ist, was dunkler als ``ink`` ist (Standard wie ``crop()``; Bild-Objekte nehmen
-    ``NOT_WHITE``, damit helle Fotos und gelbe Logos nicht abgeschnitten werden). Bilder in
+    ``NOT_WHITE``, damit helle Fotos und gelbe Logos nicht abgeschnitten werden). Die Marken
+    selbst werden immer mit ``INK`` gesucht – helle Elemente außerhalb stören nicht. Bilder in
     Farbe zählen nach ihrer Helligkeit, Transparenz zuerst auf Weiß; ``dpi``: Auflösung des
     Bilds (Maße der Marken in mm).
     """
@@ -184,7 +185,13 @@ def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, in
     box = ink.getbbox()
     if box is None:
         raise ValueError("Datei enthält keinen druckbaren Inhalt.")
-    content = ink.crop(box)
+    # Schnittmarken sind schwarz: immer auf der Maske mit ``INK`` suchen, damit helle
+    # Elemente anderswo auf der Seite (graue Textzeile) sie nicht vom Rand verdrängen
+    marks = ink if level == INK else gray.point(lambda v: 255 if v < INK else 0)
+    marks_box = marks.getbbox()
+    if marks_box is None:
+        return box
+    content = marks.crop(marks_box)
     mm = dpi / 25.4
     tl = _corner_mark(content, mm)
     tr = _corner_mark(ImageOps.mirror(content), mm)
@@ -195,7 +202,8 @@ def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, in
     w, h = content.size
     left, top = max(tl[0], bl[0]), max(tl[1], tr[1])
     right, bottom = w - max(tr[0], br[0]), h - max(bl[1], br[1])
-    inner = (box[0] + left, box[1] + top, box[0] + right, box[1] + bottom)
+    x0, y0 = marks_box[:2]
+    inner = (x0 + left, y0 + top, x0 + right, y0 + bottom)
     trimmed = ink.crop(inner).getbbox()  # Leerraum innerhalb der Marken entfernen
     if trimmed is None:
         raise ValueError("Zwischen den Schnittmarken ist kein druckbarer Inhalt.")

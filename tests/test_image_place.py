@@ -87,6 +87,53 @@ def test_insert_frame_on_growing_tape_only_limits_across():
     assert factor < 1 and rect.h < 1000                      # höchstens die größte Länge
 
 
+# --- Einfügen: lieber drehen als verkleinern (wie print-file --rotate auto) --------------
+def test_insert_placement_keeps_fitting_image_unturned():
+    rect, rotation, factor = layout.insert_placement(Document("62", length_mm=40), "QL-600",
+                                                     AREA, (20, 10))
+    assert (rotation, factor) == (0, 1)
+    assert (rect.w, rect.h) == (20, 10)
+    assert (rect.cx, rect.cy) == pytest.approx((AREA.cx, AREA.cy))
+
+
+def test_insert_placement_turns_image_that_fits_only_turned():
+    doc = Document("62", length_mm=70)                       # 59 × 68 mm bedruckbar
+    area = Rect(1.5, 1.0, 59.0, 68.0)
+    rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (66, 34))
+    assert (rotation, factor) == (90, 1)
+    assert (rect.w, rect.h) == (34, 66)                      # Rahmen auf dem Etikett (gedreht)
+    assert (rect.cx, rect.cy) == pytest.approx((area.cx, area.cy))
+
+
+def test_insert_placement_shrinks_only_when_neither_fits():
+    rect, rotation, factor = layout.insert_placement(Document("62", length_mm=40), "QL-600",
+                                                     AREA, (118, 19))
+    assert rotation == 0 and factor == pytest.approx(0.5)
+    assert (rect.w, rect.h) == pytest.approx((59, 9.5))
+
+
+def test_insert_placement_on_growing_tape_vertical_turns_wide_image():
+    """Endlosband, automatische Länge, senkrecht: quer begrenzt die Bandbreite, längs nur
+    die größte Etikettlänge – eine Internetmarke (70 × 34 mm) passt gedreht 1:1."""
+    doc = Document("62", length_mm=None)
+    area = Rect(1.5, 1.0, 59.0, 10.0)
+    rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (70, 34))
+    assert (rotation, factor) == (90, 1)
+    assert (rect.w, rect.h) == (34, 70)
+    assert rect.y == pytest.approx(area.y) and rect.cx == pytest.approx(area.cx)
+
+
+def test_insert_placement_on_growing_tape_horizontal_keeps_wide_image():
+    doc = Document("62", length_mm=None, orientation="horizontal")
+    area = Rect(1.0, 1.5, 10.0, 59.0)
+    rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (70, 34))
+    assert (rotation, factor) == (0, 1)
+    assert (rect.w, rect.h) == (70, 34)
+    assert rect.x == pytest.approx(area.x) and rect.cy == pytest.approx(area.cy)
+    rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (34, 70))
+    assert (rotation, factor) == (90, 1) and (rect.w, rect.h) == (70, 34)
+
+
 # --- Zuschnitt umschalten: Maßstab und Lage des Inhalts bleiben ------------------------
 def test_set_crop_keeps_scale_and_content_in_place():
     obj = _image(x_mm=10, y_mm=5)                            # 50,8 × 25,4 mm

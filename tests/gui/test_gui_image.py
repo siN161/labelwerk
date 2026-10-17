@@ -1,6 +1,7 @@
 """Werkzeug „Bild“ (Etappe 3d-2a): einfügen aus Datei, Zwischenablage und per Ablegen,
 Bild-Panel, Bilder auf der Arbeitsfläche wie Text."""
 import io
+import math
 
 import pytest
 from PIL import Image, ImageDraw
@@ -175,7 +176,7 @@ def test_too_large_image_is_fitted_with_hint(window, tmp_path):
     area = window._area
     assert obj.w_mm == pytest.approx(area.w, abs=0.01)
     assert obj.w_mm / obj.h_mm == pytest.approx(3000 / 400, rel=1e-4)
-    percent = round(area.w / (3000 / MM) * 100)
+    percent = math.floor(area.w / (3000 / MM) * 100)
     assert _status(window) == f"Bild auf {percent} % verkleinert – Codes ggf. nicht mehr lesbar"
     # eingepasst: höchstens 600 dpi bezogen auf die neue Druckgröße, 1:1-Größe bleibt
     assert obj.image().width == pytest.approx(600 * obj.w_mm / 25.4, abs=1)
@@ -186,6 +187,64 @@ def test_shrink_hint_never_says_zero_percent(window, tmp_path):
     _insert_file(window, _file(tmp_path, _picture(3000, 30, border=0), dpi=4))    # 19 m
     assert window.doc.objects[1].w_mm == pytest.approx(window._area.w, abs=0.01)
     assert _status(window).startswith("Bild auf < 1 % verkleinert")
+
+
+def test_shrink_hint_never_says_hundred_percent(window, tmp_path):
+    """Knapp zu groß (99,8 %): abgerundet, nie „auf 100 % verkleinert“."""
+    width = round(window._area.w * MM / 0.998)
+    _insert_file(window, _file(tmp_path, _picture(width, 60, border=0)))
+    assert window.doc.objects[1].rotation == 0
+    assert _status(window).startswith("Bild auf 99 % verkleinert")
+
+
+def test_shrink_hint_mentions_codes_only_in_line_mode():
+    from labelwerk.gui.main_window import shrunk_hint
+    assert shrunk_hint(0.372, "line") == "Bild auf 37 % verkleinert – Codes ggf. nicht mehr lesbar"
+    assert shrunk_hint(0.372, "photo") == "Bild auf 37 % verkleinert"
+    assert shrunk_hint(0.289, "photo") == "Bild auf 28 % verkleinert"      # abgerundet
+    assert shrunk_hint(0.29, "photo") == "Bild auf 29 % verkleinert"       # ohne Rundungsfehler
+    assert shrunk_hint(0.9999, "photo") == "Bild auf 99 % verkleinert"
+    assert shrunk_hint(0.001, "photo") == "Bild auf < 1 % verkleinert"
+
+
+def _stamp_doc():
+    """Endlosband 62 mm, automatische Länge, senkrecht (Standard) mit einem Absender."""
+    return Document("62", objects=[TextObject("Absender", size_pt=10, x_mm=3, y_mm=3)])
+
+
+def test_wide_image_is_turned_instead_of_shrunk(qtbot, tmp_path):
+    """70 × 34 mm (wie eine Internetmarke) auf 62 mm senkrecht: gedreht 1:1 statt 81 %."""
+    win = _window(qtbot, _stamp_doc())
+    _insert_file(win, _file(tmp_path, _picture(827, 402, border=0)))
+    obj = win.doc.objects[1]
+    assert obj.rotation == 90
+    assert (obj.w_mm, obj.h_mm) == pytest.approx(obj.natural_mm(), abs=0.001)    # 1:1
+    assert obj.w_mm == pytest.approx(827 / MM, abs=0.01)
+    rect = layout.exact_rect(obj, win.rendered[1])
+    assert (rect.w, rect.h) == pytest.approx((obj.h_mm, obj.w_mm), abs=0.01)
+    assert win._area.x - 0.01 <= rect.x and rect.right <= win._area.right + 0.01
+    assert _status(win) == "Bild um 90° gedreht, damit es 1:1 passt"
+    assert win.result.property("state") == "warn"
+    assert win.canvas.selection() == [1]
+
+
+def test_wide_clipboard_image_is_turned_too(qtbot):
+    win = _window(qtbot, _stamp_doc())
+    QApplication.clipboard().setImage(_qimage(_picture(827, 402, border=0)))
+    win.panel("image").from_clipboard.click()
+    obj = win.doc.objects[1]
+    assert obj.rotation == 90 and (obj.w_mm, obj.h_mm) == pytest.approx(obj.natural_mm(), abs=0.001)
+    assert "Bild um 90° gedreht" in _status(win)
+
+
+def test_wide_image_stays_unturned_when_horizontal(qtbot, tmp_path):
+    doc = _stamp_doc()
+    doc.orientation = "horizontal"
+    win = _window(qtbot, doc)
+    _insert_file(win, _file(tmp_path, _picture(827, 402, border=0)))
+    obj = win.doc.objects[1]
+    assert obj.rotation == 0 and (obj.w_mm, obj.h_mm) == pytest.approx(obj.natural_mm(), abs=0.001)
+    assert _status(win) == ""
 
 
 def _pdf(tmp_path):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -21,7 +22,7 @@ from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
 from ..labels import DPI, get_label
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, growing_axis,
-                      insert_frame, match_objects, maximize_object, move, object_rect,
+                      insert_placement, match_objects, maximize_object, move, object_rect,
                       outside_indices, printable_area, proportional, reorder, resize, rotate,
                       set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
@@ -51,7 +52,9 @@ NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit U
 _DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
 OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
 PASTE_OFFSET_MM = 2.0      # Einfügen/Duplizieren: versetzt nach rechts und unten
-SHRUNK_HINT = "Bild auf {percent} verkleinert – Codes ggf. nicht mehr lesbar"   # „37 %“
+SHRUNK_HINT = "Bild auf {percent} verkleinert"                    # „37 %“
+CODES_HINT = " – Codes ggf. nicht mehr lesbar"                    # nur Strich (Codes)
+TURNED_HINT = "Bild um 90° gedreht, damit es 1:1 passt"
 NO_CLIPBOARD_IMAGE = "Kein Bild in der Zwischenablage."
 # Bearbeitungsleiste: Aktion und eigenes Symbol (gui/icons); None = Trenner
 EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
@@ -59,6 +62,14 @@ EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
             None, ("edit.undo", "edit-undo"), ("edit.redo", "edit-redo"))
 _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
 OBJECT_PANELS = ("text", "image")       # Panel je Objektart (Text, Bild)
+
+
+def shrunk_hint(factor: float, mode: str) -> str:
+    """Hinweis zum verkleinerten Bild: Prozent abgerundet (nie „100 %“, nie „0 %“); Codes
+    werden nur bei Strich erwähnt – ein Foto wird gerastert, Codes sind dort nicht gemeint."""
+    percent = math.floor(factor * 100 + 1e-9)
+    text = SHRUNK_HINT.format(percent=f"{percent} %" if percent else "< 1 %")
+    return text + CODES_HINT if mode == "line" else text
 
 
 class MainWindow(QMainWindow):
@@ -937,26 +948,31 @@ class MainWindow(QMainWindow):
 
     def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
                        notes: list[str], state: str = "warn") -> None:
-        """Bilder platzieren (``layout.insert_frame``: mittig, zu große proportional
-        verkleinert und danach auf höchstens 600 dpi der neuen Größe begrenzt; mehrere je
-        2 mm versetzt) und einfügen – ein Schritt, ausgewählt."""
+        """Bilder platzieren (``layout.insert_placement``: mittig; passt ein Bild nur um 90°
+        gedreht 1:1, kommt es gedreht, sonst wird ein zu großes proportional verkleinert und
+        danach auf höchstens 600 dpi der neuen Größe begrenzt; mehrere je 2 mm versetzt) und
+        einfügen – ein Schritt, ausgewählt."""
         if objects:
             if self._timer.isActive():
                 self.render_now()                   # aktueller bedruckbarer Bereich
-            smallest = 1.0
+            smallest, shrunk_mode, turned = 1.0, "line", False
             for number, obj in enumerate(objects):
-                rect, factor = insert_frame(self.doc, self.model, self._area,
-                                            (obj.w_mm, obj.h_mm), at)
+                rect, rotation, factor = insert_placement(self.doc, self.model, self._area,
+                                                          (obj.w_mm, obj.h_mm), at)
                 shift = number * PASTE_OFFSET_MM
                 obj.x_mm, obj.y_mm = rect.x + shift, rect.y + shift
-                obj.w_mm, obj.h_mm = rect.w, rect.h
+                obj.w_mm, obj.h_mm = (rect.h, rect.w) if rotation else (rect.w, rect.h)
+                obj.rotation = rotation
+                turned = turned or bool(rotation)
                 if factor < 1:
                     objects[number] = obj.limit_resolution()
-                smallest = min(smallest, factor)
+                if factor < smallest:
+                    smallest, shrunk_mode = factor, obj.mode
             self._insert(objects)
+            if turned:
+                notes.append(TURNED_HINT)
             if smallest < 1:
-                percent = round(smallest * 100)
-                notes.append(SHRUNK_HINT.format(percent=f"{percent} %" if percent else "< 1 %"))
+                notes.append(shrunk_hint(smallest, shrunk_mode))
         self._show_notice(notes, state)
 
     def _show_notice(self, notes: list[str], state: str) -> None:
