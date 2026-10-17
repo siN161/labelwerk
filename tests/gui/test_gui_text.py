@@ -12,6 +12,7 @@ def window(qtbot):
     win = MainWindow(settings=Settings(check_media_on_start=False))
     qtbot.addWidget(win)
     win.show()
+    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
     return win
 
 
@@ -113,6 +114,7 @@ def test_start_uses_settings_family_and_size(qtbot):
     win = MainWindow(settings=Settings(check_media_on_start=False, font_size_pt=24,
                                        font_family="Liberation Sans"))
     qtbot.addWidget(win)
+    win.canvas.set_selection([0])
     panel = win.panel("text")
     assert panel.size.currentText() == "24"
     assert panel.family.currentFont().family() == "Liberation Sans"
@@ -205,13 +207,33 @@ def test_refresh_keeps_format_of_empty_paragraph(window):
     assert paragraphs[1].spans[0].size_pt == 40
 
 
-def test_shortcuts_are_scoped_to_panel(window):
+def test_format_shortcuts_are_actions_scoped_to_panel(window):
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QShortcut
     panel = window.panel("text")
-    shortcuts = panel.findChildren(QShortcut)
-    assert len(shortcuts) == 3
-    assert all(s.context() == Qt.ShortcutContext.WidgetWithChildrenShortcut for s in shortcuts)
+    assert panel.findChildren(QShortcut) == []              # alles über das Kürzel-Verzeichnis
+    actions = [window.shortcut_actions[key] for key in ("text.bold", "text.italic", "text.underline")]
+    assert all(a in panel.actions() for a in actions)
+    assert all(a.shortcutContext() == Qt.ShortcutContext.WidgetWithChildrenShortcut
+               for a in actions)
+    # Tooltip aus der Aktion: stimmt auch nach dem Umbelegen
+    assert [b.toolTip() for b in (panel.bold, panel.italic, panel.underline)] == \
+           [a.toolTip() for a in actions]
+
+
+def test_ctrl_b_in_editor_makes_selection_bold(window, qtbot):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    panel = window.panel("text")
+    window.tool_actions["text"].trigger()
+    panel.edit.setPlainText("aaa bbb")
+    window.activateWindow()
+    panel.edit.setFocus()
+    qtbot.waitUntil(panel.edit.hasFocus, timeout=1000)
+    _select(panel, 4, 7)
+    QTest.keyClick(panel.edit, Qt.Key.Key_B, Qt.KeyboardModifier.ControlModifier)
+    first, second = panel.to_text_object().paragraphs[0].spans
+    assert (first.text, second.text) == ("aaa ", "bbb") and first.bold != second.bold
 
 
 def test_format_change_is_one_undo_step(window):

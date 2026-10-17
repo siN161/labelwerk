@@ -1,6 +1,6 @@
 import os
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["QT_QPA_PLATFORM"] = "offscreen"   # immer, auch wenn die Sitzung wayland/xcb vorgibt
 
 try:
     import PySide6  # noqa: F401
@@ -8,6 +8,13 @@ except ImportError:  # reine CLI-Umgebung: GUI-Tests überspringen
     collect_ignore_glob = ["test_*.py"]
 else:
     import pytest
+
+    @pytest.fixture(autouse=True)
+    def no_leftover_theme(qapp):
+        """Speichern der Einstellungen setzt das Design der ganzen Anwendung – danach zurück,
+        damit jeder Test im Qt-Grundstil startet."""
+        yield
+        qapp.setStyleSheet("")
 
     @pytest.fixture(autouse=True)
     def no_printer(monkeypatch):

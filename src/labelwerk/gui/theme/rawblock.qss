@@ -29,6 +29,10 @@ QToolBar QToolButton:hover, QToolBar QToolButton:checked {
     background: #000000;
     color: #FFFFFF;
 }
+/* Bearbeitungsleiste: kleinere Knöpfe, Trenner als schwarzer Strich */
+QToolBar#editBar { padding: 4px 6px; }
+QToolBar#editBar QToolButton { padding: 3px 10px; letter-spacing: 1px; }
+QToolBar#editBar::separator { background: #000000; width: 3px; margin: 2px 8px 5px 8px; }
 QToolBar QToolButton#print { background: #000000; color: #FFFFFF; }
 QToolBar QToolButton#print:hover { background: #FFFFFF; color: #000000; }
 QToolBar QToolButton:disabled, QToolBar QToolButton#print:disabled {
@@ -37,7 +41,7 @@ QToolBar QToolButton:disabled, QToolBar QToolButton#print:disabled {
     border-color: #CCCCCC;
 }
 
-#panels { border-right: 3px solid #000000; }
+#panelScroll { border: none; border-right: 3px solid #000000; }
 QLabel#panelTitle { font-size: 22px; font-weight: 900; padding: 4px 0 8px 0; }
 QLabel[role="section"] { font-weight: 900; letter-spacing: 1px; padding-top: 10px; }
 QLabel#fixedSize { font-family: "Space Mono", "DejaVu Sans Mono", monospace; }
@@ -77,7 +81,15 @@ QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top righ
 QComboBox::drop-down:hover { background: #000000; }
 QComboBox::down-arrow { image: url(@THEME@/arrow-down-black.svg); width: 10px; height: 7px; }
 QComboBox::down-arrow:hover { image: url(@THEME@/arrow-down-white.svg); }
-QSpinBox:disabled, QDoubleSpinBox:disabled { border-color: #CCCCCC; background: #F5F5F5; color: #999999; }
+/* nur Anzeige (z. B. Rahmengröße ohne feste Rahmengröße): weiß, Pfeile grau */
+QDoubleSpinBox[readOnly="true"] { background: #FFFFFF; }
+QDoubleSpinBox[readOnly="true"]::up-arrow { image: url(@THEME@/arrow-up-gray.svg); }
+QDoubleSpinBox[readOnly="true"]::down-arrow { image: url(@THEME@/arrow-down-gray.svg); }
+QDoubleSpinBox[readOnly="true"]::up-button:hover, QDoubleSpinBox[readOnly="true"]::down-button:hover { background: #FFFFFF; }
+QLabel#hint { border: 3px dashed #000000; padding: 8px; font-weight: 700; }
+QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled { border-color: #CCCCCC; background: #F5F5F5; color: #999999; }
+QComboBox::drop-down:disabled { border-left-color: #CCCCCC; background: #F5F5F5; }
+QComboBox::down-arrow:disabled { image: url(@THEME@/arrow-down-gray.svg); }
 QComboBox QAbstractItemView { border: 3px solid #000000; selection-background-color: #000000; selection-color: #FFFFFF; }
 
 QCheckBox::indicator { width: 16px; height: 16px; border: 3px solid #000000; background: #FFFFFF; }
@@ -95,9 +107,50 @@ QPushButton#formatButton { padding: 4px 8px; min-width: 22px; }
 QPushButton#formatButton:checked { background: #000000; color: #FFFFFF; }
 QPushButton#formatButton[style="italic"] { font-style: italic; }
 QPushButton#formatButton[style="underline"] { text-decoration: underline; }
-QTextEdit { background: #F0F0F0; border: 3px solid #000000; border-radius: 0; padding: 4px; }
+QTextEdit { background: #F0F0F0; border: 3px solid #000000; border-radius: 0; padding: 6px; }
 QTextEdit:focus { border-width: 5px; }
+QTextEdit:disabled { border-color: #CCCCCC; background: #F5F5F5; }
 QFontComboBox { min-width: 0; }
+/* Reiter Layout: Symbolknöpfe; beim Darüberfahren schwarz, das Symbol wird dann weiß */
+QToolButton#layoutButton { background: #FFFFFF; border: 3px solid #000000; border-radius: 0; padding: 6px; }
+QToolButton#layoutButton:hover { background: #000000; }
+QToolButton#layoutButton:disabled { background: #F0F0F0; border-color: #CCCCCC; }
+
+/* Einstellungen: Reiter und Kürzel-Tabelle */
+QTabWidget::pane { border: 3px solid #000000; top: -3px; }
+QTabBar::tab {
+    background: #FFFFFF;
+    border: 3px solid #000000;
+    padding: 6px 14px;
+    margin-right: -3px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+QTabBar::tab:selected { background: #000000; color: #FFFFFF; }
+QTabBar::tab:hover:!selected { background: #E8E8E8; }
+QTableWidget {
+    border: 3px solid #000000;
+    gridline-color: #CCCCCC;
+    selection-background-color: #000000;
+    selection-color: #FFFFFF;
+}
+QHeaderView::section {
+    background: #000000;
+    color: #FFFFFF;
+    border: none;
+    border-right: 1px solid #FFFFFF;
+    padding: 4px 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+QPushButton#tableButton { border-width: 2px; padding: 1px 8px; margin: 1px 2px; letter-spacing: 0; }
+QKeySequenceEdit QLineEdit {
+    background: #F0F0F0;
+    border: 3px solid #000000;
+    border-radius: 0;
+    padding: 0 4px;
+    font-family: "Space Mono", "DejaVu Sans Mono", monospace;
+}
 
 QStatusBar { border-top: 3px solid #000000; }
 QStatusBar QLabel[state="ok"] { color: #008000; font-weight: 700; }

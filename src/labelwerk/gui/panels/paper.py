@@ -73,9 +73,9 @@ class PaperPanel(Panel):
 
         self.section("Ausrichtung")
         self.horizontal = QRadioButton("Horizontal")
-        self.horizontal.setToolTip("Text längs zum Band – z. B. Versandetikett")
+        self.horizontal.setToolTip("Etikett im Querformat – Leserichtung längs zum Band")
         self.vertical = QRadioButton("Vertikal")
-        self.vertical.setToolTip("Text quer zum Band")
+        self.vertical.setToolTip("Etikett im Hochformat – Leserichtung quer zum Band")
         self.orientation_group = QButtonGroup(self)
         for button in (self.horizontal, self.vertical):
             self.orientation_group.addButton(button)
@@ -101,6 +101,7 @@ class PaperPanel(Panel):
         self._update_visibility()
         self._update_media_status()
         self.changed.emit()
+        self.edited.emit()           # jede Papier-Änderung ist ein eigener Schritt
 
     def refresh(self) -> None:
         for w in self._widgets():

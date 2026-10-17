@@ -1,5 +1,5 @@
 import pytest
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, Qt, QThreadPool
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -14,6 +14,7 @@ def window(qtbot):
     win = MainWindow()
     qtbot.addWidget(win)
     win.show()
+    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
     return win
 
 
@@ -361,3 +362,80 @@ def test_font_replacement_hint_in_status_bar(window):
     window.doc.objects[0] = TextObject([Paragraph([Span("Hallo")])])
     window.render_now()
     assert window.result.text() == ""
+
+
+def test_global_actions_come_from_shortcut_registry(window, monkeypatch):
+    """Drucken, Einstellungen und Zoom sind Aktionen des Kürzel-Verzeichnisses."""
+    from PySide6.QtGui import QKeySequence
+    assert window.print_action is window.shortcut_actions["file.print"]
+    assert window.settings_action is window.shortcut_actions["app.settings"]
+    assert window.print_action.shortcut() == QKeySequence("Ctrl+P")
+    assert "Ctrl+P" in window.print_action.toolTip()
+    asked = []                                              # leeres Etikett: Rückfrage = Druck läuft
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.Cancel)
+    window.panel("text").edit.setPlainText("")
+    window.shortcut_actions["file.print"].trigger()
+    assert asked
+    window.canvas.set_zoom(100)
+    window.shortcut_actions["view.zoom_in"].trigger()
+    assert window.canvas.zoom == 110
+    window.shortcut_actions["view.zoom_out"].trigger()
+    window.shortcut_actions["view.zoom_out"].trigger()
+    assert window.canvas.zoom == 90
+    window.shortcut_actions["view.zoom_reset"].trigger()
+    assert window.canvas.zoom == 100
+    from PySide6.QtWidgets import QWidget
+    window_actions = QWidget.actions(window)                # self.shortcut_actions ist das Verzeichnis
+    assert all(window.shortcut_actions[key] in window_actions
+               for key in ("view.zoom_in", "view.zoom_out", "view.zoom_reset", "edit.undo"))
+
+
+# --- Rückfrage: Objekt ragt über das Etikett --------------------------------------
+def _outside_window(qtbot):
+    from labelwerk.document import Document, TextObject
+    from labelwerk.settings import Settings
+    doc = Document("62", length_mm=30, objects=[TextObject("Rand", size_pt=20, x_mm=55, y_mm=5)])
+    win = MainWindow(doc=doc, settings=Settings(check_media_on_start=False))
+    qtbot.addWidget(win)
+    return win
+
+
+def test_print_with_outside_object_asks_and_no_does_not_print(qtbot, monkeypatch):
+    win = _outside_window(qtbot)
+    asked = []
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.No)
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp0")
+    printed = []                     # pytest.fail im Worker-Thread wirkte nicht: zählen
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: printed.append(a) or {"did_print": True})
+    win.print_label()
+    QThreadPool.globalInstance().waitForDone(2000)          # ein gestarteter Druck wäre fertig
+    assert printed == []
+    (_, title, text, buttons, default), = asked
+    assert text == "Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?"
+    assert buttons == QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+    assert default == QMessageBox.StandardButton.No
+    assert not win.is_printing() and win.print_action.isEnabled()
+
+
+def test_print_with_outside_object_yes_prints(qtbot, monkeypatch):
+    win = _outside_window(qtbot)
+    monkeypatch.setattr(MainWindow, "confirm_outside", lambda self: True)
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp0")
+    sent = []
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: sent.append(a) or {"did_print": True})
+    win.print_label()
+    qtbot.waitUntil(lambda: win.print_action.isEnabled(), timeout=3000)
+    assert sent and win.result.text() == "Gedruckt ✓"
+
+
+def test_print_inside_label_does_not_ask(window, qtbot, monkeypatch):
+    monkeypatch.setattr(MainWindow, "confirm_outside", lambda self: pytest.fail("keine Rückfrage"))
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
+                        lambda *a, **kw: {"did_print": True})
+    window.panel("text").edit.setPlainText("Hallo")
+    window.print_label()
+    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)

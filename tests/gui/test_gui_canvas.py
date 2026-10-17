@@ -3,7 +3,7 @@ import pytest
 from labelwerk.document import Document, TextObject
 from labelwerk.gui.canvas import Canvas
 from labelwerk.labels import get_label
-from labelwerk.render import render_document
+from labelwerk.render import label_size, render_object
 
 
 @pytest.fixture
@@ -13,9 +13,14 @@ def canvas(qtbot):
     return view
 
 
+def show(canvas, doc):
+    """Dokument so anzeigen, wie das Hauptfenster es tut (Objekte einzeln gerendert)."""
+    canvas.set_document(get_label(doc.label_id), label_size(doc),
+                        [render_object(obj, doc) for obj in doc.objects], doc.orientation)
+
+
 def _show(canvas, label_id):
-    doc = Document(label_id, objects=[TextObject("Test")])
-    canvas.set_document(get_label(label_id), render_document(doc))
+    show(canvas, Document(label_id, objects=[TextObject("Test")]))
 
 
 def test_die_cut_outline_has_physical_size(canvas):
@@ -76,7 +81,7 @@ def test_length_handle_does_not_jump_when_grabbed(qtbot, canvas):
     from PySide6.QtWidgets import QApplication
     from labelwerk.gui.canvas import MM
 
-    canvas.set_document(get_label("62"), render_document(Document("62", objects=[TextObject("Test")])))
+    show(canvas, Document("62", objects=[TextObject("Test")]))
     qtbot.addWidget(canvas)
     canvas.show()
     emitted = []

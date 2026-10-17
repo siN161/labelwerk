@@ -1,34 +1,42 @@
-"""Panel „Text“: zeichenweise Formatierung wie im P-touch Editor.
+"""Panel „Text“: bearbeitet den ausgewählten Textrahmen – zeichenweise wie im P-touch Editor.
 
 Regel wie bei einem ausgewählten Textrahmen in P-touch: Ist nichts markiert, wirkt eine
-Formatierung auf den ganzen Text; sonst nur auf die Markierung.
+Formatierung auf den ganzen Text; sonst nur auf die Markierung. Bereich „Position“: Lage
+und (mit fester Rahmengröße) Größe des Rahmens in mm.
 """
 from __future__ import annotations
 
 import math
-from importlib import resources
-
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import (QFont, QIcon, QKeySequence, QShortcut, QTextCharFormat, QTextCursor, QTextFormat,
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import (QAction, QFont, QIcon, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QHBoxLayout, QLabel,
-                               QPushButton, QTextEdit)
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QGridLayout, QHBoxLayout,
+                               QLabel, QPushButton, QTextEdit)
 
 from ...document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
 from ...fonts import DEFAULT_FAMILY
+from ...layout import Rect
 from ...render import REF_PT
+from ..symbols import line_icon
+from ..widgets import DoubleSpinBox
 from . import Panel
 
 _P = QTextFormat.Property
 
 SIZES_PT = (6, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72)
 DEFAULT_PT = 19
+HINT = "Auf das Etikett klicken, um einen Textrahmen anzulegen"
+POSITION_MM = (-999.9, 999.9)    # Lage darf auch neben dem Etikett liegen (ragt hinaus)
+SIZE_MM = (1.0, 999.9)
+_FRAME_ONLY = "Nur mit fester Rahmengröße änderbar"
 _ALIGN_TO_QT = {"left": Qt.AlignmentFlag.AlignLeft, "center": Qt.AlignmentFlag.AlignHCenter,
                 "right": Qt.AlignmentFlag.AlignRight, "justify": Qt.AlignmentFlag.AlignJustify}
 
 
 class PlainPasteEdit(QTextEdit):
     """Rich-Text-Editor, der aus der Zwischenablage nur reinen Text übernimmt."""
+
+    focus_left = Signal()            # Tippen ist abgeschlossen (ein Schritt für Rückgängig)
 
     def __init__(self):
         super().__init__()
@@ -45,6 +53,10 @@ class PlainPasteEdit(QTextEdit):
         if source.hasText():
             self.textCursor().insertText(source.text())
 
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.focus_left.emit()
+
 
 def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
     button = QPushButton(text)
@@ -55,17 +67,13 @@ def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
 
 
 def _align_icon(key: str, dark_checked: bool = True) -> QIcon:
-    """Liniensymbol: schwarz im Normalzustand, weiß auf dem schwarzen Hintergrund gewählter Knöpfe
-    (RawBlock); im klassischen Design bleibt der gewählte Knopf hell, also auch schwarz."""
-    folder = resources.files("labelwerk.gui") / "icons"
-    icon = QIcon()
-    for color, state in (("black", QIcon.State.Off), ("white" if dark_checked else "black", QIcon.State.On)):
-        path = str(folder / f"align-{key}-{color}.svg")
-        icon.addFile(path, QSize(), QIcon.Mode.Normal, state)
-    return icon
+    """Liniensymbol der Textposition; gewählt weiß auf schwarz nur bei RawBlock."""
+    return line_icon(f"align-{key}", dark_checked)
 
 
 class TextPanel(Panel):
+    frame_edited = Signal(str, float)   # Feld im Bereich „Position“ ("x" | "y" | "w" | "h"), mm
+
     def set_icon_style(self, dark_checked: bool) -> None:
         """Ausrichtungssymbole an das Design anpassen (weiß auf schwarz nur bei RawBlock)."""
         self.dark_checked_icons = dark_checked
@@ -75,14 +83,19 @@ class TextPanel(Panel):
     def __init__(self, doc: Document):
         super().__init__(doc, "Text")
         self.dark_checked_icons = True
-        if not doc.objects:
-            doc.objects.append(TextObject(""))
+        self.index: int | None = None   # bearbeitetes Objekt; None = kein Text ausgewählt
+        self._frame: Rect | None = None   # zuletzt angezeigter Rahmen (mm)
         self._updating = False
         self._formatting = False        # während einer Formatierung: contentsChanged nicht doppelt anwenden
         self._shown_pt: float | None = float(DEFAULT_PT)   # zuletzt angezeigte Größe; None = gemischt
         # Grundformat: gilt für alles, was nicht ausdrücklich formatiert ist (nicht Qts Widget-Schrift)
         self._base = {"family": DEFAULT_FAMILY, "pt": float(DEFAULT_PT), "bold": True,
                       "italic": False, "underline": False}
+
+        self.hint = QLabel(HINT)
+        self.hint.setObjectName("hint")
+        self.hint.setWordWrap(True)
+        self.layout_.addWidget(self.hint)
 
         self.section("Inhalt")
         self.edit = PlainPasteEdit()
@@ -109,9 +122,9 @@ class TextPanel(Panel):
 
         self.section("Stil")
         row = QHBoxLayout()
-        self.bold = _button("B", "Fett (Strg+B)")
-        self.italic = _button("I", "Kursiv (Strg+I)")
-        self.underline = _button("U", "Unterstrichen (Strg+U)")
+        self.bold = _button("B", "Fett")            # Tooltip mit Kürzel: use_actions
+        self.italic = _button("I", "Kursiv")
+        self.underline = _button("U", "Unterstrichen")
         for button, attr in ((self.bold, "bold"), (self.italic, "italic"),
                              (self.underline, "underline")):
             button.setProperty("style", attr)
@@ -139,6 +152,29 @@ class TextPanel(Panel):
         self.fit = _button("FESTE RAHMENGRÖSSE", "Text automatisch so skalieren, dass er passt")
         self.layout_.addWidget(self.fit)
 
+        self.section("Position (mm)")
+        grid = QGridLayout()
+        self.pos_x, self.pos_y, self.pos_w, self.pos_h = (DoubleSpinBox() for _ in range(4))
+        self._frame_spins = {"x": self.pos_x, "y": self.pos_y, "w": self.pos_w, "h": self.pos_h}
+        for i, (key, text, tip) in enumerate((("x", "X", "Abstand vom linken Etikettrand"),
+                                              ("y", "Y", "Abstand vom oberen Etikettrand"),
+                                              ("w", "B", "Breite des Rahmens"),
+                                              ("h", "H", "Höhe des Rahmens"))):
+            spin = self._frame_spins[key]
+            spin.setDecimals(1)
+            spin.setSingleStep(0.1)
+            spin.setRange(*(POSITION_MM if key in "xy" else SIZE_MM))
+            spin.setKeyboardTracking(False)        # erst nach Enter/Fokuswechsel/Pfeil übernehmen
+            spin.setToolTip(tip)
+            label = QLabel(text)
+            label.setToolTip(tip)
+            grid.addWidget(label, i // 2, (i % 2) * 2)
+            grid.addWidget(spin, i // 2, (i % 2) * 2 + 1)
+            spin.valueChanged.connect(lambda value, k=key: self._frame_changed(k, value))
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(3, 1)
+        self.layout_.addLayout(grid)
+
         self.error = QLabel()
         self.error.setObjectName("error")
         self.error.setWordWrap(True)
@@ -147,30 +183,59 @@ class TextPanel(Panel):
         self.layout_.addStretch()
 
         self.refresh()
+        self.edit.focus_left.connect(self.edited)
         self.edit.document().contentsChanged.connect(self._apply)
         self.edit.currentCharFormatChanged.connect(self._sync_buttons)
         self.edit.cursorPositionChanged.connect(self._sync_buttons)
         self.edit.selectionChanged.connect(self._sync_buttons)
-        self.family.currentFontChanged.connect(lambda font: self._format(family=font.family()))
-        self.size.activated.connect(lambda _: self._size_entered())
-        self.size.lineEdit().editingFinished.connect(self._size_entered)
-        self.grow.clicked.connect(lambda: self._step_size(+1))
-        self.shrink.clicked.connect(lambda: self._step_size(-1))
-        self.bold.clicked.connect(lambda on: self._format(bold=on))
-        self.italic.clicked.connect(lambda on: self._format(italic=on))
-        self.underline.clicked.connect(lambda on: self._format(underline=on))
+        step = self._step     # Knöpfe und Felder: jede Änderung ein eigener Schritt
+        self.family.currentFontChanged.connect(
+            lambda font: step(self._format, family=font.family()))
+        self.size.activated.connect(lambda _: step(self._size_entered))
+        self.size.lineEdit().editingFinished.connect(lambda: step(self._size_entered))
+        self.grow.clicked.connect(lambda: step(self._step_size, +1))
+        self.shrink.clicked.connect(lambda: step(self._step_size, -1))
+        self.bold.clicked.connect(lambda on: step(self._format, bold=on))
+        self.italic.clicked.connect(lambda on: step(self._format, italic=on))
+        self.underline.clicked.connect(lambda on: step(self._format, underline=on))
         for key, button in self.align_buttons.items():
-            button.clicked.connect(lambda _=False, k=key: self._align(k))
-        self.fit.toggled.connect(lambda _: self._apply())
-        for keys, button in ((QKeySequence.StandardKey.Bold, self.bold),
-                             (QKeySequence.StandardKey.Italic, self.italic),
-                             (QKeySequence.StandardKey.Underline, self.underline)):
-            QShortcut(keys, self, context=Qt.ShortcutContext.WidgetWithChildrenShortcut,
-                      activated=button.click)
+            button.clicked.connect(lambda _=False, k=key: step(self._align, k))
+        self.fit.toggled.connect(lambda _: step(self._apply))
+
+    def use_actions(self, actions: dict[str, QAction]) -> None:
+        """Kürzel für Fett/Kursiv/Unterstrichen: wirken, solange das Panel den Fokus hat.
+        Die Knöpfe zeigen den Tooltip der Aktion – auch nach dem Umbelegen."""
+        for key, button in (("text.bold", self.bold), ("text.italic", self.italic),
+                            ("text.underline", self.underline)):
+            action = actions[key]
+            action.triggered.connect(lambda _=False, b=button: b.click())
+            self.addAction(action)
+            button.setToolTip(action.toolTip())
+            action.changed.connect(lambda b=button, a=action: b.setToolTip(a.toolTip()))
 
     @property
     def obj(self) -> TextObject:
-        return self.doc.objects[0]
+        return self.doc.objects[self.index]
+
+    def set_object(self, index: int | None) -> None:
+        """Objekt bearbeiten (Index in ``doc.objects``) bzw. mit None keins (Hinweis)."""
+        if index != self.index:
+            self.index = index
+            self._frame = None
+            self.refresh()
+
+    def _editing_widgets(self):
+        return (self.edit, self.family, self.size, self.grow, self.shrink, self.bold,
+                self.italic, self.underline, *self.align_buttons.values(), self.fit,
+                *self._frame_spins.values())
+
+    def _step(self, change, *args, **kwargs) -> None:
+        """Änderung als eigener Rückgängig-Schritt: vorher Getipptes festhalten, danach das Neue."""
+        if self._updating:
+            return
+        self.edited.emit()
+        change(*args, **kwargs)
+        self.edited.emit()
 
     # --- Formatieren ------------------------------------------------------
     def _target(self) -> QTextCursor:
@@ -348,23 +413,42 @@ class TextPanel(Panel):
                 spans.append(_span("", self._props(block.charFormat()), base_pt))
             paragraphs.append(Paragraph(spans, align))
             block = block.next()
-        return TextObject(paragraphs, size_pt=base_pt, font_path=self.obj.font_path,
-                          fit=self.fit.isChecked())
+        obj = self.obj                 # Rahmen und Drehung bleiben beim Tippen erhalten
+        fit = self.fit.isChecked()
+        w, h = obj.w_mm, obj.h_mm
+        if fit and not obj.fit and obj.positioned and self._frame is not None:
+            # feste Rahmengröße einschalten: Rahmen bleibt so groß, wie er gerade ist
+            w, h = round(self._frame.w, 3), round(self._frame.h, 3)
+            if obj.rotation in (90, 270):
+                w, h = h, w
+        return TextObject(paragraphs, size_pt=base_pt, font_path=obj.font_path,
+                          fit=fit, x_mm=obj.x_mm, y_mm=obj.y_mm,
+                          w_mm=w, h_mm=h, rotation=obj.rotation)
 
     def _apply(self) -> None:
-        if self._updating or self._formatting:
+        if self._updating or self._formatting or self.index is None:
             return
         self._updating = True
         try:
             self._fill_base_formats()
         finally:
             self._updating = False
-        self.doc.objects[0] = self.to_text_object()
+        self.doc.objects[self.index] = self.to_text_object()
         self._sync_buttons()
+        self._update_frame_editing()
         self.changed.emit()
 
     def refresh(self) -> None:
-        """Editor aus dem Modell aufbauen (Start mit Einstellungen, später „Öffnen“)."""
+        """Editor aus dem Modell aufbauen (Auswahl, Rückgängig, Ziehen an den Anfassern)."""
+        if self.index is not None and not 0 <= self.index < len(self.doc.objects):
+            self.index = None                      # Objekt gibt es nicht mehr
+        editing = self.index is not None
+        self.hint.setVisible(not editing)
+        for widget in self._editing_widgets():
+            widget.setEnabled(editing)
+        if not editing:
+            self._show_nothing()
+            return
         obj = self.obj
         self._updating = True
         try:
@@ -378,6 +462,7 @@ class TextPanel(Panel):
                           "italic": first.italic if first else False,
                           "underline": first.underline if first else False}
             document = self.edit.document()
+            document.setUndoRedoEnabled(False)     # Aufbau ist kein Schritt im Editor
             document.clear()
             cursor = QTextCursor(document)
             cursor.setCharFormat(_char_format_of(self._base))
@@ -395,12 +480,58 @@ class TextPanel(Panel):
                            else _char_format_of(self._base))
                     cursor.setBlockCharFormat(fmt)
                     cursor.setCharFormat(fmt)
+            document.setUndoRedoEnabled(True)
             self.edit.setTextCursor(cursor)
             self.edit.setCurrentCharFormat(_char_format_of(self._props(cursor.charFormat())))
             self.fit.setChecked(obj.auto)
         finally:
             self._updating = False
         self._sync_buttons()
+        self._update_frame_editing()
+
+    def _show_nothing(self) -> None:
+        """Kein Text ausgewählt: leeres, gesperrtes Panel."""
+        self._updating = True
+        try:
+            document = self.edit.document()
+            document.setUndoRedoEnabled(False)
+            document.clear()
+            document.setUndoRedoEnabled(True)
+            self.fit.setChecked(False)
+        finally:
+            self._updating = False
+        for combo in (self.family, self.size):         # keine Schrift anzeigen, die nicht gilt
+            combo.blockSignals(True)
+            combo.setCurrentIndex(-1)
+            combo.setEditText("")
+            combo.blockSignals(False)
+        self.show_frame(None)
+
+    # --- Position -----------------------------------------------------------
+    def show_frame(self, rect: Rect | None) -> None:
+        """Rahmen des bearbeiteten Objekts in mm anzeigen (vom Hauptfenster nach dem Rendern)."""
+        self._frame = rect
+        for key, spin in self._frame_spins.items():
+            spin.blockSignals(True)
+            spin.setValue(getattr(rect, key) if rect is not None else 0.0)
+            spin.blockSignals(False)
+        self._update_frame_editing()
+
+    def _update_frame_editing(self) -> None:
+        """Breite/Höhe nur mit fester Rahmengröße änderbar, sonst Anzeige der Größe."""
+        fixed = self.index is not None and self.obj.fit
+        for spin in (self.pos_w, self.pos_h):
+            if spin.isReadOnly() == fixed:
+                spin.setReadOnly(not fixed)          # Pfeile bleiben sichtbar, wirken aber nicht
+                spin.style().unpolish(spin)          # Stylesheet: [readOnly="true"] neu anwenden
+                spin.style().polish(spin)
+            spin.setToolTip(("Breite" if spin is self.pos_w else "Höhe") + " des Rahmens"
+                            + ("" if fixed else f" – {_FRAME_ONLY}"))
+
+    def _frame_changed(self, key: str, value: float) -> None:
+        if self.index is None or (key in "wh" and not self.obj.fit):
+            return
+        self.frame_edited.emit(key, value)
 
     def _sync_buttons(self) -> None:
         """Knöpfe zeigen die Formatierung an der Schreibmarke."""
