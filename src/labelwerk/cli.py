@@ -41,6 +41,8 @@ def _parser() -> argparse.ArgumentParser:
     pf.add_argument("--page", type=int, default=1, help="PDF-Seite (Standard 1)")
     pf.add_argument("--fit", action="store_true",
                     help="verkleinern, falls zu groß (Codes evtl. nicht mehr lesbar)")
+    pf.add_argument("--rotate", default="auto", choices=["auto", "0", "90", "180", "270"],
+                    help="auto (Standard: nur drehen wenn nötig) oder Grad im Uhrzeigersinn")
     _add_output_options(pf)
     return p
 
@@ -69,7 +71,8 @@ def _detect_printer(backend: str) -> str | None:
 def _make_image(args: argparse.Namespace) -> Image.Image:
     if args.cmd == "print-file":
         img = crop(load_file(args.file, page=args.page))
-        return fit_to_label(img, args.label, fit=args.fit, model=args.model)
+        rotate = args.rotate if args.rotate == "auto" else int(args.rotate)
+        return fit_to_label(img, args.label, fit=args.fit, model=args.model, rotate=rotate)
     text = args.text.replace("\\n", "\n")
     return render_text(text, args.label, font_size=args.font_size, font_path=args.font)
 

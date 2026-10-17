@@ -57,7 +57,7 @@ def _load_image(path: Path) -> Image.Image:
 
 
 def crop(img: Image.Image) -> Image.Image:
-    """Auf den Bereich zwischen vier Eck-Schnittmarken zuschneiden, sonst auf den Inhalt."""
+    """Auf den Inhalt zuschneiden; liegen vier Eck-Schnittmarken außen, ohne die Marken."""
     ink = img.point(lambda v: 255 if v < INK else 0)
     box = ink.getbbox()
     if box is None:
@@ -72,7 +72,12 @@ def crop(img: Image.Image) -> Image.Image:
     w, h = content.size
     left, top = max(tl[0], bl[0]), max(tl[1], tr[1])
     right, bottom = w - max(tr[0], br[0]), h - max(bl[1], br[1])
-    return img.crop((box[0] + left, box[1] + top, box[0] + right, box[1] + bottom))
+    inner = (box[0] + left, box[1] + top, box[0] + right, box[1] + bottom)
+    trimmed = ink.crop(inner).getbbox()  # Leerraum innerhalb der Marken entfernen
+    if trimmed is None:
+        raise ValueError("Zwischen den Schnittmarken ist kein druckbarer Inhalt.")
+    return img.crop((inner[0] + trimmed[0], inner[1] + trimmed[1],
+                     inner[0] + trimmed[2], inner[1] + trimmed[3]))
 
 
 def _corner_mark(ink: Image.Image) -> tuple[int, int] | None:
@@ -94,9 +99,18 @@ def _corner_mark(ink: Image.Image) -> tuple[int, int] | None:
     return cols[-1] + 2, rows[-1] + 2
 
 
+ROTATIONS = ("auto", 0, 90, 180, 270)
+
+
 def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
-                 model: str = "QL-600") -> Image.Image:
-    """Motiv 1:1 mittig aufs Etikett setzen; drehen nur wenn nötig, verkleinern nur mit fit."""
+                 model: str = "QL-600", rotate: str | int = "auto") -> Image.Image:
+    """Motiv 1:1 mittig aufs Etikett setzen; verkleinern nur mit fit.
+
+    rotate: "auto" dreht nur wenn nötig (90° gegen den Uhrzeigersinn), sonst feste
+    Drehung in Grad im Uhrzeigersinn (0, 90, 180, 270).
+    """
+    if rotate not in ROTATIONS:
+        raise ValueError(f"Drehung {rotate!r} nicht möglich – erlaubt: auto, 0, 90, 180, 270")
     label = get_label(label_id)
     min_len, max_len = length_limits(model)
     max_w = label.width
@@ -105,11 +119,13 @@ def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
     def fits(w: int, h: int) -> bool:
         return w <= max_w and h <= max_h
 
+    if rotate != "auto":
+        img = img.rotate(-rotate, expand=True)
     if not fits(*img.size):
-        if fits(img.height, img.width):
+        if rotate == "auto" and fits(img.height, img.width):
             img = img.rotate(90, expand=True)
         elif fit:
-            img = _shrink(img, max_w, max_h)
+            img = _shrink(img, max_w, max_h, may_rotate=rotate == "auto")
         else:
             limit = (f"{format_mm(max_w)} mm breit" if not label.height
                      else f"{format_mm(max_w)} × {format_mm(max_h)} mm groß")
@@ -124,12 +140,12 @@ def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
     return out
 
 
-def _shrink(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
-    """Proportional verkleinern, in der Lage (gedreht oder nicht), die größer bleibt."""
+def _shrink(img: Image.Image, max_w: int, max_h: int, may_rotate: bool = True) -> Image.Image:
+    """Proportional verkleinern; mit may_rotate in der Lage, die größer bleibt."""
     def scale(w: int, h: int) -> float:
         return min(max_w / w, max_h / h)
 
-    if scale(img.height, img.width) > scale(*img.size):
+    if may_rotate and scale(img.height, img.width) > scale(*img.size):
         img = img.rotate(90, expand=True)
     s = scale(*img.size)
     return img.resize((max(1, round(img.width * s)), max(1, round(img.height * s))), Image.LANCZOS)

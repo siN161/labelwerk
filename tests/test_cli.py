@@ -126,3 +126,11 @@ def test_preview_with_unknown_extension_gives_friendly_error(tmp_path, capsys):
     rc = main(["print-file", str(_png(tmp_path)), "--preview", str(tmp_path / "o.txt")])
     assert rc == 2
     assert "Vorschau kann nicht gespeichert werden" in capsys.readouterr().err
+
+
+def test_print_file_rotate_0_with_fit(tmp_path, capsys):
+    out = tmp_path / "vorschau.png"
+    rc = main(["print-file", str(_png(tmp_path, 90, 47)), "-l", "62", "--rotate", "0", "--fit",
+               "--preview", str(out)])
+    assert rc == 0
+    assert "58,9 × 32,8 mm" in capsys.readouterr().out

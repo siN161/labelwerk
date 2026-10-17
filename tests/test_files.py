@@ -72,22 +72,16 @@ def _with_marks(corners=("tl", "tr", "bl", "br"), dotted=False):
     return img
 
 
-def test_crop_to_solid_marks():
-    w, h = crop(_with_marks()).size
-    assert abs(w - (RECT[2] - RECT[0])) <= 4
-    assert abs(h - (RECT[3] - RECT[1])) <= 4
-
-
-def test_crop_to_dotted_marks():
-    w, h = crop(_with_marks(dotted=True)).size
-    assert abs(w - (RECT[2] - RECT[0])) <= 4
-    assert abs(h - (RECT[3] - RECT[1])) <= 4
-
-
-def test_crop_removes_marks_completely():
+def test_crop_to_solid_marks_trims_dead_space():
     cropped = crop(_with_marks())
-    border = [cropped.crop(b) for b in ((0, 0, cropped.width, 1), (0, 0, 1, cropped.height))]
-    assert all(b.getextrema()[0] == 255 for b in border)
+    assert cropped.size == (401, 101)            # nur der Inhalt, ohne Marken und Leerraum
+    assert cropped.getextrema() == (0, 0)
+
+
+def test_crop_to_dotted_marks_trims_dead_space():
+    cropped = crop(_with_marks(dotted=True))
+    assert cropped.size == (401, 101)
+    assert cropped.getextrema() == (0, 0)
 
 
 def test_without_all_four_marks_crops_to_content():
@@ -177,3 +171,47 @@ def test_page_below_one_has_own_message(tmp_path):
     _page().save(path, "PDF", resolution=300)
     with pytest.raises(ValueError, match="mindestens 1"):
         load_file(path, page=0)
+
+
+def _corner_motif(w_mm, h_mm):
+    """Weißes Motiv mit schwarzem Block oben links – zeigt die Drehrichtung."""
+    img = Image.new("L", (round(w_mm * 300 / 25.4), round(h_mm * 300 / 25.4)), 255)
+    img.paste(0, (0, 0, 50, 50))
+    return img
+
+
+def _ink_box(img):
+    return img.point(lambda v: 255 if v < 128 else 0).getbbox()
+
+
+def test_auto_rotation_is_counterclockwise():
+    box = _ink_box(fit_to_label(_corner_motif(90, 47), "62"))
+    assert box[0] < 348 and box[1] > 500         # oben links -> unten links
+
+
+def test_rotate_90_is_clockwise():
+    box = _ink_box(fit_to_label(_corner_motif(90, 47), "62", rotate=90))
+    assert box[0] > 348 and box[1] < 100         # oben links -> oben rechts
+
+
+def test_rotate_180_turns_upside_down():
+    box = _ink_box(fit_to_label(_corner_motif(40, 20), "62", rotate=180))
+    assert box[0] > 348 and box[1] > 130         # oben links -> unten rechts
+
+
+def test_rotate_0_too_wide_suggests_fit():
+    with pytest.raises(ValueError, match="--fit"):
+        fit_to_label(_motif(90, 47), "62", rotate=0)
+
+
+def test_rotate_0_with_fit_keeps_orientation():
+    out = fit_to_label(_motif(90, 47), "62", rotate=0, fit=True)
+    box = _ink_box(out)
+    w, h = box[2] - box[0], box[3] - box[1]
+    assert w == 696
+    assert abs(h / w - 47 / 90) < 0.01           # quer wie im PDF, nur verkleinert
+
+
+def test_invalid_rotation():
+    with pytest.raises(ValueError, match="Drehung"):
+        fit_to_label(_motif(40, 20), "62", rotate=45)
