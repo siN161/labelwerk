@@ -71,3 +71,15 @@ def test_label_not_in_model_list_falls_back(tmp_path, label):
     s = load_settings(path)
     assert s.label_id == "62"
     assert len(s.warnings) == 1
+
+
+def test_unreadable_config_dir_gives_warning_not_exception(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    def denied(self, *a, **kw):
+        raise PermissionError(13, "Keine Berechtigung")
+    monkeypatch.setattr(Path, "exists", denied)
+    monkeypatch.setattr(Path, "read_text", denied)
+    s = load_settings(tmp_path / "settings.json")
+    assert s == Settings()
+    assert any("nicht lesbar" in w for w in s.warnings)

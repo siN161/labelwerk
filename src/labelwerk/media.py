@@ -6,7 +6,7 @@ import select
 import time
 from dataclasses import dataclass
 
-from brother_ql.reader import interpret_response
+from brother_ql.reader import RESP_MEDIA_TYPES, interpret_response
 
 from .labels import labels_for_model
 
@@ -40,6 +40,8 @@ def read_media(printer: str, timeout: float = TIMEOUT_S) -> Media:
 
 
 def parse_media(data: bytes) -> Media:
+    if len(data) > 11 and data[11] not in RESP_MEDIA_TYPES:
+        raise MediaError(f"Unbekannte Rolle (Code 0x{data[11]:02X})")
     try:
         status = interpret_response(data)
     except Exception as e:  # brother_ql wirft je nach Fehler NameError, UnboundLocalError …

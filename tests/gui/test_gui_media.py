@@ -133,14 +133,16 @@ def test_check_button_disabled_while_printing(window, qtbot, monkeypatch):
     def blocking(*a, **kw):
         release.wait(5)
         return {"did_print": True}
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp1")
     monkeypatch.setattr("labelwerk.gui.print_worker.print_image", blocking)
     window.panel("text").edit.setPlainText("Hallo")
     window.print_label()
     try:
+        assert window.is_printing()
         assert not window.panel("paper").check.isEnabled()
     finally:
         release.set()
-    qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+    qtbot.waitUntil(lambda: not window.is_printing(), timeout=3000)
     assert window.panel("paper").check.isEnabled()
 
 
@@ -156,3 +158,34 @@ def test_matching_label_not_mentioned_as_adjusted(window, qtbot, monkeypatch):
     window.check_media()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
     assert "angepasst" not in window.panel("paper").media_status.text()
+
+
+def test_media_check_is_caught_up_after_print(qtbot, monkeypatch):
+    win = MainWindow(settings=Settings(check_media_on_start=True))
+    qtbot.addWidget(win)
+    win._printing = True                           # Druck läuft, Drucker erscheint
+    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    _printer_with(monkeypatch, Media(62, 29, "die_cut"))
+    win.refresh_printer()
+    assert not win.is_checking_media()
+    win._print_done({"did_print": True})           # Druck fertig
+    qtbot.waitUntil(lambda: win.doc.label_id == "62x29", timeout=3000)
+
+
+def test_pending_media_check_dropped_on_disconnect(qtbot, monkeypatch):
+    win = MainWindow(settings=Settings(check_media_on_start=True))
+    qtbot.addWidget(win)
+    win._printing = True
+    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    win.refresh_printer()
+    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: None)
+    win.refresh_printer()
+    win._printing = False
+    win._print_finished()
+    assert not win.is_checking_media()
+
+
+def test_close_stops_printer_timer(window):
+    assert window._printer_timer.isActive()
+    window.close()
+    assert not window._printer_timer.isActive()

@@ -99,3 +99,8 @@ def test_query_status_only_for_kernel_device():
 def test_query_status_missing_device(tmp_path):
     with pytest.raises(MediaError, match="nicht gefunden"):
         query_status(f"file://{tmp_path}/lp9")
+
+
+def test_parse_unknown_media_code():
+    with pytest.raises(MediaError, match=r"Unbekannte Rolle \(Code 0x77\)"):
+        parse_media(status(media_code=0x77))

@@ -52,12 +52,12 @@ def settings_path() -> Path:
 def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Settings:
     path = Path(path) if path else settings_path()
     settings = Settings()
-    if not path.exists():
-        return settings
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             raise ValueError("kein JSON-Objekt")
+    except FileNotFoundError:
+        return settings
     except (OSError, ValueError) as e:
         settings.warnings.append(f"Einstellungen nicht lesbar ({path}): {e} – Standardwerte aktiv.")
         return settings

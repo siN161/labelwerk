@@ -1,3 +1,4 @@
+import pytest
 from PIL import Image
 
 from labelwerk.cli import main
@@ -10,7 +11,10 @@ def test_preview_writes_png_without_printer(tmp_path):
     assert out.exists()
 
 
-def test_missing_printer_gives_friendly_error(capsys):
+def test_missing_printer_gives_friendly_error(monkeypatch, capsys):
+    def not_found(**kwargs):
+        raise FileNotFoundError(kwargs["printer_identifier"])
+    monkeypatch.setattr("labelwerk.printer.send", not_found)
     rc = main(["print", "Hallo", "-l", "62", "-p", "file:///nonexistent/lp9"])
     assert rc == 2
     assert "nicht gefunden" in capsys.readouterr().err
@@ -232,3 +236,35 @@ def test_media_command_without_printer(monkeypatch, capsys):
     monkeypatch.setattr("labelwerk.cli.brother_busy", lambda: False)
     assert main(["media"]) == 2
     assert "nicht gefunden" in capsys.readouterr().err
+
+
+def test_font_size_auto_overrides_saved_size(tmp_path):
+    from labelwerk.document import Document, TextObject
+    from labelwerk.render import render_document
+    _write_settings(font_size=80)
+    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", font_size=None)]))
+    assert _preview(tmp_path, "-s", "auto") == expected.convert("RGB").tobytes()
+
+
+def test_font_size_option_beats_settings(tmp_path):
+    from labelwerk.document import Document, TextObject
+    from labelwerk.render import render_document
+    _write_settings(font_size=80)
+    expected = render_document(Document("62", objects=[TextObject("Hallo Welt", font_size=100)]))
+    assert _preview(tmp_path, "-s", "100") == expected.convert("RGB").tobytes()
+
+
+@pytest.mark.parametrize("value", ["7", "401", "abc", "1.5"])
+def test_font_size_invalid_is_argparse_error(value, capsys):
+    with pytest.raises(SystemExit) as e:
+        main(["print", "X", "-s", value])
+    assert e.value.code == 2
+    assert "Schriftgröße" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value", ["25", "-1", "nan", "inf", "abc"])
+def test_margin_invalid_is_argparse_error(value, capsys):
+    with pytest.raises(SystemExit) as e:
+        main(["print", "X", f"--margin={value}"])
+    assert e.value.code == 2
+    assert "Rand" in capsys.readouterr().err

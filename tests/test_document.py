@@ -44,6 +44,8 @@ def test_length_is_ignored_for_die_cut():
 def test_empty_document_renders_blank_label():
     img = render_document(Document("62"))
     assert img.convert("L").getextrema() == (255, 255)
+
+
 def _ink(img):
     return img.convert("L").point(lambda v: 255 if v < 128 else 0)
 
@@ -110,6 +112,7 @@ def test_horizontal_render_is_fast_enough_for_live_preview():
     import time
     doc = Document("62", orientation="horizontal",
                    objects=[TextObject("Max Mustermann\nMusterstr. 5\n12345 Musterstadt")])
+    render_document(doc)                      # Aufwärmen (Schrift laden)
     start = time.perf_counter()
     render_document(doc)
     assert time.perf_counter() - start < 0.5

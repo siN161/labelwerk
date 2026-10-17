@@ -31,7 +31,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.resize(1100, 700)
-        self.settings = settings if settings is not None else load_settings()
+        self.settings = settings if settings is not None else load_settings(model=model)
         self.doc = doc if doc is not None else new_document(self.settings)
         self.model = model
         self.image = None
@@ -40,6 +40,7 @@ class MainWindow(QMainWindow):
         self._media_signals = None
         self._printer_present = False
         self._printing = False
+        self._media_check_pending = False
 
         # Werkzeugleiste + Panels aus der Registry
         toolbar = QToolBar("Werkzeuge")
@@ -170,10 +171,23 @@ class MainWindow(QMainWindow):
         self.printer_status.setText(text)
         present = printer is not None
         if present and not self._printer_present and self.settings.check_media_on_start:
-            self.check_media()
-        if not present and self._printer_present:
-            self.panel("paper").clear_media()
+            self._media_check_pending = True
+        if not present:
+            self._media_check_pending = False
+            if self._printer_present:
+                self.panel("paper").clear_media()
         self._printer_present = present
+        self._run_pending_media_check()
+
+    def _run_pending_media_check(self) -> None:
+        """Automatische Prüfung nachholen, sobald weder Druck noch Prüfung laufen."""
+        if self._media_check_pending and not self.is_printing() and not self.is_checking_media():
+            self._media_check_pending = False
+            self.check_media()
+
+    def closeEvent(self, event) -> None:
+        self._printer_timer.stop()
+        super().closeEvent(event)
 
     # --- Einstellungen ----------------------------------------------------
     def open_settings(self) -> None:
@@ -215,6 +229,7 @@ class MainWindow(QMainWindow):
     def _media_finished(self) -> None:
         self._media_signals = None
         self.panel("paper").set_checking(False)
+        self._run_pending_media_check()
 
     def confirm_empty(self) -> bool:
         answer = QMessageBox.question(
