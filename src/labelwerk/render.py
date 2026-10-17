@@ -3,11 +3,14 @@
 Der Zeilensatz verallgemeinert Pillows ``multiline_text`` auf formatierte Textstücke:
 gleicher Zeilenabstand (Unterkante von „A“ + 4 Punkte), gleiche Ausrichtungsrechnung –
 reiner Text sieht dadurch pixelgleich aus wie früher.
+Das Ergebnis (``TextLayout``) zeichnet das Rendern; dieselben Zahlen liefern der
+Arbeitsfläche Schreibmarke, Treffer und Markierung.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import cached_property
 
 from PIL import Image, ImageDraw, ImageOps
 
@@ -74,6 +77,7 @@ class RenderedObject:
     Tinte ab (Anschnitt: Kantenglättung, Unterstreichung, Glyphen wie „J“ reichen etwas über
     den Rahmen); seine linke obere Ecke liegt bei ``x + image_dx``, ``y + image_dy``
     (``image_dx``/``image_dy`` ≤ 0).
+    ``layout``: der Zeilensatz, aus dem das Bild gezeichnet wurde (Schreibmarke, Treffer).
     """
     image: Image.Image
     x: int
@@ -83,17 +87,29 @@ class RenderedObject:
     base_pt: float
     image_dx: int = 0
     image_dy: int = 0
+    layout: TextLayout | None = field(default=None, compare=False, repr=False)
 
 
 def render_object(obj: TextObject, doc: Document, model: str = "QL-600") -> RenderedObject:
     """Ein Objekt einzeln rendern (Arbeitsfläche); Position bezogen auf das Etikett von ``doc``."""
+    return _finish(*_measure(obj, doc, model))
+
+
+def text_layout(obj: TextObject, doc: Document, model: str = "QL-600") -> TextLayout:
+    """Zeilensatz eines Objekts ohne Bild – derselbe, den ``render_object`` zeichnet
+    (``RenderedObject.layout``)."""
+    return _place(*_measure(obj, doc, model))[0]
+
+
+def _measure(obj: TextObject, doc: Document, model: str) -> tuple[Prepared, _Sheet, int, int]:
+    """Objekt messen; Etikettgröße nur für ein Objekt ohne Position (mittig), sonst 0."""
     sheet = _sheet(doc, model)
     prep = _prepare(obj, sheet)
     width = height = 0
     if not obj.positioned:                     # mittig: braucht die Etikettgröße
         others = [_prepare(o, sheet) for o in doc.objects if o is not obj]
         width, height = _label_size(sheet, [prep, *others])
-    return _finish(prep, sheet, width, height)
+    return prep, sheet, width, height
 
 
 def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
@@ -267,12 +283,14 @@ def _label_size(sheet: _Sheet, preps: list[Prepared]) -> tuple[int, int]:
     return (feed, sheet.across) if sheet.horizontal else (sheet.across, feed)
 
 
-def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedObject:
-    """Objektbild zeichnen und auf dem Etikett (``width`` × ``height``) platzieren.
+def _place(prep: Prepared, sheet: _Sheet, width: int, height: int
+           ) -> tuple[TextLayout, tuple[int, int, int, int], tuple[int, int], tuple[int, int]]:
+    """Zeilensatz im Rahmen auf dem Etikett (``width`` × ``height``).
 
     Gerechnet wird ungedreht in einer Fläche ``area`` (positioniert: der eigene Rahmen,
-    sonst das Etikett – bei 90/270 mit getauschten Seiten); danach werden Bild, Rahmen und
-    Bildlage mit der Fläche gedreht.
+    sonst das Etikett – bei 90/270 mit getauschten Seiten). Zurück kommen der Zeilensatz
+    (relativ zum Rahmen), der Rahmen (x, y, w, h) in der Fläche, die Fläche (Breite, Höhe)
+    und die Lage der Fläche auf dem Etikett.
     """
     obj = prep.obj
     lines, (l, t, r, b) = prep.lines, prep.box
@@ -294,7 +312,17 @@ def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedO
         fl, ft, fr, fb = _block_box(lines)
         frame = (x0 + fl, y0 + ft, fr - fl, fb - ft)
         origin = (0, 0)
-    image, (ix, iy) = _paint(lines, x0 - frame[0], y0 - frame[1], *frame[2:],
+    text = TextLayout([para.text for para in obj.paragraphs], lines, x0 - frame[0],
+                      y0 - frame[1], frame[2], frame[3])
+    return text, frame, area, origin
+
+
+def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedObject:
+    """Objektbild aus dem Zeilensatz (``_place``) zeichnen und auf dem Etikett platzieren;
+    Bild, Rahmen und Bildlage werden mit der Fläche gedreht."""
+    obj = prep.obj
+    text, frame, area, origin = _place(prep, sheet, width, height)
+    image, (ix, iy) = _paint(text.pieces, text.x0, text.y0, *frame[2:],
                              at=(origin[0] + frame[0], origin[1] + frame[1]))
     picture = (frame[0] + ix, frame[1] + iy, image.width, image.height)
     if obj.rotation:
@@ -303,7 +331,7 @@ def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedO
         picture = _turn(picture, area, obj.rotation)
     base_pt = obj.size_pt if not obj.auto else prep.base / PT
     return RenderedObject(image, origin[0] + frame[0], origin[1] + frame[1], frame[2], frame[3],
-                          base_pt, picture[0] - frame[0], picture[1] - frame[1])
+                          base_pt, picture[0] - frame[0], picture[1] - frame[1], text)
 
 
 _TRANSPOSE = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180,
@@ -411,6 +439,7 @@ class _Piece:
     slant: bool                # Ersatzkursive
     x: float = 0.0             # links, relativ zum Block
     y: float = 0.0             # Oberkante (Ascender-Linie), relativ zum Block
+    start: int = 0             # Stelle des ersten Zeichens im Absatz
 
 
 def _font_for(obj: TextObject, span: Span, dots: int):
@@ -429,11 +458,12 @@ def _shape(obj: TextObject, base: int, mode: str = "L",
     rows = []
     for para in obj.paragraphs:
         spans = para.spans or [Span("")]
-        pieces = []
+        pieces, start = [], 0
         for span in spans:
             dots = span_dots(obj, span, base)
             font, slant = _font_for(obj, span, dots)
-            pieces.append(_Piece(span.text, font, dots, span.underline, slant))
+            pieces.append(_Piece(span.text, font, dots, span.underline, slant, start=start))
+            start += len(span.text)
         rows.append((para, pieces))
 
     widths = [sum(p.font.getlength(p.text, mode) for p in pieces) for _, pieces in rows]
@@ -462,13 +492,17 @@ def _shape(obj: TextObject, base: int, mode: str = "L",
 
 
 def _justify(pieces: list[_Piece], max_width: float, mode: str) -> list[_Piece]:
-    """Wortabstände dehnen, bis die Zeile die Blockbreite füllt (ein Wort: linksbündig)."""
+    """Wortabstände dehnen, bis die Zeile die Blockbreite füllt (ein Wort: linksbündig).
+
+    Die Leerzeichen entfallen: jedes wird zur gedehnten Lücke vor dem folgenden Wort."""
     words: list[_Piece] = []
     gaps_before: list[bool] = []
     for p in pieces:
+        start = p.start
         for i, part in enumerate(p.text.split(" ")):
-            words.append(_Piece(part, p.font, p.dots, p.underline, p.slant))
+            words.append(_Piece(part, p.font, p.dots, p.underline, p.slant, start=start))
             gaps_before.append(i > 0)
+            start += len(part) + 1
     gaps = sum(gaps_before[1:])
     used = sum(w.font.getlength(w.text, mode) for w in words)
     extra = (max_width - used) / gaps if gaps else 0.0
@@ -479,6 +513,187 @@ def _justify(pieces: list[_Piece], max_width: float, mode: str) -> list[_Piece]:
         word.x = x
         x += word.font.getlength(word.text, mode)
     return words
+
+
+@dataclass(frozen=True)
+class LayoutLine:
+    """Eine Zeile (ein Absatz) des Zeilensatzes, Koordinaten wie ``TextLayout``.
+
+    ``stops``: x jeder Zeichengrenze (Zeichen + 1 Werte; Schreibmarke vor Zeichen i);
+    ``marks``: je Grenze Oberkante und Höhe der Schreibmarke – in der Schrift des Zeichens
+    davor, am Zeilenanfang des ersten Zeichens. Ein leerer Absatz hat kein Zeichen: dort gilt
+    die Standardschrift des Objekts in Grundgröße. Schreibt der Editor in einem anderen
+    Format weiter, skaliert die GUI die Marke um die Grundlinie (Höhe und Abstand
+    Oberkante–Grundlinie wachsen mit der Schriftgröße).
+    ``top``: Ascender-Linie der größten Schrift, ``baseline``: gemeinsame Grundlinie,
+    ``height``: bis zur tiefsten Unterlänge; ``break_width``: Breite des markierten
+    Absatzwechsels (ein Leerzeichen am Zeilenende).
+    """
+    start: int
+    stops: tuple[float, ...]
+    marks: tuple[tuple[float, float], ...]
+    top: float
+    baseline: float
+    height: float
+    break_width: float
+
+    @property
+    def end(self) -> int:
+        """Position nach dem letzten Zeichen (vor dem Absatzwechsel)."""
+        return self.start + len(self.stops) - 1
+
+    def boxes(self) -> list[tuple[float, float]]:
+        """Kästchen (x0, x1) je Zeichen; ein Leerzeichen im Blocksatz reicht über die
+        ganze gedehnte Lücke."""
+        return list(zip(self.stops, self.stops[1:]))
+
+
+@dataclass(eq=False)
+class TextLayout:
+    """Zeilensatz eines Textobjekts: das Rendern zeichnet ``pieces``, die Arbeitsfläche
+    bekommt daraus Schreibmarke, Treffer und Markierung (eine Berechnung, zwei Nutzer).
+
+    Koordinaten in Druckpunkten relativ zur linken oberen Ecke des Objektrahmens **vor** der
+    Drehung (``width`` × ``height``; bei 90/270° sind ``RenderedObject.w``/``h`` vertauscht –
+    ``layout.to_object``/``from_object`` rechnen vom und aufs Etikett um).
+    Positionen zählen wie im ``QTextDocument``: die Zeichen der Absätze hintereinander, jeder
+    Absatzwechsel zählt als ein Zeichen; Positionen außerhalb werden auf den Text begrenzt.
+    """
+    texts: list[str]               # Text je Absatz
+    pieces: list[list[_Piece]]     # gesetzte Stücke je Zeile, relativ zum Block
+    x0: int                        # Blockursprung im Rahmen
+    y0: int
+    width: int
+    height: int
+
+    @cached_property
+    def lines(self) -> list[LayoutLine]:
+        """Zeilen mit Zeichengrenzen – erst bei Bedarf gemessen (das Rendern braucht sie nicht)."""
+        lines, start = [], 0
+        for text, pieces in zip(self.texts, self.pieces):
+            lines.append(_layout_line(text, pieces, start, self.x0, self.y0))
+            start += len(text) + 1
+        return lines
+
+    def caret(self, pos: int) -> tuple[float, float, float]:
+        """Schreibmarke vor Zeichen ``pos``: (x, Oberkante, Höhe)."""
+        line = self._line_at(pos)
+        i = self._clamp(pos) - line.start
+        return (line.stops[i], *line.marks[i])
+
+    def hit(self, x: float, y: float) -> int:
+        """Nächste Zeichengrenze zum Punkt (``x``, ``y``).
+
+        Die Zeile wechselt in der Mitte zwischen Unterkante und nächster Oberkante; Punkte
+        über/unter dem Text treffen die erste/letzte Zeile, links/rechts daneben deren
+        Anfang/Ende. Grenzen ohne Breite (z. B. vor einem kombinierenden Akzent) zählen
+        nicht – getroffen wird die Stelle hinter dem ganzen Zeichen.
+        """
+        lines = self.lines
+        line = lines[sum(1 for above, below in zip(lines, lines[1:])
+                         if y >= (above.top + above.height + below.top) / 2)]
+        stops = line.stops
+        candidates = [k for k in range(len(stops))
+                      if k == len(stops) - 1 or stops[k] != stops[k + 1]]
+        return line.start + min(candidates, key=lambda k: abs(stops[k] - x))
+
+    def selection_rects(self, a: int, b: int) -> list[tuple[float, float, float, float]]:
+        """Markierung zwischen ``a`` und ``b`` (Reihenfolge egal): ein Rechteck
+        (x, y, w, h) je betroffener Zeile über die ganze Zeilenhöhe; ein markierter
+        Absatzwechsel verlängert seine Zeile um ``break_width``. Die Rechtecke folgen den
+        Zeichengrenzen – den nach rechts überhängenden Kopf der Ersatzkursive decken sie
+        nicht ab."""
+        a, b = sorted((self._clamp(a), self._clamp(b)))
+        rects = []
+        for line in self.lines:
+            if line.end < a or line.start > b:
+                continue
+            x1 = line.stops[max(a, line.start) - line.start]
+            x2 = line.stops[min(b, line.end) - line.start]
+            if b > line.end:
+                x2 += line.break_width
+            if x2 > x1:
+                rects.append((x1, line.top, x2 - x1, line.height))
+        return rects
+
+    def anchor(self, align: str) -> tuple[float, float]:
+        """Punkt, der beim Tippen stehen bleibt (``layout.anchor_after_edit``): senkrecht die
+        Oberkante (Ascender-Linie) der ersten Zeile, waagerecht die Bezugskante des Blocks –
+        Anfang (links, Blocksatz), Ende (rechts) bzw. Mitte (zentriert) der breitesten Zeile.
+
+        Bezug sind Schriftmaße, nicht die Tinte: eine Oberlänge oder ein „j“ am Zeilenanfang
+        verschiebt den Rahmen (Tintenbox), aber nicht den Text. Die Zeile, in die getippt
+        wird, bleibt stehen, solange sie die breiteste ist oder ihre Ausrichtung zur
+        Bezugskante passt; bei gemischten Ausrichtungen gilt die linke Kante.
+        """
+        if align not in ALIGNMENTS:
+            raise ValueError(f"Unbekannte Textposition {align!r} – erlaubt: links, zentriert, "
+                             "rechts, Blocksatz (left, center, right, justify)")
+        left = min(line.stops[0] for line in self.lines)
+        right = max(line.stops[-1] for line in self.lines)
+        share = {"left": 0.0, "justify": 0.0, "center": 0.5, "right": 1.0}[align]
+        return left + share * (right - left), self.lines[0].top
+
+    def _clamp(self, pos: int) -> int:
+        return min(max(pos, 0), self.lines[-1].end)
+
+    def _line_at(self, pos: int) -> LayoutLine:
+        pos = self._clamp(pos)
+        return next(line for line in self.lines if line.start <= pos <= line.end)
+
+
+def to_utf16(text: str, pos: int) -> int:
+    """Position in Zeichen (Codepunkte, wie ``TextLayout``) → Position in UTF-16-Einheiten
+    (wie ``QTextDocument``: Zeichen außerhalb der BMP zählen doppelt); ``text`` wie
+    ``TextObject.text`` (Absatzwechsel = „\\n“)."""
+    pos = min(max(pos, 0), len(text))
+    return pos + sum(1 for char in text[:pos] if ord(char) > 0xFFFF)
+
+
+def from_utf16(text: str, pos16: int) -> int:
+    """Umkehrung von ``to_utf16``; eine Position mitten in einem Ersatzzeichenpaar zählt als
+    die vor dem Zeichen."""
+    units = 0
+    for i, char in enumerate(text):
+        units += 2 if ord(char) > 0xFFFF else 1
+        if units > pos16:
+            return i
+    return len(text)
+
+
+def _layout_line(text: str, pieces: list[_Piece], start: int, x0: int, y0: int) -> LayoutLine:
+    """Zeichengrenzen und Schreibmarken einer Zeile aus ihren gesetzten Stücken."""
+    stops = [0.0] * (len(text) + 1)
+    for p in pieces:
+        t = p.text
+        prefix = [p.font.getlength(t[:k], "L") for k in range(len(t) + 1)]
+        for j in range(len(t) + 1):
+            # Ursprung von Zeichen j, wie gezeichnet – samt Unterschneidung zum Zeichen davor
+            # („To“: das „o“ rückt unter das „T“); ein Zeichen ohne eigene Breite (kombinierender
+            # Akzent) steht an der Grenze davor; das Ende ist die Länge des ganzen Stücks
+            if j == len(t) or prefix[j + 1] == prefix[j]:
+                advance = prefix[j]
+            else:
+                advance = prefix[j + 1] - p.font.getlength(t[j], "L")
+            stops[p.start + j] = x0 + p.x + advance
+    # Stück je Zeichen: das letzte, das davor beginnt – ein Leerzeichen im Blocksatz gehört
+    # so zum Wort davor (gleiches Textstück), ein leeres Stück zum folgenden
+    owner, i = [], 0
+    for k in range(len(text)):
+        while i + 1 < len(pieces) and pieces[i + 1].start <= k:
+            i += 1
+        owner.append(pieces[i])
+    marks = []
+    for j in range(len(text) + 1):
+        p = owner[j - 1] if j else owner[0] if owner else pieces[0]
+        ascent, descent = p.font.getmetrics()
+        marks.append((y0 + p.y, ascent + descent))
+    top = min(p.y for p in pieces)
+    baseline = max(p.y + p.font.getmetrics()[0] for p in pieces)
+    bottom = max(p.y + sum(p.font.getmetrics()) for p in pieces)
+    last = owner[-1] if owner else pieces[0]
+    return LayoutLine(start, tuple(stops), tuple(marks), y0 + top, y0 + baseline, bottom - top,
+                      last.font.getlength(" ", "L"))
 
 
 def _block_box(lines: list[list[_Piece]]) -> tuple[int, int, int, int]:

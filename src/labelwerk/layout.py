@@ -2,13 +2,15 @@
 
 Alle Rechtecke in mm in Leserichtung, Ursprung = linke obere Ecke des Etiketts
 (wie ``TextObject.x_mm``/``y_mm``). Die GUI rechnet nur in Bildschirmkoordinaten um.
+Ausnahme Schreibmodus (``to_object``/``from_object``): Punkte in Druckpunkten wie
+``RenderedObject`` und ``TextLayout`` – so rechnet die Arbeitsfläche ohne Umweg über mm.
 """
 from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field, replace
 
-from .document import MAX_PT, MIN_PT, Document, TextObject
+from .document import MAX_PT, MIN_PT, ROTATIONS, Document, TextObject
 from .labels import DPI, get_label
 from .render import (PT, REF_PT, RenderedObject, span_dots, label_margins, label_size,
                      render_object)
@@ -510,3 +512,77 @@ def to_grid(obj: TextObject, x: bool = False, y: bool = False, w: bool = False,
 def _rounded(rect: Rect) -> Rect:
     """Rahmen fürs Modell: auf 1/1000 mm gerundet."""
     return Rect(*(round(v, _DECIMALS) for v in (rect.x, rect.y, rect.w, rect.h)))
+
+
+# --- Schreibmodus -------------------------------------------------------------------
+def to_object(point: tuple[float, float], rendered: RenderedObject,
+              rotation: int) -> tuple[float, float]:
+    """Punkt auf dem Etikett (Druckpunkte in Leserichtung) → Objektkoordinaten: Druckpunkte
+    relativ zur linken oberen Ecke des Rahmens vor der Drehung (wie ``TextLayout``).
+
+    ``rendered``: das gerenderte Objekt (Rahmen nach der Drehung), ``rotation`` seine Drehung.
+    Punkte außerhalb des Rahmens bleiben gültig (Treffer im überstehenden Text).
+    """
+    return _to_frame(point, (rendered.x, rendered.y, rendered.w, rendered.h), rotation)
+
+
+def from_object(point: tuple[float, float], rendered: RenderedObject,
+                rotation: int) -> tuple[float, float]:
+    """Umkehrung von ``to_object``: Objektkoordinaten → Punkt auf dem Etikett (Druckpunkte)."""
+    return _from_frame(point, (rendered.x, rendered.y, rendered.w, rendered.h), rotation)
+
+
+def _unturned(frame: tuple[float, float, float, float], rotation: int) -> tuple[float, float]:
+    """Rahmengröße (Breite, Höhe) vor der Drehung."""
+    if rotation not in ROTATIONS:
+        raise ValueError(f"Unbekannte Drehung {rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
+    _, _, w, h = frame
+    return (h, w) if rotation in (90, 270) else (w, h)
+
+
+def _from_frame(point: tuple[float, float], frame: tuple[float, float, float, float],
+                rotation: int) -> tuple[float, float]:
+    """Punkt im ungedrehten Rahmen → Etikett; ``frame`` (x, y, w, h) nach der Drehung, in
+    beliebiger Einheit. Gedreht wird im Uhrzeigersinn wie ``render._turn``."""
+    u, v = point
+    x, y = frame[:2]
+    w, h = _unturned(frame, rotation)
+    return {0: (x + u, y + v), 90: (x + h - v, y + u),
+            180: (x + w - u, y + h - v), 270: (x + v, y + w - u)}[rotation]
+
+
+def _to_frame(point: tuple[float, float], frame: tuple[float, float, float, float],
+              rotation: int) -> tuple[float, float]:
+    """Umkehrung von ``_from_frame``."""
+    px, py = point[0] - frame[0], point[1] - frame[1]
+    w, h = _unturned(frame, rotation)
+    return {0: (px, py), 90: (py, h - px), 180: (w - px, h - py), 270: (w - py, px)}[rotation]
+
+
+def anchor_align(obj: TextObject) -> str:
+    """Textposition, nach der sich der Rahmen beim Wachsen richtet (``anchor_after_edit``):
+    die gemeinsame der Absätze; haben sie verschiedene, bleibt die linke Kante („left“)."""
+    aligns = {para.align for para in obj.paragraphs}
+    return aligns.pop() if len(aligns) == 1 else "left"
+
+
+def anchor_after_edit(obj: TextObject, old: RenderedObject,
+                      new: RenderedObject) -> tuple[float, float]:
+    """Neue Position (``x_mm``, ``y_mm``) eines Objekts ohne feste Rahmengröße, nachdem sein
+    Text beim Tippen gewachsen oder geschrumpft ist – der Text bleibt stehen.
+
+    ``obj``: das bearbeitete Objekt, noch an der alten Position; ``old``: gerendert vor der
+    Bearbeitung, ``new``: ``obj`` gerendert. Fest bleibt der Punkt ``TextLayout.anchor`` zur
+    Textposition ``anchor_align(obj)``: in Leserichtung des Texts die linke Kante (links,
+    Blocksatz, gemischt), die rechte Kante (rechts) bzw. die Mitte (zentriert) und in der
+    Höhe die Oberkante der ersten Zeile – bei gedrehten Objekten entsprechend gedreht.
+    Nur für Objekte mit Position: eines ohne Position bleibt mittig auf dem Etikett, der
+    Aufrufer setzt dort keine Position.
+    """
+    align = anchor_align(obj)
+    start = exact_rect(obj, old)
+    # Lage des festen Punkts relativ zur linken oberen Ecke des Rahmens (Druckpunkte)
+    ox, oy = from_object(old.layout.anchor(align), old, obj.rotation)
+    nx, ny = from_object(new.layout.anchor(align), new, obj.rotation)
+    return (round(start.x + _mm(ox - old.x) - _mm(nx - new.x), _DECIMALS),
+            round(start.y + _mm(oy - old.y) - _mm(ny - new.y), _DECIMALS))
