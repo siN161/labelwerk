@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "labelwerk"
+version = "0.1.0"
+description = "Etiketten gestalten und drucken auf Brother-QL-Druckern unter Linux"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.10"
+dependencies = [
+    "brother_ql-inventree>=1.3",
+    "pillow>=10",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+labelwerk = "labelwerk.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/labelwerk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
