@@ -15,6 +15,7 @@ from .clipart import RECENT_LIMIT
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .fonts import DEFAULT_FAMILY
 from .labels import labels_for_model
+from .storage import RECENT_FILES
 
 THEMES = ("rawblock", "classic")
 SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")
@@ -34,6 +35,8 @@ class Settings:
     image_rotate: bool = False             # Bilder drehen, wenn sie nur gedreht 1:1 passen
     symbols_recent: list[str] = field(default_factory=list)      # Symbol-ids, neueste zuerst
     symbols_favorites: list[str] = field(default_factory=list)   # Symbol-ids
+    recent_files: list[str] = field(default_factory=list)   # Zuletzt geöffnet (Pfade), neueste zuerst
+    start_favorite: str | None = None      # Favorit, mit dem labelwerk startet; None = leer
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
@@ -58,6 +61,8 @@ def _rules(model: str) -> dict:
         "image_rotate": lambda v: isinstance(v, bool),
         "symbols_recent": lambda v: isinstance(v, list),
         "symbols_favorites": lambda v: isinstance(v, list),
+        "recent_files": lambda v: isinstance(v, list),
+        "start_favorite": lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
     }
 
 
@@ -93,6 +98,8 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
                 value = float(value)
             elif key in SYMBOL_LISTS:
                 value = _symbol_ids(key, value, settings.warnings)
+            elif key == "recent_files":
+                value = _text_list(key, value, settings.warnings)[:RECENT_FILES]
             setattr(settings, key, value)
         else:
             settings.warnings.append(f"Einstellung {key!r} ungültig ({value!r}) – "
@@ -103,13 +110,18 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
     return settings
 
 
-def _symbol_ids(key: str, value: list, warnings: list[str]) -> list[str]:
-    """Symbol-ids: ungültige Einträge einzeln verworfen (mit Hinweis), Doppelte entfernt,
-    Zuletzt verwendet auf ``RECENT_LIMIT`` begrenzt."""
+def _text_list(key: str, value: list, warnings: list[str]) -> list[str]:
+    """Liste von Texten: ungültige Einträge einzeln verworfen (mit Hinweis), Doppelte entfernt."""
     valid = [i for i in value if isinstance(i, str) and i]
     if len(valid) != len(value):
         warnings.append(f"Einstellung {key!r}: ungültige Einträge verworfen.")
-    ids = list(dict.fromkeys(valid))
+    return list(dict.fromkeys(valid))
+
+
+def _symbol_ids(key: str, value: list, warnings: list[str]) -> list[str]:
+    """Symbol-ids: ungültige Einträge einzeln verworfen (mit Hinweis), Doppelte entfernt,
+    Zuletzt verwendet auf ``RECENT_LIMIT`` begrenzt."""
+    ids = _text_list(key, value, warnings)
     return ids[:RECENT_LIMIT] if key == "symbols_recent" else ids
 
 

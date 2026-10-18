@@ -44,6 +44,8 @@ class SettingsDialog(QDialog):
         self.path = path
         self.saved: Settings | None = None
         self._symbols = (settings.symbols_recent, settings.symbols_favorites)   # nur durchgereicht
+        self._recent_files = settings.recent_files                             # nur durchgereicht
+        self._start_favorite = settings.start_favorite
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
@@ -292,6 +294,8 @@ class SettingsDialog(QDialog):
             image_rotate=self.image_rotate.isChecked(),
             symbols_recent=list(self._symbols[0]),
             symbols_favorites=list(self._symbols[1]),
+            recent_files=list(self._recent_files),
+            start_favorite=self._start_favorite,
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},
         )

@@ -261,3 +261,31 @@ def test_save_is_atomic_and_leaves_no_temp_files(tmp_path, monkeypatch):
         save_settings(Settings(margin_mm=5), path)
     assert load_settings(path).margin_mm == 3.0          # alte Datei unversehrt
     assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
+
+
+# --- Dateien ------------------------------------------------------------------------
+def test_recent_files_and_start_favorite_default_and_roundtrip(tmp_path):
+    s = Settings()
+    assert (s.recent_files, s.start_favorite) == ([], None)
+    path = tmp_path / "s.json"
+    save_settings(Settings(recent_files=["/a.labelwerk", "/b.labelwerk"], start_favorite="Absender"),
+                  path)
+    loaded = load_settings(path)
+    assert loaded.recent_files == ["/a.labelwerk", "/b.labelwerk"]
+    assert loaded.start_favorite == "Absender" and loaded.warnings == []
+
+
+def test_recent_files_are_cleaned_when_loading(tmp_path):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"recent_files": [f"/{i}.labelwerk" for i in range(12)] + ["/0.labelwerk", 3]}))
+    s = load_settings(path)
+    assert s.recent_files == [f"/{i}.labelwerk" for i in range(10)]
+    assert any("recent_files" in w for w in s.warnings)
+
+
+@pytest.mark.parametrize("value", [3, "", "  "])
+def test_invalid_start_favorite_falls_back(tmp_path, value):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"start_favorite": value}))
+    s = load_settings(path)
+    assert s.start_favorite is None and any("start_favorite" in w for w in s.warnings)

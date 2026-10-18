@@ -161,7 +161,7 @@ class ImageObject:
         """Ausschnitt (l, t, r, b) in Pixeln – ohne ``crop`` das ganze Bild."""
         if self.crop is not None:
             return self.crop
-        with Image.open(io.BytesIO(self.png)) as img:   # liest nur den Kopf der Datei
+        with Image.open(io.BytesIO(self.png), formats=["PNG"]) as img:   # nur den Kopf
             return (0, 0, *img.size)
 
     def natural_mm(self) -> tuple[float, float]:
@@ -171,7 +171,7 @@ class ImageObject:
 
     def image(self) -> Image.Image:
         """Das Original als RGB-Bild."""
-        with Image.open(io.BytesIO(self.png)) as img:
+        with Image.open(io.BytesIO(self.png), formats=["PNG"]) as img:
             return img.convert("RGB")
 
 

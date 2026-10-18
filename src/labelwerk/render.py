@@ -553,7 +553,7 @@ def _vector_source(svg: bytes, png: bytes, crop: tuple[int, int, int, int] | Non
                    size: tuple[int, int], keep_ratio: bool) -> Image.Image:
     """Wie ``_scaled_source``, aber neu gerastert statt skaliert: das Blatt so groß, dass der
     Ausschnitt (Pixel der Vorschau-PNG) genau ``size`` füllt – scharf in jeder Größe."""
-    with Image.open(io.BytesIO(png)) as img:     # liest nur den Kopf der Datei
+    with Image.open(io.BytesIO(png), formats=["PNG"]) as img:     # liest nur den Kopf
         sheet = img.size
     l, t, r, b = crop if crop is not None else (0, 0, *sheet)
     _check_crop((l, t, r, b), sheet)
@@ -598,7 +598,7 @@ def _source(png: bytes, crop: tuple[int, int, int, int] | None) -> Image.Image:
     eines ``bytes``-Objekts, der Schlüssel kostet nach dem ersten Mal fast nichts.
     Das Ergebnis wird geteilt und darf nicht verändert werden.
     """
-    with Image.open(io.BytesIO(png)) as img:
+    with Image.open(io.BytesIO(png), formats=["PNG"]) as img:
         img = img.convert("RGB")
     if crop is not None:
         _check_crop(crop, img.size)
