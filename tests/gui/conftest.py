@@ -1,6 +1,9 @@
 import os
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"   # immer, auch wenn die Sitzung wayland/xcb vorgibt
+# Sitzungsbus ins Leere: kein Test erreicht echte Dienste (Bildschirmfoto-Portal öffnete eine
+# Auswahl auf dem Bildschirm); Tests mit D-Bus nutzen einen eigenen Bus mit eigener Adresse
+os.environ["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/labelwerk-test-bus"
 
 try:
     import PySide6  # noqa: F401
@@ -21,6 +24,14 @@ else:
         """Jeder Test beginnt mit leerer Zwischenablage des Systems – „Einfügen“ folgt ihr."""
         qapp.clipboard().clear()
         yield
+
+    @pytest.fixture(autouse=True)
+    def no_session_bus(monkeypatch):
+        """Zusätzlich zur Adresse ins Leere: das Bildschirmfoto-Modul bekommt statt des
+        Sitzungsbusses eine nie verbundene Verbindung."""
+        from PySide6.QtDBus import QDBusConnection
+        monkeypatch.setattr("labelwerk.gui.screenshot.session_bus",
+                            lambda: QDBusConnection("labelwerk-test-kein-bus"))
 
     @pytest.fixture(autouse=True)
     def no_printer(monkeypatch):
