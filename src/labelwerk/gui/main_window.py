@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import math
 import uuid
+import zipfile
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -27,7 +28,8 @@ from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, 
                       set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
 from ..render import Renderer, RenderedObject, font_warnings, set_svg_rasterizer
-from ..settings import Settings, load_settings, new_document
+from ..settings import Settings, load_settings, new_document, save_settings
+from .. import clipart
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
@@ -39,6 +41,7 @@ from .panels.image import CROP_FAILED
 from .panels.text import DEFAULT_PT
 from .print_worker import PrintWorker
 from .screenshot import FAILED as SCREENSHOT_FAILED, ScreenshotPortal
+from .symbol_dialog import SymbolDialog
 from .settings_dialog import SettingsDialog
 from .symbols import SIZE, line_icon
 from .text_edit_mode import TextEditSession
@@ -59,6 +62,8 @@ TURNED_HINT = "Bild um 90° gedreht, damit es 1:1 passt"
 NO_CLIPBOARD_IMAGE = "Kein Bild in der Zwischenablage."
 NO_SCREENSHOT = ("Bildschirmfoto nicht verfügbar (kein XDG-Portal) – mit dem System-Werkzeug in "
                  "die Zwischenablage kopieren und mit Strg+V einfügen")
+SYMBOL_MM = 15.0           # Symbol: längere Seite beim Einfügen (höchstens quer zum Band)
+SYMBOL_SOURCE = "Symbol: {name}"
 HIDE_DELAY_MS = 300        # Bildschirmfoto: so lange nimmt der Desktop das Fenster weg
 RESTORE_TIMEOUT_MS = 300_000  # Sicherheitsnetz nur für Portale, die nie antworten: so lange kann
                               # eine Auswahl offen sein, erst danach kommt das Fenster trotzdem wieder
@@ -107,6 +112,8 @@ class MainWindow(QMainWindow):
         self._notice: str | None = None             # Meldung zum Einfügen von Bildern
         self._image_dir = ""                        # Ordner des zuletzt eingefügten Bilds
         self._portal: ScreenshotPortal | None = None   # Bildschirmfoto (beim ersten Gebrauch)
+        self.symbol_window: SymbolDialog | None = None  # „Symbol einfügen“ (beim ersten Gebrauch)
+        self._symbols_were_open = False             # Bildschirmfoto: Symbol-Fenster mit ausgeblendet
         self._shooting = False                      # Fenster für ein Bildschirmfoto ausgeblendet
         self._quit_on_close = True                  # Einstellung der App vor dem Ausblenden
         self._shot_pending = False                  # Antwort des Portals steht noch aus
@@ -168,6 +175,7 @@ class MainWindow(QMainWindow):
         self.canvas.selection_changed.connect(self._update_edit_actions)
         self.canvas.object_clicked.connect(self._show_object_panel)
         self.canvas.dropped.connect(self._dropped)
+        self.canvas.symbol_dropped.connect(self._symbol_dropped)
         self.history = History(self.doc)
         self.history.changed.connect(self._update_edit_actions)
         self._connect_view_actions()
@@ -281,7 +289,8 @@ class MainWindow(QMainWindow):
                     "tool.select": lambda: self._choose_tool("select"),
                     "tool.text": lambda: self._choose_tool("text"),
                     "image.insert": self.insert_image_file,
-                    "image.screenshot": self.insert_screenshot}
+                    "image.screenshot": self.insert_screenshot,
+                    "image.symbol": self.open_symbols}
         handlers["text.start_edit"] = handlers["text.start_edit_enter"] = self.edit_selected
         for key, handler in handlers.items():
             self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
@@ -970,6 +979,10 @@ class MainWindow(QMainWindow):
             return
         self._shooting = self._shot_pending = True
         self.shortcut_actions["image.screenshot"].setEnabled(False)
+        # das Symbol-Fenster ist eigenes Fenster: mit ausblenden, sonst ist es mit auf dem Foto
+        self._symbols_were_open = self.symbol_window is not None and self.symbol_window.isVisible()
+        if self._symbols_were_open:
+            self.symbol_window.hide()
         # ausgeblendet ist kein Fenster mehr sichtbar: schlösse sich jetzt ein anderes, endete
         # die App sonst
         app = QApplication.instance()
@@ -1017,8 +1030,69 @@ class MainWindow(QMainWindow):
             return
         self._end_shooting()
         self.show()
+        if self._symbols_were_open:
+            self.symbol_window.show()
+            self._symbols_were_open = False
         self.raise_()
         self.activateWindow()
+
+    # --- Symbole -------------------------------------------------------------
+    def open_symbols(self) -> None:
+        """Fenster „Symbol einfügen“ zeigen (eine Instanz, bleibt offen)."""
+        self.finish_editing()
+        if self.symbol_window is None:
+            self.symbol_window = SymbolDialog(self.settings.symbols_recent,
+                                              self.settings.symbols_favorites, self)
+            self.symbol_window.chosen.connect(lambda symbol: self.insert_symbol(symbol))
+            self.symbol_window.favorites_changed.connect(self._favorites_changed)
+        self.symbol_window.show()
+        self.symbol_window.raise_()
+        self.symbol_window.activateWindow()
+
+    def insert_symbol(self, symbol: clipart.Symbol, at: tuple[float, float] | None = None) -> None:
+        """Symbol als Bild-Objekt einfügen: längere Seite ``SYMBOL_MM`` (höchstens quer zum
+        Band bedruckbar), auf den Inhalt zugeschnitten, Strich, Vektor wenn SVG; Platzierung wie
+        Bilder; danach „Zuletzt verwendet“."""
+        if self._timer.isActive():
+            self.render_now()                       # aktueller bedruckbarer Bereich
+        try:
+            image, dpi, crop, svg = image_import.load_symbol(symbol, self._symbol_mm())
+        except (ValueError, OSError, KeyError, zipfile.BadZipFile,
+                Image.DecompressionBombError) as e:
+            self._show_notice([f"Symbol: {e}"], "error")
+            return
+        obj = ImageObject.from_image(image, dpi, SYMBOL_SOURCE.format(name=symbol.name),
+                                     crop=crop, svg=svg)
+        # Größe passt schon quer zum Band – Drehen nach Einstellung gilt für Symbole nicht
+        self._insert_images([obj], at, [] if crop is not None else [CROP_FAILED], rotate=False)
+        self.settings.symbols_recent = clipart.add_recent(self.settings.symbols_recent, symbol.id)
+        self._save_settings()
+        if self.symbol_window is not None:
+            self.symbol_window.set_recent(self.settings.symbols_recent)
+
+    def _symbol_mm(self) -> float:
+        """Größe neuer Symbole: ``SYMBOL_MM``, höchstens der bedruckbare Bereich quer zum Band
+        (in der mitwachsenden Achse begrenzt das Etikett nicht)."""
+        grow = growing_axis(self.doc)
+        cross = (self._area.h if grow == "x" else self._area.w if grow == "y"
+                 else min(self._area.w, self._area.h))
+        return max(1.0, math.floor(min(SYMBOL_MM, cross) * 1000) / 1000)   # nie knapp zu groß
+
+    def _symbol_dropped(self, symbol_id: str, x_mm: float, y_mm: float) -> None:
+        symbol = clipart.find(symbol_id)
+        if symbol is not None:
+            self.insert_symbol(symbol, at=(x_mm, y_mm))
+
+    def _favorites_changed(self, favorites: list[str]) -> None:
+        self.settings.symbols_favorites = list(favorites)
+        self._save_settings()
+
+    def _save_settings(self) -> None:
+        """Einstellungen still speichern (Zuletzt verwendet, Favoriten); Fehler in die Statusleiste."""
+        try:
+            save_settings(self.settings)
+        except OSError as e:
+            self._set_result(str(e), "error")
 
     def _end_shooting(self) -> None:
         self._shooting = False
@@ -1055,7 +1129,7 @@ class MainWindow(QMainWindow):
         return ImageObject.from_image(image, dpi, source, page, crop, svg)
 
     def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
-                       notes: list[str], state: str = "warn") -> None:
+                       notes: list[str], state: str = "warn", rotate: bool | None = None) -> None:
         """Bilder platzieren (``layout.insert_placement``: mittig; passt ein Bild nur um 90°
         gedreht 1:1, kommt es mit Einstellung ``image_rotate`` gedreht; auf einem Endlosband mit automatischer Länge hinter den
         vorhandenen Objekten statt darüber, sonst wird ein zu großes proportional verkleinert und
@@ -1071,7 +1145,8 @@ class MainWindow(QMainWindow):
             for number, obj in enumerate(objects):
                 rect, rotation, factor = insert_placement(self.doc, self.model, self._area,
                                                           (obj.w_mm, obj.h_mm), at, others,
-                                                          rotate=self.settings.image_rotate)
+                                                          rotate=self.settings.image_rotate
+                                                          if rotate is None else rotate)
                 others.append(rect)
                 shift = number * PASTE_OFFSET_MM if at is not None or not growing_axis(
                     self.doc) else 0.0
@@ -1163,6 +1238,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self._printer_timer.stop()
+        if self.symbol_window is not None:
+            self.symbol_window.close()              # sonst hielte es die App offen
         self._restore_timer.stop()
         self._shot_pending = False                  # keine Auswahl und kein Einfügen mehr
         if self._shooting:

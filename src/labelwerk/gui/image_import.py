@@ -17,8 +17,9 @@ from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QMimeData, QRectF, Qt
 from PySide6.QtGui import QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-from .. import files
-from ..imaging import MAX_PIXELS, on_white
+from .. import clipart, files
+from ..clipart import Symbol
+from ..imaging import MAX_DPI, MAX_PIXELS, on_white
 from ..labels import DPI
 
 SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".pdf")
@@ -29,6 +30,9 @@ CLIPBOARD = "Zwischenablage"                    # Quelle eines eingefügten Bild
 DROPPED = "Abgelegtes Bild"
 SCREENSHOT = "Bildschirmfoto"
 MIME_OBJECTS = "application/x-labelwerk-objects"   # kopierte Objekte (Kennung der Kopie)
+MIME_SYMBOL = "application/x-labelwerk-symbol"     # Symbol aus dem Fenster gezogen (id)
+SYMBOL_PROBE_PX = 512          # Symbol: erst grob rastern, um den Inhalt zu finden
+INK_LEVEL = 250                # heller als das zählt beim Zuschneiden eines Symbols als Papier
 SVG_DPI = 96                                    # SVG: 1 px = 1/96 in
 
 
@@ -121,6 +125,43 @@ def rasterize_svg(svg: bytes, size: tuple[int, int],
     if not renderer.isValid():
         raise ValueError("Vektorbild kann nicht gelesen werden (kein gültiges SVG).")
     return _render(renderer, size, region)
+
+
+def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tuple | None,
+                                                         bytes | None]:
+    """Symbol als Bild-Objekt-Zutaten: (Vorschau RGB, dpi, Ausschnitt, SVG-Bytes oder None).
+
+    Zugeschnitten auf die Tinte (nicht die Schnittmarken-Erkennung: umrandete Zeichen blieben
+    sonst nicht ganz); die längere Seite des Inhalts misst ``side_mm`` (Größe 1:1). Ganz weiß:
+    Ausschnitt None (ganzes Bild). Vektoren werden so gerastert, dass der Inhalt ``MAX_DPI`` hat
+    – die Vorschau aber höchstens ``MAX_PIXELS`` groß (winziger Inhalt auf großer Seite). Eigene
+    SVGs mit Verweisen auf andere Dateien werden Pixelbilder (wie ``load_vector``).
+    Unlesbar: ``ValueError``/``OSError``."""
+    data = clipart.data(symbol)
+    if clipart.is_vector(symbol):
+        linked = _EXTERNAL.search(data) is not None
+        renderer = QSvgRenderer(symbol.file) if linked else _svg_renderer(data)
+        size = renderer.defaultSize()
+        if not renderer.isValid() or size.isEmpty():
+            raise ValueError(f"Symbol {symbol.name} kann nicht gelesen werden (kein gültiges SVG).")
+        k = SYMBOL_PROBE_PX / max(size.width(), size.height())
+        probe = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
+        if box := _ink_box(_render(renderer, probe, (0, 0, *probe))):
+            k *= side_mm / 25.4 * MAX_DPI / max(box[2] - box[0], box[3] - box[1])
+        k = min(k, MAX_PIXELS / max(size.width(), size.height()))
+        sheet = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
+        image, svg = _render(renderer, sheet, (0, 0, *sheet)), None if linked else data
+    else:
+        with Image.open(io.BytesIO(data)) as img:
+            image, svg = on_white(img), None
+    crop = _ink_box(image)
+    l, t, r, b = crop or (0, 0, *image.size)
+    return image, max(r - l, b - t) * 25.4 / side_mm, crop, svg
+
+
+def _ink_box(image: Image.Image) -> tuple[int, int, int, int] | None:
+    """Umriss alles Nicht-Weißen; ganz weiß: None."""
+    return image.convert("L").point(lambda v: 255 if v < INK_LEVEL else 0).getbbox()
 
 
 _UNITS = {"": 1.0, "px": 1.0, "in": 96.0, "cm": 96 / 2.54, "mm": 96 / 25.4, "pt": 96 / 72,

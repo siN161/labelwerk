@@ -78,21 +78,28 @@ Online-Suche, Text in Symbolen, Zweifarbdruck (Farbe bleibt nur erhalten).
 
 - Reiter Bild, Bereich „Einfügen“: Knopf **SYMBOL …** (Aktion `image.symbol` „Symbol einfügen …“, ohne
   Standardkürzel, in den Einstellungen belegbar).
-- Fenster **„Symbol einfügen“** (nicht modal, bleibt offen, eine Instanz; Größe gemerkt nur für die Sitzung):
-  - oben Suche (wirkt sofort, über alle Gruppen bzw. die gewählte),
-  - links Gruppen: Zuletzt verwendet, Favoriten, Eigene, Elektro, Versand, Sicherheit, Allgemein,
-  - rechts Raster (Vorschau ca. 48 px, Tooltip: Name, Quelle, Lizenz), Bildlauf, große Gruppen schrittweise
-    geladen (kein Einfrieren bei ca. 5000 Icons),
-  - Einfügen: Doppelklick, Enter oder Ziehen aufs Etikett (an der Ablagestelle); ★-Knopf bzw. Kontextmenü
-    „Zu Favoriten“/„Aus Favoriten entfernen“,
+- Fenster **„Symbol einfügen“** (Werkzeugfenster des Hauptfensters – dessen Kürzel wie Strg+Z wirken
+  weiter; nicht modal, bleibt offen, eine Instanz; Größe gemerkt nur für die Sitzung):
+  - oben Suche (wirkt sofort, über die ganze Bibliothek – Gruppe und Untergruppe gelten dann nicht; eine
+    Gruppe wählen beendet die Suche; Enter fügt den ersten Treffer ein, Pfeil runter führt ins Raster),
+  - links Gruppen: Zuletzt verwendet, Favoriten, Elektro, Versand, Sicherheit, Allgemein, Eigene (Start:
+    Zuletzt verwendet, wenn es dort etwas gibt, sonst Elektro); Untergruppe als Auswahl bei großen Gruppen,
+  - rechts Raster (Vorschau ca. 48 px, doppelt fein gerastert; nur sichtbare werden gerastert, höchstens
+    3000 gemerkt; Tooltip: Name, Quelle, Lizenz), große Gruppen schrittweise geladen,
+  - Einfügen: Doppelklick (genau einmal), Enter, Knopf EINFÜGEN, Kontextmenü oder Ziehen aufs Etikett (an der
+    Ablagestelle); ☆/★-Knopf (gedrückt schwarz) bzw. Kontextmenü „Zu Favoriten“/„Aus Favoriten entfernen“;
+    Esc schließt,
   - Tabler-Icons zeigen outline; filled als eigene Einträge (Name mit „gefüllt“).
 - **Einfügen:** Bild-Objekt (Vektorbild) mit Quelle „Symbol: Name“, längere Seite **15 mm** (höchstens der
   bedruckbare Bereich quer zum Band), Strich, Seitenverhältnis an, Zuschnitt auf den Inhalt (immer, unabhängig
   von der Einstellung – Symbole haben Ränder im viewBox); Platzierung wie Bilder (`insert_placement`: Mitte,
-  Endlosband hinter vorhandenem Inhalt; Drehen nach Einstellung entfällt, 15 mm passen immer). Ausgewählt,
+  Endlosband hinter vorhandenem Inhalt; Drehen nach Einstellung entfällt, die Größe ist auf 0,001 mm
+  abgerundet, passt also immer). Ganz weißes Symbol: nicht zugeschnitten, Hinweis. Eigene SVG mit Verweisen
+  auf andere Dateien: Pixelbild. Winziger Inhalt auf großer Seite: Vorschau höchstens 6000 Pixel. Ausgewählt,
   ein Rückgängig-Schritt; „Zuletzt verwendet“ wird aktualisiert und gespeichert.
 - Farbige Zeichen (ISO 7010) werden über Strich/Schwelle schwarz-weiß; das Original bleibt farbig.
-- Fehler (Archiv defekt, eigene Datei unlesbar) → Meldung in der Statusleiste, kein Traceback.
+- Fehler (Archiv defekt, eigene Datei unlesbar, zu groß) → Meldung in der Statusleiste, kein Traceback.
+- Bildschirmfoto: ein offenes Symbol-Fenster wird mit ausgeblendet und danach wieder gezeigt.
 
 ## Tests
 

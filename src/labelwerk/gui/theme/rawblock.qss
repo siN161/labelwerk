@@ -168,3 +168,14 @@ QStatusBar QToolButton:hover { background: #000000; color: #FFFFFF; }
 
 QGraphicsView { border: none; }
 QToolTip { background: #000000; color: #FFFFFF; border: none; padding: 8px 12px; font-family: "Space Mono", "DejaVu Sans Mono", monospace; }
+
+/* Fenster „Symbol einfügen“: Suche, Gruppen, Raster */
+QLineEdit#symbolSearch { background: #F0F0F0; border: 3px solid #000000; border-radius: 0; padding: 4px 6px; }
+QLineEdit#symbolSearch:focus { border-width: 5px; }
+QListWidget#symbolGroups, QListView#symbolGrid {
+    border: 3px solid #000000;
+    selection-background-color: #000000;
+    selection-color: #FFFFFF;
+}
+QListWidget#symbolGroups::item { padding: 4px 6px; }
+QListWidget#symbolGroups::item:selected, QListView#symbolGrid::item:selected { background: #000000; color: #FFFFFF; }
