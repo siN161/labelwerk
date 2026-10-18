@@ -276,3 +276,25 @@ def test_paper_sections_put_orientation_above_margins_and_frame(qtbot):
                 if isinstance(layout_.itemAt(i).widget(), QLabel)
                 and layout_.itemAt(i).widget().property("role") == "section"]
     assert sections == ["ETIKETT", "LÄNGE", "AUSRICHTUNG", "RÄNDER", "RAHMEN"]
+
+
+def test_pasted_text_starts_in_the_inner_room(qtbot):
+    win = _window(qtbot, Document("62x29", objects=[], frame=Frame("single")))
+    inner = layout.frame_area(win.doc)
+    win._paste_text("Eingefügt")
+    obj = win.doc.objects[-1]
+    assert (obj.x_mm, obj.y_mm) == pytest.approx((inner.x, inner.y), abs=0.001)
+
+
+def test_typed_font_size_counts_when_printing_right_away(qtbot, monkeypatch):
+    """Auch eine editierbare Auswahlliste (Schriftgröße) übernimmt Getipptes vor dem Drucken."""
+    win = _window(qtbot, Document("62x29", objects=[TextObject("Hallo", size_pt=10, x_mm=3, y_mm=3)]))
+    win.canvas.set_selection([0])
+    text = win.panel("text")
+    combo = text.size
+    combo.lineEdit().setText("24")
+    monkeypatch.setattr(main_window.QApplication, "focusWidget", lambda: combo)   # Fokus liegt am Feld
+    printed = []
+    monkeypatch.setattr(win, "_print", lambda image, doc, outside: printed.append(doc.objects[0]))
+    win.print_label()
+    assert printed[0].size_pt == 24

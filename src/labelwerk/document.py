@@ -207,5 +207,5 @@ class Document:
     frame: Frame | None = None        # Zierrahmen; None = keiner
 
     def is_empty(self) -> bool:
-        """True, wenn kein Objekt sichtbaren Inhalt hat."""
-        return all(obj.is_empty() for obj in self.objects)
+        """True, wenn nichts gedruckt würde: kein Objekt mit sichtbarem Inhalt und kein Rahmen."""
+        return self.frame is None and all(obj.is_empty() for obj in self.objects)

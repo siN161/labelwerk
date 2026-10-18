@@ -338,3 +338,18 @@ def test_renderer_reports_the_frame_mask():
     result = Renderer().render(doc)
     assert result.frame.tobytes() == frame_mask(doc, size=result.size).tobytes()
     assert Renderer().render(Document("62x29")).frame is None
+
+
+# --- Schlussreview ---------------------------------------------------------------------------
+@pytest.mark.parametrize("style", ["single", "double", "thick_thin", "dashed", "dotted", "corners"])
+def test_rounded_corners_stay_out_of_the_inner_room(style):
+    """Auch ohne Innenabstand reichen die Bögen nicht in den Innenraum (seine Ecken)."""
+    from labelwerk.render import frame_mask
+    doc = Document("62x29", frame=Frame(style, rounded=True, padding_mm=0))
+    x, y, w, h = frame_box(doc, size=(696, 271))
+    assert frame_mask(doc, size=(696, 271)).crop((x, y, x + w, y + h)).getbbox() is None
+
+
+def test_label_with_only_a_frame_is_not_empty():
+    assert not Document("62x29", frame=Frame()).is_empty()
+    assert Document("62x29").is_empty()

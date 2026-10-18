@@ -34,16 +34,19 @@ Rahmen als Voreinstellung für neue Etiketten (dafür gibt es Favoriten).
   kürzere Seite des bedruckbaren Bereichs − 2 × `inset_mm`); `rounded` gilt dort nicht, `corners` ergibt
   keinen Rahmen und wird in der GUI nicht angeboten (Datei mit `corners` auf rundem Etikett: wie `single`).
   Innenraum = Quadrat im Kreis.
-- **Zeichnen:** `render.draw_frame(img, doc, size)` in Druckpunkten (300 dpi, Pillow, schwarz), in
-  `compose`/`render_document` vor den Objekten; Vorschau = Druck. Pixelgenau: Linien liegen ganz innerhalb
+- **Zeichnen:** `render.frame_mask(doc, model, size)` (Maske in Druckpunkten, 300 dpi, Pillow), in
+  `compose(..., frame=)`/`render_document` unter den Objekten; Vorschau = Druck. Pixelgenau: Linien liegen ganz innerhalb
   der Außenkante, Strichstärke = `round(line_mm · 300/25,4)`, mindestens 1 Punkt.
 - **Innenraum:** `_Sheet.room()` und das mittige Platzieren (`_place`) rechnen ohne Rahmenstärke und
-  `padding_mm` (Innenabstand je Seite = `inset_mm` + Rahmenbreite + `padding_mm`); die automatische
+  `padding_mm` (Innenabstand je Seite = `inset_mm` + Rahmenbreite + `padding_mm`; abgerundet mindestens so
+  viel, dass die Bögen nicht in die Ecken des Innenraums reichen); die automatische
   Länge (`_label_size`) legt den Innenabstand in Bandlaufrichtung zusätzlich zu. Frei platzierte
   Objekte bleiben, wo sie sind (Lage relativ zum Etikett wie bisher).
 - `layout.frame_area(doc, model, size) -> Rect | None` (mm, Innenraum) für Ausrichten und Einrasten.
-- **Renderer-Cache:** `frame` gehört zum Kontext (Änderung → Etikett neu, Objekte nur, wenn sich der
-  Innenraum für sie ändert, d. h. nicht positionierte).
+- **Renderer-Cache:** `frame` gehört zum Kontext aller Objekte (eine Rahmen-Änderung misst alle neu –
+  selten, und Bilder kommen aus dem Skalier-Cache); die Maske wird nur bei geändertem Rahmen, Etikett
+  oder Größe neu gezeichnet.
+- Ein Etikett mit nur einem Rahmen ist nicht „leer“ (keine Rückfrage beim Drucken).
 - **Speichern** (`storage.py`): Feld `frame` im Dokument (optional, `null` = kein Rahmen), Schema `FRAME`
   mit Arten und Grenzen; Version bleibt 1 (ältere Stände übergehen das Feld).
 

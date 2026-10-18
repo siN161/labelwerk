@@ -340,7 +340,12 @@ class _Sheet:
         if self.round:
             inset = (self.across - _circle_room(self)) // 2
             return inset, inset
-        pad = _dots(self.frame.inset_mm) + _band(self.frame, False) + _dots(self.frame.padding_mm)
+        band = _band(self.frame)
+        inner = band + _dots(self.frame.padding_mm)
+        if self.frame.rounded:          # Ecken des Innenraums bleiben vor den Bögen (auch ohne Abstand)
+            r = _dots(FRAME_RADIUS_MM)  # größter Radius – kleinere Bögen ragen weniger weit
+            inner = max(inner, math.ceil(r - (r - band) / math.sqrt(2)) + 1)
+        pad = _dots(self.frame.inset_mm) + inner
         return mx + pad, my + pad
 
     def room(self, inner: bool = True) -> tuple[int, int]:
@@ -1086,7 +1091,7 @@ def _line(frame: Frame) -> int:
     return max(1, _dots(frame.line_mm))
 
 
-def _band(frame: Frame, round_label: bool) -> int:
+def _band(frame: Frame) -> int:
     """Breite aller Linien zusammen (doppelt: Linie, Lücke, Linie; dick-dünn: 2, 1, 1)."""
     lw = _line(frame)
     return {"double": 3 * lw, "thick_thin": 4 * lw}.get(frame.style, lw)
@@ -1108,7 +1113,7 @@ def _outer(sheet: _Sheet, width: int, height: int) -> tuple[int, int, int, int]:
 def _circle_room(sheet: _Sheet) -> int:
     """Seite des Quadrats im Kreisrahmen (Innenraum runder Etiketten) in Druckpunkten."""
     x0, _, x1, _ = _outer(sheet, sheet.across, sheet.across)   # runde Etiketten sind quadratisch
-    radius = (x1 - x0) / 2 - _band(sheet.frame, True) - _dots(sheet.frame.padding_mm)
+    radius = (x1 - x0) / 2 - _band(sheet.frame) - _dots(sheet.frame.padding_mm)
     return int(radius * math.sqrt(2)) if radius > 0 else 0
 
 

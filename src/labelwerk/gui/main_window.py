@@ -11,8 +11,8 @@ from pathlib import Path
 from PIL import Image
 from PySide6.QtCore import QMimeData, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QFileDialog, QFrame, QHBoxLayout,
-                               QInputDialog,
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileDialog, QFrame,
+                               QHBoxLayout, QInputDialog, QLineEdit,
                                QLabel, QMainWindow, QMessageBox,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
@@ -894,7 +894,8 @@ class MainWindow(QMainWindow):
             self.render_now()                       # aktueller bedruckbarer Bereich
         obj = self._new_text(text)
         shift = self._text_pastes * PASTE_OFFSET_MM
-        obj.x_mm, obj.y_mm = round(self._area.x + shift, 3), round(self._area.y + shift, 3)
+        area = self._paper_area()                   # mit Zierrahmen: in seinem Innenraum
+        obj.x_mm, obj.y_mm = round(area.x + shift, 3), round(area.y + shift, 3)
         self._text_pastes += 1
         self._insert([obj])
 
@@ -1395,12 +1396,17 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Yes
 
     def accept_pending_input(self) -> None:
-        """Eben getippte Zahl übernehmen: Zahlenfelder ohne Tastatur-Mitlauf melden ihren Wert
-        erst bei Enter oder beim Verlassen – DRUCKEN in der Werkzeugleiste und Kürzel nehmen
-        den Fokus nicht. Vor Drucken, Speichern und Rückgängig aufrufen."""
+        """Eben getippte Zahl übernehmen: Zahlenfelder ohne Tastatur-Mitlauf und editierbare
+        Auswahllisten (Schriftgröße) melden ihren Wert erst bei Enter oder beim Verlassen –
+        DRUCKEN in der Werkzeugleiste und Kürzel nehmen den Fokus nicht. Vor Drucken, Speichern
+        und Rückgängig aufrufen."""
         widget = QApplication.focusWidget()
+        if isinstance(widget, QLineEdit) and isinstance(widget.parent(), QComboBox):
+            widget = widget.parent()
         if isinstance(widget, QAbstractSpinBox):
             widget.interpretText()
+        elif isinstance(widget, QComboBox) and widget.isEditable():
+            widget.lineEdit().editingFinished.emit()
 
     def print_label(self) -> None:
         self.accept_pending_input()
