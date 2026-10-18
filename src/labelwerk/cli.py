@@ -17,6 +17,7 @@ from .labels import format_mm, labels_for_model
 from .media import MediaError, label_for_media, read_media
 from .render import font_warnings, render_document
 from .settings import load_settings
+from .storage import os_reason
 
 
 def _font_size(value: str) -> float | None:
@@ -184,20 +185,38 @@ def _apply_settings(args: argparse.Namespace) -> None:
 
 
 def _install_desktop(remove: bool) -> int:
+    data = desktop.data_home()
     if remove:
-        removed = desktop.uninstall()
+        try:
+            removed = desktop.uninstall(data, update=False)
+        except OSError as e:
+            print(f"labelwerk wurde nicht entfernt ({os_reason(e)}).", file=sys.stderr)
+            return 2
         print("\n".join(f"Entfernt: {p}" for p in removed) or "Nichts zu entfernen.")
+        if removed:
+            _report_update(desktop.update_databases(data))
         return 0
     gui_exe = Path(sys.executable).parent / "labelwerk-gui"
     try:
-        paths = desktop.install(gui_exe)
+        paths = desktop.install(gui_exe, data, update=False)
     except ValueError as e:
         print(e, file=sys.stderr)
         return 2
+    except OSError as e:
+        print(f"labelwerk wurde nicht eingetragen ({os_reason(e)}).", file=sys.stderr)
+        return 2
     for path in paths:
         print(f"Installiert: {path}")
-    print("labelwerk erscheint jetzt im Starter (ggf. kurz warten oder neu anmelden).")
+    _report_update(desktop.update_databases(data))
+    print("labelwerk erscheint jetzt im Starter (ggf. kurz warten oder neu anmelden); "
+          "Doppelklick auf eine .labelwerk-Datei öffnet sie.")
     return 0
+
+
+def _report_update(failed: list[str]) -> None:
+    if failed:
+        print(f"Hinweis: {', '.join(failed)} hat nicht geklappt – Dateizuordnung gilt ggf. erst "
+              f"nach neuer Anmeldung.", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:

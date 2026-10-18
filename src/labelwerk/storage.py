@@ -101,7 +101,7 @@ class StorageError(ValueError):
     """Datei lässt sich nicht als Etikett lesen (Meldung auf Deutsch, mit Dateiname)."""
 
 
-def _reason(error: OSError) -> str:
+def os_reason(error: OSError) -> str:
     """Grund eines Datei-Fehlers auf Deutsch (statt englischem Text des Betriebssystems)."""
     if isinstance(error, FileNotFoundError):
         return "Ordner fehlt"
@@ -173,7 +173,7 @@ def save(doc: Document, path: str | Path) -> Path:
         os.replace(tmp, target)
         tmp = None
     except OSError as e:
-        raise OSError(f"{path.name} wurde nicht gespeichert ({_reason(e)})") from e
+        raise OSError(f"{path.name} wurde nicht gespeichert ({os_reason(e)})") from e
     finally:
         if tmp is not None:
             Path(tmp).unlink(missing_ok=True)
@@ -286,7 +286,7 @@ def load(path: str | Path) -> Document:
     except FileNotFoundError as e:
         raise StorageError(f"Datei nicht gefunden: {path}") from e
     except OSError as e:
-        raise StorageError(f"{path.name} kann nicht gelesen werden ({_reason(e)})") from e
+        raise StorageError(f"{path.name} kann nicht gelesen werden ({os_reason(e)})") from e
     except UnicodeDecodeError as e:
         raise StorageError(f"{path.name}: keine labelwerk-Datei (kein UTF-8-Text)") from e
     try:

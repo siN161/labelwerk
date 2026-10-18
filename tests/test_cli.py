@@ -151,6 +151,9 @@ def test_busy_printer_gives_specific_hint(monkeypatch, capsys):
 
 def test_install_desktop_uses_xdg_data_home(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setattr("labelwerk.desktop.shutil.which", lambda name: None)   # kein update-…
+    monkeypatch.setattr("labelwerk.desktop.subprocess.run",
+                        lambda *a, **k: pytest.fail("externes Programm gestartet"))
     rc = main(["install-desktop"])
     assert rc == 0
     assert (tmp_path / "applications" / "labelwerk.desktop").exists()
@@ -338,3 +341,19 @@ def test_unloadable_font_gives_friendly_error(tmp_path, capsys):
 
 def test_align_left_changes_preview(tmp_path):
     assert _rich_preview(tmp_path, "--align", "left") != _rich_preview(tmp_path, "--align", "center")
+
+
+def test_install_desktop_write_error_is_a_message(tmp_path, monkeypatch, capsys):
+    blocker = tmp_path / "share"
+    blocker.write_text("kein Ordner")
+    monkeypatch.setenv("XDG_DATA_HOME", str(blocker))
+    monkeypatch.setattr("labelwerk.desktop.shutil.which", lambda name: None)
+    assert main(["install-desktop"]) == 2
+    assert "nicht eingetragen" in capsys.readouterr().err
+
+
+def test_install_desktop_reports_failed_update_tools(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setattr("labelwerk.desktop.update_databases", lambda data, **kw: ["update-mime-database"])
+    assert main(["install-desktop"]) == 0
+    assert "update-mime-database" in capsys.readouterr().err
