@@ -6,7 +6,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from labelwerk import storage
-from labelwerk.document import Document, ImageObject, Paragraph, Span, TextObject
+from labelwerk.document import Document, Frame, ImageObject, Paragraph, Span, TextObject
 from labelwerk.render import render_document
 from labelwerk.storage import StorageError, load, save
 
@@ -33,7 +33,9 @@ def _document():
                                     svg=SVG)
     vector.x_mm, vector.y_mm = 5, 20
     return Document("62", length_mm=45, orientation="horizontal", margin_mm=2,
-                    objects=[text, centred, image, vector])
+                    objects=[text, centred, image, vector],
+                    frame=Frame("thick_thin", rounded=True, line_mm=0.4, inset_mm=1.5,
+                                padding_mm=2))
 
 
 def test_roundtrip_gives_the_same_document(tmp_path):
@@ -160,7 +162,8 @@ def test_schemas_cover_every_dataclass_field():
     for cls, schema, extra in ((Span, storage.SPAN, set()), (Paragraph, storage.PARAGRAPH, {"spans"}),
                                (TextObject, storage.TEXT, {"paragraphs"}),
                                (ImageObject, storage.IMAGE, set()),
-                               (Document, storage.DOCUMENT, {"objects"})):
+                               (Frame, storage.FRAME, set()),
+                               (Document, storage.DOCUMENT, {"objects", "frame"})):
         assert {f.name for f in fields(cls)} == set(schema) | extra, cls.__name__
 
 
@@ -261,6 +264,13 @@ def test_deeply_nested_json_is_refused(tmp_path):
     (lambda d: d["document"].update(length_mm=0), "length_mm"),
     (lambda d: d["document"].update(margin_mm=99), "margin_mm"),
     (lambda d: d["document"].update(label_id="999"), "Etikett"),
+    (lambda d: d["document"].update(frame="dick"), "Rahmen"),
+    (lambda d: d["document"]["frame"].update(style="welle"), "style"),
+    (lambda d: d["document"]["frame"].update(line_mm=5), "line_mm"),
+    (lambda d: d["document"]["frame"].update(line_mm=0), "line_mm"),
+    (lambda d: d["document"]["frame"].update(inset_mm=-1), "inset_mm"),
+    (lambda d: d["document"]["frame"].update(padding_mm=10.5), "padding_mm"),
+    (lambda d: d["document"]["frame"].update(rounded="ja"), "rounded"),
     (lambda d: d["document"]["objects"][0]["paragraphs"][0]["spans"][0].update(text="a\nb"),
      "Zeilenumbruch"),
     (lambda d: d["document"]["objects"][0]["paragraphs"][0]["spans"][0].update(text="a b"),
@@ -404,3 +414,33 @@ def test_position_limit_is_the_one_of_the_position_fields():
     data["document"]["objects"][0]["x_mm"] = MAX_POSITION_MM + 0.1
     with pytest.raises(StorageError, match="x_mm"):
         storage.from_dict(data)
+
+
+# --- Zierrahmen ---------------------------------------------------------------------------
+def test_frame_is_saved_as_its_own_entry(tmp_path):
+    path = save(_document(), tmp_path / "r.labelwerk")
+    frame = json.loads(path.read_text())["document"]["frame"]
+    assert frame == {"style": "thick_thin", "rounded": True, "line_mm": 0.4, "inset_mm": 1.5,
+                     "padding_mm": 2}
+
+
+@pytest.mark.parametrize("value", ["missing", None])
+def test_without_frame_entry_there_is_no_frame(tmp_path, value):
+    data = _valid()
+    if value == "missing":
+        data["document"].pop("frame", None)
+    else:
+        data["document"]["frame"] = None
+    assert load(_write(tmp_path, data)).frame is None
+
+
+def test_frame_fields_missing_get_defaults(tmp_path):
+    data = _valid()
+    data["document"]["frame"] = {"style": "dotted"}
+    assert load(_write(tmp_path, data)).frame == Frame("dotted")
+
+
+def test_document_without_frame_saves_null(tmp_path):
+    path = save(Document("62"), tmp_path / "leer.labelwerk")
+    assert json.loads(path.read_text())["document"]["frame"] is None
+    assert load(path).frame is None

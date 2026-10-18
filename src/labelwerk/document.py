@@ -14,6 +14,10 @@ ROTATIONS = (0, 90, 180, 270)      # Grad im Uhrzeigersinn
 MAX_MARGIN_MM = 20.0
 MAX_POSITION_MM = 999.9            # Lage eines Objekts (Positionsfelder der GUI, auch neben dem Etikett)
 MIN_PT, MAX_PT = 4.0, 100.0
+# Zierrahmen: einfach, doppelt, dick-dünn, gestrichelt, gepunktet, nur Ecken
+FRAME_STYLES = ("single", "double", "thick_thin", "dashed", "dotted", "corners")
+FRAME_LINE_MM = (0.1, 3.0)          # Strichstärke
+MAX_FRAME_MM = 10.0                 # Abstand zum Rand, Innenabstand
 
 
 @dataclass
@@ -183,6 +187,16 @@ def _png(img: Image.Image) -> bytes:
     return buffer.getvalue()
 
 
+@dataclass(frozen=True)
+class Frame:
+    """Zierrahmen ums Etikett (wie der P-touch „Rahmen“) im bedruckbaren Bereich."""
+    style: str = "single"           # FRAME_STYLES
+    rounded: bool = False           # abgerundete Ecken (nicht bei runden Etiketten)
+    line_mm: float = 0.5            # Strichstärke
+    inset_mm: float = 0.0           # Abstand vom bedruckbaren Rand
+    padding_mm: float = 1.0         # Abstand zum Inhalt (automatisch gesetzter Text, Länge)
+
+
 @dataclass
 class Document:
     label_id: str = "62"
@@ -190,6 +204,7 @@ class Document:
     orientation: str = "vertical"     # "vertical" (Text quer zum Band) | "horizontal" (längs)
     margin_mm: float = 1.0            # Rand in Bandlaufrichtung (vorne/hinten)
     objects: list[TextObject | ImageObject] = field(default_factory=list)
+    frame: Frame | None = None        # Zierrahmen; None = keiner
 
     def is_empty(self) -> bool:
         """True, wenn kein Objekt sichtbaren Inhalt hat."""

@@ -17,11 +17,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from . import fonts, imaging
-from .document import (ALIGNMENTS, MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS,
-                       Document, ImageObject, Paragraph, Span, TextObject)
+from .document import (ALIGNMENTS, FRAME_LINE_MM, FRAME_STYLES, MAX_FRAME_MM, MAX_MARGIN_MM,
+                       MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS, Document, Frame, ImageObject,
+                       Paragraph, Span, TextObject)
 from .labels import DPI, get_label, length_limits
 
 MARGIN = 12            # Punkte, ca. 1 mm
@@ -30,6 +31,8 @@ REF_PT = 12.0          # Bezugsgröße für automatische Skalierung von Stücken
 MIN_DOTS = 8           # kleinste Schrift in Druckpunkten
 _LINE_GAP = 4          # wie Pillow multiline_text
 _SLANT = 0.2           # Ersatzkursive: Scherung, wenn die Schrift keine echte Kursive hat
+FRAME_RADIUS_MM = 2.0  # Eckradius abgerundeter Rahmen (höchstens ¼ der kürzeren Seite)
+FRAME_CORNER_MM = 4.0  # Schenkel bei „nur Ecken“ (höchstens ¼ der kürzeren Seite)
 
 
 class TextTooLarge(ValueError):
@@ -134,19 +137,23 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     Textanfang zuerst aus dem Drucker und das veränderliche Ende liegt in Leserichtung rechts.
     """
     sheet = _sheet(doc, model)
+    _check_room(sheet)
     preps = [_prepare(obj, sheet) for obj in doc.objects or [TextObject("")]]
     width, height = _label_size(sheet, preps)
     return compose([_finish(prep, sheet, width, height) for prep in preps], (width, height),
-                   doc.orientation)
+                   doc.orientation, _frame_mask(sheet, width, height))
 
 
 def compose(rendered: list[RenderedObject], size: tuple[int, int],
-            orientation: str = "vertical") -> Image.Image:
-    """Druckbild aus einzeln gerenderten Objekten (``size`` = Etikett in Leserichtung).
+            orientation: str = "vertical", frame: Image.Image | None = None) -> Image.Image:
+    """Druckbild aus einzeln gerenderten Objekten (``size`` = Etikett in Leserichtung);
+    ``frame``: Maske des Zierrahmens (``frame_mask``), liegt unter den Objekten.
 
     Die Arbeitsfläche zeigt dieselben Objektbilder – so bleibt Vorschau = Druck.
     """
     img = Image.new("RGB", size, "white")
+    if frame is not None:
+        img.paste((0, 0, 0), (0, 0), frame)
     for obj in rendered:
         img.paste((0, 0, 0), (obj.x + obj.image_dx, obj.y + obj.image_dy),
                   ImageOps.invert(obj.image))
@@ -181,6 +188,26 @@ def finish_object(prep: Prepared, doc: Document, size: tuple[int, int],
     """Gemessenes Objekt auf dem Etikett ``size`` (wie ``label_size``) rendern – dasselbe
     Ergebnis wie ``render_object``."""
     return _finish(prep, _sheet(doc, model), *size)
+
+
+def frame_mask(doc: Document, model: str = "QL-600",
+               size: tuple[int, int] | None = None) -> Image.Image | None:
+    """Zierrahmen als Maske (Modus „L“, 255 = Tinte) in Leserichtung; None ohne Rahmen."""
+    if doc.frame is None:
+        return None
+    return _frame_mask(_sheet(doc, model), *(size if size is not None else label_size(doc, model)))
+
+
+def frame_box(doc: Document, model: str = "QL-600",
+              size: tuple[int, int] | None = None) -> tuple[int, int, int, int] | None:
+    """Innenraum des Rahmens (x, y, Breite, Höhe) in Druckpunkten in Leserichtung – dort steht
+    automatisch gesetzter Text; None ohne Rahmen."""
+    if doc.frame is None:
+        return None
+    sheet = _sheet(doc, model)
+    width, height = size if size is not None else label_size(doc, model)
+    ix, iy = sheet.inset()
+    return ix, iy, width - 2 * ix, height - 2 * iy
 
 
 @dataclass
@@ -220,19 +247,29 @@ class Renderer:
 
     def __init__(self):
         self._cache: dict[int, _Cached] = {}
-        self._composed: tuple = (None, [], None)   # Druckbild und woraus es entstand
+        self._composed: tuple = (None, [], None, None)   # Druckbild und woraus es entstand
+        self._frame: tuple = (None, None)                # Rahmen-Maske und wofür
 
     def render(self, doc: Document, model: str = "QL-600") -> Rendered:
         """Dokument rendern; ``ValueError`` (z. B. ``TextTooLarge``) lässt den Cache stehen."""
+        _check_room(_sheet(doc, model))
         entries = self._prepare_all(doc, model)
         size = label_size(doc, model, prepared=[e.prepared for e in entries])
         objects = self._draw(entries, doc, model, size)
-        return Rendered(size, objects, self._compose(objects, size, doc.orientation))
+        frame = self._frame_mask(doc, model, size)
+        return Rendered(size, objects, self._compose(objects, size, doc.orientation, frame))
+
+    def _frame_mask(self, doc: Document, model: str, size: tuple[int, int]) -> Image.Image | None:
+        """Rahmen-Maske – neu nur, wenn sich Rahmen oder Etikett ändern."""
+        key = (size, model, doc.label_id, doc.orientation, doc.margin_mm, doc.frame)
+        if key != self._frame[0]:
+            self._frame = (key, frame_mask(doc, model, size))
+        return self._frame[1]
 
     def _prepare_all(self, doc: Document, model: str) -> list[_Cached]:
         """Objekte messen; unveränderte kommen aus dem Cache."""
         context = (model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm,
-                   _svg_generation)
+                   doc.frame, _svg_generation)
         cache: dict[int, _Cached] = {}
         for obj in doc.objects:
             entry = self._cache.get(id(obj))
@@ -257,19 +294,21 @@ class Renderer:
         return [entry.rendered for entry in entries]
 
     def _compose(self, objects: list[RenderedObject], size: tuple[int, int],
-                 orientation: str) -> Image.Image:
-        """Druckbild – unverändert, solange dieselben Objektbilder auf derselben Größe liegen."""
+                 orientation: str, frame: Image.Image | None) -> Image.Image:
+        """Druckbild – unverändert, solange dieselben Objektbilder und derselbe Rahmen auf
+        derselben Größe liegen."""
         key = (size, orientation)
-        if (key != self._composed[0] or len(objects) != len(self._composed[1])
+        if (key != self._composed[0] or frame is not self._composed[3]
+                or len(objects) != len(self._composed[1])
                 or any(a is not b for a, b in zip(objects, self._composed[1]))):
-            self._composed = (key, list(objects), compose(objects, size, orientation))
+            self._composed = (key, list(objects), compose(objects, size, orientation, frame),
+                              frame)
         return self._composed[2]
 
 
 def label_margins(doc: Document, model: str = "QL-600") -> tuple[int, int]:
     """Ränder (links/rechts, oben/unten) in Druckpunkten in Leserichtung."""
-    sheet = _sheet(doc, model)
-    return (sheet.margin, MARGIN) if sheet.horizontal else (MARGIN, sheet.margin)
+    return _sheet(doc, model).margins()
 
 
 # --- Etikett und Objekte ------------------------------------------------------------
@@ -283,12 +322,34 @@ class _Sheet:
     margin: int                # Rand in Bandlaufrichtung
     min_len: int
     max_len: int
+    frame: Frame | None = None
+    round: bool = False        # rundes Etikett: Rahmen ist ein Kreis
 
-    def room(self) -> tuple[int, int]:
-        """Bedruckbarer Bereich (Breite, Höhe) in Leserichtung; automatische Länge: Höchstlänge."""
-        across = self.across - 2 * MARGIN
-        feed = (self.feed or self.max_len) - 2 * self.margin
-        return (feed, across) if self.horizontal else (across, feed)
+    def margins(self) -> tuple[int, int]:
+        """Ränder (links/rechts, oben/unten) in Leserichtung."""
+        return (self.margin, MARGIN) if self.horizontal else (MARGIN, self.margin)
+
+    def inset(self) -> tuple[int, int]:
+        """Abstand des Innenraums vom Etikettrand (links/rechts, oben/unten) in Leserichtung:
+        die Ränder, mit Rahmen zusätzlich Abstand, Linie und Innenabstand (rund: Quadrat im
+        Kreis)."""
+        mx, my = self.margins()
+        if self.frame is None:
+            return mx, my
+        if self.round:
+            inset = (self.across - _circle_room(self)) // 2
+            return inset, inset
+        pad = _dots(self.frame.inset_mm) + _band(self.frame, False) + _dots(self.frame.padding_mm)
+        return mx + pad, my + pad
+
+    def room(self, inner: bool = True) -> tuple[int, int]:
+        """Bedruckbarer Bereich (Breite, Höhe) in Leserichtung; automatische Länge: Höchstlänge.
+        ``inner``: mit Rahmen nur sein Innenraum (für automatisch gesetzten Text)."""
+        width, height = self.across, self.feed or self.max_len
+        if self.horizontal:
+            width, height = height, width
+        ix, iy = self.inset() if inner else self.margins()
+        return width - 2 * ix, height - 2 * iy
 
 
 def _sheet(doc: Document, model: str) -> _Sheet:
@@ -302,8 +363,20 @@ def _sheet(doc: Document, model: str) -> _Sheet:
         feed = min(max(_dots(doc.length_mm), min_len), max_len)
     if feed is not None:                      # feste Länge: Rand darf nicht alles aufbrauchen
         margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
+    if doc.frame is not None:
+        _check_frame(doc.frame)
     return _Sheet(doc.label_id, doc.orientation == "horizontal", label.width, feed, margin,
-                  min_len, max_len)
+                  min_len, max_len, doc.frame, label.shape == "round")
+
+
+FRAME_TOO_BIG = "Rahmen passt nicht aufs Etikett – Abstand, Strichstärke oder Innenabstand verkleinern"
+
+
+def _check_room(sheet: _Sheet) -> None:
+    """Rahmen ohne Innenraum → Meldung. Nur beim Rendern geprüft – Ränder und bedruckbarer
+    Bereich bleiben auch dann bestimmbar (die GUI fragt sie außerhalb des Renderns ab)."""
+    if sheet.frame is not None and min(sheet.room()) <= 0:
+        raise ValueError(FRAME_TOO_BIG)
 
 
 def _dots(mm: float) -> int:
@@ -336,7 +409,7 @@ def _prepare(obj: TextObject | ImageObject, sheet: _Sheet) -> Prepared:
                              "rechts, Blocksatz (left, center, right, justify)")
     if obj.rotation not in ROTATIONS:
         raise ValueError(f"Unbekannte Drehung {obj.rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
-    max_w, max_h = sheet.room()
+    max_w, max_h = sheet.room(inner=not obj.positioned)   # frei platziert: Rahmen gilt nicht
     if obj.rotation in (90, 270):
         max_w, max_h = max_h, max_w
     auto_start = max(10, sheet.across // 5)
@@ -367,6 +440,8 @@ def _label_size(sheet: _Sheet, preps: list[Prepared]) -> tuple[int, int]:
     """Etikettgröße in Leserichtung; automatische Länge aus dem Platzbedarf der Objekte."""
     feed = sheet.feed
     if feed is None:
+        ix, iy = sheet.inset()
+        along = ix if sheet.horizontal else iy     # Rand (+ Rahmen) in Bandlaufrichtung
         needed = 0
         for prep in preps:
             if prep.obj.positioned and prep.obj.is_empty():
@@ -375,9 +450,11 @@ def _label_size(sheet: _Sheet, preps: list[Prepared]) -> tuple[int, int]:
             size = w if sheet.horizontal else h
             if prep.obj.positioned:
                 start = prep.obj.x_mm if sheet.horizontal else prep.obj.y_mm
-                needed = max(needed, _dots(start or 0) + size + sheet.margin)
+                needed = max(needed, _dots(start or 0) + size + along)
             else:
-                needed = max(needed, size + 2 * sheet.margin)
+                needed = max(needed, size + 2 * along)
+        if sheet.frame is not None:            # im Rahmen bleibt immer Platz (kein Innenraum ≤ 0)
+            needed = max(needed, 2 * along + 1)
         feed = min(max(needed, sheet.min_len), sheet.max_len)
     return (feed, sheet.across) if sheet.horizontal else (sheet.across, feed)
 
@@ -405,8 +482,9 @@ def _place(prep: Prepared, sheet: _Sheet, width: int, height: int
         origin = (_dots(obj.x_mm or 0), _dots(obj.y_mm or 0))
     else:                                      # mittig auf dem Etikett wie bisher
         area = (height, width) if turned else (width, height)
-        # Innenrand der Textzeilen: Rand in Bandlaufrichtung, wenn sie längs zum Band laufen
-        start = sheet.margin if sheet.horizontal != turned else MARGIN
+        # Innenrand der Textzeilen: Rand (mit Rahmen: Innenraum) in Richtung der Zeilen
+        ix, iy = sheet.inset()
+        start = iy if turned else ix
         x0, y0, lines = _align(obj, prep.base, lines, prep.box, start, *area)
         fl, ft, fr, fb = _block_box(lines)
         frame = (x0 + fl, y0 + ft, fr - fl, fb - ft)
@@ -980,3 +1058,206 @@ def _draw_slanted(img: Image.Image, p: _Piece, x: float, y: float) -> None:
     sheared = mask.transform(mask.size, Image.Transform.AFFINE,
                              (1, _SLANT, -_SLANT * ascent, 0, 1, 0), Image.Resampling.BICUBIC)
     img.paste(0, (round(x) - pad, round(y)), sheared)
+
+
+# --- Zierrahmen ---------------------------------------------------------------------
+def _check_frame(frame: Frame) -> None:
+    if frame.style not in FRAME_STYLES:
+        raise ValueError(f"Unbekannte Rahmenart {frame.style!r} – erlaubt: "
+                         f"{', '.join(FRAME_STYLES)}")
+    if not isinstance(frame.rounded, bool):
+        raise ValueError(f"„abgerundet“ des Rahmens muss ja oder nein sein, nicht {frame.rounded!r}")
+    for value, (low, high), name in ((frame.line_mm, FRAME_LINE_MM, "Strichstärke"),
+                                     (frame.inset_mm, (0.0, MAX_FRAME_MM), "Abstand zum Rand"),
+                                     (frame.padding_mm, (0.0, MAX_FRAME_MM), "Innenabstand")):
+        if (not isinstance(value, (int, float)) or isinstance(value, bool)
+                or not math.isfinite(value) or not low <= value <= high):
+            raise ValueError(f"{name} des Rahmens muss zwischen {_fmt_mm(low)} und "
+                             f"{_fmt_mm(high)} mm liegen")
+
+
+def _fmt_mm(value: float) -> str:
+    return f"{value:g}".replace(".", ",")
+
+
+def _line(frame: Frame) -> int:
+    """Strichstärke in Druckpunkten (mindestens 1)."""
+    return max(1, _dots(frame.line_mm))
+
+
+def _band(frame: Frame, round_label: bool) -> int:
+    """Breite aller Linien zusammen (doppelt: Linie, Lücke, Linie; dick-dünn: 2, 1, 1)."""
+    lw = _line(frame)
+    return {"double": 3 * lw, "thick_thin": 4 * lw}.get(frame.style, lw)
+
+
+def _outer(sheet: _Sheet, width: int, height: int) -> tuple[int, int, int, int]:
+    """Außenkante des Rahmens (x0, y0, x1, y1; Ende ausschließlich) in Leserichtung; rund:
+    das Quadrat um den Kreis."""
+    mx, my = sheet.margins()
+    inset = _dots(sheet.frame.inset_mm)
+    x0, y0, x1, y1 = mx + inset, my + inset, width - mx - inset, height - my - inset
+    if sheet.round:
+        d = min(x1 - x0, y1 - y0)
+        x0, y0 = x0 + (x1 - x0 - d) // 2, y0 + (y1 - y0 - d) // 2
+        x1, y1 = x0 + d, y0 + d
+    return x0, y0, x1, y1
+
+
+def _circle_room(sheet: _Sheet) -> int:
+    """Seite des Quadrats im Kreisrahmen (Innenraum runder Etiketten) in Druckpunkten."""
+    x0, _, x1, _ = _outer(sheet, sheet.across, sheet.across)   # runde Etiketten sind quadratisch
+    radius = (x1 - x0) / 2 - _band(sheet.frame, True) - _dots(sheet.frame.padding_mm)
+    return int(radius * math.sqrt(2)) if radius > 0 else 0
+
+
+def _frame_mask(sheet: _Sheet, width: int, height: int) -> Image.Image | None:
+    """Zierrahmen als Maske (255 = Tinte): Linien liegen ganz innerhalb der Außenkante."""
+    frame = sheet.frame
+    if frame is None:
+        return None
+    lw = _line(frame)
+    box = _outer(sheet, width, height)
+    w, h = box[2] - box[0], box[3] - box[1]
+    style = "single" if sheet.round and frame.style == "corners" else frame.style
+    radius = (min(_dots(FRAME_RADIUS_MM), min(w, h) // 4)
+              if frame.rounded and not sheet.round else 0)
+    mask = Image.new("L", (width, height), 0)
+    draw = ImageDraw.Draw(mask)
+
+    def ring(offset: int, thickness: int) -> None:
+        xy = (box[0] + offset, box[1] + offset, box[2] - 1 - offset, box[3] - 1 - offset)
+        if xy[2] < xy[0] or xy[3] < xy[1]:
+            return
+        if sheet.round:
+            draw.ellipse(xy, outline=255, width=thickness)
+        else:
+            draw.rounded_rectangle(xy, radius=max(0, radius - offset), outline=255,
+                                   width=thickness)
+
+    if style == "double":
+        ring(0, lw)
+        ring(2 * lw, lw)
+    elif style == "thick_thin":
+        ring(0, 2 * lw)
+        ring(3 * lw, lw)
+    else:
+        ring(0, lw)
+    if style == "corners":
+        leg = min(_dots(FRAME_CORNER_MM), min(w, h) // 4)
+        if leg < 2 * lw:                     # sonst blieben nur Quadrate (oder nichts)
+            raise ValueError(FRAME_TOO_BIG)
+        keep = Image.new("L", mask.size, 0)
+        corners = ImageDraw.Draw(keep)
+        for x, y in ((box[0], box[1]), (box[2] - leg, box[1]), (box[0], box[3] - leg),
+                     (box[2] - leg, box[3] - leg)):
+            corners.rectangle((x, y, x + leg - 1, y + leg - 1), fill=255)
+        mask = ImageChops.darker(mask, keep)
+    elif style == "dashed":
+        mask = ImageChops.darker(mask, _dashes(sheet.round, box, radius, lw, mask.size))
+    elif style == "dotted":
+        mask = _dots_mask(sheet.round, box, radius, lw, mask.size)
+    return mask
+
+
+def _sides(box: tuple[int, int, int, int], radius: int, lw: int) -> list[list[tuple[float, float]]]:
+    """Mittellinie eines (abgerundeten) Rechteckrahmens in vier Seiten, je von Eckmitte zu
+    Eckmitte – Striche und Punkte verteilen sich je Seite gleichmäßig, die Ecken sind besetzt."""
+    half = lw / 2
+    x0, y0, x1, y1 = box[0] + half, box[1] + half, box[2] - half, box[3] - half
+    r = max(radius - half, 0.0)
+    centres = {"tl": (x0 + r, y0 + r), "tr": (x1 - r, y0 + r), "br": (x1 - r, y1 - r),
+               "bl": (x0 + r, y1 - r)}
+
+    def arc(corner: str, a0: float, a1: float) -> list[tuple[float, float]]:
+        cx, cy = centres[corner]
+        steps = max(1, math.ceil(r * math.radians(abs(a1 - a0)) / 0.5))
+        return [(cx + r * math.cos(math.radians(a0 + (a1 - a0) * i / steps)),
+                 cy + r * math.sin(math.radians(a0 + (a1 - a0) * i / steps)))
+                for i in range(steps + 1)]
+    return [arc("tl", 225, 270) + arc("tr", 270, 315),
+            arc("tr", 315, 360) + arc("br", 0, 45),
+            arc("br", 45, 90) + arc("bl", 90, 135),
+            arc("bl", 135, 180) + arc("tl", 180, 225)]
+
+
+def _lengths(path: list[tuple[float, float]]) -> list[float]:
+    out = [0.0]
+    for (ax, ay), (bx, by) in zip(path, path[1:]):
+        out.append(out[-1] + math.hypot(bx - ax, by - ay))
+    return out
+
+
+def _point(path, lengths, s: float) -> tuple[float, float]:
+    """Punkt der Mittellinie bei Bogenlänge ``s``."""
+    s = min(max(s, 0.0), lengths[-1])
+    for i in range(1, len(path)):
+        if lengths[i] >= s:
+            span = lengths[i] - lengths[i - 1] or 1.0
+            t = (s - lengths[i - 1]) / span
+            (ax, ay), (bx, by) = path[i - 1], path[i]
+            return ax + (bx - ax) * t, ay + (by - ay) * t
+    return path[-1]
+
+
+def _piece(path, lengths, s0: float, s1: float) -> list[tuple[float, float]]:
+    """Stück der Mittellinie zwischen den Bogenlängen ``s0`` und ``s1``."""
+    s0, s1 = max(s0, 0.0), min(s1, lengths[-1])
+    inner = [p for p, s in zip(path, lengths) if s0 < s < s1]
+    return [_point(path, lengths, s0), *inner, _point(path, lengths, s1)]
+
+
+def _dashes(round_label: bool, box, radius: int, lw: int, size) -> Image.Image:
+    """Striche (3 × Strichstärke, Lücke 2 ×, je Seite gleichmäßig) als Maske – breiter als die
+    Linie, geschnitten mit ihr ergeben sich saubere Kanten."""
+    keep = Image.new("L", size, 0)
+    draw = ImageDraw.Draw(keep)
+    if round_label:                          # Kreis: Tortenstücke vom Mittelpunkt aus
+        d = box[2] - box[0]
+        n = max(4, round(math.pi * (d - lw) / (5 * lw)))
+        pad = 2 * lw
+        wedge = (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+        for k in range(n):
+            mid = -90 + 360 * k / n
+            draw.pieslice(wedge, mid - 108 / n, mid + 108 / n, fill=255)   # 60 % der Teilung
+        return keep
+    if radius == 0:                          # Eckstriche bis in die äußere Ecke
+        for x, y in ((box[0], box[1]), (box[2] - lw, box[1]), (box[0], box[3] - lw),
+                     (box[2] - lw, box[3] - lw)):
+            draw.rectangle((x, y, x + lw - 1, y + lw - 1), fill=255)
+    for side in _sides(box, radius, lw):
+        lengths = _lengths(side)
+        total = lengths[-1]
+        m = max(1, round(total / (5 * lw)))
+        period, dash = total / m, 0.6 * total / m
+        for k in range(m + 1):
+            centre = k * period
+            piece = _piece(side, lengths, centre - dash / 2, centre + dash / 2)
+            draw.line(piece, fill=255, width=lw + 4, joint="curve")
+    return keep
+
+
+def _dots_mask(round_label: bool, box, radius: int, lw: int, size) -> Image.Image:
+    """Runde Punkte (Durchmesser = Strichstärke, Abstand 2 ×) auf der Mittellinie."""
+    mask = Image.new("L", size, 0)
+    draw = ImageDraw.Draw(mask)
+    half = lw / 2
+    points = []
+    if round_label:
+        cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+        r = (box[2] - box[0]) / 2 - half
+        n = max(8, round(2 * math.pi * r / (2 * lw)))
+        points = [(cx + r * math.cos(2 * math.pi * k / n - math.pi / 2),
+                   cy + r * math.sin(2 * math.pi * k / n - math.pi / 2)) for k in range(n)]
+    else:
+        for side in _sides(box, radius, lw):
+            lengths = _lengths(side)
+            m = max(1, round(lengths[-1] / (2 * lw)))
+            points += [_point(side, lengths, lengths[-1] * k / m) for k in range(m)]
+    for x, y in points:
+        if lw <= 2:
+            draw.rectangle((math.floor(x - half), math.floor(y - half),
+                            math.floor(x - half) + lw - 1, math.floor(y - half) + lw - 1), fill=255)
+        else:
+            draw.ellipse((x - half, y - half, x + half - 1, y + half - 1), fill=255)
+    return mask

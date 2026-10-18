@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, replace
 
 from .document import MAX_PT, MIN_PT, ROTATIONS, Document, ImageObject, TextObject
 from .labels import DPI, get_label, length_limits
-from .render import (PT, REF_PT, RenderedObject, span_dots, label_margins, label_size,
+from .render import (PT, REF_PT, RenderedObject, frame_box, span_dots, label_margins, label_size,
                      render_object)
 
 ALIGN_MODES = ("left", "hcenter", "right", "top", "vcenter", "bottom")
@@ -777,3 +777,10 @@ def anchor_after_edit(obj: TextObject, old: RenderedObject,
     nx, ny = from_object(new.layout.anchor(align), new, obj.rotation)
     return (round(start.x + _mm(ox - old.x) - _mm(nx - new.x), _DECIMALS),
             round(start.y + _mm(oy - old.y) - _mm(ny - new.y), _DECIMALS))
+
+
+def frame_area(doc: Document, model: str = "QL-600",
+               size: tuple[int, int] | None = None) -> Rect | None:
+    """Innenraum des Zierrahmens in mm (Ausrichten am Etikett, Einrasten); None ohne Rahmen."""
+    box = frame_box(doc, model, size)
+    return None if box is None else Rect(*(_mm(v) for v in box))

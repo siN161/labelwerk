@@ -23,8 +23,9 @@ from pathlib import Path
 
 from PIL import Image
 
-from .document import (ALIGNMENTS, MAX_MARGIN_MM, MAX_POSITION_MM, ORIENTATIONS, ROTATIONS,
-                       Document, ImageObject, Paragraph, Span, TextObject)
+from .document import (ALIGNMENTS, FRAME_LINE_MM, FRAME_STYLES, MAX_FRAME_MM, MAX_MARGIN_MM,
+                       MAX_POSITION_MM, ORIENTATIONS, ROTATIONS, Document, Frame, ImageObject,
+                       Paragraph, Span, TextObject)
 from .imaging import MAX_PIXELS, MODES
 from .labels import get_label
 
@@ -51,8 +52,10 @@ IMAGE = {"png": "bytes", "source": "str", "page": "page?", "crop": "crop", "x_mm
          "y_mm": "pos", "w_mm": "size", "h_mm": "size", "rotation": "rotation", "mode": "mode",
          "threshold": "threshold", "invert": "bool", "keep_ratio": "bool", "dpi": "dpi",
          "svg": "bytes?"}
+FRAME = {"style": "frame_style", "rounded": "bool", "line_mm": "frame_line",
+         "inset_mm": "frame_mm", "padding_mm": "frame_mm"}
 DOCUMENT = {"label_id": "label", "length_mm": "size?", "orientation": "orientation",
-            "margin_mm": "margin"}                                # dazu „objects“
+            "margin_mm": "margin"}                                # dazu „objects“, „frame“
 
 
 def _num(v) -> bool:
@@ -95,6 +98,9 @@ _KINDS = {
     "align": lambda v: v in ALIGNMENTS, "orientation": lambda v: v in ORIENTATIONS,
     "rotation": lambda v: _int(v) and v in ROTATIONS,
     "mode": lambda v: v in MODES, "label": _label,
+    "frame_style": lambda v: v in FRAME_STYLES,
+    "frame_line": lambda v: _num(v) and FRAME_LINE_MM[0] <= v <= FRAME_LINE_MM[1],
+    "frame_mm": lambda v: _num(v) and 0 <= v <= MAX_FRAME_MM,
     "crop": lambda v: v is None or (isinstance(v, list) and len(v) == 4 and all(map(_int, v))),
 }
 
@@ -148,8 +154,9 @@ def to_dict(doc: Document) -> dict:
                 for p in obj.paragraphs]})
         else:
             objects.append({"type": "image", **_dump(obj, IMAGE)})
+    frame = None if doc.frame is None else _dump(doc.frame, FRAME)
     return {"format": FORMAT, "version": VERSION,
-            "document": {**_dump(doc, DOCUMENT), "objects": objects}}
+            "document": {**_dump(doc, DOCUMENT), "objects": objects, "frame": frame}}
 
 
 def save(doc: Document, path: str | Path) -> Path:
@@ -281,6 +288,9 @@ def from_dict(data) -> Document:
                            f"– bitte labelwerk aktualisieren")
     document = data.get("document")
     values = _load(document, DOCUMENT, "")
+    frame = document.get("frame")
+    if frame is not None:                   # fehlt oder null: kein Rahmen
+        values["frame"] = Frame(**_load(frame, FRAME, " im Rahmen"))
     items = _list(document, "objects", "")
     if len(items) > MAX_OBJECTS:
         raise StorageError(f"Etikett zu groß ({len(items)} Objekte, höchstens {MAX_OBJECTS})")
