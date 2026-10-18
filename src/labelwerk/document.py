@@ -105,6 +105,8 @@ class ImageObject:
     invert: bool = False
     keep_ratio: bool = True         # Seitenverhältnis beibehalten (Ecken/Kanten skalieren gleich)
     dpi: float = 300.0              # Auflösung von ``png`` – ergibt die Größe 1:1 (``natural_mm``)
+    svg: bytes | None = field(default=None, repr=False)   # Vektorbild: beim Rendern in Rahmengröße
+                                    # gerastert (``render.set_svg_rasterizer``); ``png`` ist Vorschau
 
     def __post_init__(self) -> None:
         if self.crop is not None:                # JSON liefert eine Liste
@@ -120,11 +122,13 @@ class ImageObject:
 
     @classmethod
     def from_image(cls, img: Image.Image, dpi: float, source: str, page: int | None = None,
-                   crop: tuple[int, int, int, int] | None = None) -> "ImageObject":
+                   crop: tuple[int, int, int, int] | None = None,
+                   svg: bytes | None = None) -> "ImageObject":
         """Bild 1:1 nach ``dpi`` (Größe des Ausschnitts ``crop``, sonst des ganzen Bilds).
 
         Transparenz wird weiß; sehr große Bilder werden begrenzt (``imaging.limit_size``) –
         der Ausschnitt rechnet mit, die Druckgröße bleibt (``dpi`` = Auflösung danach).
+        Mit ``svg`` ein Vektorbild: ``img`` ist dessen Vorschau (das ganze Blatt gerastert).
         """
         l, t, r, b = crop if crop is not None else (0, 0, *img.size)
         mm = 25.4 / dpi                          # Druckgröße aus dem Original
@@ -133,12 +137,15 @@ class ImageObject:
             fx, fy = rgb.width / img.width, rgb.height / img.height
             crop = (round(l * fx), round(t * fy), round(r * fx), round(b * fy))
         return cls(png=_png(rgb), source=source, page=page, crop=crop,
-                   w_mm=(r - l) * mm, h_mm=(b - t) * mm, dpi=stored_dpi)
+                   w_mm=(r - l) * mm, h_mm=(b - t) * mm, dpi=stored_dpi, svg=svg)
 
     def limit_resolution(self) -> "ImageObject":
         """Kopie mit höchstens ``MAX_DPI`` bezogen auf die jetzige Druckgröße (``w_mm``/
         ``h_mm``) – z. B. nach dem Einpassen eines Handyfotos. Größe 1:1 (``natural_mm``) und
-        Ausschnitt rechnen mit; ein Bild in Grenzen kommt unverändert zurück (dasselbe Objekt)."""
+        Ausschnitt rechnen mit; ein Bild in Grenzen kommt unverändert zurück (dasselbe Objekt),
+        ein Vektorbild immer (seine PNG ist nur Vorschau – verkleinert würde der Ausschnitt gröber)."""
+        if self.svg is not None:
+            return self
         l, t, r, b = self.box()
         dpi = max((r - l) / self.w_mm, (b - t) / self.h_mm) * 25.4
         if dpi <= MAX_DPI:

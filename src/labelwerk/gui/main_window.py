@@ -26,7 +26,7 @@ from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, 
                       outside_indices, printable_area, proportional, reorder, resize, rotate,
                       set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
-from ..render import Renderer, RenderedObject, font_warnings
+from ..render import Renderer, RenderedObject, font_warnings, set_svg_rasterizer
 from ..settings import Settings, load_settings, new_document
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self._structure_dirty = False               # Objektliste seit der letzten Anzeige umgebaut
         self.rendered: list[RenderedObject] = []    # Objektbilder auf der Arbeitsfläche = im Druck
         self.renderer = Renderer()                  # rendert nur geänderte Objekte neu
+        set_svg_rasterizer(image_import.rasterize_svg)   # Vektorbilder: Qt rastert SVG
         self._render_error: str | None = None
         self._hint: str | None = None               # Hinweis (ragt hinaus, Schrift ersetzt)
         self._print_signals = None
@@ -920,11 +921,13 @@ class MainWindow(QMainWindow):
                 if number is None:
                     continue                        # Seitenwahl abgebrochen
                 image, dpi = image_import.load(path, number)
+                svg = image_import.load_vector(path)
             except (ValueError, OSError) as e:
                 notes.append(str(e))
                 failed = True
                 continue
-            objects.append(self._new_image(image, dpi, path.name, number if pdf else None, notes))
+            objects.append(self._new_image(image, dpi, path.name, number if pdf else None, notes,
+                                           svg))
         self._insert_images(objects, at, notes, "error" if failed else "warn")
 
     def _choose_page(self, path: Path) -> int | None:
@@ -1040,15 +1043,16 @@ class MainWindow(QMainWindow):
         self._insert_images([self._new_image(image, dpi, source, None, notes)], at, notes)
 
     def _new_image(self, image: Image.Image, dpi: float, source: str, page: int | None,
-                   notes: list[str]) -> ImageObject:
+                   notes: list[str], svg: bytes | None = None) -> ImageObject:
         """Bild-Objekt 1:1, automatisch zugeschnitten (alles, was nicht weiß ist; Einstellung
-        ``image_crop``); ist das Bild ganz weiß, bleibt es ganz – mit Hinweis in ``notes``."""
+        ``image_crop``); ist das Bild ganz weiß, bleibt es ganz – mit Hinweis in ``notes``.
+        Mit ``svg`` ein Vektorbild (``image`` ist dessen Vorschau)."""
         if not self.settings.image_crop:
-            return ImageObject.from_image(image, dpi, source, page, None)
+            return ImageObject.from_image(image, dpi, source, page, None, svg)
         crop = crop_box(image, dpi, ink=NOT_WHITE)
         if crop is None and CROP_FAILED not in notes:
             notes.append(CROP_FAILED)
-        return ImageObject.from_image(image, dpi, source, page, crop)
+        return ImageObject.from_image(image, dpi, source, page, crop, svg)
 
     def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
                        notes: list[str], state: str = "warn") -> None:

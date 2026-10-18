@@ -17,7 +17,8 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Direkt auf dem Etikett schreiben (Etappe 3d-1b): Schreibmodus (Text anlegen + Klick bzw. Doppelklick, Esc/Klick daneben beendet), Schreibmarke/Markierung aus dem Kern-Zeilensatz, Markieren mit Maus und Tastatur, eine Bearbeitung = ein Rückgängig-Schritt, Rahmen wächst an der Kante der Textposition; Feld INHALT entfällt.
 - Bild-Objekt (Etappe 3d-2a): Werkzeug Bild – aus Datei (PNG/JPG/GIF/BMP/WebP/SVG/PDF-Seite), Zwischenablage, Ablegen; 1:1, automatisch zugeschnitten, zu große eingepasst (Einstellungen: automatisch zuschneiden an, drehen statt verkleinern aus); Umwandlung Strich/Foto, Schwelle, Umkehren, Zuschnitt, Originalgröße, Seitenverhältnis, Drehen; Strg+V: Objekte (MIME application/x-labelwerk-objects) › lokale Dateien › Text als Textrahmen › Bild.
 - Bildschirmfoto (Etappe 3d-2b): Knopf BILDSCHIRMFOTO im Reiter Bild – labelwerk blendet sich aus, der Desktop zeigt seine Auswahl (XDG-Portal), das Bild kommt mit 300 dpi aufs Etikett; ohne Portal Hinweis auf Zwischenablage + Strg+V.
-- 1381 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- SVG-Dateien sind Vektorbilder: in jeder Größe scharf gerastert (Etappe 3d-2c).
+- 1412 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -37,6 +38,9 @@ src/labelwerk/
               (in Codepunkten; to_utf16/from_utf16 rechnen in Qts UTF-16-Positionen um)
               ImageObject: Ausschnitt → Rahmen in Druckpunkten (Lanczos, keep_ratio eingepasst) → imaging.to_layers → gedreht;
               decodiert/skaliert gecacht (_source/_scaled_source, Schlüssel PNG-Bytes + Ausschnitt + Größe)
+              Vektorbilder (ImageObject.svg): set_svg_rasterizer(fn(svg, size, region)) – die GUI meldet Qt an; gerastert
+              wird das Blatt so groß, dass der Ausschnitt den Rahmen füllt (scharf in jeder Größe, _vector_source gecacht);
+              ohne Raster-Funktion gilt die Vorschau-PNG
   fonts.py    Schriften über fontconfig (families, resolve, load), Ersatzkursive bei fehlender Kursiv-Datei
   files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi)
               crop(img) -> auf Inhalt, ohne Schnittmarken/Leerraum; fit_to_label(img, label_id, fit, rotate) -> 1:1, auto/feste Drehung
@@ -51,7 +55,8 @@ src/labelwerk/
   document.py Etikett-Dokument (Etikett, Länge, Objekte), UI-unabhängig; Span/Paragraph/TextObject (zeichenweise Formatierung, fit);
               TextObject: Position x_mm/y_mm (None = mittig wie bisher), Rahmen w_mm/h_mm (mit fit), Drehen rotation 0/90/180/270
               ImageObject: png (Farboriginal), source/page/crop, Rahmen x/y/w/h_mm immer gesetzt, rotation, mode/threshold/invert,
-              keep_ratio, dpi (Auflösung der PNG-Bytes); from_image(img, dpi, source, page, crop) setzt 1:1-Größe;
+              keep_ratio, dpi (Auflösung der PNG-Bytes), svg (Vektorbild, png = Vorschau); from_image(img, dpi, source, page,
+              crop, svg) setzt 1:1-Größe;
               box() (Ausschnitt in Pixeln), natural_mm() (Größe 1:1)
   settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings); Feld `theme` (rawblock/classic), `image_crop`/`image_rotate` (Bilder einfügen)
   media.py    Medium prüfen: Statusabfrage ESC i S (nicht blockierend, 2 s), Media, label_for_media
@@ -75,7 +80,7 @@ src/labelwerk/
     panels/         Eigenschaften-Panels je Werkzeug (paper, text und image mit Bereich Position)
     panels/image.py Reiter Bild: Aus Datei/Aus Zwischenablage/Bildschirmfoto, Quelle, Strich/Foto, Schwelle (Regler = ein Schritt), Umkehren,
                     Zuschnitt (Fallback ohne Inhalt: ganzes Bild + Hinweis), Originalgröße 1:1, Seitenverhältnis, Drehen (Aktionen), Position
-    image_import.py Bilder beschaffen: load (SVG per QSvgRenderer bei 300 dpi, Maße mit Einheit selbst gelesen: svg_size; sonst files.load_image), load_screenshot (Bildschirmfoto: 300 dpi, Dateiangabe gilt nicht;
+    image_import.py Bilder beschaffen: rasterize_svg (Raster-Funktion für Vektorbilder); load (SVG per QSvgRenderer bei 300 dpi, Maße mit Einheit selbst gelesen: svg_size; sonst files.load_image), load_screenshot (Bildschirmfoto: 300 dpi, Dateiangabe gilt nicht;
                     Quelle SCREENSHOT), page_count,
                     mime_image/mime_files/mime_text (Zwischenablage, Ablegen; ohne Auflösung 300 dpi), MIME_OBJECTS
     screenshot.py   Bildschirmfoto über das XDG-Portal (QtDBus, interaktiv): ScreenshotPortal (available, take, Signal

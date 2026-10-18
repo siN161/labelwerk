@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import io
 import re
+from functools import lru_cache
 from pathlib import Path
 from xml.etree import ElementTree
 
 from PIL import Image
-from PySide6.QtCore import QBuffer, QIODevice, QMimeData, Qt
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QMimeData, QRectF, Qt
 from PySide6.QtGui import QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -61,20 +62,65 @@ def load_svg(path: Path) -> tuple[Image.Image, float]:
     ``MAX_PIXELS`` auf der längsten Seite."""
     if not path.exists():
         raise FileNotFoundError(f"Datei nicht gefunden: {path}")
-    renderer = QSvgRenderer(str(path))
+    # mit Verweisen auf andere Dateien über den Pfad (sie liegen neben der SVG), sonst aus den
+    # Bytes – derselbe Weg wie beim Rastern eines Vektorbilds (Vorschau = Raster)
+    vector = load_vector(path)
+    renderer = QSvgRenderer(str(path)) if vector is None else _svg_renderer(vector)
     size = renderer.defaultSize()
     if not renderer.isValid() or size.isEmpty():
         raise ValueError(f"Datei kann nicht gelesen werden: {path.name} (kein gültiges SVG)")
     # Qt rechnet mm/in/pt mit 90 dpi – Maße mit Einheit deshalb selbst lesen (CSS: 96 px/in)
     width, height = svg_size(path) or (size.width(), size.height())
     dpi = min(DPI, MAX_PIXELS * SVG_DPI / max(width, height))
-    image = QImage(max(1, round(width * dpi / SVG_DPI)),
-                   max(1, round(height * dpi / SVG_DPI)), QImage.Format.Format_RGB32)
+    pixels = (max(1, round(width * dpi / SVG_DPI)), max(1, round(height * dpi / SVG_DPI)))
+    return _render(renderer, pixels, (0, 0, *pixels)), dpi
+
+
+# Verweis auf eine andere Datei: href, das weder auf eine Stelle im Dokument (#…) noch auf
+# eingebettete Daten (data:) zeigt
+_EXTERNAL = re.compile(rb"""href\s*=\s*["'](?!\s*(?:#|data:))""")
+
+
+def load_vector(path: Path) -> bytes | None:
+    """SVG-Datei als Vektorbild: ihre Bytes – außer sie verweist auf andere Dateien (``<image>``,
+    externes ``<use>``; die gelten nur neben der SVG): dann None, sie wird Pixelbild. Andere
+    Dateitypen: None."""
+    path = Path(path)
+    if path.suffix.lower() != ".svg":
+        return None
+    data = path.read_bytes()
+    return None if _EXTERNAL.search(data) else data
+
+
+@lru_cache(maxsize=4)
+def _svg_renderer(svg: bytes) -> QSvgRenderer:
+    """Geparstes SVG (Größe ändern rastert neu, ohne neu zu parsen)."""
+    return QSvgRenderer(QByteArray(svg))
+
+
+def _render(renderer: QSvgRenderer, size: tuple[int, int],
+            region: tuple[int, int, int, int]) -> Image.Image:
+    """Ganzes Blatt auf ``size`` Pixel, davon ``region`` (x, y, w, h), RGB auf Weiß."""
+    x, y, w, h = region
+    image = QImage(w, h, QImage.Format.Format_RGB888)
     image.fill(Qt.GlobalColor.white)
     painter = QPainter(image)
-    renderer.render(painter)
+    painter.translate(-x, -y)
+    renderer.render(painter, QRectF(0, 0, *size))
     painter.end()
-    return to_pil(image), dpi
+    return Image.frombuffer("RGB", (w, h), image.constBits(), "raw", "RGB",
+                            image.bytesPerLine(), 1).copy()     # eine Kopie: Qt gibt frei
+
+
+def rasterize_svg(svg: bytes, size: tuple[int, int],
+                  region: tuple[int, int, int, int]) -> Image.Image:
+    """Raster-Funktion für Vektorbilder (``render.set_svg_rasterizer``): das ganze Blatt auf
+    ``size`` Pixel, davon nur ``region`` (x, y, w, h) – RGB auf Weiß. Kaputtes SVG:
+    ``ValueError``."""
+    renderer = _svg_renderer(svg)
+    if not renderer.isValid():
+        raise ValueError("Vektorbild kann nicht gelesen werden (kein gültiges SVG).")
+    return _render(renderer, size, region)
 
 
 _UNITS = {"": 1.0, "px": 1.0, "in": 96.0, "cm": 96 / 2.54, "mm": 96 / 25.4, "pt": 96 / 72,

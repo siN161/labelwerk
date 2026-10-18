@@ -19,8 +19,10 @@ Online-Suche, Text in Symbolen, Zweifarbdruck (Farbe bleibt nur erhalten).
 - `ImageObject` bekommt `svg: bytes | None = None` (repr=False). Gesetzt → das Objekt ist ein Vektorbild;
   `png` bleibt Vorschau/Rückfall und bestimmt wie bisher Ausschnitt (`crop`, Pixel der PNG) und Größe 1:1
   (`dpi`).
-- `render.set_svg_rasterizer(fn | None)`: Raster-Funktion `fn(svg: bytes, size: (w, h)) -> PIL.Image RGB`
-  (auf Weiß). Die GUI meldet beim Start eine an (`gui/image_import`: QSvgRenderer); Tests eine Ersatzfunktion;
+- `render.set_svg_rasterizer(fn | None)`: Raster-Funktion `fn(svg: bytes, size: (w, h), region: (x, y, w, h))
+  -> PIL.Image RGB` (auf Weiß): das ganze Blatt auf `size`, geliefert nur `region` – bei kleinem Ausschnitt
+  aus großem Blatt wird nie das ganze Blatt angelegt; Blattseite höchstens 4 000 000 Pixel (sonst klare
+  Meldung; Qt ließe Formen still weg). Die GUI meldet beim Start eine an (`gui/image_import`: QSvgRenderer); Tests eine Ersatzfunktion;
   ohne Funktion (CLI) gilt die PNG wie bei jedem Bild.
 - Rendern eines Vektorbilds: das ganze SVG so groß rastern, dass der Ausschnitt genau den Rahmen in
   Druckpunkten füllt (Faktor = Rahmen / Ausschnitt der PNG), dann den Ausschnitt nehmen – kein Skalieren
@@ -28,7 +30,9 @@ Online-Suche, Text in Symbolen, Zweifarbdruck (Farbe bleibt nur erhalten).
   (Schlüssel SVG-Bytes + Ausschnitt + Größe). Vorschau = Druck (der Druck nimmt das Bild des Renderers).
 - „Originalgröße 1:1“ gilt für Vektorbilder als Standardgröße (die `dpi` der Vorschau-PNG legt sie fest).
 - Auch SVG-Dateien aus „Aus Datei …“ (3d-2a) werden so Vektorbilder (gleicher Weg; Größe wie bisher aus
-  width/height).
+  width/height; Vorschau aus denselben Bytes wie das Raster). SVGs mit Verweisen auf andere Dateien
+  (`<image>`, externes `<use>`) werden Pixelbilder – die Verweise gelten nur neben der Datei.
+- `limit_resolution` lässt Vektorbilder unverändert; der Ausschnitt wird in beiden Wegen geprüft.
 
 ## 2 – Bibliothek (Daten, Kern)
 

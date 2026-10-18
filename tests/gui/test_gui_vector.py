@@ -1,0 +1,143 @@
+"""Vektorbilder in der GUI (Etappe 3d-2c): Qt rastert SVG in Rahmengröße – auch SVG-Dateien
+aus „Aus Datei …“ bleiben beim Vergrößern scharf."""
+import pytest
+from PIL import Image
+
+from labelwerk import render
+from labelwerk.document import Document, TextObject
+from labelwerk.gui import image_import
+from labelwerk.gui.image_import import rasterize_svg
+from labelwerk.gui.main_window import MainWindow
+from labelwerk.settings import Settings
+
+# Linie 1 Einheit dick quer durch die Mitte eines 100 × 50 Blatts
+LINE = (b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50" viewBox="0 0 100 50">'
+        b'<rect x="0" y="24.5" width="100" height="1" fill="black"/></svg>')
+
+
+@pytest.fixture
+def window(qtbot):
+    win = MainWindow(doc=Document("62", length_mm=60, objects=[TextObject("Eins", x_mm=2, y_mm=2)]),
+                     settings=Settings(check_media_on_start=False))
+    qtbot.addWidget(win)
+    win.show()
+    return win
+
+
+def _gray_rows(img: Image.Image) -> list[int]:
+    """Zeilen, die irgendwo dunkler als Weiß sind."""
+    gray = img.convert("L")
+    return [y for y in range(gray.height)
+            if gray.crop((0, y, gray.width, y + 1)).getextrema()[0] < 250]
+
+
+def test_rasterize_svg_renders_the_whole_sheet_scaled(qapp):
+    img = rasterize_svg(LINE, (1000, 500), (0, 0, 1000, 500))
+    assert img.mode == "RGB" and img.size == (1000, 500)
+    assert _gray_rows(img) == list(range(245, 255))          # 10 Pixel dick, scharf
+
+
+def test_rasterize_svg_region_equals_crop_of_the_sheet(qapp):
+    whole = rasterize_svg(LINE, (400, 200), (0, 0, 400, 200))
+    part = rasterize_svg(LINE, (400, 200), (100, 80, 150, 60))
+    assert part.tobytes() == whole.crop((100, 80, 250, 140)).tobytes()
+
+
+def test_rasterize_svg_rejects_broken_svg(qapp):
+    with pytest.raises(ValueError, match="Vektorbild"):
+        rasterize_svg(b"<svg", (10, 10), (0, 0, 10, 10))
+
+
+def test_window_registers_the_qt_rasterizer(window):
+    assert render._svg_rasterizer is image_import.rasterize_svg
+
+
+def test_svg_file_becomes_a_vector_image(window, tmp_path):
+    path = tmp_path / "linie.svg"
+    path.write_bytes(LINE)
+    window.ask_image_file = lambda: str(path)
+    window.panel("image").from_file.click()
+    obj = window.doc.objects[1]
+    assert obj.svg == LINE
+    assert obj.image().size == (round(100 * 300 / 96), round(50 * 300 / 96))   # Vorschau 300 dpi
+
+
+BARS = (b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50" viewBox="0 0 100 50">'
+        b'<rect x="0" y="10.3" width="100" height="9.4" fill="black"/>'
+        b'<rect x="0" y="30.3" width="100" height="9.4" fill="black"/></svg>')
+
+
+def _soft_rows(img: Image.Image) -> int:
+    """Zeilen mit Graustufen (Kantensaum) in der Bildmitte."""
+    gray = img.convert("L")
+    column = [gray.getpixel((gray.width // 2, y)) for y in range(gray.height)]
+    return sum(30 < v < 225 for v in column)
+
+
+def test_enlarged_svg_stays_sharp(window, tmp_path):
+    """4× so groß: das Vektorbild wird neu gerastert – an jeder der vier Kanten höchstens eine
+    graue Zeile; die hochskalierte Vorschau hätte einen breiten Saum."""
+    path = tmp_path / "balken.svg"
+    path.write_bytes(BARS)
+    window.ask_image_file = lambda: str(path)
+    window.panel("image").from_file.click()
+    obj = window.doc.objects[1]
+    size = (round(obj.w_mm * 4 * 300 / 25.4), round(obj.h_mm * 4 * 300 / 25.4))
+    crop = tuple(obj.crop)
+    vector = render._vector_source(obj.svg, obj.png, crop, size, obj.keep_ratio)
+    scaled = render._scaled_source(obj.png, crop, size, obj.keep_ratio)
+    assert _soft_rows(vector) <= 4 < _soft_rows(scaled)
+
+
+def test_window_renders_vectors_in_frame_size(window, tmp_path):
+    """Die Arbeitsfläche nimmt den Vektorweg: nach dem Vergrößern wird in Rahmengröße gerastert."""
+    path = tmp_path / "balken.svg"
+    path.write_bytes(BARS)
+    window.ask_image_file = lambda: str(path)
+    window.panel("image").from_file.click()
+    calls = []
+
+    def spy(svg, size, region):
+        calls.append(region[2:])
+        return rasterize_svg(svg, size, region)
+    render.set_svg_rasterizer(spy)
+    obj = window.doc.objects[1]
+    obj.w_mm, obj.h_mm = obj.w_mm * 4, obj.h_mm * 4
+    window.render_now()
+    assert calls[-1] == (round(obj.w_mm * 300 / 25.4), round(obj.h_mm * 300 / 25.4))
+
+
+def test_svg_preview_is_the_same_raster_as_the_vector(window, tmp_path):
+    """Vorschau-PNG und Raster stammen aus denselben Bytes – Zuschnitt und Druck passen."""
+    path = tmp_path / "balken.svg"
+    path.write_bytes(BARS)
+    image, _ = image_import.load(path)
+    assert image.tobytes() == rasterize_svg(BARS, image.size, (0, 0, *image.size)).tobytes()
+
+
+def test_svg_with_linked_file_is_inserted_as_pixel_image(window, tmp_path):
+    """Verweise auf andere Dateien gelten nur neben der SVG – als Pixelbild bleibt das Bild drin."""
+    Image.new("RGB", (40, 40), "black").save(tmp_path / "bild.png")
+    path = tmp_path / "mit-bild.svg"
+    path.write_text('<svg xmlns="http://www.w3.org/2000/svg" '
+                    'xmlns:xlink="http://www.w3.org/1999/xlink" width="96" height="96">'
+                    '<image xlink:href="bild.png" x="0" y="0" width="96" height="96"/></svg>')
+    window.ask_image_file = lambda: str(path)
+    window.panel("image").from_file.click()
+    obj = window.doc.objects[1]
+    assert obj.svg is None
+    assert obj.image().convert("L").getextrema()[0] == 0      # das verlinkte Bild ist drin
+
+
+@pytest.mark.parametrize("href", ["#teil", "data:image/png;base64,iVBORw0KGgo="])
+def test_internal_references_stay_vector(tmp_path, href):
+    path = tmp_path / "intern.svg"
+    path.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" '
+                    f'xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="{href}"/></svg>')
+    assert image_import.load_vector(path) == path.read_bytes()
+
+
+def test_load_vector_only_for_svg(tmp_path):
+    path = tmp_path / "bild.png"
+    Image.new("RGB", (4, 4)).save(path)
+    assert image_import.load_vector(path) is None
