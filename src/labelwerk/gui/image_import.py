@@ -26,6 +26,7 @@ FILE_FILTER = ("Bilder und PDF (" + " ".join(f"*{s} *{s.upper()}" for s in SUFFI
                "Alle Dateien (*)")              # Großschreibung: Kameras, Windows
 CLIPBOARD = "Zwischenablage"                    # Quelle eines eingefügten Bilds
 DROPPED = "Abgelegtes Bild"
+SCREENSHOT = "Bildschirmfoto"
 MIME_OBJECTS = "application/x-labelwerk-objects"   # kopierte Objekte (Kennung der Kopie)
 SVG_DPI = 96                                    # SVG: 1 px = 1/96 in
 
@@ -45,6 +46,16 @@ def load(path: Path, page: int = 1) -> tuple[Image.Image, float]:
     if path.suffix.lower() == ".svg":
         return load_svg(path)
     return files.load_image(path, page)
+
+
+def load_screenshot(path: Path) -> tuple[Image.Image, float]:
+    """Bildschirmfoto-Datei: (RGB-Bild, dpi) mit 1 Bildschirmpixel = 1 Druckpunkt (300 dpi) –
+    eine Auflösungsangabe der Datei gilt nicht; hat das Laden ein riesiges Foto verkleinert
+    (``imaging.limit_size``), entsprechend weniger, damit die Größe stimmt."""
+    image, _ = load(path)
+    with Image.open(path) as raw:
+        scale = max(image.size) / max(raw.size)
+    return image, DPI * scale
 
 
 def load_svg(path: Path) -> tuple[Image.Image, float]:
