@@ -36,7 +36,13 @@ keine Fensterwahl), `cosmic-screenshot` direkt (nur COSMIC).
     Aufruf einen anderen Request-Pfad (ältere Portale), wird auf diesen umabonniert.
     Aufruffehler → sofort `finished(None, Meldung)`.
   - Signal `finished(object, object)`: (Pfad | None, Fehlermeldung | None); (None, None) = abgebrochen.
-    Genau einmal je `take()`; das Abo wird danach gelöst.
+    Genau einmal je `take()`; das Abo wird danach gelöst. Fehler vor der Auswahl kommen noch während
+    `take()`.
+  - Empfänger je Aufnahme (`_Request`): QtDBus stellt Signale über die Ereignisschlange zu – eine schon
+    eingereihte Antwort einer verworfenen Aufnahme zählt nicht. Ein neues `take()` schließt die offene
+    Auswahl (`Request.Close`). Empfänger werden erst beim nächsten `take()` gelöscht (Löschen während der
+    eigenen Zustellung stürzt ab). Scheitert das Abo, endet die Aufnahme sofort mit Fehler.
+  - `available()` wartet höchstens 5 s, der Aufruf 10 s; D-Bus-Fehler werden über `error_text` deutsch.
 
 ## 2 – GUI
 
@@ -54,19 +60,27 @@ keine Fensterwahl), `cosmic-screenshot` direkt (nur COSMIC).
      Aktion währenddessen gesperrt (kein zweiter Aufruf).
   3. Antwort (`finished`): Fenster wieder zeigen und nach vorn holen (`show`, `raise_`, `activateWindow`),
      Aktion entsperren. Pfad → Bild laden (`image_import.load`), mit **300 dpi** (1 Bildschirmpixel = 1
-     Druckpunkt; eine DPI-Angabe in der Datei wird ignoriert) einfügen wie ein Bild aus der Zwischenablage
+     Druckpunkt; eine DPI-Angabe in der Datei wird ignoriert, eine Verkleinerung beim Laden riesiger Fotos
+     eingerechnet: `image_import.load_screenshot`) einfügen wie ein Bild aus der Zwischenablage
      (`_insert_picture`: Zuschnitt/Drehen nach Einstellungen, zu groß → verkleinert, Endlosband hinter den
      Inhalt, ausgewählt, ein Rückgängig-Schritt), Quelle „Bildschirmfoto“. Abgebrochen → nichts, keine
-     Meldung. Fehler / Datei nicht lesbar → Meldung in der Statusleiste („error“).
+     Meldung. Fehler → Meldung in der Statusleiste („error“), Datei nicht lesbar → „Bildschirmfoto: …“.
+     Eine Ausnahme beim Portal-Aufruf holt das Fenster sofort zurück (Meldung statt Traceback).
+     Solange ausgeblendet, beendet sich die App nicht, wenn sich ein anderes Fenster schließt
+     (`quitOnLastWindowClosed` vorübergehend aus). Schließen während der Aufnahme beendet sie (keine
+     Auswahl, kein Einfügen mehr).
   4. **Sicherheitsnetz:** keine Antwort nach `RESTORE_TIMEOUT_MS` = 60 s → Fenster wieder zeigen, Aktion
      entsperren; eine spätere Antwort wird trotzdem noch eingefügt (nur die erste je Aufnahme).
 - Die vom Portal angelegte Datei bleibt unangetastet (gehört dem Nutzer bzw. dem Desktop).
 
 ## Tests
 
-- **Nie gegen das echte Portal** (es würde eine Auswahl auf dem Bildschirm öffnen): GUI-Tests ersetzen
-  `take_screenshot` bzw. die Portal-Instanz (`available`) durch Fakes; ein Test stellt sicher, dass die
-  Test-Umgebung den echten Aufruf nicht erreicht (Fixture ersetzt `ScreenshotPortal.take`/`available`).
+- **Nie gegen das echte Portal** (es würde eine Auswahl auf dem Bildschirm öffnen): `tests/gui/conftest.py`
+  setzt `DBUS_SESSION_BUS_ADDRESS` ins Leere und ersetzt `screenshot.session_bus` (autouse); GUI-Tests
+  ersetzen die Haken `screenshot_available`/`take_screenshot`. D-Bus-Ablauf gegen `tests/gui/fake_portal.py`
+  (System-Python + Gio) auf einem eigenen `dbus-daemon` mit eigener Konfiguration **ohne** Service-
+  Verzeichnisse (die Sitzungs-Standardkonfiguration startet echte Dienste); Fixture prüft
+  `ListActivatableNames`. Ohne dbus-daemon/PyGObject übersprungen; CI installiert `dbus python3-gi`.
 - Kern-artige Tests: `request_path` (Sonderzeichen im Busnamen), `parse_response` (0 mit URI inkl.
   Leerzeichen/Umlaut %-kodiert, 0 ohne URI, nicht-`file`-URI, 1, 2).
 - GUI: Knopf im Panel + Aktion im Verzeichnis (ohne Kürzel); Fenster wird ausgeblendet und nach der Antwort
