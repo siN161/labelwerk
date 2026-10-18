@@ -40,23 +40,31 @@ Häkchen (nach dem Öffnen ist jede Zeile gewählt), mehrere Etiketten nebeneina
   - XLSX über `openpyxl` (MIT; mit `defusedxml`, PSF – gegen XML-Angriffe), nur lesend, Werte statt Formeln;
     höchstens 20 MB. Zahlen: ganze ohne „,0“, sonst mit Komma (1,5); Datum TT.MM.JJJJ (mit Uhrzeit, wenn
     nicht 0:00); leere Zellen leer.
-  - Erste Zeile = Spaltennamen (leer → „Spalte N“, doppelte → „Name (2)“); leere Zeilen am Ende entfallen;
-    höchstens 10 000 Zeilen und 200 Spalten.
+  - Erste Zeile = Spaltennamen (leer → „Spalte N“, doppelte → „Name (2)“); leere Zeilen entfallen (auch
+    mittendrin – die Zeilennummern in labelwerk zählen sie nicht), leere Zellen am Zeilenende auch (nur
+    formatierte Excel-Zellen, `;;;` aus Excel-CSV); höchstens 10 000 Zeilen und 200 Spalten, Zellen bis
+    100 000 Zeichen; gelesen wird gestreamt (Grenzen greifen sofort).
+  - CSV: Trennzeichen aus den ersten 20 Zeilen (gleiche Feldzahl > 1; Tab vor `;` vor `,` vor `|`); UTF-16 mit
+    BOM („Unicode-Text“). Excel: nur Arbeitsblätter (keine Diagrammblätter), Standard = erstes sichtbare;
+    Zahlenformate führende Nullen (000), Prozent, feste Nachkommastellen; ohne aktives defusedxml kein Excel.
   - Fehler → `SeriesError` (deutsch, mit Dateiname): nicht gefunden, nicht lesbar, kein Tabellenformat,
     Blatt fehlt, zu groß.
-  - `numbering_table(n) -> Table` mit der Spalte „Nummer“.
+  - `numbering_table(n) -> Table` mit der Spalte „Nummer“ (auch die letzte Zahl höchstens 10⁹).
   - `table_for(series, base=None) -> Table` (Datei bzw. Nummerierung).
 - **Platzhalter:** `placeholders(doc) -> list[str]` (Namen in Textobjekten, Reihenfolge des Auftretens),
   `fill(doc, columns, row, keep=None) -> Document` (Kopie; `{Name}` einer vorhandenen Spalte → Zellwert, die
   Formatierung des Stücks, in dem der Platzhalter beginnt, gilt für den Wert; über Stückgrenzen hinweg möglich;
-  unbekannte Namen bleiben stehen; `keep` = Index eines Objekts, das unverändert bleibt – Schreibmodus).
+  unbekannte Namen bleiben stehen; Leerzeichen in den Klammern zählen nicht; `keep` = Index eines Objekts,
+  das unverändert bleibt – Schreibmodus). Das Ergebnis ist nur zum Lesen: unveränderte Objekte sind dieselben
+  wie im Original (Renderer-Cache), nur gefüllte Textobjekte neu.
   `missing(doc, columns) -> list[str]` (Platzhalter ohne Spalte).
 - **Drucken mehrerer Etiketten** (`printer.py`): `build_instructions(images, label_id, model, cut=True,
   cut_every=1)` nimmt eine Liste (ein Bild bleibt erlaubt); `cut_every` = n schneidet alle n Etiketten
   (Brother `ESC i A n`, 1–255) und am Ende. „Nur am Ende“ = `cut_every = min(Anzahl, 255)`. `print_images`
   wie `print_image` für eine Liste.
 - **Speichern** (`storage.py`): Eintrag `series` (null = keine), Schema `SERIES`/`NUMBERING` mit Grenzen;
-  `source` als Text (Pfad wie gewählt, absolut).
+  `source` absolut – liegt die Tabelle im Ordner der Datei (oder darunter), relativ dazu (kein Benutzername in
+  weitergegebenen Etiketten); nie leer, kein NUL.
 
 ## 2 – GUI
 

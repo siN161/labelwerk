@@ -19,13 +19,15 @@ import math
 import os
 import reprlib
 import stat
+from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
 
-from .document import (ALIGNMENTS, FRAME_LINE_MM, FRAME_STYLES, MAX_FRAME_MM, MAX_MARGIN_MM,
-                       MAX_POSITION_MM, ORIENTATIONS, ROTATIONS, Document, Frame, ImageObject,
-                       Paragraph, Span, TextObject)
+from .document import (ALIGNMENTS, CUTS, FRAME_LINE_MM, FRAME_STYLES, MAX_DIGITS, MAX_FRAME_MM,
+                       MAX_MARGIN_MM, MAX_NUMBER, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS,
+                       ROTATIONS, Document, Frame, ImageObject, Numbering, Paragraph, Series, Span,
+                       TextObject)
 from .imaging import MAX_PIXELS, MODES
 from .labels import get_label
 
@@ -54,8 +56,10 @@ IMAGE = {"png": "bytes", "source": "str", "page": "page?", "crop": "crop", "x_mm
          "svg": "bytes?"}
 FRAME = {"style": "frame_style", "rounded": "bool", "line_mm": "frame_line",
          "inset_mm": "frame_mm", "padding_mm": "frame_mm"}
+NUMBERING = {"start": "number", "step": "step", "count": "count", "digits": "digits"}
+SERIES = {"source": "path?", "sheet": "str?", "cut": "cut"}       # dazu „numbering“
 DOCUMENT = {"label_id": "label", "length_mm": "size?", "orientation": "orientation",
-            "margin_mm": "margin"}                                # dazu „objects“, „frame“
+            "margin_mm": "margin"}                                # dazu „objects“, „frame“, „series“
 
 
 def _num(v) -> bool:
@@ -101,6 +105,12 @@ _KINDS = {
     "frame_style": lambda v: v in FRAME_STYLES,
     "frame_line": lambda v: _num(v) and FRAME_LINE_MM[0] <= v <= FRAME_LINE_MM[1],
     "frame_mm": lambda v: _num(v) and 0 <= v <= MAX_FRAME_MM,
+    "number": lambda v: _int(v) and abs(v) <= MAX_NUMBER,
+    "step": lambda v: _int(v) and v != 0 and abs(v) <= MAX_NUMBER,
+    "count": lambda v: _int(v) and 1 <= v <= MAX_SERIES_ROWS,
+    "digits": lambda v: _int(v) and 0 <= v <= MAX_DIGITS,
+    "cut": lambda v: v in CUTS,
+    "path": lambda v: _text(v) and v != "" and "\x00" not in v,
     "crop": lambda v: v is None or (isinstance(v, list) and len(v) == 4 and all(map(_int, v))),
 }
 
@@ -145,7 +155,9 @@ def _dump(obj, schema: dict) -> dict:
     return out
 
 
-def to_dict(doc: Document) -> dict:
+def to_dict(doc: Document, base: str | Path | None = None) -> dict:
+    """``base``: Ordner der Datei – eine Tabelle darin oder darunter wird relativ gespeichert
+    (kein Benutzername in weitergegebenen Etiketten, Ordner mitsamt Tabelle verschiebbar)."""
     objects = []
     for obj in doc.objects:
         if isinstance(obj, TextObject):
@@ -155,8 +167,16 @@ def to_dict(doc: Document) -> dict:
         else:
             objects.append({"type": "image", **_dump(obj, IMAGE)})
     frame = None if doc.frame is None else _dump(doc.frame, FRAME)
+    series = None
+    if doc.series is not None:
+        numbering = doc.series.numbering
+        series = {**_dump(doc.series, SERIES),
+                  "numbering": None if numbering is None else _dump(numbering, NUMBERING)}
+        if base is not None and doc.series.source is not None:
+            series["source"] = _relative(doc.series.source, base)
     return {"format": FORMAT, "version": VERSION,
-            "document": {**_dump(doc, DOCUMENT), "objects": objects, "frame": frame}}
+            "document": {**_dump(doc, DOCUMENT), "objects": objects, "frame": frame,
+                         "series": series}}
 
 
 def save(doc: Document, path: str | Path) -> Path:
@@ -167,7 +187,8 @@ def save(doc: Document, path: str | Path) -> Path:
     path = Path(path)
     target = Path(os.path.realpath(path))
     try:
-        text = json.dumps(to_dict(doc), ensure_ascii=False, indent=1, allow_nan=False) + "\n"
+        text = json.dumps(to_dict(doc, target.parent), ensure_ascii=False, indent=1,
+                          allow_nan=False) + "\n"
         text.encode("utf-8")                # einzelne Surrogates lassen sich nicht schreiben
     except UnicodeEncodeError as e:
         raise OSError(f"{path.name} wurde nicht gespeichert: ungültige Zeichen im Text") from e
@@ -257,6 +278,16 @@ def _image(data: dict, where: str) -> ImageObject:
     return ImageObject(**values)
 
 
+def _series(data) -> Series:
+    values = _load(data, SERIES, " in der Serie")
+    numbering = data.get("numbering")
+    if numbering is not None:
+        values["numbering"] = Numbering(**_load(numbering, NUMBERING, " in der Nummerierung"))
+    if (values.get("source") is None) == (numbering is None):
+        raise StorageError("Serie braucht genau eins: Tabelle oder Nummerierung")
+    return Series(**values)
+
+
 def _is_file(path: str) -> bool:
     try:
         return stat.S_ISREG(os.stat(path).st_mode)
@@ -277,7 +308,16 @@ def _text_object(item: dict, where: str) -> TextObject:
     return TextObject(paragraphs or [Paragraph([Span("")])], **values)   # leer = eine Zeile
 
 
-def from_dict(data) -> Document:
+def _relative(source: str, base: str | Path) -> str:
+    """Pfad relativ zu ``base`` (mit „/“), wenn er darin liegt – sonst wie er ist."""
+    try:
+        return Path(source).relative_to(Path(os.path.realpath(base))).as_posix()
+    except ValueError:
+        return source
+
+
+def from_dict(data, base: str | Path | None = None) -> Document:
+    """``base``: Ordner der Datei – relative Tabellenpfade gelten von dort aus."""
     if not isinstance(data, dict) or data.get("format") != FORMAT:
         raise StorageError("keine labelwerk-Datei")
     version = data.get("version")
@@ -291,6 +331,12 @@ def from_dict(data) -> Document:
     frame = document.get("frame")
     if frame is not None:                   # fehlt oder null: kein Rahmen
         values["frame"] = Frame(**_load(frame, FRAME, " im Rahmen"))
+    if document.get("series") is not None:  # fehlt oder null: keine Serie
+        values["series"] = _series(document["series"])
+        source = values["series"].source
+        if base is not None and source is not None and not Path(source).is_absolute():
+            values["series"] = replace(values["series"],
+                                       source=str(Path(os.path.realpath(base)) / source))
     items = _list(document, "objects", "")
     if len(items) > MAX_OBJECTS:
         raise StorageError(f"Etikett zu groß ({len(items)} Objekte, höchstens {MAX_OBJECTS})")
@@ -340,7 +386,7 @@ def load(path: str | Path) -> Document:
     except ValueError as e:
         raise StorageError(f"{path.name}: keine labelwerk-Datei oder beschädigt") from e
     try:
-        return from_dict(data)
+        return from_dict(data, path.parent)
     except StorageError as e:
         raise StorageError(f"{path.name}: {e}") from e
     except (TypeError, AttributeError, KeyError, RecursionError, OverflowError) as e:

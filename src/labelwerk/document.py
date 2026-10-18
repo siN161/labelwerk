@@ -18,6 +18,11 @@ MIN_PT, MAX_PT = 4.0, 100.0
 FRAME_STYLES = ("single", "double", "thick_thin", "dashed", "dotted", "corners")
 FRAME_LINE_MM = (0.1, 3.0)          # Strichstärke
 MAX_FRAME_MM = 10.0                 # Abstand zum Rand, Innenabstand
+# Serien: Schnitt nach jedem Etikett bzw. nur am Ende; Grenzen der Nummerierung
+CUTS = ("each", "end")
+MAX_SERIES_ROWS = 10_000
+MAX_NUMBER = 10**9
+MAX_DIGITS = 10
 
 
 @dataclass
@@ -197,6 +202,26 @@ class Frame:
     padding_mm: float = 1.0         # Abstand zum Inhalt (automatisch gesetzter Text, Länge)
 
 
+@dataclass(frozen=True)
+class Numbering:
+    """Nummerierung ohne Datei: ``start + i·step`` für i < ``count``, auf ``digits`` Stellen mit
+    Nullen aufgefüllt (Spalte „Nummer“)."""
+    start: int = 1
+    step: int = 1
+    count: int = 10
+    digits: int = 0
+
+
+@dataclass(frozen=True)
+class Series:
+    """Serie: Platzhalter ``{Spalte}`` im Text werden je Zeile einer Tabelle (``source``, CSV
+    oder Excel, ``sheet`` = Blatt; None = erstes) bzw. einer Nummerierung gefüllt."""
+    source: str | None = None
+    sheet: str | None = None
+    numbering: Numbering | None = None
+    cut: str = "each"               # CUTS: nach jedem Etikett | nur am Ende
+
+
 @dataclass
 class Document:
     label_id: str = "62"
@@ -205,6 +230,7 @@ class Document:
     margin_mm: float = 1.0            # Rand in Bandlaufrichtung (vorne/hinten)
     objects: list[TextObject | ImageObject] = field(default_factory=list)
     frame: Frame | None = None        # Zierrahmen; None = keiner
+    series: Series | None = None      # Serie aus Tabelle oder Nummerierung; None = Einzeletikett
 
     def is_empty(self) -> bool:
         """True, wenn nichts gedruckt würde: kein Objekt mit sichtbarem Inhalt und kein Rahmen."""
