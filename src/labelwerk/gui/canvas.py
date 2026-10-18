@@ -137,6 +137,10 @@ class Canvas(QGraphicsView):
         self._pixmaps: dict[int, tuple[RenderedObject, QPixmap]] = {}
         self._selection: list[int] = []
         self._area = self._label_rect = Rect(0, 0, 0, 0)
+        self._inner: Rect | None = None                    # Innenraum des Zierrahmens (mm)
+        self.frame_item: QGraphicsPixmapItem | None = None # Zierrahmen (unter den Objekten)
+        self._frame_source: Image.Image | None = None      # Maske, aus der _frame_pixmap entstand
+        self._frame_pixmap = QPixmap()
         self._grow: str | None = None                      # mitwachsende Achse (Endlosband)
         self._guides: list[tuple[str, float]] = []
         self._caption = ""
@@ -165,14 +169,17 @@ class Canvas(QGraphicsView):
     def set_document(self, label: Label, size: tuple[int, int],
                      rendered: list[RenderedObject], orientation: str = "vertical",
                      area: Rect | None = None, keep_ratio: list[bool] | None = None,
-                     grow: str | None = None, keep_aspect: list[bool] | None = None) -> None:
+                     grow: str | None = None, keep_aspect: list[bool] | None = None,
+                     frame: Image.Image | None = None, inner: Rect | None = None) -> None:
         """Etikett (physische Form) und die einzeln gerenderten Objekte darin anzeigen.
 
         ``size``: Etikett in Druckpunkten in Leserichtung (wie ``render.label_size``);
         ``area``: bedruckbarer Bereich in mm (Einrasten); ``keep_ratio`` je Objekt: Ecken
         skalieren die Schrift (ohne feste Rahmengröße); ``keep_aspect`` je Objekt: auch
         Kanten halten das Seitenverhältnis (Bild); ``grow``: Achse, in der das Etikett
-        mitwächst (``layout.growing_axis``) – dort rastet nur der Anfang ein. Die Szene ist immer in
+        mitwächst (``layout.growing_axis``) – dort rastet nur der Anfang ein; ``frame``: Maske des
+        Zierrahmens (``Rendered.frame``), liegt unter den Objekten und nimmt keine Klicks;
+        ``inner``: sein Innenraum in mm (Einrasten). Die Szene ist immer in
         Druckkoordinaten; bei „horizontal“ dreht die Ansicht um −90°, damit das Etikett in
         Leserichtung erscheint – die Objekte liegen in ``sheet``, das in Leserichtung zählt.
         """
@@ -204,6 +211,16 @@ class Canvas(QGraphicsView):
         self.sheet.setTransform(QTransform().translate(ox + pw, oy).rotate(90) if horizontal
                                 else QTransform().translate(ox, oy))
         scene.addItem(self.sheet)
+        self.frame_item = None
+        if frame is not None:
+            if frame is not self._frame_source:  # der Renderer liefert unverändert dieselbe Maske
+                self._frame_source = frame
+                self._frame_pixmap = QPixmap.fromImage(to_qimage(ImageOps.invert(frame)))
+            self.frame_item = QGraphicsPixmapItem(self._frame_pixmap, self.sheet)
+            self.frame_item.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
+            self.frame_item.setZValue(-1)
+            self.frame_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self._inner = inner
         self._pixmaps = {id(obj): (obj, self._pixmap(obj)) for obj in rendered}
         ratios = keep_ratio if keep_ratio is not None else [True] * len(rendered)
         aspects = keep_aspect if keep_aspect is not None else [False] * len(rendered)
@@ -220,6 +237,7 @@ class Canvas(QGraphicsView):
             self.printable = QGraphicsRectItem(QRectF(area.x * MM, area.y * MM,
                                                       area.w * MM, area.h * MM), self.sheet)
             self.printable.setPen(dotted)
+            self.printable.setZValue(-2)                 # unter dem Zierrahmen
         else:
             self.printable = scene.addRect(QRectF(ox, oy, pw, ph), dotted)
 
@@ -594,7 +612,7 @@ class Canvas(QGraphicsView):
                        if item.index not in self._start and not item.is_empty()]
             snap = layout.snap(layout.bounds(frames), targets, self._area,
                                SNAP_PX / self.px_per_mm(), label=self._label_rect,
-                               grow=self._grow)
+                               grow=self._grow, inner=self._inner)
             delta += QPointF(snap.dx * MM, snap.dy * MM)
             self._guides = snap.guides
         for index, start in self._start.items():

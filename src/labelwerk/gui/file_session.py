@@ -145,6 +145,7 @@ class FileSession(QObject):
     def maybe_save(self) -> bool:
         """Vor Neu/Öffnen/Schließen: bei Änderungen fragen; False = abbrechen (der Schreibmodus
         läuft dann weiter). Das Dokument ist auch beim Tippen aktuell."""
+        self.window.accept_pending_input()
         if not self.modified():
             return True
         answer = self.ask_save_changes()
@@ -215,11 +216,13 @@ class FileSession(QObject):
         return True
 
     def save(self) -> bool:
+        self.window.accept_pending_input()          # eben getippte Zahl gehört dazu
         if self.path is None:
             return self.save_as()
         return self._write(self.path)
 
     def save_as(self) -> bool:
+        self.window.accept_pending_input()
         suggested = str(self.path) if self.path is not None else str(
             Path(self._dir or Path.home()) / f"{self.suggested_name() or UNTITLED}{SUFFIX}")
         path = self.ask_save_file(suggested)

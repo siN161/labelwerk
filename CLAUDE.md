@@ -19,8 +19,11 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Bildschirmfoto (Etappe 3d-2b): Knopf BILDSCHIRMFOTO im Reiter Bild – labelwerk blendet sich aus, der Desktop zeigt seine Auswahl (XDG-Portal), das Bild kommt mit 300 dpi aufs Etikett; ohne Portal Hinweis auf Zwischenablage + Strg+V.
 - SVG-Dateien sind Vektorbilder: in jeder Größe scharf gerastert (Etappe 3d-2c).
 - Symbole/ClipArt (Etappe 3d-2c): Knopf SYMBOL im Reiter Bild – Fenster „Symbol einfügen“ (bleibt offen; Suche über die ganze Bibliothek, Gruppen Zuletzt verwendet/Favoriten/Elektro/Versand/Sicherheit/Allgemein/Eigene, Doppelklick/Enter/Ziehen fügt ein); Symbole 15 mm, Vektor, zugeschnitten.
+- Zierrahmen ums Etikett: Reiter PAPIER → Rahmen (Einfach, Doppelt, Dick-dünn, Gestrichelt, Gepunktet, Nur Ecken; abgerundet,
+  Linie, Randabstand, Innenabstand); runde Etiketten: Kreis; automatischer Text, Ausrichten/Maximieren und neue Bilder/Symbole
+  bleiben im Innenraum.
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
-- 1785 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 1809 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -31,7 +34,7 @@ src/labelwerk/
               render_object(obj, doc, model) -> RenderedObject (Bild mit Anschnitt image_dx/dy, Rahmen x/y/w/h, base_pt);
               compose(rendered, size, orientation) -> Druckbild; label_size/label_margins; schrittweise:
               prepare_object, label_size(prepared=), finish_object; span_dots
-              Renderer (Qt-frei, für die GUI): render(doc, model) -> Rendered(size, objects, image) – Objekt-Cache,
+              Renderer (Qt-frei, für die GUI): render(doc, model) -> Rendered(size, objects, image, frame) – Objekt-Cache,
               rendert nur Geändertes neu (Objekt + Kontext, ohne Position auch Etikettgröße), Druckbild = render_document
               Zeilensatz mit gemeinsamer Grundlinie (pixelgleich zu Pillow multiline_text für reinen Text), font_warnings(doc)
               exakte Druckbreite @300 dpi, Schrift schrumpft automatisch, mehrzeilig zentriert
@@ -93,7 +96,7 @@ src/labelwerk/
               Bilder wie Text mit fester Rahmengröße; keep_aspect (Anfasser mit keep_ratio); Schrift-Funktionen: TypeError bei Bildern
               Bild einfügen/einstellen: insert_frame (Mitte bzw. Ablagepunkt, zu groß → proportional eingepasst, Endlosband
               nur quer), set_crop (Maßstab und Lage des Inhalts bleiben), original_size, set_keep_ratio, proportional
-              frame_area(doc, model, size) -> Rect | None (Innenraum des Zierrahmens in mm)
+              frame_area(doc, model, size) -> Rect | None (Innenraum des Zierrahmens in mm); snap(..., inner=) rastet auch daran ein
   shortcuts.py Tastenkürzel-Verzeichnis ohne Qt: ACTIONS (id, Name, Standard, Bereich global/canvas/edit, fest), effective, conflicts,
               without_conflicts, validate; Bereich edit = Schreibmodus (Esc fest, B/I/U), kollidiert nur mit global
   desktop.py  .desktop-Eintrag (Exec … %f, MimeType) + Icon + Dateityp application/x-labelwerk (*.labelwerk, mime/packages,
@@ -106,7 +109,9 @@ src/labelwerk/
                     Bildschirmfoto (insert_screenshot: ausblenden, Portal, wieder zeigen; Haken screenshot_available/take_screenshot,
                     Antwort screenshot_finished; 5 min Sicherheitsnetz), Symbole (open_symbols, insert_symbol: SYMBOL_MM 15 mm,
                     höchstens quer zum Band; Zuletzt verwendet/Favoriten still gespeichert), Strg+V nach Zwischenablage des Systems (eigene Kopie › Dateien › Text › Bild; Stand beim Ändern gemerkt,
-                    Daten erst beim Einfügen gelesen); Auswahl zeigt Panel der Objektart; start(path) (Datei bzw. Start-Favorit),
+                    Daten erst beim Einfügen gelesen); Auswahl zeigt Panel der Objektart; Ausrichten/Maximieren „am Etikett“
+                    sowie Bilder/Symbole einfügen nutzen mit Zierrahmen seinen Innenraum (_paper_area);
+                    accept_pending_input (getippte Zahl ohne Enter vor Drucken/Speichern/Rückgängig übernehmen); start(path) (Datei bzw. Start-Favorit),
                     print_document(doc) (anderes Etikett drucken, gleiche Rückfragen); closeEvent fragt bei Änderungen
     tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Layout; neue Werkzeuge als Eintrag; START_TOOL = Papier)
     file_session.py FileSession: Neu/Öffnen/Speichern, modified/update_title („•“), maybe_save (Rückfrage), Dokument an Ort und
@@ -116,6 +121,8 @@ src/labelwerk/
                     aufgelöst); Dialoge ask_* ersetzbar (Speichern-Dialog ergänzt die Endung selbst)
     panels/file.py  Reiter Datei: Knöpfe (Aktionen file.*), Favoriten mit Vorschau und ⎙ je Zeile, Kontextmenü, Zuletzt geöffnet
     panels/         Eigenschaften-Panels je Werkzeug (paper, text und image mit Bereich Position)
+    panels/paper.py Reiter Papier: Etikett, Länge, Ausrichtung, Ränder, Rahmen (Arten mit Vorschau aus dem Kern: frame_icon;
+                    Felder ohne Tastatur-Mitlauf = ein Schritt, Werte bleiben bei „Kein“ stehen; rund: ohne „Nur Ecken“/abgerundet)
     symbol_dialog.py Fenster „Symbol einfügen“ (SymbolDialog, Werkzeugfenster, nicht modal; Enter/Esc/Kontextmenü): Suche, Gruppen + Untergruppe, Raster über
                     SymbolModel (Vorschau erst bei Bedarf gerastert), Ziehen (MIME_SYMBOL = id), ★ Favorit, Ordner öffnen (open_url ersetzbar)
     panels/image.py Reiter Bild: Aus Datei/Aus Zwischenablage/Bildschirmfoto/Symbol, Quelle, Strich/Foto, Schwelle (Regler = ein Schritt), Umkehren,
@@ -131,6 +138,7 @@ src/labelwerk/
     panels/position.py PositionSection: Bereich Position (X/Y/B/H in mm), show_frame(rect, editable_size), Signal edited(key, wert)
     panels/layout.py Reiter Layout: Ausrichten, Größe angleichen, Drehen, Reihenfolge (Knöpfe = Aktionen)
     canvas.py       Etikett in echter Größe, Objekte (Auswahl, Ziehen, Einrasten, Anfasser), Lineale, Zug-Anfasser, Zoom;
+                    Zierrahmen (frame_item unter den Objekten, keine Klicks; Einrasten am Innenraum);
                     Ablegen von Dateien/Bilddaten (Daten im dropEvent kopiert, Signal dropped danach, mm) und Symbolen (symbol_dropped); Anfasser-Vorschau mit
                     keep_aspect (Bild, dieselbe Regel wie layout.resize: fest ist, was der Anfasser sagt)
                     Schreibmodus: zeichnet Rahmen/Schreibmarke/Markierung (set_edit_marks), meldet Klicks hinein (edit_*)

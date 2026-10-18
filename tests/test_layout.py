@@ -124,6 +124,20 @@ def test_snap_center_to_label_center():
     assert sorted(s.guides) == [("x", 31), ("y", 15)]
 
 
+def test_snap_to_frame_inner_room():
+    inner = Rect(3, 3, 56, 24)
+    s = layout.snap(Rect(3.2, 9, 5, 5), [], _AREA, 0.5, inner=inner)
+    assert s.dx == pytest.approx(-0.2) and s.guides == [("x", 3)]
+    s = layout.snap(Rect(53.9, 9, 5, 5), [], _AREA, 0.5, inner=inner)      # rechte Innenkante 59
+    assert s.dx == pytest.approx(0.1)
+
+
+def test_snap_inner_room_offers_only_its_start_in_the_growing_axis():
+    inner = Rect(3, 3, 56, 24)
+    s = layout.snap(Rect(53.9, 9, 5, 5), [], _AREA, 0.5, inner=inner, grow="x")
+    assert s.dx == 0
+
+
 def test_snap_to_label_edge():
     s = layout.snap(Rect(0.2, 9, 5, 5), [], _AREA, 0.3, label=_LABEL)
     assert s.dx == pytest.approx(-0.2) and s.guides == [("x", 0)]

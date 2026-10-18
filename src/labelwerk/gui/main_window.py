@@ -11,7 +11,8 @@ from pathlib import Path
 from PIL import Image
 from PySide6.QtCore import QMimeData, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QFileDialog, QFrame, QHBoxLayout,
+                               QInputDialog,
                                QLabel, QMainWindow, QMessageBox,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
@@ -23,10 +24,10 @@ from ..document import Document, ImageObject, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
 from ..labels import DPI, get_label
-from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, growing_axis,
-                      insert_placement, match_objects, maximize_object, move, object_rect,
-                      objects_outside, outside_indices, printable_area, proportional, reorder, resize, rotate,
-                      set_frame, to_grid)
+from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, frame_area,
+                      growing_axis, insert_placement, match_objects, maximize_object, move,
+                      object_rect, objects_outside, outside_indices, printable_area, proportional,
+                      reorder, resize, rotate, set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
@@ -124,6 +125,8 @@ class MainWindow(QMainWindow):
         self._arranging = False                     # Auswahl wird intern umgestellt (Anlegen …)
         self._outside: list[int] = []               # Objekte, die über das Etikett ragen
         self._area = Rect(0, 0, 0, 0)               # bedruckbarer Bereich (mm), mit dem Bild
+        self._inner: Rect | None = None             # Innenraum des Zierrahmens (mm), mit dem Bild
+        self._shown_frame = None                    # Rahmen-Maske der letzten gültigen Anzeige
         # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar;
         # doppelt belegte (von Hand bearbeitete Datei): die spätere Aktion bleibt ohne Kürzel
         keys, key_warnings = without_conflicts(effective(self.settings.shortcuts))
@@ -530,6 +533,8 @@ class MainWindow(QMainWindow):
         self._structure_dirty = False
         self._outside = outside
         self._area = area
+        self._inner = frame_area(self.doc, self.model, size)
+        self._shown_frame = result.frame
         # Anfasser: Ecken halten das Seitenverhältnis bei Text ohne feste Rahmengröße und bei
         # Bildern mit „Seitenverhältnis beibehalten“ – Bilder dann auch an den Kanten
         images = [isinstance(obj, ImageObject) for obj in self.doc.objects]
@@ -538,7 +543,8 @@ class MainWindow(QMainWindow):
                                                    for obj, image in zip(self.doc.objects, images)],
                                  grow=growing_axis(self.doc),
                                  keep_aspect=[image and obj.keep_ratio
-                                              for obj, image in zip(self.doc.objects, images)])
+                                              for obj, image in zip(self.doc.objects, images)],
+                                 frame=result.frame, inner=self._inner)
         self.panel("layout").set_growing(growing_axis(self.doc))
         self._update_frame()
         self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
@@ -554,7 +560,8 @@ class MainWindow(QMainWindow):
         self.rendered = []
         self.canvas.set_document(get_label(self.doc.label_id), self._shown_size, [],
                                  self.doc.orientation,
-                                 self._area, keep_ratio=[], grow=growing_axis(self.doc))
+                                 self._area, keep_ratio=[], grow=growing_axis(self.doc),
+                                 frame=self._shown_frame, inner=self._inner)
 
     # --- Rückgängig -------------------------------------------------------
     def _commit(self, merge=None) -> None:
@@ -572,11 +579,13 @@ class MainWindow(QMainWindow):
     def undo(self) -> None:
         """Rückgängig – im Schreibmodus erst innerhalb der Bearbeitung (``TextEditSession.undo``),
         dann im Dokument (Knopf und Strg+Z gleich)."""
+        self.accept_pending_input()                 # eben Getipptes ist der letzte Schritt
         if not self.edit_session.undo():
             self._restore(self.history.undo(self.doc, self.canvas.selection()))
 
     def redo(self) -> None:
         """Wiederherstellen – im Schreibmodus erst im Editor, dann im Dokument (wie ``undo``)."""
+        self.accept_pending_input()
         if not self.edit_session.redo():
             self._restore(self.history.redo(self.doc, self.canvas.selection()))
 
@@ -745,19 +754,26 @@ class MainWindow(QMainWindow):
 
     # --- Reiter „Layout“ ---------------------------------------------------
     def align_selected(self, mode: str, paper: bool = False) -> None:
-        """Auswahl aneinander bzw. am bedruckbaren Bereich ausrichten."""
+        """Auswahl aneinander bzw. am bedruckbaren Bereich (mit Zierrahmen: an seinem
+        Innenraum) ausrichten."""
         self._change_selected(lambda objs, rendered: align_objects(
-            objs, rendered, mode, self._area if paper else None, growing_axis(self.doc)))
+            objs, rendered, mode, self._paper_area() if paper else None, growing_axis(self.doc)))
+
+    def _paper_area(self) -> Rect:
+        """Fläche für „am Etikett“ (Ausrichten, Maximieren): Innenraum des Zierrahmens, sonst
+        der bedruckbare Bereich."""
+        return self._inner if self._inner is not None else self._area
 
     def match_selected(self, mode: str) -> None:
         """Größe, Breite oder Höhe an das zuerst gewählte Objekt angleichen."""
         self._change_selected(lambda objs, rendered: match_objects(objs, rendered, mode))
 
     def maximize_selected(self) -> None:
-        """Jedes gewählte Objekt so groß wie möglich mittig in den bedruckbaren Bereich
-        (auf Endlosband mit automatischer Länge nur quer – ``maximize_object``)."""
+        """Jedes gewählte Objekt so groß wie möglich mittig in den bedruckbaren Bereich bzw. den
+        Innenraum des Zierrahmens (auf Endlosband mit automatischer Länge nur quer –
+        ``maximize_object``)."""
         self._change_selected(lambda objs, rendered: [
-            maximize_object(obj, r, self._area, self.doc, self.model)
+            maximize_object(obj, r, self._paper_area(), self.doc, self.model)
             for obj, r in zip(objs, rendered)])
 
     def rotate_selected(self, degrees: int) -> None:
@@ -1091,8 +1107,8 @@ class MainWindow(QMainWindow):
         """Größe neuer Symbole: ``SYMBOL_MM``, höchstens der bedruckbare Bereich quer zum Band
         (in der mitwachsenden Achse begrenzt das Etikett nicht)."""
         grow = growing_axis(self.doc)
-        cross = (self._area.h if grow == "x" else self._area.w if grow == "y"
-                 else min(self._area.w, self._area.h))
+        area = self._paper_area()                   # mit Zierrahmen: sein Innenraum
+        cross = area.h if grow == "x" else area.w if grow == "y" else min(area.w, area.h)
         return max(1.0, math.floor(min(SYMBOL_MM, cross) * 1000) / 1000)   # nie knapp zu groß
 
     def _symbol_dropped(self, symbol_id: str, x_mm: float, y_mm: float) -> None:
@@ -1168,10 +1184,9 @@ class MainWindow(QMainWindow):
             others = [object_rect(r) for o, r in zip(self.doc.objects, self.rendered)
                       if not o.is_empty()]
             for number, obj in enumerate(objects):
-                rect, rotation, factor = insert_placement(self.doc, self.model, self._area,
-                                                          (obj.w_mm, obj.h_mm), at, others,
-                                                          rotate=self.settings.image_rotate
-                                                          if rotate is None else rotate)
+                rect, rotation, factor = insert_placement(
+                    self.doc, self.model, self._paper_area(), (obj.w_mm, obj.h_mm), at, others,
+                    rotate=self.settings.image_rotate if rotate is None else rotate)
                 others.append(rect)
                 shift = number * PASTE_OFFSET_MM if at is not None or not growing_axis(
                     self.doc) else 0.0
@@ -1379,7 +1394,16 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Cancel)
         return answer == QMessageBox.StandardButton.Yes
 
+    def accept_pending_input(self) -> None:
+        """Eben getippte Zahl übernehmen: Zahlenfelder ohne Tastatur-Mitlauf melden ihren Wert
+        erst bei Enter oder beim Verlassen – DRUCKEN in der Werkzeugleiste und Kürzel nehmen
+        den Fokus nicht. Vor Drucken, Speichern und Rückgängig aufrufen."""
+        widget = QApplication.focusWidget()
+        if isinstance(widget, QAbstractSpinBox):
+            widget.interpretText()
+
     def print_label(self) -> None:
+        self.accept_pending_input()
         if self._timer.isActive():
             self.render_now()
         if self._render_error is not None:

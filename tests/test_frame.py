@@ -332,3 +332,9 @@ def test_positioned_fit_object_ignores_the_frame():
     framed = Renderer().render(Document("62x29", objects=[obj], frame=Frame("double", padding_mm=5))
                                ).objects[0]
     assert (framed.base_pt, framed.w, framed.h) == (plain.base_pt, plain.w, plain.h)
+def test_renderer_reports_the_frame_mask():
+    from labelwerk.render import frame_mask
+    doc = Document("62x29", objects=[TextObject("A")], frame=Frame("double"))
+    result = Renderer().render(doc)
+    assert result.frame.tobytes() == frame_mask(doc, size=result.size).tobytes()
+    assert Renderer().render(Document("62x29")).frame is None

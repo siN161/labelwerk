@@ -105,16 +105,16 @@ def printable_area(doc: Document, model: str = "QL-600",
 
 # --- Einrasten --------------------------------------------------------------------
 def snap(moving: Rect, targets: list[Rect], area: Rect, tolerance_mm: float,
-         label: Rect | None = None, grow: str | None = None) -> Snap:
+         label: Rect | None = None, grow: str | None = None, inner: Rect | None = None) -> Snap:
     """Kanten und Mitte von ``moving`` an nahe Linien einrasten lassen.
 
-    Kandidaten: Kanten und Mitte des bedruckbaren Bereichs, des Etiketts (falls angegeben)
-    und der anderen Objekte. Je Achse gewinnt der nächste Kandidat innerhalb der Toleranz
+    Kandidaten: Kanten und Mitte des bedruckbaren Bereichs, des Etiketts und des Innenraums
+    eines Zierrahmens (``inner``, falls angegeben) und der anderen Objekte. Je Achse gewinnt der nächste Kandidat innerhalb der Toleranz
     (Grenze eingeschlossen); ``guides`` nennt alle Linien, die nach dem Einrasten getroffen
     werden. ``grow`` (``growing_axis``): In dieser Achse bieten Etikett und Bereich nur
     ihren Anfang an – Mitte und Ende wandern mit dem Objekt.
     """
-    sheets = [area, *([label] if label is not None else [])]
+    sheets = [area, *(r for r in (label, inner) if r is not None)]
     x_lines = [v for r in sheets for v in ((r.x,) if grow == "x" else (r.x, r.cx, r.right))]
     y_lines = [v for r in sheets for v in ((r.y,) if grow == "y" else (r.y, r.cy, r.bottom))]
     dx, x_guides = _snap_axis((moving.x, moving.cx, moving.right),

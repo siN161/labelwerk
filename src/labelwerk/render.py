@@ -217,6 +217,7 @@ class Rendered:
     size: tuple[int, int]
     objects: list[RenderedObject]
     image: Image.Image
+    frame: Image.Image | None = None       # Zierrahmen als Maske (``frame_mask``), Arbeitsfläche
 
 
 @dataclass
@@ -257,7 +258,7 @@ class Renderer:
         size = label_size(doc, model, prepared=[e.prepared for e in entries])
         objects = self._draw(entries, doc, model, size)
         frame = self._frame_mask(doc, model, size)
-        return Rendered(size, objects, self._compose(objects, size, doc.orientation, frame))
+        return Rendered(size, objects, self._compose(objects, size, doc.orientation, frame), frame)
 
     def _frame_mask(self, doc: Document, model: str, size: tuple[int, int]) -> Image.Image | None:
         """Rahmen-Maske – neu nur, wenn sich Rahmen oder Etikett ändern."""
