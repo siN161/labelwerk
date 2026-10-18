@@ -18,6 +18,7 @@ _IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
 _OBJECT_SUFFIXES = (*_IMAGE_SUFFIXES, ".gif", ".bmp", ".webp")
 
 INK = 128            # dunkler gilt als bedruckt
+INK_LEVEL = 250      # Symbole: heller als das zählt beim Zuschneiden als Papier
 NOT_WHITE = 245      # Bild-Objekte: alles, was nicht (fast) weiß ist, gehört zum Inhalt
 _PDFIUM_PASSWORD = 4   # FPDF_ERR_PASSWORD
 MM = DPI / 25.4      # Punkte pro mm
@@ -180,6 +181,13 @@ def crop_box(img: Image.Image, dpi: float = DPI,
         return _content_box(img, dpi, ink)
     except ValueError:
         return None
+
+
+def ink_box(img: Image.Image) -> tuple[int, int, int, int] | None:
+    """Umriss alles Nicht-Weißen (heller als ``INK_LEVEL`` ist Papier), ohne Schnittmarken-
+    Erkennung – für Symbole, deren umrandete Zeichen ``crop_box`` sonst innen schnitte;
+    ganz weiß: None."""
+    return on_white(img).convert("L").point(lambda v: 255 if v < INK_LEVEL else 0).getbbox()
 
 
 def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, int, int]:

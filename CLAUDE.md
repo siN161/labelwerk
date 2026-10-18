@@ -19,7 +19,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Bildschirmfoto (Etappe 3d-2b): Knopf BILDSCHIRMFOTO im Reiter Bild – labelwerk blendet sich aus, der Desktop zeigt seine Auswahl (XDG-Portal), das Bild kommt mit 300 dpi aufs Etikett; ohne Portal Hinweis auf Zwischenablage + Strg+V.
 - SVG-Dateien sind Vektorbilder: in jeder Größe scharf gerastert (Etappe 3d-2c).
 - Symbole/ClipArt (Etappe 3d-2c): Knopf SYMBOL … im Reiter Bild – Fenster „Symbol einfügen“ (bleibt offen; Suche über die ganze Bibliothek, Gruppen Zuletzt verwendet/Favoriten/Elektro/Versand/Sicherheit/Allgemein/Eigene, Doppelklick/Enter/Ziehen fügt ein); Symbole 15 mm, Vektor, zugeschnitten.
-- 1506 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 1535 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -47,6 +47,7 @@ src/labelwerk/
               crop(img) -> auf Inhalt, ohne Schnittmarken/Leerraum; fit_to_label(img, label_id, fit, rotate) -> 1:1, auto/feste Drehung
               load_image(path, page, dpi=None) -> (RGB-Bild, dpi) für Bild-Objekte (PNG/JPG/GIF/BMP/WebP/PDF, Transparenz → weiß, EXIF-Lage; dpi gesetzt: Dateiauflösung gilt nicht, quadratisch diese dpi);
               crop_box(img, dpi, ink) -> (l, t, r, b) | None, dieselbe Logik wie crop() (Bilder: ink=NOT_WHITE); page_count(path) (PDF-Seitenwahl)
+              ink_box(img) -> (l, t, r, b) | None, alles Nicht-Weiße ohne Schnittmarken-Erkennung (Symbole: Einfügen und Panel-Zuschnitt, Schwelle INK_LEVEL)
   imaging.py  Bilder ohne Qt: to_layers(img, mode line|photo, threshold, invert) -> {"black": Bild "1"} (später "red" für QL-8xx),
               on_white, to_8bit (16-Bit-Graustufen skalieren), limit_size (höchstens 600 dpi bzw. 6000 px längste Seite,
               Druckgröße bleibt); Foto: Gammakurve photo_curve (Weiß/Schwarz fest), dann Floyd-Steinberg
@@ -62,13 +63,13 @@ src/labelwerk/
   settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings); Feld `theme` (rawblock/classic), `image_crop`/`image_rotate` (Bilder einfügen),
               `symbols_recent` (höchstens 24)/`symbols_favorites` (Symbol-ids; der Einstellungsdialog reicht sie durch)
   clipart.py  Symbol-Bibliothek ohne Qt: catalog() aus clipart_data/clipart.zip (catalog.json + SVGs, einmal ganz gelesen;
-              erzeugt von tools/fetch_clipart.py: Tabler Icons MIT ohne Marken (Kategorie Brand + Sperrliste tabler_skip),
+              erzeugt von tools/fetch_clipart.py: Tabler Icons MIT ohne Marken (Kategorien Brand und Laundry/Pflegesymbole + Sperrliste tabler_skip, u. a. Michelin),
               ISO 7000/7010 von Wikimedia Commons nur gemeinfrei/CC0 ohne Einschränkungen (Stand fest: tools/clipart/commons.lock.json,
               --update), eigene Zeichnungen tools/clipart/eigene (CC0); deutsche Namen/Synonyme tools/clipart/de.json;
               Lizenzen clipart_data/LICENSES.md, auch in pyproject license-files) – im Zweifel weglassen (Lizenz, Marke),
               GROUPS (elektro, versand, sicherheit, allgemein, eigene), symbols(group), search(text, group) (Teilwort, ä=ae;
               Rang: genaues Wort/Kürzel › Namenswort beginnt › Suchbegriff beginnt › im Namen › sonst), find/resolve(ids), data, is_vector, own_dir/own_symbols ($XDG_DATA_HOME/labelwerk/symbole,
-              SVG/PNG, ohne versteckte), add_recent
+              SVG/PNG, ohne versteckte), add_recent; Archiv fehlt/defekt: OSError/BadZipFile/KeyError/ValueError (GUI: Meldung „Symbol-Bibliothek nicht lesbar“)
   media.py    Medium prüfen: Statusabfrage ESC i S (nicht blockierend, 2 s), Media, label_for_media
   layout.py   Platzier-Logik ohne Qt (mm-Rechtecke): snap, align, match_size, maximize, scale_text, outside_indices/objects_outside,
               growing_axis (Endlosband wächst mit), to_grid (0,1 mm nach Ziehen), Objekte: move/resize/set_frame/rotate/*_objects
@@ -92,9 +93,9 @@ src/labelwerk/
     symbol_dialog.py Fenster „Symbol einfügen“ (SymbolDialog, Werkzeugfenster, nicht modal; Enter/Esc/Kontextmenü): Suche, Gruppen + Untergruppe, Raster über
                     SymbolModel (Vorschau erst bei Bedarf gerastert), Ziehen (MIME_SYMBOL = id), ★ Favorit, Ordner öffnen (open_url ersetzbar)
     panels/image.py Reiter Bild: Aus Datei/Aus Zwischenablage/Bildschirmfoto/Symbol, Quelle, Strich/Foto, Schwelle (Regler = ein Schritt), Umkehren,
-                    Zuschnitt (Fallback ohne Inhalt: ganzes Bild + Hinweis), Originalgröße 1:1, Seitenverhältnis, Drehen (Aktionen), Position
+                    Zuschnitt (Symbole: Tintenbox, sonst Schnittmarken-Erkennung; Fallback ohne Inhalt: ganzes Bild + Hinweis), Originalgröße 1:1, Seitenverhältnis, Drehen (Aktionen), Position
     image_import.py Bilder beschaffen: rasterize_svg (Raster-Funktion für Vektorbilder); load (SVG per QSvgRenderer bei 300 dpi, Maße mit Einheit selbst gelesen: svg_size; sonst files.load_image), load_symbol (Symbol: Vorschau 600 dpi bei SYMBOL_MM,
-                    auf die Tinte zugeschnitten, SVG-Bytes), MIME_SYMBOL; load_screenshot (Bildschirmfoto: 300 dpi, Dateiangabe gilt nicht;
+                    auf die Tinte zugeschnitten, SVG-Bytes), SYMBOL_SOURCE/is_symbol_source (Panel schneidet Symbole mit files.ink_box zu), MIME_SYMBOL; load_screenshot (Bildschirmfoto: 300 dpi, Dateiangabe gilt nicht;
                     Quelle SCREENSHOT), page_count,
                     mime_image/mime_files/mime_text (Zwischenablage, Ablegen; ohne Auflösung 300 dpi), MIME_OBJECTS
     screenshot.py   Bildschirmfoto über das XDG-Portal (QtDBus, interaktiv): ScreenshotPortal (available, take, Signal

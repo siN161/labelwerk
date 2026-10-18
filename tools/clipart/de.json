@@ -31,7 +31,10 @@
     "coin-monero",
     "currency-ripple",
     "currency-solana",
-    "currency-tether"
+    "currency-tether",
+    "currency-xrp",
+    "e-passport",
+    "michelin-"
   ],
   "eigene": {
     "erde": {
@@ -759,14 +762,8 @@
     "Toilettenpapier": [
       "toilet-paper"
     ],
-    "Waschen": [
-      "wash"
-    ],
-    "Bügeln": [
-      "ironing-1"
-    ],
     "Waschmaschine": [
-      "wash"
+      "wash-machine"
     ],
     "Kühlschrank": [
       "fridge"

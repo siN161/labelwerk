@@ -49,7 +49,7 @@ SOFTWARE.
 | Keinen Gabelstapler benutzen | [ISO 7000 - Ref-No 2406.svg](https://commons.wikimedia.org/wiki/File%3AISO_7000_-_Ref-No_2406.svg) | Vektorisierung: Mrmw | Public domain |
 | Notausgang (links) (E001) | [ISO 7010 E001.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_E001.svg) | MaxxL | Public domain |
 | Notausgang (rechts) (E002) | [ISO 7010 E002.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_E002.svg) | MaxxL | Public domain |
-| Erste Hilfe (E003) | [ISO 7010 E003 - First aid sign.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_E003_-_First_aid_sign.svg) | Die vorherige Version wurde erzeugt mit Inkscape (1019 bytes) i nun 19.53% der vorherigen Größe Bitte ersetze den vereinfachten Code dieser Datei nicht durch eine Version, die mit Inkscape erzeugt wurde oder einem anderen grafischen Vektorgrafik-Editor | Public domain |
+| Erste Hilfe (E003) | [ISO 7010 E003 - First aid sign.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_E003_-_First_aid_sign.svg) | unbekannt | Public domain |
 | Notruftelefon (E004) | [ISO 7010 E004.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_E004.svg) | MaxxL | Public domain |
 | Sammelstelle (E007) | [ISO 7010 E007.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_E007.svg) | MaxxL | Public domain |
 | Notausgangsvorrichtung, die nach Zerschlagen einer Scheibe zu erreichen ist (E008) | [ISO 7010 E008.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_E008.svg) | Bloody666 | CC0 |
@@ -288,7 +288,7 @@ SOFTWARE.
 | Warnung vor Hindernissen am Boden (W007) | [ISO 7010 W007.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W007.svg) | Maxxl2 | Public domain |
 | Warnung vor Absturzgefahr (W008) | [ISO 7010 W008.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W008.svg) | Maxxl2 | Public domain |
 | Warnung vor Biogefährdung (W009) | [ISO 7010 W009.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W009.svg) | MaxxL | Public domain |
-| Warnung vor niedriger Temperatur/Frost (W010) | [ISO 7010 W010.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W010.svg) | MaxxL i Der Quelltext dieser SVG -Datei ist valide | Public domain |
+| Warnung vor niedriger Temperatur/Frost (W010) | [ISO 7010 W010.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W010.svg) | MaxxL | Public domain |
 | Warnung vor Rutschgefahr (W011) | [ISO 7010 W011.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W011.svg) | MaxxL | Public domain |
 | Warnung vor elektrischer Spannung (W012) | [ISO 7010 W012.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W012.svg) | MaxxL | Public domain |
 | Warnung vor Wachhund (W013) | [ISO 7010 W013.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_W013.svg) | Bloody666 | CC0 |

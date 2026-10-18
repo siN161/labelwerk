@@ -48,6 +48,13 @@ def test_rasterize_svg_rejects_broken_svg(qapp):
         rasterize_svg(b"<svg", (10, 10), (0, 0, 10, 10))
 
 
+def test_rasterize_svg_rejects_links_to_other_files(qapp):
+    linked = (b'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+              b'width="10" height="10"><image xlink:href="bild.png" width="10" height="10"/></svg>')
+    with pytest.raises(ValueError, match="andere Dateien"):
+        rasterize_svg(linked, (10, 10), (0, 0, 10, 10))
+
+
 def test_window_registers_the_qt_rasterizer(window):
     assert render._svg_rasterizer is image_import.rasterize_svg
 
@@ -141,3 +148,16 @@ def test_load_vector_only_for_svg(tmp_path):
     path = tmp_path / "bild.png"
     Image.new("RGB", (4, 4)).save(path)
     assert image_import.load_vector(path) is None
+
+
+def test_copy_paste_and_undo_keep_the_vector(window):
+    from labelwerk.document import ImageObject
+    obj = ImageObject.from_image(Image.new("RGB", (100, 50), "black"), 96, "Test", svg=LINE)
+    window._insert_images([obj], None, [])
+    window.copy_selected()
+    window.paste()
+    assert [o.svg for o in window.doc.objects[1:]] == [LINE, LINE]
+    window.undo()
+    assert [o.svg for o in window.doc.objects[1:]] == [LINE]
+    window.redo()
+    assert [o.svg for o in window.doc.objects[1:]] == [LINE, LINE]

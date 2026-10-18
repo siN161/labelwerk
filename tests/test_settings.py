@@ -247,3 +247,17 @@ def test_recent_symbols_are_capped_when_loading(tmp_path):
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"symbols_recent": [f"s{i}" for i in range(40)]}))
     assert load_settings(path).symbols_recent == [f"s{i}" for i in range(24)]
+
+
+def test_save_is_atomic_and_leaves_no_temp_files(tmp_path, monkeypatch):
+    path = tmp_path / "settings.json"
+    save_settings(Settings(margin_mm=3), path)
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
+
+    def broken(src, dst):
+        raise OSError(28, "Kein Speicherplatz mehr")
+    monkeypatch.setattr("labelwerk.settings.os.replace", broken)
+    with pytest.raises(OSError, match="konnten nicht gespeichert werden"):
+        save_settings(Settings(margin_mm=5), path)
+    assert load_settings(path).margin_mm == 3.0          # alte Datei unversehrt
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]

@@ -118,7 +118,6 @@ def find(symbol_id: str) -> Symbol | None:
     return entry[0] if entry else None
 
 
-
 def resolve(ids: list[str]) -> list[Symbol]:
     """Symbole zu ids (Zuletzt verwendet, Favoriten); unbekannte werden übergangen."""
     return [s for s in map(find, ids) if s is not None]

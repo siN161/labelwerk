@@ -47,10 +47,22 @@ def test_no_brand_logos():
 
 @pytest.mark.parametrize("name", ["mickey", "lego", "olympics", "playstation-x", "xbox-a",
                                   "bluetooth", "usb", "nfc", "creative-commons", "ce", "steam",
-                                  "device-imac", "device-ipad", "pokeball", "currency-tether"])
+                                  "device-imac", "device-ipad", "pokeball", "currency-tether",
+                                  "michelin-star", "michelin-star-green", "michelin-bib-gourmand",
+                                  "currency-xrp", "e-passport", "wash", "wash-hand", "wash-dry",
+                                  "wash-temperature-3", "wash-tumble-dry", "ironing",
+                                  "ironing-steam", "bleach", "bleach-chlorine"])
 def test_trademarks_are_left_out(name):
     """Marken und geschützte Zeichen außerhalb der Tabler-Kategorie „Brand“ fehlen auch."""
     assert clipart.find(f"tabler/outline/{name}") is None
+
+
+def test_washing_machine_stays_but_care_symbols_do_not():
+    """Textil-Pflegesymbole sind Marken (GINETEX); die Waschmaschine ist keins."""
+    assert clipart.find("tabler/outline/wash-machine") is not None
+    assert not [s for s in clipart.symbols("allgemein")
+                if s.id.startswith(("tabler/outline/wash-", "tabler/outline/ironing"))
+                and s.id != "tabler/outline/wash-machine"]
 
 
 def test_licences_file_names_mit_text_and_every_commons_file():

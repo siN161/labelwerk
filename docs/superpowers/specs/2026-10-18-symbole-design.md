@@ -38,8 +38,10 @@ Online-Suche, Text in Symbolen, Zweifarbdruck (Farbe bleibt nur erhalten).
 
 - **Quellen** (alle GPL-verträglich; je Symbol Quelle, Autor, Lizenz im Katalog):
   - Allgemein: **Tabler Icons 3.49.0** (MIT), Varianten outline und filled; Lizenztext mitgeliefert. **Ohne
-    Marken**: ohne die Kategorie „Brand“ und ohne eine Sperrliste (`tabler_skip` in de.json: z. B. Olympia,
-    LEGO, PlayStation/Xbox, Bluetooth, USB, NFC, CE, Creative Commons, Apple-/Nintendo-Geräte, Krypto-Logos).
+    Marken**: ohne die Kategorien „Brand“ und „Laundry“ (Textil-Pflegesymbole sind GINETEX-Marken; die
+    Waschmaschine liegt in „Devices“ und bleibt) und ohne eine Sperrliste (`tabler_skip` in de.json: z. B. Olympia,
+    LEGO, PlayStation/Xbox, Bluetooth, USB, NFC, CE, Creative Commons, Apple-/Nintendo-Geräte, Krypto-Logos,
+    Michelin, E-Pass).
   - **Grundsatz: Wo es Lizenz- oder Markenfragen gibt, wird weggelassen.**
   - Versand/Verpackung: Packzeichen nach ISO 780 (ISO-7000-Grafiken) von **Wikimedia Commons**, nur Dateien
     mit Lizenz „Public domain“/CC0 laut Commons-API, ohne Einschränkungshinweis (Marke, Hoheitszeichen), keine
@@ -49,10 +51,12 @@ Online-Suche, Text in Symbolen, Zweifarbdruck (Farbe bleibt nur erhalten).
     was nicht passt, wird übersprungen und aufgelistet. Deutsche Namen aus Commons, Lücken in de.json.
   - Stand der Commons-Dateien fest in `tools/clipart/commons.lock.json` (SHA-1, Lizenz); Abweichung → Abbruch,
     `--update` übernimmt (danach prüfen).
-  - Elektro/Betrieb: **selbst gezeichnete** SVGs (**CC0** – frei, auch auf gedruckten Etiketten), ca. 25: Schutzleiter,
-    Erde, Funktionserde, AC, DC, AC/DC, Blitz/Hochspannung, Sicherung, Motor, Generator, Transformator,
-    Steckdose, Schalter, Taster, Lampe, Batterie, Klemme, Schirm/Masse, Schutzklasse I/II/III, Spannungsfrei,
-    Gefahr elektrische Spannung (eigene Zeichnung, nicht ISO-Datei).
+  - Elektro/Betrieb: **selbst gezeichnete** SVGs (**CC0** – frei, auch auf gedruckten Etiketten), 23: Erde,
+    Schutzleiter (PE), Masse/Rahmen, Wechselstrom (AC), Gleichstrom (DC), Gleich- und Wechselstrom,
+    Hochspannung (Blitzpfeil), Warnung vor elektrischer Spannung (Warndreieck, eigene Zeichnung, nicht ISO-Datei),
+    Sicherung, Motor, Generator, Transformator, Steckdose, Schalter, Taster, Leuchte, Batterie, Klemme,
+    Widerstand, Kondensator, Diode, Schutzklasse II, Schutzklasse III (ohne Funktionserde, Schutzklasse I,
+    Spannungsfrei, Schirm: Normzeichen mit Marken-/Lizenzfragen – weggelassen).
 - **Ablage:** `src/labelwerk/clipart_data/` – `clipart.zip` (darin `catalog.json` mit id, Gruppe, deutschem
   Namen, Suchbegriffen, Quelle, Urheber, Lizenz, Datei, und alle SVGs) und `LICENSES.md` (auch als
   `license-files` im Paket). Höchstens ca. 6 MB, mit dem Paket ausgeliefert.
@@ -92,13 +96,16 @@ Online-Suche, Text in Symbolen, Zweifarbdruck (Farbe bleibt nur erhalten).
   - Tabler-Icons zeigen outline; filled als eigene Einträge (Name mit „gefüllt“).
 - **Einfügen:** Bild-Objekt (Vektorbild) mit Quelle „Symbol: Name“, längere Seite **15 mm** (höchstens der
   bedruckbare Bereich quer zum Band), Strich, Seitenverhältnis an, Zuschnitt auf den Inhalt (immer, unabhängig
-  von der Einstellung – Symbole haben Ränder im viewBox); Platzierung wie Bilder (`insert_placement`: Mitte,
+  von der Einstellung – Symbole haben Ränder im viewBox; über die Tintenbox `files.ink_box`, nicht über die
+  Schnittmarken-Erkennung: umrandete Zeichen blieben sonst nicht ganz – auch das Panel schneidet Symbole
+  beim Zuschnitt aus/an so zu); Platzierung wie Bilder (`insert_placement`: Mitte,
   Endlosband hinter vorhandenem Inhalt; Drehen nach Einstellung entfällt, die Größe ist auf 0,001 mm
   abgerundet, passt also immer). Ganz weißes Symbol: nicht zugeschnitten, Hinweis. Eigene SVG mit Verweisen
   auf andere Dateien: Pixelbild. Winziger Inhalt auf großer Seite: Vorschau höchstens 6000 Pixel. Ausgewählt,
   ein Rückgängig-Schritt; „Zuletzt verwendet“ wird aktualisiert und gespeichert.
 - Farbige Zeichen (ISO 7010) werden über Strich/Schwelle schwarz-weiß; das Original bleibt farbig.
-- Fehler (Archiv defekt, eigene Datei unlesbar, zu groß) → Meldung in der Statusleiste, kein Traceback.
+- Fehler (Archiv fehlt oder defekt: „Symbol-Bibliothek nicht lesbar: …“ beim Öffnen des Fensters und beim
+  Ablegen; eigene Datei unlesbar, zu groß) → Meldung in der Statusleiste, kein Traceback, kein halbes Fenster.
 - Bildschirmfoto: ein offenes Symbol-Fenster wird mit ausgeblendet und danach wieder gezeigt.
 
 ## Tests

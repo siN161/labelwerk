@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, Q
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
+from .. import clipart
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
 from ..document import Document, ImageObject, TextObject
@@ -29,13 +30,12 @@ from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, 
 from ..printer import DEFAULT_MODEL
 from ..render import Renderer, RenderedObject, font_warnings, set_svg_rasterizer
 from ..settings import Settings, load_settings, new_document, save_settings
-from .. import clipart
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
 from .history import History, restore
 from . import image_import
-from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS, SCREENSHOT
+from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS, SCREENSHOT, SYMBOL_SOURCE
 from .media_worker import MediaWorker
 from .panels.image import CROP_FAILED
 from .panels.text import DEFAULT_PT
@@ -63,7 +63,7 @@ NO_CLIPBOARD_IMAGE = "Kein Bild in der Zwischenablage."
 NO_SCREENSHOT = ("Bildschirmfoto nicht verfügbar (kein XDG-Portal) – mit dem System-Werkzeug in "
                  "die Zwischenablage kopieren und mit Strg+V einfügen")
 SYMBOL_MM = 15.0           # Symbol: längere Seite beim Einfügen (höchstens quer zum Band)
-SYMBOL_SOURCE = "Symbol: {name}"
+LIBRARY_ERRORS = (OSError, zipfile.BadZipFile, KeyError, ValueError)   # Archiv fehlt/beschädigt
 HIDE_DELAY_MS = 300        # Bildschirmfoto: so lange nimmt der Desktop das Fenster weg
 RESTORE_TIMEOUT_MS = 300_000  # Sicherheitsnetz nur für Portale, die nie antworten: so lange kann
                               # eine Auswahl offen sein, erst danach kommt das Fenster trotzdem wieder
@@ -1041,8 +1041,12 @@ class MainWindow(QMainWindow):
         """Fenster „Symbol einfügen“ zeigen (eine Instanz, bleibt offen)."""
         self.finish_editing()
         if self.symbol_window is None:
-            self.symbol_window = SymbolDialog(self.settings.symbols_recent,
-                                              self.settings.symbols_favorites, self)
+            try:
+                self.symbol_window = SymbolDialog(self.settings.symbols_recent,
+                                                  self.settings.symbols_favorites, self)
+            except LIBRARY_ERRORS as e:
+                self._library_unreadable(e)
+                return
             self.symbol_window.chosen.connect(lambda symbol: self.insert_symbol(symbol))
             self.symbol_window.favorites_changed.connect(self._favorites_changed)
         self.symbol_window.show()
@@ -1079,9 +1083,17 @@ class MainWindow(QMainWindow):
         return max(1.0, math.floor(min(SYMBOL_MM, cross) * 1000) / 1000)   # nie knapp zu groß
 
     def _symbol_dropped(self, symbol_id: str, x_mm: float, y_mm: float) -> None:
-        symbol = clipart.find(symbol_id)
+        try:
+            symbol = clipart.find(symbol_id)
+        except LIBRARY_ERRORS as e:
+            self._library_unreadable(e)
+            return
         if symbol is not None:
             self.insert_symbol(symbol, at=(x_mm, y_mm))
+
+    def _library_unreadable(self, error: Exception) -> None:
+        """Archiv der Symbol-Bibliothek fehlt oder ist beschädigt: Meldung statt Traceback."""
+        self._set_result(f"Symbol-Bibliothek nicht lesbar: {error}", "error")
 
     def _favorites_changed(self, favorites: list[str]) -> None:
         self.settings.symbols_favorites = list(favorites)

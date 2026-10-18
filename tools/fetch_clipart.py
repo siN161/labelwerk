@@ -2,7 +2,8 @@
 
 Lädt reproduzierbar:
 - Tabler Icons (MIT) als npm-Tarball mit fester Version und SHA-256 – ohne Marken: ohne die
-  Kategorie „Brand“ und ohne die Namen/Präfixe aus ``tabler_skip`` in de.json,
+  Kategorien „Brand“ und „Laundry“ (Pflegesymbole) und ohne die Namen/Präfixe aus
+  ``tabler_skip`` in de.json,
 - Packzeichen (ISO 7000/ISO 780) und Sicherheitszeichen (ISO 7010) von Wikimedia Commons –
   nur Dateien mit Lizenz „Public domain“ oder „CC0“ laut Commons-API, ohne Einschränkungs-
   hinweise (Marke, Hoheitszeichen …) und ohne CC0-Freigaben von Dateien, deren Urheber die ISO
@@ -42,7 +43,8 @@ OUT = ROOT / "src" / "labelwerk" / "clipart_data"
 TABLER_VERSION = "3.49.0"
 TABLER_URL = f"https://registry.npmjs.org/@tabler/icons/-/icons-{TABLER_VERSION}.tgz"
 TABLER_SHA256 = "aa3042907eb0bdb079fd70733e2d75f785683d4726279128a0ca2343099f7074"
-TABLER_SKIP_CATEGORIES = {"Brand"}
+TABLER_SKIP_CATEGORIES = {"Brand", "Laundry"}   # Laundry: Textil-Pflegesymbole (GINETEX-Marken);
+                                                # die Waschmaschine liegt in „Devices“ und bleibt
 API = "https://commons.wikimedia.org/w/api.php"
 ISO7010_CATEGORY = "Category:ISO 7010 safety signs (vector drawings)"
 ISO7010_FILE = re.compile(r"^File:ISO 7010 ([EFMPW]\d{3})(?:\.svg$|[ ;].*\.svg$)")
@@ -53,8 +55,10 @@ USER_AGENT = ("labelwerk-fetch-clipart/1.0 (https://github.com/siN161/labelwerk;
               "einmaliger Abruf der Symbol-Bibliothek) python-urllib")   # Wikimedia-Richtlinie
 RETRY = {429, 500, 502, 503, 504}
 _WS = re.compile(r">\s+<")
-_AUTHOR_NOISE = re.compile(r"(Der Quelltext dieser SVG-Datei ist valide\.?|Diese Vektorgrafik wurde "
-                           r"von .* erstellt\s*\.?|Unknown author|Autor/-in unbekannt)",
+_AUTHOR_NOISE = re.compile(r"(Diese Vektorgrafik wurde "
+                           r"von .* erstellt\s*\.?|Die vorherige Version wurde erzeugt mit .*|"
+                           r"(?:\bi\s+)?Der Quelltext dieser SVG\s*-Datei ist valide\.?|"
+                           r"Unknown author|Autor/-in unbekannt)",
                            re.IGNORECASE)
 
 

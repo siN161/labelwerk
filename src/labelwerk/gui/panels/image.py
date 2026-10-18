@@ -17,8 +17,9 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QHBoxLayout, QLabel, QPu
 
 from ... import layout
 from ...document import Document, ImageObject
-from ...files import NOT_WHITE, crop_box
+from ...files import NOT_WHITE, crop_box, ink_box
 from ...layout import Rect
+from ..image_import import is_symbol_source
 from ..symbols import SIZE, line_icon
 from ..widgets import SpinBox
 from . import Panel
@@ -252,12 +253,16 @@ class ImagePanel(Panel):
             self._step(self._set, threshold=value)
 
     def _set_crop(self, on: bool) -> None:
-        """Zuschnitt an (auf den Inhalt: alles, was nicht weiß ist) bzw. aus (ganzes Bild);
-        ist das Bild ganz weiß, bleibt es ganz – mit Hinweis."""
+        """Zuschnitt an (auf den Inhalt: alles, was nicht weiß ist; bei Symbolen auf die Tinte,
+        wie beim Einfügen) bzw. aus (ganzes Bild); ist das Bild ganz weiß, bleibt es ganz –
+        mit Hinweis."""
         if not on:
             self._change(lambda obj: layout.set_crop(obj, None))
             return
-        box = crop_box(self.obj.image(), self.obj.dpi, ink=NOT_WHITE)
+        if is_symbol_source(self.obj.source):
+            box = ink_box(self.obj.image())
+        else:
+            box = crop_box(self.obj.image(), self.obj.dpi, ink=NOT_WHITE)
         if box is None:
             self.refresh()                         # Haken wieder aus
             self.message.emit(CROP_FAILED, "warn")

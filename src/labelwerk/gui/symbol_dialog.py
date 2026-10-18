@@ -22,7 +22,7 @@ from .. import clipart
 from ..clipart import Symbol
 from .image_import import MIME_SYMBOL
 ICON_PX = 48
-ICON_CACHE = 3000              # höchstens so viele Vorschauen gemerkt (ca. 30 MB)
+ICON_CACHE = 800               # höchstens so viele Vorschauen gemerkt (je 96 × 96 × 4 Byte, ca. 30 MB)
 SPECIAL = (("zuletzt", "Zuletzt verwendet"), ("favoriten", "Favoriten"))
 ALL_SUBGROUPS = "Alle"
 EMPTY_OWN = ("Noch keine eigenen Symbole. SVG- oder PNG-Dateien in diesen Ordner legen "

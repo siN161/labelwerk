@@ -1,5 +1,7 @@
 """Symbole/ClipArt (Etappe 3d-2c): Fenster „Symbol einfügen“, Einfügen, Zuletzt verwendet,
 Favoriten, eigener Ordner, Ziehen aufs Etikett."""
+import zipfile
+
 import pytest
 from PIL import Image
 from PySide6.QtCore import QByteArray, QMimeData, QPointF, Qt
@@ -129,6 +131,24 @@ def test_inserted_symbol_is_cropped_to_its_ink(qtbot):
     obj = win.doc.objects[1]
     l, t, r, b = obj.crop
     assert l > 0 and t > 0 and r < obj.image().width and b < obj.image().height
+
+
+@pytest.mark.parametrize("symbol_id", ["labelwerk/motor", "labelwerk/batterie", "iso7000/0627",
+                                       "tabler/outline/home"])
+def test_crop_off_and_on_again_gives_the_same_section(qtbot, symbol_id):
+    """Das Panel schneidet Symbole wie beim Einfügen auf die Tinte zu (nicht per
+    Schnittmarken-Erkennung: von „Motor“ bliebe sonst nur das „M“)."""
+    win = _window(qtbot)
+    win.insert_symbol(clipart.find(symbol_id))
+    obj = win.doc.objects[1]
+    inserted = obj.crop
+    assert inserted is not None
+    panel = win.panel("image")
+    panel.crop.click()
+    assert win.doc.objects[1].crop is None
+    panel.crop.click()
+    assert win.doc.objects[1].crop == inserted
+    assert not win.result.text().startswith("Zuschnitt")
 
 
 def test_symbol_on_narrow_tape_fits_across(qtbot):
@@ -416,3 +436,46 @@ def test_own_svg_with_linked_file_becomes_pixel_image(qtbot):
     dialog.insert.click()
     obj = win.doc.objects[1]
     assert obj.svg is None and obj.image().convert("L").getextrema()[0] == 0
+
+
+# --- Bibliotheksarchiv defekt oder fehlend ------------------------------------------
+def _clear_library_caches():
+    for function in (clipart._files, clipart.catalog, clipart._index):
+        function.cache_clear()
+
+
+@pytest.fixture
+def broken_library(tmp_path, monkeypatch):
+    def make(kind):
+        archive = tmp_path / "clipart.zip"
+        if kind == "garbage":
+            archive.write_bytes(b"kein Zip")
+        elif kind == "nocatalog":
+            with zipfile.ZipFile(archive, "w") as z:
+                z.writestr("x.svg", "<svg/>")
+        elif kind == "badjson":
+            with zipfile.ZipFile(archive, "w") as z:
+                z.writestr("catalog.json", "{")
+        monkeypatch.setattr(clipart, "ARCHIVE", archive)
+        _clear_library_caches()
+    _clear_library_caches()
+    yield make
+    _clear_library_caches()      # der Archivpfad kommt mit monkeypatch zurück
+
+
+@pytest.mark.parametrize("kind", ["garbage", "nocatalog", "badjson", "missing"])
+def test_unreadable_library_gives_message_and_no_window(qtbot, broken_library, kind):
+    broken_library(kind)
+    win = _window(qtbot, symbols_recent=["labelwerk/motor"])
+    win.panel("image").symbol.click()
+    assert win.symbol_window is None
+    assert win.result.text().startswith("Symbol-Bibliothek nicht lesbar: ")
+    assert win.result.property("state") == "error"
+
+
+def test_unreadable_library_does_not_break_dropping(qtbot, broken_library):
+    broken_library("garbage")
+    win = _window(qtbot)
+    win._symbol_dropped("labelwerk/motor", 5, 5)
+    assert len(win.doc.objects) == 1
+    assert win.result.text().startswith("Symbol-Bibliothek nicht lesbar: ")

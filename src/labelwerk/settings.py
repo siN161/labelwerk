@@ -133,7 +133,14 @@ def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
     data = {key: getattr(settings, key) for key in _KEYS}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        # erst daneben schreiben, dann ersetzen: ein Absturz mitten im Schreiben lässt die alte
+        # Datei heil (die GUI speichert Zuletzt verwendet/Favoriten bei jedem Einfügen still)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        try:
+            tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
     except OSError as e:
         raise OSError(f"Einstellungen konnten nicht gespeichert werden ({path}): "
                       f"{e.strerror or e}") from e

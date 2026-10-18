@@ -30,9 +30,9 @@ CLIPBOARD = "Zwischenablage"                    # Quelle eines eingefügten Bild
 DROPPED = "Abgelegtes Bild"
 SCREENSHOT = "Bildschirmfoto"
 MIME_OBJECTS = "application/x-labelwerk-objects"   # kopierte Objekte (Kennung der Kopie)
+SYMBOL_SOURCE = "Symbol: {name}"                    # Quelle eines eingefügten Symbols
 MIME_SYMBOL = "application/x-labelwerk-symbol"     # Symbol aus dem Fenster gezogen (id)
 SYMBOL_PROBE_PX = 512          # Symbol: erst grob rastern, um den Inhalt zu finden
-INK_LEVEL = 250                # heller als das zählt beim Zuschneiden eines Symbols als Papier
 SVG_DPI = 96                                    # SVG: 1 px = 1/96 in
 
 
@@ -116,11 +116,19 @@ def _render(renderer: QSvgRenderer, size: tuple[int, int],
                             image.bytesPerLine(), 1).copy()     # eine Kopie: Qt gibt frei
 
 
+def is_symbol_source(source: str) -> bool:
+    """Stammt das Bild aus der Symbol-Bibliothek (Quelle ``SYMBOL_SOURCE``)?"""
+    return source.startswith(SYMBOL_SOURCE.split("{")[0])
+
+
 def rasterize_svg(svg: bytes, size: tuple[int, int],
                   region: tuple[int, int, int, int]) -> Image.Image:
     """Raster-Funktion für Vektorbilder (``render.set_svg_rasterizer``): das ganze Blatt auf
     ``size`` Pixel, davon nur ``region`` (x, y, w, h) – RGB auf Weiß. Kaputtes SVG:
-    ``ValueError``."""
+    ``ValueError``; ebenso ein SVG mit Verweisen auf andere Dateien (die gelten nur neben der
+    SVG, nicht in einem gespeicherten Dokument)."""
+    if _EXTERNAL.search(svg):
+        raise ValueError("Vektorbild verweist auf andere Dateien – die werden nicht mitgespeichert.")
     renderer = _svg_renderer(svg)
     if not renderer.isValid():
         raise ValueError("Vektorbild kann nicht gelesen werden (kein gültiges SVG).")
@@ -146,7 +154,7 @@ def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tup
             raise ValueError(f"Symbol {symbol.name} kann nicht gelesen werden (kein gültiges SVG).")
         k = SYMBOL_PROBE_PX / max(size.width(), size.height())
         probe = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
-        if box := _ink_box(_render(renderer, probe, (0, 0, *probe))):
+        if box := files.ink_box(_render(renderer, probe, (0, 0, *probe))):
             k *= side_mm / 25.4 * MAX_DPI / max(box[2] - box[0], box[3] - box[1])
         k = min(k, MAX_PIXELS / max(size.width(), size.height()))
         sheet = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
@@ -154,14 +162,9 @@ def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tup
     else:
         with Image.open(io.BytesIO(data)) as img:
             image, svg = on_white(img), None
-    crop = _ink_box(image)
+    crop = files.ink_box(image)
     l, t, r, b = crop or (0, 0, *image.size)
     return image, max(r - l, b - t) * 25.4 / side_mm, crop, svg
-
-
-def _ink_box(image: Image.Image) -> tuple[int, int, int, int] | None:
-    """Umriss alles Nicht-Weißen; ganz weiß: None."""
-    return image.convert("L").point(lambda v: 255 if v < INK_LEVEL else 0).getbbox()
 
 
 _UNITS = {"": 1.0, "px": 1.0, "in": 96.0, "cm": 96 / 2.54, "mm": 96 / 25.4, "pt": 96 / 72,
