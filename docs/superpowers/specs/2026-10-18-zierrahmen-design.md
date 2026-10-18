@@ -26,7 +26,10 @@ Rahmen als Voreinstellung für neue Etiketten (dafür gibt es Favoriten).
 - **Lage:** Außenkante des Rahmens = bedruckbarer Bereich (Etikett minus `MARGIN` quer und `margin_mm` in
   Bandlaufrichtung), um `inset_mm` nach innen versetzt. Ist kein Platz mehr (Innenraum ≤ 0), entfällt
   der Rahmen nicht still: `ValueError` „Rahmen passt nicht aufs Etikett“ (GUI: Meldung wie bei
-  Renderfehlern).
+  Renderfehlern) – geprüft nur beim Rendern, Ränder und bedruckbarer Bereich bleiben bestimmbar. Das
+  Endlosband mit automatischer Länge wird lang genug, dass im Rahmen Platz bleibt. „Nur Ecken“ braucht
+  Schenkel von mindestens zwei Linienbreiten, sonst dieselbe Meldung. Gestrichelt ohne Rundung: Eckstriche
+  reichen bis in die äußere Ecke.
 - **Runde Etiketten** (`shape == "round"`): Rahmen ist ein Kreis um den Mittelpunkt (Durchmesser =
   kürzere Seite des bedruckbaren Bereichs − 2 × `inset_mm`); `rounded` gilt dort nicht, `corners` ergibt
   keinen Rahmen und wird in der GUI nicht angeboten (Datei mit `corners` auf rundem Etikett: wie `single`).
@@ -46,14 +49,16 @@ Rahmen als Voreinstellung für neue Etiketten (dafür gibt es Favoriten).
 
 ## 2 – GUI
 
-- **Reiter PAPIER, Bereich „Rahmen“** (nach „Ränder“): Auswahlliste der Arten mit Vorschau je Eintrag (aus
+- **Reiter PAPIER:** Reihenfolge Etikett · Länge · Ausrichtung · Ränder · Rahmen (nach Abnahme-Wunsch).
+- **Bereich „Rahmen“** (nach „Ränder“): Auswahlliste der Arten mit Vorschau je Eintrag (aus
   dem Kern gezeichnet) – „Kein“, Einfach, Doppelt, Dick-dünn, Gestrichelt, Gepunktet, Nur Ecken (nicht bei
-  runden Etiketten); Haken „abgerundet“ (nicht bei runden); Strichstärke, Abstand zum Rand, Innenabstand in mm
-  (deaktiviert bei „Kein“). Jede Änderung = ein Rückgängig-Schritt (Felder wie die Ränder: beim Verlassen
-  bzw. Enter).
+  runden Etiketten; Hinweis „Kreis“); Haken „abgerundet“ (nicht bei runden); Linie, Randabstand, Innenabstand in
+  mm (deaktiviert bei „Kein“, Werte bleiben für später stehen). Jede Änderung = ein Rückgängig-Schritt (beim
+  Verlassen bzw. Enter; eine getippte Zahl gilt auch, wenn direkt gedruckt, gespeichert oder zurückgenommen wird).
 - **Arbeitsfläche:** zeigt den Rahmen als Teil des Etiketts (Druckbild), nicht anklickbar.
-- **Ausrichten am Etikett** und **Einrasten** an Kanten/Mitte nutzen bei aktivem Rahmen zusätzlich den
-  Innenraum (`frame_area`); ohne Rahmen wie bisher.
+- **Ausrichten und Maximieren am Etikett** sowie **Bilder/Symbole einfügen** nutzen bei aktivem Rahmen den
+  Innenraum (`frame_area`); **Einrasten** an Kanten/Mitte zusätzlich zu den bisherigen Linien; ohne Rahmen
+  wie bisher.
 
 ## Tests
 
