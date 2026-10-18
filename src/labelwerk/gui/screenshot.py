@@ -113,7 +113,7 @@ class ScreenshotPortal(QObject):
         der Auswahl (kein Bus, kein Portal) noch während dieses Aufrufs. Eine noch offene
         Aufnahme wird verworfen (ihre Auswahl geschlossen, ihre Antwort nicht mehr gemeldet)."""
         if self._path is not None:
-            self.bus().send(QDBusMessage.createMethodCall(SERVICE, self._path, REQUEST, "Close"))
+            self._close(self._path)
         self._drop()
         for request in self._spent:          # nicht früher: Löschen eines Empfängers, dessen
             request.deleteLater()             # Antwort gerade zugestellt wird, stürzt ab (SIGBUS)
@@ -136,8 +136,12 @@ class ScreenshotPortal(QObject):
         except (IndexError, AttributeError):
             self._finish(None, f"{FAILED} – unerwartete Antwort des Portals")
             return
-        if handle != self._path:            # ältere Portale: eigener Pfad
-            self._subscribe(handle)
+        if handle != self._path and not self._subscribe(handle):   # ältere Portale: eigener Pfad
+            self._close(handle)                  # ohne Abo kommt keine Antwort: Auswahl schließen
+
+    def _close(self, path: str) -> None:
+        """Offene Auswahl am Request-Pfad ``path`` schließen (``Request.Close``, ohne Antwort)."""
+        self.bus().send(QDBusMessage.createMethodCall(SERVICE, path, REQUEST, "Close"))
 
     def _subscribe(self, path: str) -> bool:
         """Antwort am Pfad ``path`` abonnieren (ein älteres wird gelöst); scheitert das, ist die

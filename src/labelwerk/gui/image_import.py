@@ -50,12 +50,9 @@ def load(path: Path, page: int = 1) -> tuple[Image.Image, float]:
 
 def load_screenshot(path: Path) -> tuple[Image.Image, float]:
     """Bildschirmfoto-Datei: (RGB-Bild, dpi) mit 1 Bildschirmpixel = 1 Druckpunkt (300 dpi) –
-    eine Auflösungsangabe der Datei gilt nicht; hat das Laden ein riesiges Foto verkleinert
-    (``imaging.limit_size``), entsprechend weniger, damit die Größe stimmt."""
-    image, _ = load(path)
-    with Image.open(path) as raw:
-        scale = max(image.size) / max(raw.size)
-    return image, DPI * scale
+    eine Auflösungsangabe der Datei gilt nicht; ein riesiges Foto wird verkleinert
+    (``imaging.limit_size``), die zurückgegebene Auflösung sinkt dann mit, damit die Größe stimmt."""
+    return files.load_image(path, dpi=DPI)
 
 
 def load_svg(path: Path) -> tuple[Image.Image, float]:

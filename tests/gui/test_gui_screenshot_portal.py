@@ -100,9 +100,13 @@ BUS_CONFIG = """<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Config
 
 
 def _read_line(proc: subprocess.Popen) -> str:
-    """Erste Zeile der Ausgabe, höchstens ``START_TIMEOUT_S`` warten ("" = keine)."""
+    """Nächste Zeile der Ausgabe, höchstens ``START_TIMEOUT_S`` warten ("" = keine). Der Fake
+    läuft ungepuffert (Bytes): ein Puffer von Python würde ``select`` später Zeilen verbergen."""
     ready, _, _ = select.select([proc.stdout], [], [], START_TIMEOUT_S)
-    return proc.stdout.readline().strip() if ready else ""
+    if not ready:
+        return ""
+    line = proc.stdout.readline()
+    return (line.decode() if isinstance(line, bytes) else line).strip()
 
 
 def _stop(proc: subprocess.Popen) -> None:
@@ -148,7 +152,7 @@ def fake_portal(private_bus):
     def start(mode="normal", code=0, uri="file:///tmp/Bild%20%C3%A4.png"):
         proc = subprocess.Popen([SYSTEM_PYTHON, "-I", str(FAKE), mode, str(code), uri],
                                 env={"DBUS_SESSION_BUS_ADDRESS": address},
-                                stdout=subprocess.PIPE, text=True)
+                                stdout=subprocess.PIPE, bufsize=0)
         started.append(proc)
         assert _read_line(proc) == "READY"
         return proc
@@ -214,6 +218,41 @@ def test_new_take_drops_the_open_one_even_with_queued_answer(qtbot, private_bus,
     qtbot.waitUntil(lambda: bool(results), timeout=5000)
     qtbot.wait(200)
     assert results == [(Path("/tmp/bild2.png"), None)]
+
+
+def test_new_take_closes_the_open_selection(qtbot, private_bus, fake_portal):
+    """Die Auswahl der ersten Aufnahme bleibt sonst auf dem Bildschirm stehen."""
+    fake = fake_portal("never")
+    portal = ScreenshotPortal(private_bus[1])
+    portal.take()
+    first = portal._path
+    portal.take()
+    lines = [_read_line(fake) for _ in range(3)]       # CALL, CLOSE, CALL
+    assert f"CLOSE {first}" in lines and sum(line.startswith("CALL") for line in lines) == 2
+
+
+class _NoSubscribeAtOwnPath:
+    """Bus, auf dem das Abonnieren des abweichenden Request-Pfads (Fake „other“: …/alt1) scheitert."""
+
+    def __init__(self, bus):
+        self._bus = bus
+
+    def connect(self, service, path, *args):
+        return "/alt" not in path and self._bus.connect(service, path, *args)
+
+    def __getattr__(self, name):
+        return getattr(self._bus, name)
+
+
+def test_failed_resubscribe_closes_the_selection(qtbot, private_bus, fake_portal):
+    fake = fake_portal("other")
+    portal = ScreenshotPortal(_NoSubscribeAtOwnPath(private_bus[1]))
+    path, error = _take(qtbot, portal)
+    assert path is None and "nicht abonnierbar" in error
+    _read_line(fake)                                   # CALL
+    close = _read_line(fake)
+    assert close.startswith("CLOSE /org/freedesktop/portal/desktop/request/")
+    assert close.endswith("/alt1")
 
 
 def test_portal_missing_on_private_bus(qtbot, private_bus):

@@ -2,10 +2,12 @@
 
 Läuft mit dem System-Python (PyGObject/Gio): ``python3 fake_portal.py ART CODE URI``.
 ART: ``normal`` (Antwort nach 50 ms), ``early`` (Antwort schon vor dem Rückgabewert),
-``other`` (eigener Request-Pfad wie ältere Portale), ``twice`` (zwei Antworten).
+``other`` (eigener Request-Pfad wie ältere Portale), ``twice`` (zwei Antworten),
+``never`` (antwortet nie).
 URI „-“ = Antwort ohne ``uri``; „{n}“ in der URI wird zur Nummer des Aufrufs.
 Gibt „READY“ aus, sobald der Name belegt ist, und je Aufruf
-„CALL interactive=… modal=… token=…“; ohne Namen endet es mit Code 1.
+„CALL interactive=… modal=… token=…“ sowie „CLOSE <pfad>“, wenn jemand ``Request.Close`` an
+einen Request-Pfad schickt (nach dem Aufruf, der ihn lieferte); ohne Namen endet es mit Code 1.
 """
 import sys
 
@@ -16,8 +18,16 @@ XML = """<node><interface name="org.freedesktop.portal.Screenshot">
 <method name="Screenshot"><arg type="s" direction="in"/><arg type="a{sv}" direction="in"/>
 <arg type="o" direction="out"/></method><property name="version" type="u" access="read"/>
 </interface></node>"""
+REQUEST_XML = """<node><interface name="org.freedesktop.portal.Request">
+<method name="Close"/></interface></node>"""
 INFO = Gio.DBusNodeInfo.new_for_xml(XML).interfaces[0]
+REQUEST_INFO = Gio.DBusNodeInfo.new_for_xml(REQUEST_XML).interfaces[0]
 calls = 0
+
+
+def close(conn, sender, path, iface, method, params, invocation):
+    print(f"CLOSE {path}", flush=True)
+    invocation.return_value(None)
 
 
 def call(conn, sender, path, iface, method, params, invocation):
@@ -38,11 +48,12 @@ def call(conn, sender, path, iface, method, params, invocation):
     if MODE == "early":
         emit()
         conn.flush_sync(None)
+    conn.register_object(request, REQUEST_INFO, close, None, None)
     invocation.return_value(GLib.Variant("(o)", (request,)))
     if MODE == "twice":
         GLib.timeout_add(30, emit)
         GLib.timeout_add(60, emit)
-    elif MODE != "early":
+    elif MODE not in ("early", "never"):
         GLib.timeout_add(50, emit)
 
 

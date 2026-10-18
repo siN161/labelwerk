@@ -322,6 +322,24 @@ def test_load_image_reports_dpi_without_resampling(tmp_path, suffix):
     assert dpi == pytest.approx(600, abs=0.5)
 
 
+def test_load_image_with_dpi_ignores_the_file_resolution(tmp_path):
+    """Ungleiche Dateiauflösung (72 × 144) streckt nicht, hohe (1200) verkleinert nicht."""
+    path = tmp_path / "bild.png"
+    Image.new("RGB", (200, 100), "white").save(path, dpi=(72, 144))
+    img, dpi = load_image(path, dpi=300)
+    assert img.size == (200, 100) and dpi == pytest.approx(300)
+    Image.new("RGB", (200, 100), "white").save(path, dpi=(1200, 1200))
+    img, dpi = load_image(path, dpi=300)
+    assert img.size == (200, 100) and dpi == pytest.approx(300)
+
+
+def test_load_image_with_dpi_still_limits_huge_images(tmp_path):
+    path = tmp_path / "riesig.png"
+    Image.new("RGB", (MAX_PIXELS * 2, 40), "white").save(path, dpi=(72, 144))
+    img, dpi = load_image(path, dpi=300)
+    assert img.size == (MAX_PIXELS, 20) and dpi == pytest.approx(150)
+
+
 def test_load_image_follows_exif_orientation(tmp_path):
     path = tmp_path / "handy.jpg"
     exif = Image.Exif()

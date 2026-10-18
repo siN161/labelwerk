@@ -22,12 +22,12 @@ def _window(qtbot, doc=None, **settings):
     return win
 
 
-def _shot(tmp_path, w=240, h=120, dpi=72):
+def _shot(tmp_path, w=240, h=120, dpi=(72, 72)):
     """Bildschirmfoto-Datei: weißer Rand, schwarzes Feld (Datei mit DPI-Angabe, die nicht gilt)."""
     img = Image.new("RGB", (w, h), "white")
     ImageDraw.Draw(img).rectangle((20, 20, w - 21, h - 21), fill="black")
     path = tmp_path / "Bildschirmfoto vom 2026-10-18.png"
-    img.save(path, dpi=(dpi, dpi))
+    img.save(path, dpi=dpi)
     return path
 
 
@@ -118,6 +118,14 @@ def test_huge_screenshot_keeps_its_size(qtbot, portal, tmp_path):
     win.screenshot_finished(_shot(tmp_path, 7680, 400), None)
     obj = win.doc.objects[1]
     assert obj.natural_mm()[0] == pytest.approx(7640 / MM, rel=0.002)
+
+
+def test_screenshot_with_unequal_file_resolution_keeps_its_aspect(qtbot, portal, tmp_path):
+    win = _window(qtbot)
+    _start(win, qtbot, portal)
+    win.screenshot_finished(_shot(tmp_path, 240, 120, dpi=(72, 144)), None)
+    w, h = win.doc.objects[1].natural_mm()
+    assert w == pytest.approx(200 / MM, rel=0.002) and h == pytest.approx(80 / MM, rel=0.002)   # zugeschnitten
 
 
 def test_cancel_inserts_nothing_and_says_nothing(qtbot, portal):

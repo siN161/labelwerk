@@ -60,7 +60,8 @@ NO_CLIPBOARD_IMAGE = "Kein Bild in der Zwischenablage."
 NO_SCREENSHOT = ("Bildschirmfoto nicht verfügbar (kein XDG-Portal) – mit dem System-Werkzeug in "
                  "die Zwischenablage kopieren und mit Strg+V einfügen")
 HIDE_DELAY_MS = 300        # Bildschirmfoto: so lange nimmt der Desktop das Fenster weg
-RESTORE_TIMEOUT_MS = 60_000   # ohne Antwort des Portals kommt das Fenster danach trotzdem wieder
+RESTORE_TIMEOUT_MS = 300_000  # Sicherheitsnetz nur für Portale, die nie antworten: so lange kann
+                              # eine Auswahl offen sein, erst danach kommt das Fenster trotzdem wieder
 # Bearbeitungsleiste: Aktion und eigenes Symbol (gui/icons); None = Trenner
 EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
             ("edit.cut", "edit-cut"), ("edit.copy", "edit-copy"), ("edit.paste", "edit-paste"),
