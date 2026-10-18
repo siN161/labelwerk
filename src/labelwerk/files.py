@@ -30,7 +30,8 @@ def load_file(path: str | Path, page: int = 1) -> Image.Image:
         return _load_pdf(path, page) if path.suffix.lower() == ".pdf" else _load_image(path)
 
 
-def load_image(path: str | Path, page: int = 1) -> tuple[Image.Image, float]:
+def load_image(path: str | Path, page: int = 1,
+               dpi: float | None = None) -> tuple[Image.Image, float]:
     """Bild für ein Bild-Objekt: (RGB-Bild in Originalauflösung, dpi).
 
     PNG, JPG, GIF (erstes Bild), BMP, WebP und PDF (Seite ``page``, gerendert bei 300 dpi).
@@ -39,14 +40,17 @@ def load_image(path: str | Path, page: int = 1) -> tuple[Image.Image, float]:
     hoch und quer verschieden (Fax: 204 × 98 dpi), wird die Höhe passend skaliert – die
     Druckgröße stimmt, ``dpi`` ist die waagrechte. Sehr große Bilder werden begrenzt
     (``imaging.limit_size``: höchstens 600 dpi bzw. 6000 px längste Seite) – PDF-Seiten
-    werden gleich passend gerendert.
+    werden gleich passend gerendert. Mit ``dpi`` gilt die Auflösung der Datei nicht: das
+    Bild zählt quadratisch mit dieser Auflösung (keine Streckung, kein Verkleinern wegen
+    einer hohen Dateiangabe), begrenzt wird wie sonst, bezogen auf ``dpi``; PDF-Seiten
+    bleiben unberührt.
     """
     path = _checked(path, _OBJECT_SUFFIXES, "PNG, JPG, GIF, BMP, WebP, PDF", page)
     with _readable(path):
         if path.suffix.lower() == ".pdf":
             return _load_pdf_page(path, page)
         with Image.open(path) as src:                  # GIF: erstes Bild
-            x_dpi, y_dpi = _file_dpi(src)
+            x_dpi, y_dpi = _file_dpi(src) if dpi is None else (dpi, dpi)
             if src.getexif().get(0x0112, 1) in (5, 6, 7, 8):   # EXIF dreht um 90°
                 x_dpi, y_dpi = y_dpi, x_dpi
             img = on_white(ImageOps.exif_transpose(src))   # Handyfotos: Lage aus EXIF

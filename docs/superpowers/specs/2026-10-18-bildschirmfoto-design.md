@@ -69,7 +69,7 @@ keine Fensterwahl), `cosmic-screenshot` direkt (nur COSMIC).
      Solange ausgeblendet, beendet sich die App nicht, wenn sich ein anderes Fenster schließt
      (`quitOnLastWindowClosed` vorübergehend aus). Schließen während der Aufnahme beendet sie (keine
      Auswahl, kein Einfügen mehr).
-  4. **Sicherheitsnetz:** keine Antwort nach `RESTORE_TIMEOUT_MS` = 60 s → Fenster wieder zeigen, Aktion
+  4. **Sicherheitsnetz:** keine Antwort nach `RESTORE_TIMEOUT_MS` = 5 min → Fenster wieder zeigen, Aktion
      entsperren; eine spätere Antwort wird trotzdem noch eingefügt (nur die erste je Aufnahme).
 - Die vom Portal angelegte Datei bleibt unangetastet (gehört dem Nutzer bzw. dem Desktop).
 

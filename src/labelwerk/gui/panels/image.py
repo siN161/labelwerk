@@ -1,4 +1,5 @@
-"""Panel „Bild“: Bilder einfügen (Datei, Zwischenablage) und das gewählte Bild einstellen.
+"""Panel „Bild“: Bilder einfügen (Datei, Zwischenablage, Bildschirmfoto) und das gewählte Bild
+einstellen.
 
 Umwandlung in Schwarz/Weiß (Strich = harte Schwelle, Foto = Rasterpunkte), Schwelle,
 Umkehren, Zuschnitt (automatisch an/aus), Originalgröße 1:1, Seitenverhältnis, Drehen
@@ -23,7 +24,8 @@ from ..widgets import SpinBox
 from . import Panel
 from .position import PositionSection
 
-HINT = "Bild aus einer Datei oder der Zwischenablage einfügen – oder aufs Etikett ziehen"
+HINT = ("Bild aus einer Datei, der Zwischenablage oder als Bildschirmfoto einfügen – oder aufs "
+        "Etikett ziehen")
 CROP_FAILED = "Bild nicht zugeschnitten – nur weiße Fläche gefunden"
 _SOURCE_PX = 240                    # Quelle: längere Namen in der Mitte gekürzt (Tooltip)
 _ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (Attribut, Aktion, Symbol)
@@ -52,7 +54,9 @@ class ImagePanel(Panel):
         self.from_clipboard.setToolTip("Bild aus der Zwischenablage einfügen")
         self.from_clipboard.setEnabled(False)
         self.from_clipboard.clicked.connect(self.paste_requested)
-        for button in (self.from_file, self.from_clipboard):
+        self.screenshot = QPushButton("BILDSCHIRMFOTO")
+        self.screenshot.setToolTip("Bildschirmfoto einfügen")
+        for button in (self.from_file, self.from_clipboard, self.screenshot):
             self.layout_.addWidget(button)
 
         self.section("Quelle")
@@ -136,11 +140,13 @@ class ImagePanel(Panel):
         self.original.clicked.connect(lambda: step(self._change, layout.original_size))
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
-        """„Aus Datei …“ löst die Aktion „Bild einfügen …“ aus (Kürzel im Tooltip)."""
-        action = actions["image.insert"]
-        self.from_file.clicked.connect(lambda: action.trigger())
-        self.from_file.setToolTip(action.toolTip())
-        action.changed.connect(lambda: self.from_file.setToolTip(action.toolTip()))
+        """„Aus Datei …“ und „Bildschirmfoto“ lösen ihre Aktionen aus (Kürzel im Tooltip)."""
+        for button, key in ((self.from_file, "image.insert"),
+                            (self.screenshot, "image.screenshot")):
+            action = actions[key]
+            button.clicked.connect(lambda _=False, a=action: a.trigger())
+            button.setToolTip(action.toolTip())
+            action.changed.connect(lambda b=button, a=action: b.setToolTip(a.toolTip()))
         # Drehen: dieselben Aktionen wie im Reiter Layout (wirken auf die Auswahl = das Bild)
         for attr, key, _ in _ROTATE:
             button, rotate = getattr(self, attr), actions[key]

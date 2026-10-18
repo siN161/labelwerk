@@ -33,11 +33,12 @@ from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
 from .history import History, restore
 from . import image_import
-from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS
+from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS, SCREENSHOT
 from .media_worker import MediaWorker
 from .panels.image import CROP_FAILED
 from .panels.text import DEFAULT_PT
 from .print_worker import PrintWorker
+from .screenshot import FAILED as SCREENSHOT_FAILED, ScreenshotPortal
 from .settings_dialog import SettingsDialog
 from .symbols import SIZE, line_icon
 from .text_edit_mode import TextEditSession
@@ -56,6 +57,11 @@ SHRUNK_HINT = "Bild auf {percent} verkleinert"                    # „37 %“
 CODES_HINT = " – Codes ggf. nicht mehr lesbar"                    # nur Strich (Codes)
 TURNED_HINT = "Bild um 90° gedreht, damit es 1:1 passt"
 NO_CLIPBOARD_IMAGE = "Kein Bild in der Zwischenablage."
+NO_SCREENSHOT = ("Bildschirmfoto nicht verfügbar (kein XDG-Portal) – mit dem System-Werkzeug in "
+                 "die Zwischenablage kopieren und mit Strg+V einfügen")
+HIDE_DELAY_MS = 300        # Bildschirmfoto: so lange nimmt der Desktop das Fenster weg
+RESTORE_TIMEOUT_MS = 300_000  # Sicherheitsnetz nur für Portale, die nie antworten: so lange kann
+                              # eine Auswahl offen sein, erst danach kommt das Fenster trotzdem wieder
 # Bearbeitungsleiste: Aktion und eigenes Symbol (gui/icons); None = Trenner
 EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
             ("edit.cut", "edit-cut"), ("edit.copy", "edit-copy"), ("edit.paste", "edit-paste"),
@@ -99,6 +105,10 @@ class MainWindow(QMainWindow):
         self._text_pastes = 0                       # Text eingefügt seit dem letzten Ändern
         self._notice: str | None = None             # Meldung zum Einfügen von Bildern
         self._image_dir = ""                        # Ordner des zuletzt eingefügten Bilds
+        self._portal: ScreenshotPortal | None = None   # Bildschirmfoto (beim ersten Gebrauch)
+        self._shooting = False                      # Fenster für ein Bildschirmfoto ausgeblendet
+        self._quit_on_close = True                  # Einstellung der App vor dem Ausblenden
+        self._shot_pending = False                  # Antwort des Portals steht noch aus
         self._merge_next = None                     # Pfeiltasten: Schritte zusammenfassen
         self._restoring = False                     # Rückgängig setzt gerade die Auswahl
         self._arranging = False                     # Auswahl wird intern umgestellt (Anlegen …)
@@ -213,6 +223,12 @@ class MainWindow(QMainWindow):
         self._printer_timer.setInterval(PRINTER_POLL_MS)
         self._printer_timer.timeout.connect(self.refresh_printer)
         self._printer_timer.start()
+        self._hide_timer = QTimer(self)              # Bildschirmfoto: erst ausblenden, dann Auswahl
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self._take_hidden)
+        self._restore_timer = QTimer(self)           # … und ohne Antwort wieder zeigen
+        self._restore_timer.setSingleShot(True)
+        self._restore_timer.timeout.connect(self._show_again)
 
         # Schreibmodus direkt auf dem Etikett (Editor des Text-Panels als Eingabepuffer)
         self.edit_session = TextEditSession(self)
@@ -263,7 +279,8 @@ class MainWindow(QMainWindow):
                     "edit.paste": self.paste, "edit.duplicate": self.duplicate_selected,
                     "tool.select": lambda: self._choose_tool("select"),
                     "tool.text": lambda: self._choose_tool("text"),
-                    "image.insert": self.insert_image_file}
+                    "image.insert": self.insert_image_file,
+                    "image.screenshot": self.insert_screenshot}
         handlers["text.start_edit"] = handlers["text.start_edit_enter"] = self.edit_selected
         for key, handler in handlers.items():
             self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
@@ -922,6 +939,90 @@ class MainWindow(QMainWindow):
             return
         self._insert_picture(image, CLIPBOARD)
 
+    # --- Bildschirmfoto ------------------------------------------------------
+    def _screenshot_portal(self) -> ScreenshotPortal:
+        if self._portal is None:
+            self._portal = ScreenshotPortal(parent=self)
+            self._portal.finished.connect(self.screenshot_finished)
+        return self._portal
+
+    def screenshot_available(self) -> bool:
+        """Gibt es das Bildschirmfoto-Portal? (in Tests ersetzbar)"""
+        return self._screenshot_portal().available()
+
+    def take_screenshot(self) -> None:
+        """Auswahl des Desktops öffnen; die Antwort kommt über ``screenshot_finished`` (in
+        Tests ersetzbar)."""
+        self._screenshot_portal().take()
+
+    def insert_screenshot(self) -> None:
+        """„Bildschirmfoto“ wie P-touch: labelwerk geht aus dem Weg, der Desktop zeigt seine
+        Auswahl (Bereich, Fenster, Bildschirm), danach liegt das Bild auf dem Etikett.
+        Ohne Portal bleibt das Fenster und ein Hinweis nennt den Weg über die Zwischenablage."""
+        if self._shooting:
+            return
+        self.finish_editing()
+        if not self.screenshot_available():
+            self._show_notice([NO_SCREENSHOT], "error")
+            return
+        self._shooting = self._shot_pending = True
+        self.shortcut_actions["image.screenshot"].setEnabled(False)
+        # ausgeblendet ist kein Fenster mehr sichtbar: schlösse sich jetzt ein anderes, endete
+        # die App sonst
+        app = QApplication.instance()
+        self._quit_on_close = app.quitOnLastWindowClosed()
+        app.setQuitOnLastWindowClosed(False)
+        self.hide()
+        self._hide_timer.start(HIDE_DELAY_MS)
+
+    def _take_hidden(self) -> None:
+        """Fenster ist weg: Auswahl öffnen; ohne Antwort kommt das Fenster nach
+        ``RESTORE_TIMEOUT_MS`` trotzdem wieder. Ein unerwarteter Fehler lässt das Fenster nie
+        verschwunden."""
+        self._restore_timer.start(RESTORE_TIMEOUT_MS)
+        try:
+            self.take_screenshot()
+        except Exception as e:  # Fenster sofort zurück; Meldung statt Traceback
+            self.screenshot_finished(None, f"{SCREENSHOT_FAILED} – {e}")
+
+    def screenshot_finished(self, path: Path | None, error: str | None) -> None:
+        """Antwort des Portals: Pfad → einfügen (300 dpi: 1 Bildschirmpixel = 1 Druckpunkt, wie
+        aus der Zwischenablage), Meldung → Statusleiste, (None, None) = abgebrochen. Es zählt
+        nur die erste Antwort je Aufnahme – auch eine nach der Zeitüberschreitung (kommt sie
+        erst während der nächsten Aufnahme, gilt sie für diese, und die entfällt)."""
+        if not self._shot_pending:
+            return
+        self._shot_pending = False
+        self._show_again()
+        if error is not None:
+            self._show_notice([error], "error")
+            return
+        if path is None:
+            return
+        try:
+            image, dpi = image_import.load_screenshot(Path(path))
+        except (ValueError, OSError) as e:
+            self._show_notice([f"Bildschirmfoto: {e}"], "error")
+            return
+        self._insert_picture(image, SCREENSHOT, dpi=dpi)
+
+    def _show_again(self) -> None:
+        """Nach dem Bildschirmfoto (oder ohne Antwort nach ``RESTORE_TIMEOUT_MS``): Fenster
+        zeigen und nach vorn holen, Aktion wieder frei."""
+        self._restore_timer.stop()
+        if not self._shooting:
+            return
+        self._end_shooting()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _end_shooting(self) -> None:
+        self._shooting = False
+        self._hide_timer.stop()
+        self.shortcut_actions["image.screenshot"].setEnabled(True)
+        QApplication.instance().setQuitOnLastWindowClosed(self._quit_on_close)
+
     def _dropped(self, paths: list[Path], image: Image.Image | None, x_mm: float,
                  y_mm: float) -> None:
         """Bilddateien oder Bilddaten auf die Arbeitsfläche abgelegt: an der Ablagestelle
@@ -932,10 +1033,11 @@ class MainWindow(QMainWindow):
             self._insert_picture(image, DROPPED, at=(x_mm, y_mm))
 
     def _insert_picture(self, image: Image.Image, source: str,
-                        at: tuple[float, float] | None = None) -> None:
-        """Bild ohne Auflösungsangabe (Zwischenablage, Bilddaten) mit 300 dpi einfügen."""
+                        at: tuple[float, float] | None = None, dpi: float = DPI) -> None:
+        """Bild ohne Auflösungsangabe (Zwischenablage, Bilddaten, Bildschirmfoto) einfügen –
+        300 dpi, also 1 Pixel = 1 Druckpunkt."""
         notes: list[str] = []
-        self._insert_images([self._new_image(image, DPI, source, None, notes)], at, notes)
+        self._insert_images([self._new_image(image, dpi, source, None, notes)], at, notes)
 
     def _new_image(self, image: Image.Image, dpi: float, source: str, page: int | None,
                    notes: list[str]) -> ImageObject:
@@ -1057,6 +1159,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self._printer_timer.stop()
+        self._restore_timer.stop()
+        self._shot_pending = False                  # keine Auswahl und kein Einfügen mehr
+        if self._shooting:
+            self._end_shooting()
         super().closeEvent(event)
 
     # --- Einstellungen ----------------------------------------------------
