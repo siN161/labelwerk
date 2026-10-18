@@ -525,3 +525,63 @@ def test_file_dialog_starts_at_the_current_table(qtbot, tmp_path, monkeypatch):
     del win.ask_series_file
     win.choose_series_table()
     assert seen == [str(path.parent)]
+
+
+# --- Schlussreview --------------------------------------------------------------------------------
+def _hidden_first(tmp_path):
+    book = openpyxl.Workbook()
+    hidden = book.active
+    hidden.title = "Versteckt"
+    hidden.append(["Klemme"])
+    hidden.append(["HIDDEN"])
+    hidden.sheet_state = "hidden"
+    shown = book.create_sheet("Sichtbar")
+    shown.append(["Klemme"])
+    shown.append(["S1"])
+    path = tmp_path / "t.xlsx"
+    book.save(path)
+    return path
+
+
+def test_choosing_excel_reads_once_and_keeps_the_visible_sheet(qtbot, tmp_path, monkeypatch):
+    path = _hidden_first(tmp_path)
+    opened = []
+    real = openpyxl.load_workbook
+    monkeypatch.setattr(openpyxl, "load_workbook", lambda *a, **k: opened.append(1) or real(*a, **k))
+    win = _window(qtbot, Document("62x29", objects=[TextObject("{Klemme}")]))
+    win.ask_series_file = lambda: str(path)
+    panel = win.panel("series")
+    panel.table_button.click()
+    assert len(opened) == 1
+    assert win.doc.series.sheet is None                  # erst eine eigene Wahl legt das Blatt fest
+    assert panel.sheet.currentText() == "Sichtbar"
+    assert panel.preview()[1] == ["S1"]
+
+
+def test_opening_reads_the_table_once(qtbot, tmp_path, monkeypatch):
+    from labelwerk import series as core
+    path = _csv(tmp_path)
+    doc = Document("62x29", objects=[TextObject("{Klemme}")], series=Series(source=str(path)))
+    saved = storage.save(doc, tmp_path / "s.labelwerk")
+    win = _window(qtbot)
+    calls = []
+    real = core.load_table
+    monkeypatch.setattr(core, "load_table", lambda *a, **k: calls.append(1) or real(*a, **k))
+    win.files.open(saved, ask=False)
+    assert len(calls) == 1
+
+
+def test_centred_text_stays_centred_for_every_row(qtbot, tmp_path):
+    from labelwerk import layout
+    from labelwerk.document import Paragraph, Span
+    obj = TextObject([Paragraph([Span("{Klemme}")], "center")], size_pt=12, x_mm=25, y_mm=5)
+    win = _window(qtbot, Document("62x29", objects=[obj]))
+    path = _csv(tmp_path, "Klemme;B\nX1;1\nX1 -K3 Klemme 24V;2\n")
+    win.ask_series_file = lambda: str(path)
+    win.panel("series").table_button.click()
+    win.render_now()
+    centres = [layout.object_rect(win.rendered[0]).cx]
+    win.panel("series").next_button.click()
+    win.render_now()
+    centres.append(layout.object_rect(win.rendered[0]).cx)
+    assert centres[1] == pytest.approx(centres[0], abs=0.2)

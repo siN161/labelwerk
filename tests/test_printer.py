@@ -219,7 +219,7 @@ def test_error_in_a_part_stops_and_names_the_labels(monkeypatch):
     monkeypatch.setattr("labelwerk.printer.send",
                         _sender([{"outcome": "printed", "did_print": True}, failing], sent))
     with pytest.raises(PrintError, match=rf"Etikett {MAX_JOB_EACH + 1}–{MAX_JOB_EACH + 2} von "
-                                         rf"{MAX_JOB_EACH + 2}.*Keine Rolle"):
+                                         rf"{MAX_JOB_EACH + 2}.*davor.*Keine Rolle"):
         print_image(_blank(MAX_JOB_EACH + 2), "62", printer="file:///dev/usb/lp0")
     assert len(sent) == 2
 
@@ -235,3 +235,16 @@ def test_print_mode_images_print_exactly_the_same():
     small = to_print_mode(img)
     assert small.mode == "1"
     assert build_instructions(small, "62") == build_instructions(img, "62")
+
+
+def test_single_label_is_byte_identical_to_plain_brother_ql():
+    """Golden: ein Etikett wie vor den Serien (BrotherQLRaster + convert) – _Raster ändert nur
+    Serien."""
+    from brother_ql.conversion import convert
+    from brother_ql.raster import BrotherQLRaster
+    image = render_text("Test", "62")
+    plain = BrotherQLRaster("QL-600")
+    plain.exception_on_warning = True
+    expected = convert(qlr=plain, images=[image], label="62", rotate="0", threshold=70.0,
+                       dither=False, compress=False, red=False, dpi_600=False, hq=True, cut=True)
+    assert build_instructions(image, "62") == bytes(expected)

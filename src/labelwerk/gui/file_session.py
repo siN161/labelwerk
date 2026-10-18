@@ -170,9 +170,10 @@ class FileSession(QObject):
         window._structure_changing()    # Renderfehler: keine Bilder des alten Etiketts stehen lassen
         restore(window.doc, doc)
         window.history.reset(window.doc)
-        for panel in window._panel_by_key.values():
-            panel.refresh()
-        window.panel("series").reload()     # Tabelle frisch lesen, alle Zeilen gewählt
+        for key, panel in window._panel_by_key.items():
+            if key != "series":
+                panel.refresh()
+        window.panel("series").reload()     # Tabelle frisch lesen (einmal), alle Zeilen gewählt
         window.render_now()
         self.path = path
         self.origin = "file" if path is not None else origin

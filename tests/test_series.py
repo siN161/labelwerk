@@ -478,3 +478,30 @@ def test_table_next_to_the_label_is_saved_relative(tmp_path):
     elsewhere.mkdir()
     saved = storage.save(doc, elsewhere / "s.labelwerk")
     assert json.loads(saved.read_text())["document"]["series"]["source"] == str(table)
+
+
+# --- Schlussreview ----------------------------------------------------------------------------
+def test_far_away_excel_rows_stop_early(tmp_path, monkeypatch):
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet["A1"], sheet["A2"], sheet["A200"] = "Klemme", "X1", "weit unten"
+    path = tmp_path / "weit.xlsx"
+    book.save(path)
+    monkeypatch.setattr(series, "MAX_RAW_ROWS", 100)
+    with pytest.raises(SeriesError, match="leere Zeilen"):
+        load_table(path)
+
+
+def test_table_knows_the_sheet_it_came_from(tmp_path):
+    book = openpyxl.Workbook()
+    hidden = book.active
+    hidden.title = "Versteckt"
+    hidden.sheet_state = "hidden"
+    shown = book.create_sheet("Sichtbar")
+    shown.append(["S"])
+    shown.append([1])
+    path = tmp_path / "t.xlsx"
+    book.save(path)
+    table = load_table(path)
+    assert table.sheet == "Sichtbar" and table.sheets == ["Versteckt", "Sichtbar"]
+    assert load_table(_csv(tmp_path, "A\n1\n")).sheet is None

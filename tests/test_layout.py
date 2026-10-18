@@ -1100,3 +1100,26 @@ def test_text_only_helpers_refuse_images():
                  lambda: layout.anchor_align(obj)):
         with pytest.raises(TypeError, match="Text"):
             call()
+
+
+# --- Serien: Ankerpunkt beim Füllen ---------------------------------------------------------------
+@pytest.mark.parametrize("align, edge", [("center", "cx"), ("right", "right"), ("left", "x")])
+def test_filled_text_keeps_its_anchor(align, edge):
+    from labelwerk.document import Paragraph, Span
+    obj = TextObject([Paragraph([Span("{A}")], align)], size_pt=14, x_mm=20, y_mm=5)
+    doc = Document("62x29", objects=[obj])
+    raw = layout.object_rect(render_object(obj, doc))
+    for value in ("X1", "X1 -K3 Klemme 24V"):
+        filled = layout.fill_anchored(doc, ["A"], [value])
+        rect = layout.object_rect(render_object(filled.objects[0], filled))
+        assert getattr(rect, edge) == pytest.approx(getattr(raw, edge), abs=0.2), value
+    assert (obj.x_mm, obj.y_mm) == (20, 5)                 # das Etikett selbst bleibt
+
+
+def test_fill_anchored_leaves_fixed_frames_and_unpositioned_text():
+    fixed = TextObject("{A}", size_pt=14, fit=True, x_mm=2, y_mm=2, w_mm=30, h_mm=10)
+    centred = TextObject("{A}", size_pt=14)
+    doc = Document("62x29", objects=[fixed, centred])
+    filled = layout.fill_anchored(doc, ["A"], ["lang lang"])
+    assert (filled.objects[0].x_mm, filled.objects[0].y_mm) == (2, 2)
+    assert filled.objects[1].x_mm is None

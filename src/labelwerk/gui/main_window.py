@@ -24,10 +24,10 @@ from ..document import Document, ImageObject, Series, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
 from ..labels import DPI, get_label
-from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, frame_area,
-                      growing_axis, insert_placement, match_objects, maximize_object, move,
-                      object_rect, objects_outside, outside_indices, printable_area, proportional,
-                      reorder, resize, rotate, set_frame, to_grid)
+from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, fill_anchored,
+                      frame_area, growing_axis, insert_placement, match_objects, maximize_object,
+                      move, object_rect, objects_outside, outside_indices, printable_area,
+                      proportional, reorder, resize, rotate, set_frame, to_grid)
 from ..printer import DEFAULT_MODEL, cut_interval, to_print_mode
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
@@ -688,7 +688,7 @@ class MainWindow(QMainWindow):
         if row is None:
             return self.doc
         keep = self._keep if self._keep is not None else self.edit_session.index
-        return series.fill(self.doc, *row, keep=keep)
+        return fill_anchored(self.doc, *row, self.model, keep=keep)
 
     def _series_error(self, message: str) -> str:
         """Renderfehler mit Serie: welche Zeile – bzw. dass es im Schreibmodus an den
@@ -1535,6 +1535,7 @@ class MainWindow(QMainWindow):
         if not self.ask_print_count(len(rows)):
             return
         images, outside = [], []
+        doc = copy.deepcopy(doc)                    # Eingaben während des Vorbereitens zählen nicht
         renderer = Renderer()                       # unveränderte Objekte aus dem Cache
         self._set_printing(True)                    # gesperrt, solange vorbereitet wird
         try:
@@ -1543,7 +1544,8 @@ class MainWindow(QMainWindow):
                     self._set_result(f"Bereite {done + 1}/{len(rows)} vor …", "")
                     QApplication.processEvents()
                 try:
-                    result = renderer.render(series.fill(doc, table.columns, values), self.model)
+                    result = renderer.render(fill_anchored(doc, table.columns, values, self.model),
+                                             self.model)
                 except ValueError as e:
                     self._set_result(f"Zeile {number}: {e}", "error")
                     return

@@ -16,7 +16,7 @@ import re
 import stat
 import zipfile
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .document import (CUTS, MAX_DIGITS, MAX_NUMBER, MAX_SERIES_ROWS, Document, Numbering,
@@ -28,6 +28,7 @@ MAX_UNPACKED = 200 * 1024 * 1024    # Excel: ausgepackt (gegen Zip-Bomben)
 MAX_ROWS = MAX_SERIES_ROWS          # Zeilen ohne Spaltennamen (leere zählen nicht)
 MAX_COLUMNS = 200
 MAX_CELL = 100_000                  # Zeichen je Zelle (CSV)
+MAX_RAW_ROWS = 100_000              # Excel: Zeilen samt leeren (verirrte Zelle weit unten)
 CSV_SUFFIXES = (".csv", ".tsv", ".txt")
 EXCEL_SUFFIXES = (".xlsx", ".xlsm")
 NUMBER_COLUMN = "Nummer"
@@ -44,9 +45,12 @@ class SeriesError(ValueError):
 
 @dataclass
 class Table:
-    """Spaltennamen und Zeilen (Texte, jede Zeile so lang wie ``columns``)."""
+    """Spaltennamen und Zeilen (Texte, jede Zeile so lang wie ``columns``); Excel: gelesenes
+    Blatt und alle Arbeitsblätter (zählen beim Vergleich nicht)."""
     columns: list[str]
     rows: list[list[str]]
+    sheet: str | None = field(default=None, compare=False)
+    sheets: list[str] = field(default_factory=list, compare=False)
 
 
 # --- Tabellen lesen ----------------------------------------------------------------------------
@@ -172,15 +176,31 @@ def _read_excel(path: Path, sheet: str | None) -> Table:
                           sheets[0] if sheets else None)
         if chosen is None:
             raise SeriesError(f"{path.name}: Tabelle ist leer")
+        # leere Zeilen kosten auch: openpyxl liefert jede Lücke (Zelle in Zeile 1 048 576 → 35 s)
+        width = MAX_COLUMNS + 1
+        if chosen.max_column:                             # Dimension der Datei, falls angegeben
+            width = max(1, min(width, chosen.max_column))
         rows = ([_cell(cell.value, getattr(cell, "number_format", "General")) for cell in row]
-                for row in chosen.iter_rows(max_col=MAX_COLUMNS + 1))
-        return _collect(rows, path)
+                for row in _limited(chosen.iter_rows(max_col=width), path))
+        table = _collect(rows, path)
+        table.sheet, table.sheets = chosen.title, [ws.title for ws in sheets]
+        return table
     except SeriesError:
         raise
     except Exception as e:
         raise SeriesError(f"{path.name}: Excel-Datei nicht lesbar") from e
     finally:
         book.close()
+
+
+def _limited(rows, path: Path):
+    """Höchstens ``MAX_RAW_ROWS`` Zeilen (auch leere) – sonst Meldung statt minutenlangem Lesen."""
+    for number, row in enumerate(rows, start=1):
+        if number > MAX_RAW_ROWS:
+            raise SeriesError(f"{path.name}: zu viele leere Zeilen (Daten bis Zeile "
+                              f"{MAX_RAW_ROWS:,}".replace(",", ".") + ") – leere Zeilen am Blattende "
+                              "löschen")
+        yield row
 
 
 def _cell(value, number_format: str = "General") -> str:

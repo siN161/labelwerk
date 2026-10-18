@@ -204,24 +204,27 @@ class SeriesPanel(Panel):
         """Tabelle lesen (``table``: schon gelesen) und anzeigen; Blätter auch, wenn das
         gewählte fehlt – dann lässt sich ein anderes wählen."""
         self.table, self.error = table, None
-        sheets: list[str] = []
         if value is not None:
             self._stamp = _stamp(value.source) if value.source is not None else None
-            if value.source is not None:
-                try:
-                    sheets = series.sheet_names(value.source)
-                except SeriesError:
-                    sheets = []
             if table is None:
                 try:
                     self.table = series.table_for(value)
                 except SeriesError as e:
                     self.error = str(e)
+        # Blätter aus der gelesenen Mappe; scheitert das Lesen (Blatt fehlt), eigens holen
+        sheets = self.table.sheets if self.table is not None else []
+        if self.table is None and value is not None and value.source is not None:
+            try:
+                sheets = series.sheet_names(value.source)
+            except SeriesError:
+                sheets = []
+        shown = self.table.sheet if self.table is not None else value.sheet if value else None
+        self.sheet.blockSignals(True)               # Füllen ist keine Wahl des Nutzers
         self.sheet.clear()
         self.sheet.addItems(sheets)
         if sheets:
-            self.sheet.setCurrentIndex(max(0, sheets.index(value.sheet)) if value.sheet in sheets
-                                       else 0)
+            self.sheet.setCurrentIndex(sheets.index(shown) if shown in sheets else 0)
+        self.sheet.blockSignals(False)
         self.sheet.setVisible(bool(sheets))
         self._fill_lists()
 

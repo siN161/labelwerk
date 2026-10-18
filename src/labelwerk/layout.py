@@ -784,3 +784,23 @@ def frame_area(doc: Document, model: str = "QL-600",
     """Innenraum des Zierrahmens in mm (Ausrichten am Etikett, Einrasten); None ohne Rahmen."""
     box = frame_box(doc, model, size)
     return None if box is None else Rect(*(_mm(v) for v in box))
+
+
+def fill_anchored(doc: Document, columns: list[str], row: list[str], model: str = "QL-600",
+                  keep: int | None = None) -> Document:
+    """``series.fill`` – und frei platzierte Texte ohne feste Rahmengröße behalten den Punkt
+    ihrer Textposition (wie beim Tippen, ``anchor_after_edit``): „mittig“ und „rechts“ gelten
+    für jede Zeile, nicht nur für die Platzhalter. Nur zum Lesen wie ``fill``."""
+    from .series import fill
+    filled = fill(doc, columns, row, keep)
+    for old, new in zip(doc.objects, filled.objects):
+        if (new is old or not isinstance(new, TextObject) or not new.positioned or new.fit
+                or anchor_align(new) == "left" and new.rotation == 0):
+            continue                                  # links ohne Drehung: Kante bleibt ohnehin
+        try:
+            x, y = anchor_after_edit(new, render_object(old, doc, model),
+                                     render_object(new, filled, model))
+        except ValueError:                            # passt nicht: Renderfehler meldet das Rendern
+            continue
+        new.x_mm, new.y_mm = x, y                     # ``new`` ist eine Kopie (fill)
+    return filled

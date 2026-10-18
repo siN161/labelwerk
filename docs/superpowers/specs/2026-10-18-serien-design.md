@@ -44,6 +44,8 @@ Häkchen (nach dem Öffnen ist jede Zeile gewählt), mehrere Etiketten nebeneina
     mittendrin – die Zeilennummern in labelwerk zählen sie nicht), leere Zellen am Zeilenende auch (nur
     formatierte Excel-Zellen, `;;;` aus Excel-CSV); höchstens 10 000 Zeilen und 200 Spalten, Zellen bis
     100 000 Zeichen; gelesen wird gestreamt (Grenzen greifen sofort).
+  - Endungen: `.csv`, `.tsv`, `.txt` (Text) bzw. `.xlsx`, `.xlsm` (Excel); Excel höchstens 100 000 Zeilen samt
+    leeren (eine verirrte Zelle weit unten → Meldung statt minutenlangem Lesen).
   - CSV: Trennzeichen aus den ersten 20 Zeilen (gleiche Feldzahl > 1; Tab vor `;` vor `,` vor `|`); UTF-16 mit
     BOM („Unicode-Text“). Excel: nur Arbeitsblätter (keine Diagrammblätter), Standard = erstes sichtbare;
     Zahlenformate führende Nullen (000), Prozent, feste Nachkommastellen; ohne aktives defusedxml kein Excel.
@@ -56,7 +58,9 @@ Häkchen (nach dem Öffnen ist jede Zeile gewählt), mehrere Etiketten nebeneina
   Formatierung des Stücks, in dem der Platzhalter beginnt, gilt für den Wert; über Stückgrenzen hinweg möglich;
   unbekannte Namen bleiben stehen; Leerzeichen in den Klammern zählen nicht; `keep` = Index eines Objekts,
   das unverändert bleibt – Schreibmodus). Das Ergebnis ist nur zum Lesen: unveränderte Objekte sind dieselben
-  wie im Original (Renderer-Cache), nur gefüllte Textobjekte neu.
+  wie im Original (Renderer-Cache), nur gefüllte Textobjekte neu. `layout.fill_anchored` (Vorschau und Druck):
+  frei platzierte Texte ohne feste Rahmengröße behalten den Punkt ihrer Textposition wie beim Tippen –
+  „mittig“/„rechts“ gelten für jede Zeile.
   `missing(doc, columns) -> list[str]` (Platzhalter ohne Spalte).
 - **Drucken mehrerer Etiketten** (`printer.py`): `build_instructions(images, label_id, model, cut=True,
   cut_every=1)` nimmt eine Liste (ein Bild bleibt erlaubt); `cut_every` = n schneidet alle n Etiketten

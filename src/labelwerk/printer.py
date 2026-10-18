@@ -125,8 +125,9 @@ def print_image(
         except PrintError as e:
             if start == 0:                  # noch nichts gedruckt: Meldung wie bei einem Etikett
                 raise
-            raise PrintError(f"Etikett {start + 1}–{start + len(chunk)} von {len(images)}: "
-                             f"{e}") from None
+            # der Drucker meldet verzögert – der Fehler kann auch zu Etiketten davor gehören
+            raise PrintError(f"Fehler bei Etikett {start + 1}–{start + len(chunk)} von {len(images)} "
+                             f"(auch die davor prüfen): {e}") from None
     return status
 
 
