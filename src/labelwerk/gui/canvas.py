@@ -111,6 +111,7 @@ class Canvas(QGraphicsView):
     tool_changed = Signal(str)                 # Werkzeug: "select" | "text"
     dropped = Signal(object, object, float, float)  # abgelegt: Dateien (list[Path]), Bild
                                                # (PIL oder None), Ablagepunkt (mm, Leserichtung)
+    symbol_dropped = Signal(str, float, float)  # Symbol aus dem Fenster abgelegt: id, Punkt (mm)
 
     def __init__(self, model: str = DEFAULT_MODEL):
         super().__init__()
@@ -663,8 +664,9 @@ class Canvas(QGraphicsView):
     # --- Ablegen ----------------------------------------------------------
     def _accepts(self, event) -> bool:
         mime = event.mimeData()
-        return self.sheet is not None and (mime.hasImage() or any(
-            url.isLocalFile() for url in mime.urls()))
+        return self.sheet is not None and (
+            mime.hasFormat(image_import.MIME_SYMBOL) or mime.hasImage()
+            or any(url.isLocalFile() for url in mime.urls()))
 
     def dragEnterEvent(self, event) -> None:
         if self._accepts(event):
@@ -683,9 +685,13 @@ class Canvas(QGraphicsView):
         point = self._reading(event.position())
         # Daten jetzt kopieren (QMimeData lebt nur während des Ablegens), verarbeiten erst
         # danach: ein Dialog (PDF-Seite) im dropEvent hielte die Quelle des Ziehens fest
+        x, y = point.x() / MM, point.y() / MM
+        if event.mimeData().hasFormat(image_import.MIME_SYMBOL):
+            symbol = bytes(event.mimeData().data(image_import.MIME_SYMBOL)).decode(errors="replace")
+            QTimer.singleShot(0, self, lambda: self.symbol_dropped.emit(symbol, x, y))
+            return
         paths = image_import.mime_files(event.mimeData())
         image = None if paths else image_import.mime_image(event.mimeData())
-        x, y = point.x() / MM, point.y() / MM
         QTimer.singleShot(0, self, lambda: self.dropped.emit(paths, image, x, y))
 
     # --- Auswahlrahmen, Hilfslinien, Lineale ------------------------------

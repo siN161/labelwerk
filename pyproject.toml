@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,7 +7,9 @@ name = "labelwerk"
 version = "0.1.0"
 description = "Etiketten gestalten und drucken auf Brother-QL-Druckern unter Linux"
 readme = "README.md"
-license = "GPL-3.0-or-later"
+# Programm GPL; mitgelieferte Symbole: Tabler Icons MIT, eigene Zeichnungen CC0, Commons gemeinfrei/CC0
+license = "GPL-3.0-or-later AND MIT AND CC0-1.0"
+license-files = ["LICEN[CS]E*", "src/labelwerk/clipart_data/LICENSES.md"]
 requires-python = ">=3.10"
 dependencies = [
     "brother_ql-inventree>=1.3",

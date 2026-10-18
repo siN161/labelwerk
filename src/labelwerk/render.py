@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import io
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
@@ -230,7 +231,8 @@ class Renderer:
 
     def _prepare_all(self, doc: Document, model: str) -> list[_Cached]:
         """Objekte messen; unveränderte kommen aus dem Cache."""
-        context = (model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm)
+        context = (model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm,
+                   _svg_generation)
         cache: dict[int, _Cached] = {}
         for obj in doc.objects:
             entry = self._cache.get(id(obj))
@@ -514,7 +516,10 @@ def _finish_image(prep: Prepared) -> RenderedObject:
     obj = prep.obj
     w, h = prep.frame
     crop = tuple(obj.crop) if obj.crop is not None else None
-    picture = _scaled_source(obj.png, crop, (w, h), obj.keep_ratio)
+    if obj.svg is not None and _svg_rasterizer is not None:
+        picture = _vector_source(obj.svg, obj.png, crop, (w, h), obj.keep_ratio)
+    else:
+        picture = _scaled_source(obj.png, crop, (w, h), obj.keep_ratio)
     black = imaging.to_layers(picture, obj.mode, obj.threshold, obj.invert)["black"]
     image = Image.new("L", (w, h), 255)
     image.paste(black.convert("L"), ((w - picture.width) // 2, (h - picture.height) // 2))
@@ -523,6 +528,66 @@ def _finish_image(prep: Prepared) -> RenderedObject:
         image = image.transpose(_TRANSPOSE[obj.rotation])
         frame = _turn(frame, (w, h), obj.rotation)
     return RenderedObject(image, _dots(obj.x_mm), _dots(obj.y_mm), frame[2], frame[3], 0.0)
+
+
+# Vektorbilder: der Kern rastert nicht selbst (Qt-frei) – die GUI meldet eine Funktion an
+SvgRasterizer = Callable[[bytes, tuple[int, int], tuple[int, int, int, int]], Image.Image]
+_svg_rasterizer: SvgRasterizer | None = None
+_svg_generation = 0          # zählt Wechsel der Raster-Funktion (Kontext im Renderer-Cache)
+MAX_SHEET = 4_000_000        # Pixel je Seite: größer ließe Qt Formen still weg
+
+
+def set_svg_rasterizer(rasterizer: SvgRasterizer | None) -> None:
+    """Raster-Funktion für Vektorbilder (``ImageObject.svg``): ``fn(svg, size, region)``
+    rastert das ganze Blatt auf ``size`` (w, h) Pixel und liefert davon nur ``region``
+    (x, y, w, h) als RGB-Bild auf Weiß. None: Vektorbilder zeigen ihre Vorschau-PNG."""
+    global _svg_rasterizer, _svg_generation
+    if rasterizer is not _svg_rasterizer:
+        _svg_rasterizer = rasterizer
+        _svg_generation += 1
+        _vector_source.cache_clear()
+
+
+@lru_cache(maxsize=8)
+def _vector_source(svg: bytes, png: bytes, crop: tuple[int, int, int, int] | None,
+                   size: tuple[int, int], keep_ratio: bool) -> Image.Image:
+    """Wie ``_scaled_source``, aber neu gerastert statt skaliert: das Blatt so groß, dass der
+    Ausschnitt (Pixel der Vorschau-PNG) genau ``size`` füllt – scharf in jeder Größe."""
+    with Image.open(io.BytesIO(png)) as img:     # liest nur den Kopf der Datei
+        sheet = img.size
+    l, t, r, b = crop if crop is not None else (0, 0, *sheet)
+    _check_crop((l, t, r, b), sheet)
+    w, h = _fitted((r - l, b - t), size, keep_ratio)
+    fx, fy = w / (r - l), h / (b - t)
+    full = (round(sheet[0] * fx), round(sheet[1] * fy))
+    if max(full) > MAX_SHEET:
+        raise ValueError("Vektorbild: Ausschnitt zu stark vergrößert – bitte kleiner skalieren "
+                         "oder den Zuschnitt ausschalten.")
+    picture = _svg_rasterizer(svg, full, (round(l * fx), round(t * fy), w, h))
+    if picture.size != (w, h):
+        raise ValueError(f"Vektorbild konnte nicht gerastert werden ({picture.width} × "
+                         f"{picture.height} statt {w} × {h} Pixel).")
+    return picture if picture.mode == "RGB" else picture.convert("RGB")
+
+
+def _check_crop(crop: tuple[int, int, int, int], size: tuple[int, int]) -> None:
+    """Ausschnitt (l, t, r, b) muss eine Fläche im Bild der Größe ``size`` sein."""
+    l, t, r, b = crop
+    if not (0 <= l < r <= size[0] and 0 <= t < b <= size[1]):
+        raise ValueError(f"Ausschnitt {crop} liegt nicht im Bild "
+                         f"({size[0]} × {size[1]} Pixel).")
+
+
+def _fitted(source: tuple[int, int], size: tuple[int, int], keep_ratio: bool) -> tuple[int, int]:
+    """Zielgröße: ``size``, mit ``keep_ratio`` ins Seitenverhältnis von ``source`` eingepasst
+    (bis 1 Pixel Rundung füllt es den Rahmen)."""
+    w, h = size
+    if keep_ratio:
+        scale = min(w / source[0], h / source[1])
+        fitted = (max(1, round(source[0] * scale)), max(1, round(source[1] * scale)))
+        if abs(fitted[0] - w) > 1 or abs(fitted[1] - h) > 1:   # sonst nur Rundung: füllen
+            w, h = fitted
+    return w, h
 
 
 @lru_cache(maxsize=2)
@@ -536,10 +601,7 @@ def _source(png: bytes, crop: tuple[int, int, int, int] | None) -> Image.Image:
     with Image.open(io.BytesIO(png)) as img:
         img = img.convert("RGB")
     if crop is not None:
-        l, t, r, b = crop
-        if not (0 <= l < r <= img.width and 0 <= t < b <= img.height):
-            raise ValueError(f"Ausschnitt {crop} liegt nicht im Bild "
-                             f"({img.width} × {img.height} Pixel).")
+        _check_crop(crop, img.size)
         img = img.crop(crop)
     return img
 
@@ -550,12 +612,7 @@ def _scaled_source(png: bytes, crop: tuple[int, int, int, int] | None, size: tup
     """Ausschnitt auf ``size`` skaliert (Lanczos); mit ``keep_ratio`` eingepasst, nicht
     verzerrt. Gecacht: Schwelle, Foto und Umkehren ändern nur die Umwandlung danach."""
     src = _source(png, crop)
-    w, h = size
-    if keep_ratio:
-        scale = min(w / src.width, h / src.height)
-        fitted = (max(1, round(src.width * scale)), max(1, round(src.height * scale)))
-        if abs(fitted[0] - w) > 1 or abs(fitted[1] - h) > 1:   # sonst nur Rundung: füllen
-            w, h = fitted
+    w, h = _fitted(src.size, size, keep_ratio)
     if src.size == (w, h):
         return src
     # reducing_gap: stark verkleinert erst ganzzahlig reduzieren (schnell), dann Lanczos;

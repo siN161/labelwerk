@@ -11,11 +11,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import shortcuts as _shortcuts
+from .clipart import RECENT_LIMIT
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .fonts import DEFAULT_FAMILY
 from .labels import labels_for_model
 
 THEMES = ("rawblock", "classic")
+SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")
 
 
 @dataclass
@@ -30,6 +32,8 @@ class Settings:
     theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
     image_crop: bool = True                # Bilder beim Einfügen auf den Inhalt zuschneiden
     image_rotate: bool = False             # Bilder drehen, wenn sie nur gedreht 1:1 passen
+    symbols_recent: list[str] = field(default_factory=list)      # Symbol-ids, neueste zuerst
+    symbols_favorites: list[str] = field(default_factory=list)   # Symbol-ids
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
@@ -52,6 +56,8 @@ def _rules(model: str) -> dict:
         "theme": lambda v: v in THEMES,
         "image_crop": lambda v: isinstance(v, bool),
         "image_rotate": lambda v: isinstance(v, bool),
+        "symbols_recent": lambda v: isinstance(v, list),
+        "symbols_favorites": lambda v: isinstance(v, list),
     }
 
 
@@ -83,7 +89,11 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
         if key == "font_family" and isinstance(value, str):
             value = value.strip()
         if valid(value):
-            setattr(settings, key, float(value) if key == "margin_mm" else value)
+            if key == "margin_mm":
+                value = float(value)
+            elif key in SYMBOL_LISTS:
+                value = _symbol_ids(key, value, settings.warnings)
+            setattr(settings, key, value)
         else:
             settings.warnings.append(f"Einstellung {key!r} ungültig ({value!r}) – "
                                      f"Standardwert {getattr(settings, key)!r} aktiv.")
@@ -91,6 +101,16 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
         settings.shortcuts, warnings = _shortcuts.validate(raw["shortcuts"])
         settings.warnings.extend(warnings)
     return settings
+
+
+def _symbol_ids(key: str, value: list, warnings: list[str]) -> list[str]:
+    """Symbol-ids: ungültige Einträge einzeln verworfen (mit Hinweis), Doppelte entfernt,
+    Zuletzt verwendet auf ``RECENT_LIMIT`` begrenzt."""
+    valid = [i for i in value if isinstance(i, str) and i]
+    if len(valid) != len(value):
+        warnings.append(f"Einstellung {key!r}: ungültige Einträge verworfen.")
+    ids = list(dict.fromkeys(valid))
+    return ids[:RECENT_LIMIT] if key == "symbols_recent" else ids
 
 
 def _migrate_font_size(raw: dict, settings: Settings) -> None:
@@ -113,7 +133,14 @@ def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
     data = {key: getattr(settings, key) for key in _KEYS}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        # erst daneben schreiben, dann ersetzen: ein Absturz mitten im Schreiben lässt die alte
+        # Datei heil (die GUI speichert Zuletzt verwendet/Favoriten bei jedem Einfügen still)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        try:
+            tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
     except OSError as e:
         raise OSError(f"Einstellungen konnten nicht gespeichert werden ({path}): "
                       f"{e.strerror or e}") from e

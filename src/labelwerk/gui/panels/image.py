@@ -1,5 +1,5 @@
-"""Panel „Bild“: Bilder einfügen (Datei, Zwischenablage, Bildschirmfoto) und das gewählte Bild
-einstellen.
+"""Panel „Bild“: Bilder einfügen (Datei, Zwischenablage, Bildschirmfoto, Symbol) und das
+gewählte Bild einstellen.
 
 Umwandlung in Schwarz/Weiß (Strich = harte Schwelle, Foto = Rasterpunkte), Schwelle,
 Umkehren, Zuschnitt (automatisch an/aus), Originalgröße 1:1, Seitenverhältnis, Drehen
@@ -17,15 +17,16 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QHBoxLayout, QLabel, QPu
 
 from ... import layout
 from ...document import Document, ImageObject
-from ...files import NOT_WHITE, crop_box
+from ...files import NOT_WHITE, crop_box, ink_box
 from ...layout import Rect
+from ..image_import import is_symbol_source
 from ..symbols import SIZE, line_icon
 from ..widgets import SpinBox
 from . import Panel
 from .position import PositionSection
 
-HINT = ("Bild aus einer Datei, der Zwischenablage oder als Bildschirmfoto einfügen – oder aufs "
-        "Etikett ziehen")
+HINT = ("Bild aus einer Datei, der Zwischenablage, als Bildschirmfoto oder Symbol einfügen – "
+        "oder aufs Etikett ziehen")
 CROP_FAILED = "Bild nicht zugeschnitten – nur weiße Fläche gefunden"
 _SOURCE_PX = 240                    # Quelle: längere Namen in der Mitte gekürzt (Tooltip)
 _ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (Attribut, Aktion, Symbol)
@@ -56,7 +57,9 @@ class ImagePanel(Panel):
         self.from_clipboard.clicked.connect(self.paste_requested)
         self.screenshot = QPushButton("BILDSCHIRMFOTO")
         self.screenshot.setToolTip("Bildschirmfoto einfügen")
-        for button in (self.from_file, self.from_clipboard, self.screenshot):
+        self.symbol = QPushButton("SYMBOL")
+        self.symbol.setToolTip("Symbol einfügen …")
+        for button in (self.from_file, self.from_clipboard, self.screenshot, self.symbol):
             self.layout_.addWidget(button)
 
         self.section("Quelle")
@@ -142,7 +145,8 @@ class ImagePanel(Panel):
     def use_actions(self, actions: dict[str, QAction]) -> None:
         """„Aus Datei …“ und „Bildschirmfoto“ lösen ihre Aktionen aus (Kürzel im Tooltip)."""
         for button, key in ((self.from_file, "image.insert"),
-                            (self.screenshot, "image.screenshot")):
+                            (self.screenshot, "image.screenshot"),
+                            (self.symbol, "image.symbol")):
             action = actions[key]
             button.clicked.connect(lambda _=False, a=action: a.trigger())
             button.setToolTip(action.toolTip())
@@ -249,12 +253,16 @@ class ImagePanel(Panel):
             self._step(self._set, threshold=value)
 
     def _set_crop(self, on: bool) -> None:
-        """Zuschnitt an (auf den Inhalt: alles, was nicht weiß ist) bzw. aus (ganzes Bild);
-        ist das Bild ganz weiß, bleibt es ganz – mit Hinweis."""
+        """Zuschnitt an (auf den Inhalt: alles, was nicht weiß ist; bei Symbolen auf die Tinte,
+        wie beim Einfügen) bzw. aus (ganzes Bild); ist das Bild ganz weiß, bleibt es ganz –
+        mit Hinweis."""
         if not on:
             self._change(lambda obj: layout.set_crop(obj, None))
             return
-        box = crop_box(self.obj.image(), self.obj.dpi, ink=NOT_WHITE)
+        if is_symbol_source(self.obj.source):
+            box = ink_box(self.obj.image())
+        else:
+            box = crop_box(self.obj.image(), self.obj.dpi, ink=NOT_WHITE)
         if box is None:
             self.refresh()                         # Haken wieder aus
             self.message.emit(CROP_FAILED, "warn")

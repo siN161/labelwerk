@@ -1,7 +1,8 @@
 import pytest
 from PIL import Image, ImageDraw
 
-from labelwerk.files import NOT_WHITE, crop, crop_box, fit_to_label, load_file, load_image
+from labelwerk.files import (NOT_WHITE, crop, crop_box, fit_to_label, ink_box, load_file,
+                             load_image)
 from labelwerk.imaging import MAX_PIXELS
 
 
@@ -554,3 +555,21 @@ def test_load_image_anisotropic_dpi_follows_exif_rotation(tmp_path):
     Image.new("RGB", (100, 200), "white").save(path, exif=exif, dpi=(100, 200))  # 1 × 1 Zoll
     img, dpi = load_image(path)
     assert dpi == 200 and img.size == (200, 200)
+
+
+def test_ink_box_is_everything_not_white_without_mark_detection():
+    img = Image.new("L", (200, 100), 255)
+    img.paste(0, (10, 10, 12, 12))             # vier Ecken wie Schnittmarken …
+    img.paste(0, (188, 10, 190, 12))
+    img.paste(0, (10, 88, 12, 90))
+    img.paste(0, (188, 88, 190, 90))
+    assert ink_box(img) == (10, 10, 190, 90)    # … zählen hier als Inhalt (crop_box schnitte innen)
+
+
+def test_ink_box_threshold_and_empty():
+    img = Image.new("RGB", (50, 50), "white")
+    assert ink_box(img) is None
+    img.paste((251, 251, 251), (5, 5, 20, 20))   # fast weiß: Papier
+    assert ink_box(img) is None
+    img.paste((249, 249, 249), (5, 5, 20, 20))
+    assert ink_box(img) == (5, 5, 20, 20)

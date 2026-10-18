@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import io
 import re
+from functools import lru_cache
 from pathlib import Path
 from xml.etree import ElementTree
 
 from PIL import Image
-from PySide6.QtCore import QBuffer, QIODevice, QMimeData, Qt
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QMimeData, QRectF, Qt
 from PySide6.QtGui import QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-from .. import files
-from ..imaging import MAX_PIXELS, on_white
+from .. import clipart, files
+from ..clipart import Symbol
+from ..imaging import MAX_DPI, MAX_PIXELS, on_white
 from ..labels import DPI
 
 SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".pdf")
@@ -28,6 +30,9 @@ CLIPBOARD = "Zwischenablage"                    # Quelle eines eingefügten Bild
 DROPPED = "Abgelegtes Bild"
 SCREENSHOT = "Bildschirmfoto"
 MIME_OBJECTS = "application/x-labelwerk-objects"   # kopierte Objekte (Kennung der Kopie)
+SYMBOL_SOURCE = "Symbol: {name}"                    # Quelle eines eingefügten Symbols
+MIME_SYMBOL = "application/x-labelwerk-symbol"     # Symbol aus dem Fenster gezogen (id)
+SYMBOL_PROBE_PX = 512          # Symbol: erst grob rastern, um den Inhalt zu finden
 SVG_DPI = 96                                    # SVG: 1 px = 1/96 in
 
 
@@ -61,20 +66,105 @@ def load_svg(path: Path) -> tuple[Image.Image, float]:
     ``MAX_PIXELS`` auf der längsten Seite."""
     if not path.exists():
         raise FileNotFoundError(f"Datei nicht gefunden: {path}")
-    renderer = QSvgRenderer(str(path))
+    # mit Verweisen auf andere Dateien über den Pfad (sie liegen neben der SVG), sonst aus den
+    # Bytes – derselbe Weg wie beim Rastern eines Vektorbilds (Vorschau = Raster)
+    vector = load_vector(path)
+    renderer = QSvgRenderer(str(path)) if vector is None else _svg_renderer(vector)
     size = renderer.defaultSize()
     if not renderer.isValid() or size.isEmpty():
         raise ValueError(f"Datei kann nicht gelesen werden: {path.name} (kein gültiges SVG)")
     # Qt rechnet mm/in/pt mit 90 dpi – Maße mit Einheit deshalb selbst lesen (CSS: 96 px/in)
     width, height = svg_size(path) or (size.width(), size.height())
     dpi = min(DPI, MAX_PIXELS * SVG_DPI / max(width, height))
-    image = QImage(max(1, round(width * dpi / SVG_DPI)),
-                   max(1, round(height * dpi / SVG_DPI)), QImage.Format.Format_RGB32)
+    pixels = (max(1, round(width * dpi / SVG_DPI)), max(1, round(height * dpi / SVG_DPI)))
+    return _render(renderer, pixels, (0, 0, *pixels)), dpi
+
+
+# Verweis auf eine andere Datei: href, das weder auf eine Stelle im Dokument (#…) noch auf
+# eingebettete Daten (data:) zeigt
+_EXTERNAL = re.compile(rb"""href\s*=\s*["'](?!\s*(?:#|data:))""")
+
+
+def load_vector(path: Path) -> bytes | None:
+    """SVG-Datei als Vektorbild: ihre Bytes – außer sie verweist auf andere Dateien (``<image>``,
+    externes ``<use>``; die gelten nur neben der SVG): dann None, sie wird Pixelbild. Andere
+    Dateitypen: None."""
+    path = Path(path)
+    if path.suffix.lower() != ".svg":
+        return None
+    data = path.read_bytes()
+    return None if _EXTERNAL.search(data) else data
+
+
+@lru_cache(maxsize=4)
+def _svg_renderer(svg: bytes) -> QSvgRenderer:
+    """Geparstes SVG (Größe ändern rastert neu, ohne neu zu parsen)."""
+    return QSvgRenderer(QByteArray(svg))
+
+
+def _render(renderer: QSvgRenderer, size: tuple[int, int],
+            region: tuple[int, int, int, int]) -> Image.Image:
+    """Ganzes Blatt auf ``size`` Pixel, davon ``region`` (x, y, w, h), RGB auf Weiß."""
+    x, y, w, h = region
+    image = QImage(w, h, QImage.Format.Format_RGB888)
     image.fill(Qt.GlobalColor.white)
     painter = QPainter(image)
-    renderer.render(painter)
+    painter.translate(-x, -y)
+    renderer.render(painter, QRectF(0, 0, *size))
     painter.end()
-    return to_pil(image), dpi
+    return Image.frombuffer("RGB", (w, h), image.constBits(), "raw", "RGB",
+                            image.bytesPerLine(), 1).copy()     # eine Kopie: Qt gibt frei
+
+
+def is_symbol_source(source: str) -> bool:
+    """Stammt das Bild aus der Symbol-Bibliothek (Quelle ``SYMBOL_SOURCE``)?"""
+    return source.startswith(SYMBOL_SOURCE.split("{")[0])
+
+
+def rasterize_svg(svg: bytes, size: tuple[int, int],
+                  region: tuple[int, int, int, int]) -> Image.Image:
+    """Raster-Funktion für Vektorbilder (``render.set_svg_rasterizer``): das ganze Blatt auf
+    ``size`` Pixel, davon nur ``region`` (x, y, w, h) – RGB auf Weiß. Kaputtes SVG:
+    ``ValueError``; ebenso ein SVG mit Verweisen auf andere Dateien (die gelten nur neben der
+    SVG, nicht in einem gespeicherten Dokument)."""
+    if _EXTERNAL.search(svg):
+        raise ValueError("Vektorbild verweist auf andere Dateien – die werden nicht mitgespeichert.")
+    renderer = _svg_renderer(svg)
+    if not renderer.isValid():
+        raise ValueError("Vektorbild kann nicht gelesen werden (kein gültiges SVG).")
+    return _render(renderer, size, region)
+
+
+def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tuple | None,
+                                                         bytes | None]:
+    """Symbol als Bild-Objekt-Zutaten: (Vorschau RGB, dpi, Ausschnitt, SVG-Bytes oder None).
+
+    Zugeschnitten auf die Tinte (nicht die Schnittmarken-Erkennung: umrandete Zeichen blieben
+    sonst nicht ganz); die längere Seite des Inhalts misst ``side_mm`` (Größe 1:1). Ganz weiß:
+    Ausschnitt None (ganzes Bild). Vektoren werden so gerastert, dass der Inhalt ``MAX_DPI`` hat
+    – die Vorschau aber höchstens ``MAX_PIXELS`` groß (winziger Inhalt auf großer Seite). Eigene
+    SVGs mit Verweisen auf andere Dateien werden Pixelbilder (wie ``load_vector``).
+    Unlesbar: ``ValueError``/``OSError``."""
+    data = clipart.data(symbol)
+    if clipart.is_vector(symbol):
+        linked = _EXTERNAL.search(data) is not None
+        renderer = QSvgRenderer(symbol.file) if linked else _svg_renderer(data)
+        size = renderer.defaultSize()
+        if not renderer.isValid() or size.isEmpty():
+            raise ValueError(f"Symbol {symbol.name} kann nicht gelesen werden (kein gültiges SVG).")
+        k = SYMBOL_PROBE_PX / max(size.width(), size.height())
+        probe = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
+        if box := files.ink_box(_render(renderer, probe, (0, 0, *probe))):
+            k *= side_mm / 25.4 * MAX_DPI / max(box[2] - box[0], box[3] - box[1])
+        k = min(k, MAX_PIXELS / max(size.width(), size.height()))
+        sheet = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
+        image, svg = _render(renderer, sheet, (0, 0, *sheet)), None if linked else data
+    else:
+        with Image.open(io.BytesIO(data)) as img:
+            image, svg = on_white(img), None
+    crop = files.ink_box(image)
+    l, t, r, b = crop or (0, 0, *image.size)
+    return image, max(r - l, b - t) * 25.4 / side_mm, crop, svg
 
 
 _UNITS = {"": 1.0, "px": 1.0, "in": 96.0, "cm": 96 / 2.54, "mm": 96 / 25.4, "pt": 96 / 72,
