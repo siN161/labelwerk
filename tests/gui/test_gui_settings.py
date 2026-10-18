@@ -368,3 +368,12 @@ def test_dialog_fits_on_small_screens(qtbot):
     assert initial_size(QSize(300, 200)) == QSize(*MIN_SIZE)  # nie kleiner als die Mindestgröße
     screen = dialog.screen().availableGeometry().size()
     assert dialog.size() == initial_size(screen)
+
+
+def test_dialog_keeps_symbol_lists(qtbot):
+    """Zuletzt verwendet und Favoriten pflegt das Symbol-Fenster – der Dialog reicht sie durch."""
+    dialog = SettingsDialog(Settings(symbols_recent=["labelwerk/erde"],
+                                     symbols_favorites=["iso7010/W012"]))
+    qtbot.addWidget(dialog)
+    values = dialog.values()
+    assert (values.symbols_recent, values.symbols_favorites) == (["labelwerk/erde"], ["iso7010/W012"])

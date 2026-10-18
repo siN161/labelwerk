@@ -1,0 +1,1211 @@
+{
+  "tabler_skip": [
+    "airpods-",
+    "device-airpods",
+    "device-airtag",
+    "device-imac",
+    "device-ipad",
+    "device-nintendo",
+    "device-vision-pro",
+    "mickey",
+    "lego",
+    "olympics",
+    "olympic-torch",
+    "pacman",
+    "pokeball",
+    "playstation-",
+    "xbox-",
+    "bluetooth",
+    "earphone-bluetooth",
+    "nfc",
+    "usb",
+    "creative-commons",
+    "no-creative-commons",
+    "ce",
+    "segway",
+    "steam",
+    "currency-dogecoin",
+    "currency-ethereum",
+    "currency-litecoin",
+    "currency-monero",
+    "coin-monero",
+    "currency-ripple",
+    "currency-solana",
+    "currency-tether"
+  ],
+  "eigene": {
+    "erde": {
+      "name": "Erde",
+      "group": "elektro",
+      "keywords": [
+        "Erdung",
+        "Erder",
+        "Ground",
+        "IEC 60417-5017"
+      ]
+    },
+    "schutzleiter": {
+      "name": "Schutzleiter (PE)",
+      "group": "elektro",
+      "keywords": [
+        "Erde",
+        "PE",
+        "Schutzerde",
+        "Schutzklasse I",
+        "Erdung",
+        "IEC 60417-5019"
+      ]
+    },
+    "masse": {
+      "name": "Masse / Rahmen",
+      "group": "elektro",
+      "keywords": [
+        "Gehäuse",
+        "Chassis",
+        "IEC 60417-5020"
+      ]
+    },
+    "wechselstrom": {
+      "name": "Wechselstrom (AC)",
+      "group": "elektro",
+      "keywords": [
+        "AC",
+        "Wechselspannung",
+        "230 V",
+        "IEC 60417-5032"
+      ]
+    },
+    "gleichstrom": {
+      "name": "Gleichstrom (DC)",
+      "group": "elektro",
+      "keywords": [
+        "DC",
+        "Gleichspannung",
+        "24 V",
+        "IEC 60417-5031"
+      ]
+    },
+    "allstrom": {
+      "name": "Gleich- und Wechselstrom",
+      "group": "elektro",
+      "keywords": [
+        "AC/DC",
+        "Allstrom",
+        "IEC 60417-5033"
+      ]
+    },
+    "hochspannung": {
+      "name": "Hochspannung (Blitzpfeil)",
+      "group": "elektro",
+      "keywords": [
+        "Blitz",
+        "Spannung",
+        "gefährliche Spannung",
+        "IEC 60417-5036"
+      ]
+    },
+    "gefahr_spannung": {
+      "name": "Warnung vor elektrischer Spannung (Warndreieck)",
+      "group": "elektro",
+      "keywords": [
+        "Blitz",
+        "Achtung",
+        "Gefahr",
+        "Spannung",
+        "Warndreieck"
+      ]
+    },
+    "sicherung": {
+      "name": "Sicherung",
+      "group": "elektro",
+      "keywords": [
+        "Schmelzsicherung",
+        "Fuse"
+      ]
+    },
+    "motor": {
+      "name": "Motor",
+      "group": "elektro",
+      "keywords": [
+        "M",
+        "Antrieb"
+      ]
+    },
+    "generator": {
+      "name": "Generator",
+      "group": "elektro",
+      "keywords": [
+        "G",
+        "Stromerzeuger"
+      ]
+    },
+    "transformator": {
+      "name": "Transformator",
+      "group": "elektro",
+      "keywords": [
+        "Trafo",
+        "Netzteil"
+      ]
+    },
+    "steckdose": {
+      "name": "Steckdose",
+      "group": "elektro",
+      "keywords": [
+        "Schuko",
+        "Schutzkontakt",
+        "Anschluss"
+      ]
+    },
+    "schalter": {
+      "name": "Schalter",
+      "group": "elektro",
+      "keywords": [
+        "Schließer",
+        "Kontakt"
+      ]
+    },
+    "taster": {
+      "name": "Taster",
+      "group": "elektro",
+      "keywords": [
+        "Drucktaster",
+        "Knopf"
+      ]
+    },
+    "lampe": {
+      "name": "Leuchte",
+      "group": "elektro",
+      "keywords": [
+        "Lampe",
+        "Licht",
+        "Meldeleuchte"
+      ]
+    },
+    "batterie": {
+      "name": "Batterie",
+      "group": "elektro",
+      "keywords": [
+        "Akku",
+        "Zelle"
+      ]
+    },
+    "klemme": {
+      "name": "Klemme",
+      "group": "elektro",
+      "keywords": [
+        "Anschlussklemme",
+        "Klemmstelle",
+        "Reihenklemme"
+      ]
+    },
+    "widerstand": {
+      "name": "Widerstand",
+      "group": "elektro",
+      "keywords": [
+        "R",
+        "Resistor"
+      ]
+    },
+    "kondensator": {
+      "name": "Kondensator",
+      "group": "elektro",
+      "keywords": [
+        "C",
+        "Kapazität"
+      ]
+    },
+    "diode": {
+      "name": "Diode",
+      "group": "elektro",
+      "keywords": [
+        "Gleichrichter",
+        "LED"
+      ]
+    },
+    "schutzklasse_2": {
+      "name": "Schutzklasse II",
+      "group": "elektro",
+      "keywords": [
+        "Schutzisolierung",
+        "doppelt isoliert",
+        "IEC 60417-5172"
+      ]
+    },
+    "schutzklasse_3": {
+      "name": "Schutzklasse III",
+      "group": "elektro",
+      "keywords": [
+        "Schutzkleinspannung",
+        "SELV",
+        "IEC 60417-5180"
+      ]
+    },
+    "nicht_stapeln": {
+      "name": "Nicht stapeln",
+      "group": "versand",
+      "keywords": [
+        "stapeln",
+        "Stapelverbot",
+        "ISO 7000-2402"
+      ]
+    }
+  },
+  "iso7000": {
+    "0621": "Zerbrechlich",
+    "0622": "Keine Haken verwenden",
+    "0623": "Oben",
+    "0624": "Vor Hitze schützen",
+    "0625": "Hier anschlagen",
+    "0626": "Vor Nässe schützen",
+    "0627": "Schwerpunkt",
+    "0628": "Nicht rollen",
+    "0629": "Keine Stechkarre",
+    "0630": "Stapellast begrenzt",
+    "0631": "Hier klammern",
+    "0632": "Temperaturgrenzen",
+    "2406": "Keinen Gabelstapler benutzen"
+  },
+  "iso7010_kinds": {
+    "W": "Warnzeichen",
+    "P": "Verbotszeichen",
+    "M": "Gebotszeichen",
+    "E": "Rettungszeichen",
+    "F": "Brandschutzzeichen"
+  },
+  "categories": {
+    "Animals": "Tiere",
+    "Arrows": "Pfeile",
+    "Badges": "Abzeichen",
+    "Buildings": "Gebäude",
+    "Charts": "Diagramme",
+    "Communication": "Kommunikation",
+    "Computers": "Computer",
+    "Currencies": "Währungen",
+    "Database": "Datenbank",
+    "Design": "Gestaltung",
+    "Development": "Entwicklung",
+    "Devices": "Geräte",
+    "Document": "Dokumente",
+    "E-commerce": "Einkaufen",
+    "Electrical": "Elektrik",
+    "Extensions": "Dateitypen",
+    "Food": "Essen und Trinken",
+    "Games": "Spiele",
+    "Gender": "Geschlecht",
+    "Gestures": "Gesten",
+    "Health": "Gesundheit",
+    "Laundry": "Wäsche",
+    "Letters": "Buchstaben",
+    "Logic": "Logik",
+    "Map": "Karte und Orte",
+    "Math": "Mathematik",
+    "Media": "Medien",
+    "Mood": "Stimmung",
+    "Nature": "Natur",
+    "Numbers": "Zahlen",
+    "Photography": "Fotografie",
+    "Shapes": "Formen",
+    "Sport": "Sport",
+    "Symbols": "Zeichen",
+    "System": "System",
+    "Text": "Text",
+    "Vehicles": "Fahrzeuge",
+    "Version control": "Versionsverwaltung",
+    "Weather": "Wetter",
+    "Zodiac": "Sternzeichen",
+    "": "Sonstiges"
+  },
+  "synonyms": {
+    "Haus": [
+      "home",
+      "home-2",
+      "building"
+    ],
+    "Zuhause": [
+      "home"
+    ],
+    "Gebäude": [
+      "building"
+    ],
+    "Garage": [
+      "car-garage"
+    ],
+    "Laden": [
+      "building-store"
+    ],
+    "Geschäft": [
+      "building-store"
+    ],
+    "Schule": [
+      "school"
+    ],
+    "Tür": [
+      "door"
+    ],
+    "Fenster": [
+      "window"
+    ],
+    "Treppe": [
+      "stairs"
+    ],
+    "Aufzug": [
+      "elevator"
+    ],
+    "Parkplatz": [
+      "parking"
+    ],
+    "Rollstuhl": [
+      "wheelchair",
+      "accessible"
+    ],
+    "Telefon": [
+      "phone"
+    ],
+    "Handy": [
+      "device-mobile"
+    ],
+    "Mail": [
+      "mail"
+    ],
+    "Brief": [
+      "mail"
+    ],
+    "Post": [
+      "mail",
+      "mailbox"
+    ],
+    "Briefkasten": [
+      "mailbox"
+    ],
+    "Uhr": [
+      "clock"
+    ],
+    "Zeit": [
+      "clock",
+      "hourglass"
+    ],
+    "Wecker": [
+      "alarm"
+    ],
+    "Kalender": [
+      "calendar"
+    ],
+    "Datum": [
+      "calendar"
+    ],
+    "Glocke": [
+      "bell"
+    ],
+    "Haken": [
+      "check"
+    ],
+    "Erledigt": [
+      "check",
+      "circle-check"
+    ],
+    "Kreuz": [
+      "x"
+    ],
+    "Falsch": [
+      "x",
+      "circle-x"
+    ],
+    "Pfeil": [
+      "arrow-right",
+      "arrow-up",
+      "arrow-down",
+      "arrow-left"
+    ],
+    "Hoch": [
+      "arrow-up"
+    ],
+    "Runter": [
+      "arrow-down"
+    ],
+    "Links": [
+      "arrow-left"
+    ],
+    "Rechts": [
+      "arrow-right"
+    ],
+    "Werkzeug": [
+      "tool",
+      "tools"
+    ],
+    "Hammer": [
+      "hammer"
+    ],
+    "Lineal": [
+      "ruler"
+    ],
+    "Pinsel": [
+      "brush"
+    ],
+    "Farbe": [
+      "paint",
+      "palette"
+    ],
+    "Schere": [
+      "scissors"
+    ],
+    "Stift": [
+      "pencil"
+    ],
+    "Bleistift": [
+      "pencil"
+    ],
+    "Büroklammer": [
+      "paperclip"
+    ],
+    "Ordner": [
+      "folder"
+    ],
+    "Datei": [
+      "file"
+    ],
+    "Dokument": [
+      "file-text"
+    ],
+    "Buch": [
+      "book"
+    ],
+    "Bücher": [
+      "books"
+    ],
+    "Notizbuch": [
+      "notebook"
+    ],
+    "Drucker": [
+      "printer"
+    ],
+    "Computer": [
+      "device-desktop"
+    ],
+    "Laptop": [
+      "device-laptop"
+    ],
+    "Fernseher": [
+      "device-tv"
+    ],
+    "Kamera": [
+      "camera"
+    ],
+    "Musik": [
+      "music"
+    ],
+    "Router": [
+      "router"
+    ],
+    "Server": [
+      "server"
+    ],
+    "Festplatte": [
+      "database"
+    ],
+    "Diskette": [
+      "device-floppy"
+    ],
+    "Speichern": [
+      "device-floppy"
+    ],
+    "WLAN": [
+      "wifi"
+    ],
+    "Funk": [
+      "antenna"
+    ],
+    "Antenne": [
+      "antenna"
+    ],
+    "Satellit": [
+      "satellite"
+    ],
+    "Strom": [
+      "bolt",
+      "plug"
+    ],
+    "Blitz": [
+      "bolt"
+    ],
+    "Stecker": [
+      "plug"
+    ],
+    "Steckdose": [
+      "outlet"
+    ],
+    "Schalter": [
+      "power"
+    ],
+    "Batterie": [
+      "battery"
+    ],
+    "Akku": [
+      "battery"
+    ],
+    "Glühbirne": [
+      "bulb"
+    ],
+    "Licht": [
+      "bulb",
+      "lamp"
+    ],
+    "Lampe": [
+      "lamp",
+      "bulb"
+    ],
+    "Schlüssel": [
+      "key"
+    ],
+    "Schloss": [
+      "lock"
+    ],
+    "Offen": [
+      "lock-open"
+    ],
+    "Person": [
+      "user"
+    ],
+    "Personen": [
+      "users"
+    ],
+    "Kinderwagen": [
+      "baby-carriage"
+    ],
+    "Herz": [
+      "heart"
+    ],
+    "Stern": [
+      "star"
+    ],
+    "Fahne": [
+      "flag"
+    ],
+    "Ort": [
+      "map-pin"
+    ],
+    "Karte": [
+      "map"
+    ],
+    "LKW": [
+      "truck"
+    ],
+    "Lastwagen": [
+      "truck"
+    ],
+    "Lieferung": [
+      "truck-delivery",
+      "package"
+    ],
+    "Paket": [
+      "package",
+      "box"
+    ],
+    "Kiste": [
+      "box"
+    ],
+    "Auto": [
+      "car"
+    ],
+    "Fahrrad": [
+      "bike"
+    ],
+    "Bus": [
+      "bus"
+    ],
+    "Zug": [
+      "train"
+    ],
+    "Flugzeug": [
+      "plane"
+    ],
+    "Schiff": [
+      "ship"
+    ],
+    "Müll": [
+      "trash"
+    ],
+    "Mülleimer": [
+      "trash"
+    ],
+    "Recycling": [
+      "recycle"
+    ],
+    "Blatt": [
+      "leaf"
+    ],
+    "Blume": [
+      "flower"
+    ],
+    "Pflanze": [
+      "plant"
+    ],
+    "Baum": [
+      "tree"
+    ],
+    "Sonne": [
+      "sun"
+    ],
+    "Mond": [
+      "moon"
+    ],
+    "Wolke": [
+      "cloud"
+    ],
+    "Regen": [
+      "cloud-rain"
+    ],
+    "Schnee": [
+      "snowflake"
+    ],
+    "Kalt": [
+      "snowflake",
+      "temperature-minus"
+    ],
+    "Tiefkühl": [
+      "snowflake"
+    ],
+    "Frost": [
+      "snowflake"
+    ],
+    "Feuer": [
+      "flame"
+    ],
+    "Heiß": [
+      "flame",
+      "temperature-plus"
+    ],
+    "Wasser": [
+      "droplet"
+    ],
+    "Tropfen": [
+      "droplet"
+    ],
+    "Temperatur": [
+      "temperature",
+      "thermometer"
+    ],
+    "Thermometer": [
+      "thermometer"
+    ],
+    "Geschenk": [
+      "gift"
+    ],
+    "Einkaufswagen": [
+      "shopping-cart"
+    ],
+    "Korb": [
+      "basket"
+    ],
+    "Kaffee": [
+      "coffee"
+    ],
+    "Tasse": [
+      "cup"
+    ],
+    "Glas": [
+      "glass"
+    ],
+    "Flasche": [
+      "bottle"
+    ],
+    "Pizza": [
+      "pizza"
+    ],
+    "Brot": [
+      "bread"
+    ],
+    "Apfel": [
+      "apple"
+    ],
+    "Möhre": [
+      "carrot"
+    ],
+    "Karotte": [
+      "carrot"
+    ],
+    "Fisch": [
+      "fish"
+    ],
+    "Milch": [
+      "milk"
+    ],
+    "Käse": [
+      "cheese"
+    ],
+    "Keks": [
+      "cookie"
+    ],
+    "Kuchen": [
+      "cake"
+    ],
+    "Hund": [
+      "dog"
+    ],
+    "Katze": [
+      "cat"
+    ],
+    "Pfote": [
+      "paw"
+    ],
+    "Bett": [
+      "bed"
+    ],
+    "Bad": [
+      "bath"
+    ],
+    "Badewanne": [
+      "bath"
+    ],
+    "Toilettenpapier": [
+      "toilet-paper"
+    ],
+    "Waschen": [
+      "wash"
+    ],
+    "Bügeln": [
+      "ironing-1"
+    ],
+    "Waschmaschine": [
+      "wash"
+    ],
+    "Kühlschrank": [
+      "fridge"
+    ],
+    "Mikrowelle": [
+      "microwave"
+    ],
+    "Herd": [
+      "cooker"
+    ],
+    "Warnung": [
+      "alert-triangle"
+    ],
+    "Achtung": [
+      "alert-triangle"
+    ],
+    "Info": [
+      "info-circle"
+    ],
+    "Hilfe": [
+      "help-circle"
+    ],
+    "Frage": [
+      "help-circle"
+    ],
+    "Verboten": [
+      "ban"
+    ],
+    "Verbot": [
+      "ban"
+    ],
+    "Erste Hilfe": [
+      "first-aid-kit",
+      "medical-cross"
+    ],
+    "Medizin": [
+      "pill",
+      "medical-cross"
+    ],
+    "Tablette": [
+      "pill"
+    ],
+    "Feuerlöscher": [
+      "fire-extinguisher"
+    ],
+    "Rauchen verboten": [
+      "smoking-no"
+    ],
+    "Koffer": [
+      "briefcase"
+    ],
+    "Geld": [
+      "cash",
+      "coin"
+    ],
+    "Euro": [
+      "currency-euro",
+      "coin-euro"
+    ],
+    "Geldbörse": [
+      "wallet"
+    ],
+    "Karte bezahlen": [
+      "credit-card"
+    ],
+    "Kreditkarte": [
+      "credit-card"
+    ],
+    "Quittung": [
+      "receipt"
+    ],
+    "Beleg": [
+      "receipt"
+    ],
+    "Etikett": [
+      "tag"
+    ],
+    "Preisschild": [
+      "tag"
+    ],
+    "Barcode": [
+      "barcode"
+    ],
+    "QR-Code": [
+      "qrcode"
+    ],
+    "Ausweis": [
+      "id",
+      "id-badge"
+    ],
+    "Chip": [
+      "cpu"
+    ],
+    "Prozessor": [
+      "cpu"
+    ],
+    "Schlafen": [
+      "zzz",
+      "bed"
+    ],
+    "Sanduhr": [
+      "hourglass"
+    ],
+    "Abspielen": [
+      "player-play"
+    ],
+    "Zahnrad": [
+      "settings"
+    ],
+    "Einstellungen": [
+      "settings"
+    ],
+    "Suche": [
+      "search"
+    ],
+    "Lupe": [
+      "search"
+    ],
+    "Plus": [
+      "plus"
+    ],
+    "Minus": [
+      "minus"
+    ],
+    "Kreis": [
+      "circle"
+    ],
+    "Quadrat": [
+      "square"
+    ],
+    "Dreieck": [
+      "triangle"
+    ],
+    "Auge": [
+      "eye"
+    ],
+    "Ohr": [
+      "ear"
+    ],
+    "Hand": [
+      "hand-stop"
+    ],
+    "Daumen hoch": [
+      "thumb-up"
+    ],
+    "Lächeln": [
+      "mood-smile"
+    ],
+    "Smiley": [
+      "mood-smile"
+    ],
+    "Zelt": [
+      "tent"
+    ],
+    "Berg": [
+      "mountain"
+    ],
+    "Anker": [
+      "anchor"
+    ],
+    "Regenschirm": [
+      "umbrella"
+    ],
+    "Brille": [
+      "eyeglass"
+    ],
+    "Kleidung": [
+      "shirt"
+    ],
+    "Hemd": [
+      "shirt"
+    ],
+    "Schuh": [
+      "shoe"
+    ],
+    "Spielzeug": [
+      "horse-toy"
+    ],
+    "Ball": [
+      "ball-football"
+    ],
+    "Fußball": [
+      "ball-football"
+    ],
+    "Fernglas": [
+      "binoculars"
+    ],
+    "Kompass": [
+      "compass"
+    ],
+    "Navigation": [
+      "navigation"
+    ],
+    "Wifi": [
+      "wifi"
+    ],
+    "Netzwerk": [
+      "network"
+    ],
+    "Cloud": [
+      "cloud"
+    ],
+    "Mikrofon": [
+      "microphone"
+    ],
+    "Lautsprecher": [
+      "speakerphone",
+      "volume"
+    ],
+    "Kopfhörer": [
+      "headphones"
+    ],
+    "Video": [
+      "video"
+    ],
+    "Foto": [
+      "photo"
+    ],
+    "Bild": [
+      "photo"
+    ],
+    "Drucken": [
+      "printer"
+    ],
+    "Kopieren": [
+      "copy"
+    ],
+    "Teilen": [
+      "share"
+    ],
+    "Link": [
+      "link"
+    ],
+    "Kette": [
+      "link"
+    ],
+    "Magnet": [
+      "magnet"
+    ],
+    "Wasserhahn": [
+      "droplet"
+    ],
+    "Gas": [
+      "flame"
+    ],
+    "Heizung": [
+      "temperature-plus",
+      "flame"
+    ],
+    "Lüftung": [
+      "propeller"
+    ],
+    "Ventilator": [
+      "propeller"
+    ],
+    "Klimaanlage": [
+      "air-conditioning"
+    ],
+    "Solar": [
+      "solar-panel"
+    ],
+    "Windrad": [
+      "windmill"
+    ]
+  },
+  "iso7010": {
+    "E001": "Notausgang (links)",
+    "E002": "Notausgang (rechts)",
+    "E013": "Krankentrage",
+    "E014": "Kindersitz-Erkennungssystem (CPOD)",
+    "E015": "Trinkwasser",
+    "E018": "Öffnung durch Linksdrehung",
+    "E019": "Öffnung durch Rechtsdrehung",
+    "E020": "Not-Halt-Taster",
+    "E021": "Schutzraum",
+    "E022": "Tür öffnet durch Drücken links",
+    "E023": "Tür öffnet durch Drücken rechts",
+    "E024": "Vorübergehender Zufluchtsbereich",
+    "E025": "Nothammer",
+    "E026": "Notausgang für Gehbehinderte (links)",
+    "E027": "Notfalltasche",
+    "E028": "Sauerstoff-Wiederbelebungsgerät",
+    "E029": "Fluchtatemschutzgerät",
+    "E030": "Notausgang für Gehbehinderte (rechts)",
+    "E038": "Rettungsfloß",
+    "E039": "Aussetzbares Rettungsfloß (Davit)",
+    "E041": "Rettungsring mit Leine",
+    "E042": "Rettungsring mit Licht",
+    "E043": "Rettungsring mit Leine und Licht",
+    "E045": "Rettungsweste für Kinder",
+    "E046": "Rettungsweste für Kleinkinder",
+    "E047": "Such- und Rettungstransponder (SART)",
+    "E048": "Notsignale für Überlebensfahrzeuge",
+    "E049": "Fallschirm-Leuchtrakete",
+    "E050": "Leinenwurfgerät",
+    "E051": "UKW-Sprechfunkgerät",
+    "E052": "Seenotfunkbake (EPIRB)",
+    "E053": "Einbootungsleiter",
+    "E054": "Rutsche des Schiffsevakuierungssystems",
+    "E055": "Schlauch des Schiffsevakuierungssystems",
+    "E056": "Kälteschutzanzug",
+    "E057": "Tür öffnet durch Ziehen links",
+    "E058": "Tür öffnet durch Ziehen rechts",
+    "E060": "Evakuierungsstuhl",
+    "E061": "Wasserrettungsausrüstung",
+    "E062": "Tsunami-Evakuierungsgebiet",
+    "E063": "Tsunami-Evakuierungsgebäude",
+    "E064": "Ersthelfer",
+    "E065": "Sammelbereich bei Naturkatastrophen",
+    "E067": "Evakuierungsmatratze",
+    "E068": "Rettungsring mit Licht und Rauchsignal",
+    "E069": "Meldestelle Person über Bord",
+    "E070": "Evakuierungsaufzug für Personen, die keine Treppen benutzen können",
+    "E071": "Rettungsschlitten",
+    "E072": "Sicherer Anschlagpunkt",
+    "E073": "Abseilgerät für Notfälle",
+    "E074": "Notverpflegung",
+    "E075": "Rettungsschwimmer",
+    "E076": "Evakuierungsausrüstung",
+    "F007": "Brandschutztür",
+    "F008": "Ortsfeste Feuerlöschbatterie",
+    "F009": "Fahrbarer Feuerlöscher",
+    "F010": "Tragbares Schaumlöschgerät",
+    "F011": "Wassernebel-Löschgerät",
+    "F012": "Ortsfeste Feuerlöschanlage",
+    "F013": "Ortsfeste Feuerlöschflasche",
+    "F014": "Auslösestelle",
+    "F015": "Feuerlöschmonitor",
+    "F016": "Löschdecke",
+    "F017": "Feuerwehraufzug",
+    "F018": "Brandalarm-Blitzleuchte",
+    "F019": "Nicht angeschlossener Feuerlöschschlauch",
+    "M028": "Verriegeln und verschlossen halten",
+    "M029": "Hupe betätigen",
+    "M030": "Abfall in den Behälter",
+    "M031": "Schutzeinrichtung der Tischkreissäge benutzen",
+    "M032": "Antistatisches bzw. funkenfreies Schuhwerk benutzen",
+    "M033": "Sicherheitsbügel am Sessellift schließen",
+    "M034": "Sicherheitsbügel am Sessellift öffnen",
+    "M035": "Schleppspur nach Sturz verlassen",
+    "M036": "Skispitzen hochhalten",
+    "M037": "Luke schließen und sichern (Rettungsboot)",
+    "M038": "Motor starten (Rettungsboot)",
+    "M039": "Rettungsboot zu Wasser lassen",
+    "M040": "Rettungsboot zu Wasser lassen (Davit)",
+    "M041": "Bereitschaftsboot zu Wasser lassen",
+    "M042": "Haken des Rettungsboots lösen",
+    "M043": "Wassersprühanlage des Rettungsboots einschalten",
+    "M044": "Luftversorgung des Rettungsboots einschalten",
+    "M045": "Zurrgurte lösen (Rettungsboot)",
+    "M046": "Gasflaschen sichern",
+    "M047": "Atemschutzgerät benutzen",
+    "M048": "Gasdetektor benutzen",
+    "M049": "Schutzausrüstung für den Sport benutzen",
+    "M050": "Rodel nach links verlassen",
+    "M051": "Rodel nach rechts verlassen",
+    "M052": "Sicherheitsabstand zwischen Rodeln halten",
+    "M053": "Rettungsweste tragen",
+    "M054": "Kinder beim Wassersport beaufsichtigen",
+    "M056": "Vor und während des Einstiegs belüften",
+    "M057": "Für dauernde Belüftung sorgen",
+    "M058": "Zutritt nur mit Aufsicht außen",
+    "M059": "Laborkittel tragen",
+    "M060": "Griff des Einkaufswagens festhalten",
+    "M061": "Hände desinfizieren",
+    "M062": "Oberfläche desinfizieren",
+    "M063": "Stockschlaufe vom Handgelenk nehmen",
+    "M064": "Beide Skistöcke in einer Hand halten",
+    "M065": "Kinder nur in Begleitung",
+    "M066": "Sporthelm tragen",
+    "M067": "Schneebrille tragen",
+    "M068": "Bewegliche mechanische Teile sichern",
+    "M069": "Werkzeuge gegen Herabfallen sichern",
+    "M070": "Lampe nur in Leuchte mit Abdeckung verwenden",
+    "M071": "Kippsicherung verwenden",
+    "M072": "Dekontaminationsdusche benutzen",
+    "P060": "Tragen von Straßenschuhen verboten",
+    "P073": "Deckel nicht schließen, solange die Brenner in Betrieb sind",
+    "P074": "Kindersitz-Einbau verboten",
+    "P075": "Nicht in die Lichtquelle blicken",
+    "P076": "Skifahren verboten",
+    "P077": "Snowboardfahren verboten",
+    "P078": "Rodeln verboten",
+    "P079": "Schlittschuhlaufen verboten",
+    "P080": "Zutritt für Unbefugte verboten",
+    "P081": "Gerät nicht abdecken",
+    "W020": "Warnung vor Hindernissen im Kopfbereich",
+    "W030": "Warnung vor Quetschen der Hand im Gesenkbiegewerkzeug",
+    "W031": "Warnung vor Handverletzung durch Werkstück an der Abkantpresse",
+    "W032": "Warnung vor schneller Bewegung des Werkstücks an der Abkantpresse",
+    "W033": "Warnung vor Stacheldraht",
+    "W034": "Warnung vor Stier",
+    "W035": "Warnung vor herabfallenden Gegenständen",
+    "W036": "Warnung vor nicht tragfähigem Dach",
+    "W037": "Warnung vor automatisch oder ferngesteuerten Fahrzeugen",
+    "W038": "Warnung vor plötzlichem lauten Lärm",
+    "W039": "Warnung vor herabfallendem Eis",
+    "W040": "Warnung vor Dachlawine",
+    "W041": "Warnung vor Erstickungsgefahr",
+    "W042": "Warnung vor Störlichtbogen",
+    "W043": "Warnung vor dünnem Eis",
+    "W044": "Warnung vor Slipanlage",
+    "W045": "Warnung vor Wasserski-Bereich",
+    "W046": "Warnung vor Surfern",
+    "W047": "Warnung vor tiefem Wasser",
+    "W048": "Warnung vor flachem Wasser",
+    "W049": "Warnung vor Gegenständen unter Wasser",
+    "W050": "Warnung vor plötzlicher Tiefe im Schwimmbecken",
+    "W051": "Warnung vor ungesicherter Kante",
+    "W052": "Warnung vor instabiler Klippenkante",
+    "W053": "Warnung vor instabiler Klippe",
+    "W054": "Warnung vor Haien",
+    "W055": "Warnung vor Abwassereinleitung",
+    "W056": "Warnung vor Tsunami-Gefahrenzone",
+    "W057": "Warnung vor starker Strömung",
+    "W058": "Warnung vor Bootsverkehr",
+    "W059": "Warnung vor Strandseglern",
+    "W060": "Warnung vor auflaufender Flut",
+    "W061": "Warnung vor Treibsand und Schlamm",
+    "W062": "Warnung vor Kitesurfern",
+    "W063": "Warnung vor Parasailing",
+    "W064": "Warnung vor starkem Wind",
+    "W065": "Warnung vor hoher Brandung",
+    "W066": "Warnung vor plötzlicher Wassertiefe",
+    "W067": "Warnung vor Krokodilen",
+    "W073": "Warnung vor Großbrandgebiet",
+    "W074": "Warnung vor Tornadogebiet",
+    "W075": "Warnung vor aktivem Vulkan",
+    "W076": "Warnung vor Murgang",
+    "W077": "Warnung vor Überflutung",
+    "W078": "Warnung vor Erdrutsch",
+    "W079": "Warnung vor heißem Inhalt",
+    "W080": "Warnung vor heißem Dampf",
+    "W082": "Warnung vor Gletscherspalten unter Schnee",
+    "W083": "Warnung vor Lawinen",
+    "W084": "Warnung vor Gewitter",
+    "W085": "Warnung vor Wirbelsturmgebiet",
+    "W087": "Warnung vor hoher Lautstärke",
+    "W088": "Warnung vor sich bewegenden Klingen",
+    "W089": "Warnung vor sich bewegenden Zahnrädern"
+  }
+}

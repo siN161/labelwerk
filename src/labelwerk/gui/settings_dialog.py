@@ -43,6 +43,7 @@ class SettingsDialog(QDialog):
         self.resize(initial_size(screen.availableGeometry().size()))
         self.path = path
         self.saved: Settings | None = None
+        self._symbols = (settings.symbols_recent, settings.symbols_favorites)   # nur durchgereicht
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
@@ -289,6 +290,8 @@ class SettingsDialog(QDialog):
             theme=self.theme.currentData(),
             image_crop=self.image_crop.isChecked(),
             image_rotate=self.image_rotate.isChecked(),
+            symbols_recent=list(self._symbols[0]),
+            symbols_favorites=list(self._symbols[1]),
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},
         )
