@@ -278,7 +278,7 @@ def test_structure_and_bounds_are_checked(tmp_path, change, message):
 def test_loaded_documents_render_without_unexpected_errors(tmp_path):
     """Was ``load`` annimmt, scheitert beim Rendern höchstens mit ``ValueError``."""
     data = _valid()
-    data["document"]["objects"][0].update(size_pt=1000, x_mm=-9999, w_mm=300, h_mm=300)
+    data["document"]["objects"][0].update(size_pt=1000, x_mm=-999, w_mm=300, h_mm=300)
     doc = load(_write(tmp_path, data))
     try:
         render_document(doc)
@@ -332,3 +332,75 @@ def test_long_file_name_can_be_saved(tmp_path):
     path = tmp_path / ("x" * 240 + ".labelwerk")
     save(_document(), path)
     assert load(path) == _document()
+
+
+# --- Grenzen für fremde Dateien (Schlussreview 3c) -----------------------------------------
+def _image_object(w_mm, h_mm):
+    return {"type": "image", "png": _valid()["document"]["objects"][2]["png"],
+            "w_mm": w_mm, "h_mm": h_mm}
+
+
+def test_pixel_budget_refuses_huge_frames(tmp_path):
+    data = _valid()
+    data["document"]["objects"] = [_image_object(1000, 1000) for _ in range(3)]
+    with pytest.raises(StorageError, match="Etikett zu groß"):
+        load(_write(tmp_path, data))
+
+
+def test_pixel_budget_sums_up_all_frames(tmp_path):
+    data = _valid()      # je 600 × 600 mm ≈ 50 Mio. Druckpunkte, zusammen 200 Mio.
+    data["document"]["objects"] = [_image_object(600, 600) for _ in range(4)]
+    with pytest.raises(StorageError, match="Etikett zu groß"):
+        load(_write(tmp_path, data))
+
+
+def test_object_count_is_limited(tmp_path):
+    data = _valid()
+    data["document"]["objects"] = [{"type": "text"}] * (storage.MAX_OBJECTS + 1)
+    with pytest.raises(StorageError, match="Etikett zu groß"):
+        load(_write(tmp_path, data))
+
+
+def test_normal_documents_are_within_the_limits(tmp_path):
+    path = tmp_path / "ok.labelwerk"
+    save(_document(), path)
+    assert load(path) == _document()
+
+
+def test_file_size_limit_is_moderate():
+    assert storage.MAX_FILE_BYTES <= 32 * 1024 * 1024
+
+
+def test_surrogate_text_cannot_be_saved_but_gives_a_german_oserror(tmp_path):
+    with pytest.raises(OSError, match="nicht gespeichert"):
+        save(Document("62", objects=[TextObject("\ud800")]), tmp_path / "x.labelwerk")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_font_path_is_only_taken_from_a_regular_file(tmp_path):
+    font = tmp_path / "font.ttf"
+    font.write_bytes(b"x")
+    for given, expected in ((str(font), str(font)), (str(tmp_path / "fehlt.ttf"), None),
+                            (str(tmp_path), None)):
+        data = _valid()
+        data["document"]["objects"][0]["font_path"] = given
+        assert load(_write(tmp_path, data)).objects[0].font_path == expected
+
+
+def test_a_fifo_is_not_read(tmp_path):
+    import os
+    fifo = tmp_path / "rohr.labelwerk"
+    os.mkfifo(fifo)
+    with pytest.raises(StorageError, match="keine Datei"):
+        load(fifo)
+
+
+def test_position_limit_is_the_one_of_the_position_fields():
+    from labelwerk.document import MAX_POSITION_MM
+    from labelwerk.gui.panels.position import POSITION_MM
+    assert storage.MAX_POSITION_MM == MAX_POSITION_MM and POSITION_MM == (-MAX_POSITION_MM,
+                                                                          MAX_POSITION_MM)
+    data = _valid()
+    data["document"]["objects"][0]["x_mm"] = MAX_POSITION_MM + 0.1
+    with pytest.raises(StorageError, match="x_mm"):
+        storage.from_dict(data)

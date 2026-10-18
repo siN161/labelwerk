@@ -216,6 +216,7 @@ class MainWindow(QMainWindow):
         # Statusleiste: Drucker, Ergebnis, Zoom
         self.printer_status = QLabel()
         self.result = QLabel()
+        self.result.setTextFormat(Qt.TextFormat.PlainText)   # Namen mit „<b>“ bleiben Text
         self.statusBar().addWidget(self.printer_status)
         self.media_status = QLabel()            # Rolle im Drucker (Medium prüfen)
         self.media_status.setObjectName("mediaStatus")
@@ -1381,8 +1382,11 @@ class MainWindow(QMainWindow):
     def print_label(self) -> None:
         if self._timer.isActive():
             self.render_now()
-        if self.image is None or self._render_error is not None:
-            return   # Fehler steht bereits in der Statusleiste
+        if self._render_error is not None:
+            self._set_result(self._render_error, "error")   # nicht still nichts tun
+            return
+        if self.image is None:
+            return
         self._print(self.image, self.doc, self._outside)
 
     def print_document(self, doc: Document) -> None:

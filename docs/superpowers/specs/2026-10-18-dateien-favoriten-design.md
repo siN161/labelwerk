@@ -27,10 +27,13 @@ Unterordner bei Favoriten, Import fremder Formate (P-touch `.lbx`: Roadmap 5), S
 - Dateien sind **fremde Eingabe**. Fehler beim Laden → `StorageError` mit deutscher Meldung: keine
   labelwerk-Datei, kaputtes oder zu tief verschachteltes JSON, NaN/Infinity, Version neuer als bekannt („mit
   neuerem labelwerk gespeichert“), falsche Struktur, fehlende Pflichtfelder, Werte außerhalb der Grenzen
-  (Lage ±10 000 mm, Größen > 0 und ≤ 1000 mm, Schrift ≤ 1000 pt, Ränder, dpi, Schwelle, Seite, Drehung als
+  (Lage ±999,9 mm wie die Positionsfelder, Größen > 0 und ≤ 1000 mm, Schrift ≤ 1000 pt, Ränder, dpi, Schwelle, Seite, Drehung als
   ganze Zahl, Ausschnitt im Bild), Zeilenumbrüche in Textstücken, unbekanntes Etikett, Bilddaten **nur PNG**
   (Pillow erkennt Formate sonst am Inhalt – EPS liefe durch Ghostscript), ganz dekodiert und höchstens
-  6000 Pixel je Seite. Was angenommen wird, scheitert beim Rendern höchstens mit verständlicher Meldung.
+  6000 Pixel je Seite. Dazu Grenzen gegen Speicherhunger: Datei höchstens 32 MB und nur eine reguläre
+  Datei (ein FIFO würde hängen), höchstens 500 Objekte, Rahmenflächen zusammen höchstens 100 Mio.
+  Druckpunkte (300 dpi) – sonst „Etikett zu groß“. `font_path` (setzt nur die CLI) gilt nur für eine
+  vorhandene, reguläre Datei, sonst entfällt er. Was angenommen wird, scheitert beim Rendern höchstens mit verständlicher Meldung.
   Speichern atomar, Symlinks verfolgt, Rechte bleiben (neu: umask). Gleiches Format-Pinning für alle
   Bild-Importe (`Image.open(..., formats=…)`).
 - **Favoriten** (`favorites.py`, Qt-frei): Ordner `$XDG_DATA_HOME/labelwerk/favoriten` (Standard

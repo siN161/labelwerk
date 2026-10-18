@@ -10,10 +10,11 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QAction, QPixmap
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu,
-                               QPushButton, QToolButton, QWidget)
+                               QPushButton, QStyle, QToolButton, QWidget)
 
 from ...document import Document
 from ...favorites import Favorite
+from ...storage import exists
 from . import Panel
 
 PREVIEW = QSize(110, 46)            # Vorschau eines Favoriten (eingepasst)
@@ -38,6 +39,7 @@ class _FavoriteRow(QWidget):
         else:
             self.preview.setText(BROKEN)
         self.name = QLabel(f"{favorite.name}{'  ▸ Start' if start else ''}")
+        self.name.setTextFormat(Qt.TextFormat.PlainText)    # „<b>“ im Namen bleibt Text
         self.name.setWordWrap(True)
         self.print = QToolButton()
         self.print.setText("⎙")
@@ -87,16 +89,14 @@ class FilePanel(Panel):
         self.favorites = QListWidget()
         self.favorites.setObjectName("favorites")
         self.favorites.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.favorites.itemClicked.connect(lambda item: self.open_favorite_at(self.favorites.row(item)))
-        self.favorites.itemActivated.connect(lambda item: self.open_favorite_at(self.favorites.row(item)))
+        _open_on_click(self.favorites, lambda row: self.open_favorite_at(row))
         self.favorites.customContextMenuRequested.connect(self._favorite_context)
         self.layout_.addWidget(self.favorites)
 
         self.section("Zuletzt geöffnet")
         self.recent = QListWidget()
         self.recent.setObjectName("recent")
-        self.recent.itemClicked.connect(lambda item: self.open_recent_at(self.recent.row(item)))
-        self.recent.itemActivated.connect(lambda item: self.open_recent_at(self.recent.row(item)))
+        _open_on_click(self.recent, lambda row: self.open_recent_at(row))
         self.layout_.addWidget(self.recent)
         self.layout_.addStretch()
 
@@ -179,7 +179,7 @@ class FilePanel(Panel):
         for path in paths:
             item = QListWidgetItem(Path(path).stem)
             item.setToolTip(path)
-            if not Path(path).exists():
+            if not exists(path):
                 item.setForeground(grey)
             self.recent.addItem(item)
         rows = min(len(paths), RECENT_ROWS)
@@ -191,6 +191,18 @@ class FilePanel(Panel):
 
     def open_recent_at(self, row: int) -> None:
         self.recent_open.emit(self._recent[row])
+
+
+def _open_on_click(view: QListWidget, open_row) -> None:
+    """Klick und Aktivieren (Eingabe, Doppelklick) öffnen die Zeile – einmal: Stile, die schon
+    per Einzelklick aktivieren (z. B. KDE), melden dazu zusätzlich ``itemActivated``."""
+    def clicked(item) -> None:
+        if not view.style().styleHint(QStyle.StyleHint.SH_ItemView_ActivateItemOnSingleClick,
+                                      None, view):
+            open_row(view.row(item))
+
+    view.itemClicked.connect(clicked)
+    view.itemActivated.connect(lambda item: open_row(view.row(item)))
 
 
 def _fit_height(view: QListWidget, rows: int, row_height: int) -> None:

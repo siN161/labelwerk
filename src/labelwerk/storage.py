@@ -23,8 +23,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from .document import (ALIGNMENTS, MAX_MARGIN_MM, ORIENTATIONS, ROTATIONS, Document, ImageObject,
-                       Paragraph, Span, TextObject)
+from .document import (ALIGNMENTS, MAX_MARGIN_MM, MAX_POSITION_MM, ORIENTATIONS, ROTATIONS,
+                       Document, ImageObject, Paragraph, Span, TextObject)
 from .imaging import MAX_PIXELS, MODES
 from .labels import get_label
 
@@ -32,8 +32,10 @@ FORMAT = "labelwerk"
 VERSION = 1
 SUFFIX = ".labelwerk"
 RECENT_FILES = 10
-MAX_FILE_BYTES = 256 * 1024 * 1024    # größere Dateien werden nicht gelesen
-MAX_POSITION_MM = 10_000.0            # Lage eines Objekts (auch weit neben dem Etikett)
+MAX_FILE_BYTES = 32 * 1024 * 1024     # größere Dateien werden nicht gelesen
+MAX_OBJECTS = 500                     # Objekte je Etikett
+MAX_FRAME_DOTS = 100_000_000          # Summe der Rahmenflächen in Druckpunkten (300 dpi)
+DOTS_PER_MM = 300 / 25.4
 MAX_SIZE_MM = 1_000.0                 # Rahmen, Etikettlänge (QL: höchstens 1 m)
 MAX_SIZE_PT = 1_000.0                 # Schriftgröße (über MAX_PT hinaus, wie scale_text es lässt)
 LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "   # gehören zwischen Absätze, nicht in Stücke
@@ -116,6 +118,14 @@ def os_reason(error: OSError) -> str:
     return "Fehler beim Zugriff"
 
 
+def exists(path: str | Path) -> bool:
+    """Gibt es den Pfad? Auch ein unerreichbarer (EACCES, ENOTCONN, EIO …) wirft nicht."""
+    try:
+        return Path(path).exists()
+    except OSError:
+        return False
+
+
 # --- Schreiben ---------------------------------------------------------------------------
 def _dump(obj, schema: dict) -> dict:
     out = {}
@@ -151,6 +161,9 @@ def save(doc: Document, path: str | Path) -> Path:
     target = Path(os.path.realpath(path))
     try:
         text = json.dumps(to_dict(doc), ensure_ascii=False, indent=1, allow_nan=False) + "\n"
+        text.encode("utf-8")                # einzelne Surrogates lassen sich nicht schreiben
+    except UnicodeEncodeError as e:
+        raise OSError(f"{path.name} wurde nicht gespeichert: ungültige Zeichen im Text") from e
     except ValueError as e:
         raise OSError(f"{path.name} wurde nicht gespeichert: ungültige Zahlen im Etikett") from e
     tmp = None
@@ -237,8 +250,17 @@ def _image(data: dict, where: str) -> ImageObject:
     return ImageObject(**values)
 
 
+def _is_file(path: str) -> bool:
+    try:
+        return stat.S_ISREG(os.stat(path).st_mode)
+    except (OSError, ValueError):       # ValueError: Pfad mit NUL-Zeichen
+        return False
+
+
 def _text_object(item: dict, where: str) -> TextObject:
     values = _load(item, TEXT, where)
+    if values.get("font_path") is not None and not _is_file(values["font_path"]):
+        values["font_path"] = None      # nur eine vorhandene, reguläre Datei geht an FreeType
     paragraphs = []
     for p in _list(item, "paragraphs", where):
         align = _load(p, PARAGRAPH, where)
@@ -259,8 +281,11 @@ def from_dict(data) -> Document:
                            f"– bitte labelwerk aktualisieren")
     document = data.get("document")
     values = _load(document, DOCUMENT, "")
+    items = _list(document, "objects", "")
+    if len(items) > MAX_OBJECTS:
+        raise StorageError(f"Etikett zu groß ({len(items)} Objekte, höchstens {MAX_OBJECTS})")
     objects = []
-    for number, item in enumerate(_list(document, "objects", ""), start=1):
+    for number, item in enumerate(items, start=1):
         where = f" in Objekt {number}"
         kind = item.get("type") if isinstance(item, dict) else None
         if kind == "text":
@@ -269,6 +294,10 @@ def from_dict(data) -> Document:
             objects.append(_image(item, where))
         else:
             raise StorageError(f"Objektart{where} unbekannt: {reprlib.repr(kind)}")
+    dots = sum(o.w_mm * o.h_mm for o in objects if o.w_mm and o.h_mm) * DOTS_PER_MM ** 2
+    if dots > MAX_FRAME_DOTS:
+        raise StorageError(f"Etikett zu groß (Objekte zusammen {dots / 1e6:.0f} Mio. Druckpunkte, "
+                           f"höchstens {MAX_FRAME_DOTS // 1_000_000})")
     return Document(**values, objects=objects)
 
 
@@ -280,7 +309,12 @@ def load(path: str | Path) -> Document:
     """Etikett aus einer Datei; jeder Fehler als ``StorageError`` mit Dateiname."""
     path = Path(path)
     try:
-        if path.stat().st_size > MAX_FILE_BYTES:
+        info = path.stat()
+        if stat.S_ISDIR(info.st_mode):
+            raise IsADirectoryError(path)
+        if not stat.S_ISREG(info.st_mode):      # ein FIFO o. Ä. würde beim Lesen hängen
+            raise StorageError(f"{path.name}: keine Datei")
+        if info.st_size > MAX_FILE_BYTES:
             raise StorageError(f"{path.name}: Datei zu groß")
         text = path.read_text(encoding="utf-8-sig")       # auch mit BOM (Windows-Editoren)
     except FileNotFoundError as e:

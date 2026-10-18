@@ -591,3 +591,131 @@ def test_ctrl_s_saves(qtbot, tmp_path):
     answers = Answers(win, ask_save_file=str(tmp_path / "k.labelwerk"))
     win.panel("file").save.click()
     assert answers.asked == ["ask_save_file"] and (tmp_path / "k.labelwerk").exists()
+
+
+# --- Schlussreview 3c ---------------------------------------------------------------------
+def _unreachable_folder(tmp_path):
+    import os
+    folder = tmp_path / "zu"
+    folder.mkdir()
+    (folder / "x.labelwerk").write_text("")
+    folder.chmod(0)
+    if os.geteuid() == 0:
+        folder.chmod(0o755)
+        pytest.skip("als root gibt es keinen unerreichbaren Ordner")
+    return folder
+
+
+def test_unreachable_recent_path_does_not_stop_the_start(qtbot, tmp_path):
+    folder = _unreachable_folder(tmp_path)
+    try:
+        path = str(folder / "x.labelwerk")
+        win = _window(qtbot, recent_files=[path])
+        assert win.panel("file").recent_names() == ["x"]
+        win.panel("file").open_recent_at(0)             # kein Traceback, Meldung
+        assert win.settings.recent_files == [] and "nicht gefunden" in win.result.text()
+    finally:
+        folder.chmod(0o755)
+
+
+def test_saved_new_label_does_not_follow_the_roll_any_more(qtbot, tmp_path):
+    win = _window(qtbot)
+    Answers(win, ask_save_file=str(tmp_path / "neu.labelwerk"))
+    assert win.files.save()
+    win._media_found(Media(62, 29, "die_cut"), "62x29")
+    assert win.doc.label_id == "62" and not win.files.modified()
+
+
+def test_open_with_render_error_keeps_the_error_visible(qtbot, tmp_path):
+    path = tmp_path / "gross.labelwerk"
+    storage.save(Document("62", length_mm=20, objects=[TextObject("X" * 40, size_pt=100)]), path)
+    win = _window(qtbot)
+    win.files.open(str(path))
+    assert win._render_error is not None
+    assert win.result.property("state") == "error"
+    assert win.result.text().startswith("Geöffnet: gross.labelwerk") \
+        and win._render_error in win.result.text()
+
+
+def test_print_with_render_error_says_so_again(qtbot, tmp_path, monkeypatch):
+    path = tmp_path / "gross.labelwerk"
+    storage.save(Document("62", length_mm=20, objects=[TextObject("X" * 40, size_pt=100)]), path)
+    win = _window(qtbot)
+    win.files.open(str(path))
+    win._set_result("", "")
+    monkeypatch.setattr(win, "_print", lambda *a: pytest.fail("darf nicht drucken"))
+    win.print_label()
+    assert win.result.text() == win._render_error and win.result.property("state") == "error"
+
+
+def test_many_unsaved_empty_text_frames_do_not_count_as_a_change(qtbot):
+    win = _window(qtbot)
+    win.doc.objects.append(TextObject("", x_mm=10, y_mm=10))      # frisch angelegter Rahmen
+    assert not win.files.modified()
+    win.doc.objects[-1] = TextObject("x", x_mm=10, y_mm=10)
+    assert win.files.modified()
+
+
+def test_names_are_shown_as_plain_text(qtbot, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    favorites.add(_doc("Fav"), "<b>x<b>")
+    win = _window(qtbot)
+    row = win.panel("file").favorites.itemWidget(win.panel("file").favorites.item(0))
+    assert row.name.textFormat() == Qt.TextFormat.PlainText and "<b>x<b>" in row.name.text()
+    win._set_result("<b>y</b>", "ok")
+    assert win.result.textFormat() == Qt.TextFormat.PlainText
+    seen = []
+    monkeypatch.setattr(QMessageBox, "exec",
+                        lambda box: seen.append((box.textFormat(), box.text())) or 0)
+    win.files.ask_remove("<b>x<b>")
+    win.files.ask_overwrite("<b>x<b>")
+    win.files.ask_replace_file(__import__("pathlib").Path("<b>x<b>.labelwerk"))
+    win.files.ask_print_other_roll("62", "<i>")
+    assert len(seen) == 4
+    assert all(fmt == Qt.TextFormat.PlainText and "<" in text for fmt, text in seen)
+
+
+def test_favorites_folder_error_gives_a_message(qtbot, tmp_path, monkeypatch):
+    win = _window(qtbot)
+    blocker = tmp_path / "datei"
+    blocker.write_text("")
+    monkeypatch.setattr(favorites, "favorites_dir", lambda: blocker / "favoriten")
+    opened = []
+    win.files.open_url = opened.append
+    win.files.open_favorites_folder()
+    assert opened == [] and win.result.property("state") == "error" and win.result.text()
+
+
+def test_save_dialog_is_released_after_use(qtbot, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    deleted = []
+    monkeypatch.setattr(QFileDialog, "exec", lambda self: 0)
+    monkeypatch.setattr(QFileDialog, "deleteLater", lambda self: deleted.append(self))
+    win = _window(qtbot)
+    assert win.files.ask_save_file("x.labelwerk") is None and len(deleted) == 1
+
+
+@pytest.mark.parametrize("which", ["favorites", "recent"])
+def test_single_click_style_opens_only_once(qtbot, tmp_path, which):
+    from PySide6.QtWidgets import QProxyStyle, QStyle
+
+    class SingleClick(QProxyStyle):
+        def styleHint(self, hint, option=None, widget=None, returnData=None):
+            if hint == QStyle.StyleHint.SH_ItemView_ActivateItemOnSingleClick:
+                return 1
+            return super().styleHint(hint, option, widget, returnData)
+
+    path = tmp_path / "a.labelwerk"
+    storage.save(_doc("A"), path)
+    favorites.add(_doc("Fav"), "Fav")
+    win = _window(qtbot, recent_files=[str(path)])
+    panel = win.panel("file")
+    view = getattr(panel, which)
+    style = SingleClick()
+    view.setStyle(style)
+    opened = []
+    signal = panel.favorite_open if which == "favorites" else panel.recent_open
+    signal.connect(opened.append)
+    rect = view.visualItemRect(view.item(0))
+    qtbot.mouseClick(view.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
+    assert len(opened) == 1

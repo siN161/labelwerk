@@ -9,6 +9,7 @@ Dialoge sind Methoden ``ask_*`` und in Tests ersetzbar.
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
@@ -23,7 +24,7 @@ from ..favorites import Favorite
 from ..labels import labels_for_model
 from ..render import render_document
 from ..settings import new_document
-from ..storage import SUFFIX, StorageError
+from ..storage import SUFFIX, StorageError, exists, os_reason
 from .history import restore
 from .panels.file import PREVIEW
 
@@ -67,20 +68,27 @@ class FileSession(QObject):
         dialog = QFileDialog(self.window, "Etikett speichern", suggested, FILE_FILTER)
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setDefaultSuffix(SUFFIX[1:])
-        return dialog.selectedFiles()[0] if dialog.exec() and dialog.selectedFiles() else None
+        try:
+            return dialog.selectedFiles()[0] if dialog.exec() and dialog.selectedFiles() else None
+        finally:
+            dialog.deleteLater()
+
+    def _ask_yes_no(self, title: str, text: str) -> bool:
+        """Ja/Nein-Frage (Standard: Nein); der Text ist reiner Text, auch mit „<b>“ im Namen."""
+        box = QMessageBox(QMessageBox.Icon.Question, title, text,
+                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                          self.window)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setDefaultButton(QMessageBox.StandardButton.No)
+        return box.exec() == QMessageBox.StandardButton.Yes.value
 
     def ask_replace_file(self, path: Path) -> bool:
-        return QMessageBox.question(
-            self.window, "Datei ersetzen", f"„{path.name}“ gibt es schon. Ersetzen?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+        return self._ask_yes_no("Datei ersetzen", f"„{path.name}“ gibt es schon. Ersetzen?")
 
     def ask_print_other_roll(self, label_id: str, loaded: str) -> bool:
-        return QMessageBox.question(
-            self.window, "Andere Rolle",
-            f"Eingelegt ist {loaded}, der Favorit ist für {label_id}. Trotzdem drucken?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+        return self._ask_yes_no(
+            "Andere Rolle",
+            f"Eingelegt ist {loaded}, der Favorit ist für {label_id}. Trotzdem drucken?")
 
     def ask_open_file(self) -> str | None:
         path, _ = QFileDialog.getOpenFileName(self.window, "Etikett öffnen", self._dir,
@@ -93,6 +101,7 @@ class FileSession(QObject):
                           f"„{self.name()}“ wurde geändert. Änderungen speichern?",
                           QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard
                           | QMessageBox.StandardButton.Cancel, self.window)
+        box.setTextFormat(Qt.TextFormat.PlainText)
         box.setDefaultButton(QMessageBox.StandardButton.Save)
         return answer_for(box.exec())
 
@@ -102,16 +111,10 @@ class FileSession(QObject):
         return name if ok else None
 
     def ask_overwrite(self, name: str) -> bool:
-        return QMessageBox.question(
-            self.window, "Favorit ersetzen", f"Favorit „{name}“ gibt es schon. Ersetzen?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+        return self._ask_yes_no("Favorit ersetzen", f"Favorit „{name}“ gibt es schon. Ersetzen?")
 
     def ask_remove(self, name: str) -> bool:
-        return QMessageBox.question(
-            self.window, "Favorit löschen", f"Favorit „{name}“ löschen?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+        return self._ask_yes_no("Favorit löschen", f"Favorit „{name}“ löschen?")
 
     def open_url(self, url: QUrl) -> None:
         QDesktopServices.openUrl(url)
@@ -121,12 +124,14 @@ class FileSession(QObject):
         return self.path.stem if self.path is not None else UNTITLED
 
     def modified(self) -> bool:
-        return self.window.doc != self._saved
+        """Anders als beim Öffnen/Speichern? Leere Textrahmen zählen nicht: ein frisch angelegter
+        entfällt beim Beenden des Schreibmodus ohnehin (wie ``MainWindow._drop_empty_frames``)."""
+        return _without_empty_frames(self.window.doc) != _without_empty_frames(self._saved)
 
     def may_follow_roll(self) -> bool:
         """Darf „Medium prüfen“ das Etikett umstellen? Nur bei einem neuen Etikett – eine
         geöffnete Datei oder ein Favorit gehört zu ihrer Rolle (Panel zeigt „passt nicht“)."""
-        return self.origin == "new"
+        return self.origin == "new"      # Speichern macht aus „new“ „file“
 
     def mark_unchanged(self) -> None:
         """Aktueller Stand gilt als Ausgangsstand (z. B. Rolle bei einem unberührten Etikett)."""
@@ -202,7 +207,11 @@ class FileSession(QObject):
         self._replace(doc, path)
         self._dir = str(path.parent)
         self._remember(path)
-        self.window._set_result(f"Geöffnet: {path.name}", "ok")
+        error = self.window._render_error     # render_now im Ersetzen hat ihn schon gemeldet
+        if error is None:
+            self.window._set_result(f"Geöffnet: {path.name}", "ok")
+        else:
+            self.window._set_result(f"Geöffnet: {path.name} – {error}", "error")
         return True
 
     def save(self) -> bool:
@@ -230,6 +239,7 @@ class FileSession(QObject):
             self.window._set_result(str(e), "error")
             return False
         self.path = path.resolve()
+        self.origin = "file"            # gespeichert: gehört zu seiner Rolle, folgt ihr nicht mehr
         self._dir = str(path.parent)
         self._saved = copy.deepcopy(self.window.doc)
         self.update_title()
@@ -244,7 +254,7 @@ class FileSession(QObject):
         self.refresh_lists()
 
     def open_recent(self, path: str) -> None:
-        if not Path(path).exists():
+        if not exists(path):
             settings = self.window.settings
             settings.recent_files = [p for p in settings.recent_files if p != path]
             self.window._save_settings()
@@ -349,7 +359,11 @@ class FileSession(QObject):
 
     def open_favorites_folder(self) -> None:
         folder = favorites.favorites_dir()
-        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self.window._set_result(f"Favoriten-Ordner nicht angelegt ({os_reason(e)})", "error")
+            return
         self.open_url(QUrl.fromLocalFile(str(folder)))
 
     # --- Listen im Panel --------------------------------------------------
@@ -378,6 +392,13 @@ class FileSession(QObject):
                     PREVIEW, Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation)
         return self._previews[key]
+
+
+def _without_empty_frames(doc: Document) -> Document:
+    """Dokument ohne leere, frei platzierte Textrahmen (Flachkopie, nur zum Vergleichen)."""
+    return replace(doc, objects=[o for o in doc.objects
+                                 if not (isinstance(o, TextObject) and o.positioned
+                                         and o.is_empty())])
 
 
 def _pixmap(image: Image.Image) -> QPixmap:

@@ -12,6 +12,7 @@ ORIENTATIONS = ("vertical", "horizontal")
 ALIGNMENTS = ("left", "center", "right", "justify")
 ROTATIONS = (0, 90, 180, 270)      # Grad im Uhrzeigersinn
 MAX_MARGIN_MM = 20.0
+MAX_POSITION_MM = 999.9            # Lage eines Objekts (Positionsfelder der GUI, auch neben dem Etikett)
 MIN_PT, MAX_PT = 4.0, 100.0
 
 
