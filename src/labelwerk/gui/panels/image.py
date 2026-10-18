@@ -57,7 +57,7 @@ class ImagePanel(Panel):
         self.from_clipboard.clicked.connect(self.paste_requested)
         self.screenshot = QPushButton("BILDSCHIRMFOTO")
         self.screenshot.setToolTip("Bildschirmfoto einfügen")
-        self.symbol = QPushButton("SYMBOL …")
+        self.symbol = QPushButton("SYMBOL")
         self.symbol.setToolTip("Symbol einfügen …")
         for button in (self.from_file, self.from_clipboard, self.screenshot, self.symbol):
             self.layout_.addWidget(button)

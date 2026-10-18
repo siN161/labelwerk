@@ -55,7 +55,7 @@ def test_symbol_action_and_button(qtbot):
     entry = shortcuts.action("image.symbol")
     assert (entry.name, entry.default, entry.scope) == ("Symbol einfügen …", "", "canvas")
     win = _window(qtbot)
-    assert win.panel("image").symbol.text() == "SYMBOL …"
+    assert win.panel("image").symbol.text() == "SYMBOL"
     dialog = _open(win, qtbot)
     assert dialog.windowTitle() == "Symbol einfügen" and not dialog.isModal()
     win.panel("image").symbol.click()

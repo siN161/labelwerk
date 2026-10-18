@@ -80,7 +80,7 @@ Online-Suche, Text in Symbolen, Zweifarbdruck (Farbe bleibt nur erhalten).
 
 ## 3 – GUI
 
-- Reiter Bild, Bereich „Einfügen“: Knopf **SYMBOL …** (Aktion `image.symbol` „Symbol einfügen …“, ohne
+- Reiter Bild, Bereich „Einfügen“: Knopf **SYMBOL** (Aktion `image.symbol` „Symbol einfügen …“, ohne
   Standardkürzel, in den Einstellungen belegbar).
 - Fenster **„Symbol einfügen“** (Werkzeugfenster des Hauptfensters – dessen Kürzel wie Strg+Z wirken
   weiter; nicht modal, bleibt offen, eine Instanz; Größe gemerkt nur für die Sitzung):
