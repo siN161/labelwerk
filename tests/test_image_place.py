@@ -112,6 +112,16 @@ def test_insert_placement_shrinks_only_when_neither_fits():
     assert (rect.w, rect.h) == pytest.approx((59, 9.5))
 
 
+def test_insert_placement_without_rotate_shrinks_instead_of_turning():
+    """Einstellung „nicht drehen“: die Internetmarke kommt quer und verkleinert (spart Band)."""
+    doc = Document("62", length_mm=None)
+    area = Rect(1.5, 1.0, 59.0, 10.0)
+    rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (70, 34),
+                                                     rotate=False)
+    assert rotation == 0 and factor == pytest.approx(59 / 70)
+    assert (rect.w, rect.h) == pytest.approx((59, 34 * 59 / 70), abs=0.01)
+
+
 def test_insert_placement_on_growing_tape_vertical_turns_wide_image():
     """Endlosband, automatische Länge, senkrecht: quer begrenzt die Bandbreite, längs nur
     die größte Etikettlänge – eine Internetmarke (70 × 34 mm) passt gedreht 1:1."""

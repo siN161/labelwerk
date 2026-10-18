@@ -50,9 +50,9 @@ def _doc():
     return Document("62", length_mm=40, objects=[TextObject("Eins", size_pt=14, x_mm=4, y_mm=4)])
 
 
-def _window(qtbot, doc=None):
+def _window(qtbot, doc=None, **settings):
     win = MainWindow(doc=doc if doc is not None else _doc(),
-                     settings=Settings(check_media_on_start=False))
+                     settings=Settings(check_media_on_start=False, **settings))
     qtbot.addWidget(win)
     win.show()
     return win
@@ -214,7 +214,7 @@ def _stamp_doc():
 
 def test_wide_image_is_turned_instead_of_shrunk(qtbot, tmp_path):
     """70 × 34 mm (wie eine Internetmarke) auf 62 mm senkrecht: gedreht 1:1 statt 81 %."""
-    win = _window(qtbot, _stamp_doc())
+    win = _window(qtbot, _stamp_doc(), image_rotate=True)
     _insert_file(win, _file(tmp_path, _picture(827, 402, border=0)))
     obj = win.doc.objects[1]
     assert obj.rotation == 90
@@ -229,7 +229,7 @@ def test_wide_image_is_turned_instead_of_shrunk(qtbot, tmp_path):
 
 
 def test_wide_clipboard_image_is_turned_too(qtbot):
-    win = _window(qtbot, _stamp_doc())
+    win = _window(qtbot, _stamp_doc(), image_rotate=True)
     QApplication.clipboard().setImage(_qimage(_picture(827, 402, border=0)))
     win.panel("image").from_clipboard.click()
     obj = win.doc.objects[1]
@@ -245,6 +245,33 @@ def test_wide_image_stays_unturned_when_horizontal(qtbot, tmp_path):
     obj = win.doc.objects[1]
     assert obj.rotation == 0 and (obj.w_mm, obj.h_mm) == pytest.approx(obj.natural_mm(), abs=0.001)
     assert _status(win) == ""
+
+
+def test_wide_image_is_shrunk_unturned_by_default(qtbot, tmp_path):
+    """Standard (Einstellung „drehen“ aus): quer und verkleinert – spart Band."""
+    win = _window(qtbot, _stamp_doc())
+    _insert_file(win, _file(tmp_path, _picture(827, 402, border=0)))
+    obj = win.doc.objects[1]
+    assert obj.rotation == 0
+    assert obj.w_mm == pytest.approx(win._area.w, abs=0.01)
+    assert obj.w_mm / obj.h_mm == pytest.approx(827 / 402, rel=0.01)
+    assert "verkleinert" in _status(win) and "gedreht" not in _status(win)
+
+
+def test_crop_setting_off_inserts_whole_image(qtbot, tmp_path):
+    win = _window(qtbot, image_crop=False)
+    _insert_file(win, _file(tmp_path))
+    obj = win.doc.objects[1]
+    assert obj.crop is None
+    assert (obj.w_mm, obj.h_mm) == pytest.approx((300 / MM, 150 / MM), abs=0.01)
+    assert not win.panel("image").crop.isChecked()
+    assert _status(win) == ""
+
+
+def test_crop_setting_off_gives_no_hint_for_white_image(qtbot, tmp_path):
+    win = _window(qtbot, image_crop=False)
+    _insert_file(win, _file(tmp_path, Image.new("RGB", (100, 100), "white")))
+    assert win.doc.objects[1].crop is None and _status(win) == ""
 
 
 def _pdf(tmp_path):
@@ -775,6 +802,28 @@ def test_rotate_and_reorder_images(qtbot, tmp_path):
     assert obj.rotation == 90 and (rect.w, rect.h) == pytest.approx((before.h, before.w), abs=0.01)
     win.reorder_selected(-1)
     assert isinstance(win.doc.objects[0], ImageObject) and win.canvas.selection() == [0]
+
+
+def test_image_panel_rotates_the_image(qtbot, tmp_path):
+    win = _with_image(qtbot, tmp_path)
+    panel = win.panel("image")
+    assert panel.rotate_right.isEnabled() and panel.rotate_left.isEnabled()
+    assert "Ctrl+R" in panel.rotate_right.toolTip() and "Ctrl+L" in panel.rotate_left.toolTip()
+    panel.rotate_right.click()
+    assert win.doc.objects[1].rotation == 90
+    panel.rotate_left.click()
+    panel.rotate_left.click()
+    assert win.doc.objects[1].rotation == 270
+    win.undo()
+    assert win.doc.objects[1].rotation == 0                 # jede Drehung ein Schritt
+
+
+def test_image_panel_rotate_is_disabled_without_image(qtbot):
+    win = _window(qtbot)
+    win.canvas.set_selection([0])                          # Text gewählt, Bild-Panel leer
+    win.tool_actions["image"].trigger()
+    panel = win.panel("image")
+    assert not panel.rotate_right.isEnabled() and not panel.rotate_left.isEnabled()
 
 
 @pytest.mark.parametrize("handle", ["br", "r", "b"])

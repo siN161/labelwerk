@@ -390,9 +390,11 @@ def insert_frame(doc: Document, model: str, area: Rect, size: tuple[float, float
 
 def insert_placement(doc: Document, model: str, area: Rect, size: tuple[float, float],
                      at: tuple[float, float] | None = None,
-                     others: list[Rect] | None = None) -> tuple[Rect, int, float]:
+                     others: list[Rect] | None = None,
+                     rotate: bool = True) -> tuple[Rect, int, float]:
     """Wie ``insert_frame``, aber lieber gedreht als verkleinert (wie ``print-file
     --rotate auto``): (Rahmen auf dem Etikett nach dem Drehen, Drehung 0/90, Faktor).
+    ``rotate=False`` (Einstellung „nicht drehen“): nie gedreht, wie ``insert_frame``.
 
     ``others``: Rahmen vorhandener (nicht leerer) Objekte. Wächst das Etikett mit
     (``growing_axis``), ohne ausdrücklichen Punkt ``at``, und läge der Rahmen auf einem
@@ -405,7 +407,7 @@ def insert_placement(doc: Document, model: str, area: Rect, size: tuple[float, f
     """
     limit_w, limit_h = _insert_limits(doc, model, area)
     w, h = size
-    turn = not (w <= limit_w and h <= limit_h) and h <= limit_w and w <= limit_h
+    turn = rotate and not (w <= limit_w and h <= limit_h) and h <= limit_w and w <= limit_h
     rect, factor = insert_frame(doc, model, area, (h, w) if turn else size, at)
     grow = growing_axis(doc)
     if grow and at is None and any(_overlap(rect, o) for o in others or ()):

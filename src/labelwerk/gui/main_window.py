@@ -939,8 +939,10 @@ class MainWindow(QMainWindow):
 
     def _new_image(self, image: Image.Image, dpi: float, source: str, page: int | None,
                    notes: list[str]) -> ImageObject:
-        """Bild-Objekt 1:1, automatisch zugeschnitten (alles, was nicht weiß ist); ist das
-        Bild ganz weiß, bleibt es ganz – mit Hinweis in ``notes``."""
+        """Bild-Objekt 1:1, automatisch zugeschnitten (alles, was nicht weiß ist; Einstellung
+        ``image_crop``); ist das Bild ganz weiß, bleibt es ganz – mit Hinweis in ``notes``."""
+        if not self.settings.image_crop:
+            return ImageObject.from_image(image, dpi, source, page, None)
         crop = crop_box(image, dpi, ink=NOT_WHITE)
         if crop is None and CROP_FAILED not in notes:
             notes.append(CROP_FAILED)
@@ -949,7 +951,7 @@ class MainWindow(QMainWindow):
     def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
                        notes: list[str], state: str = "warn") -> None:
         """Bilder platzieren (``layout.insert_placement``: mittig; passt ein Bild nur um 90°
-        gedreht 1:1, kommt es gedreht; auf einem Endlosband mit automatischer Länge hinter den
+        gedreht 1:1, kommt es mit Einstellung ``image_rotate`` gedreht; auf einem Endlosband mit automatischer Länge hinter den
         vorhandenen Objekten statt darüber, sonst wird ein zu großes proportional verkleinert und
         danach auf höchstens 600 dpi der neuen Größe begrenzt; mehrere je 2 mm versetzt) und
         einfügen – ein Schritt, ausgewählt."""
@@ -962,7 +964,8 @@ class MainWindow(QMainWindow):
                       if not o.is_empty()]
             for number, obj in enumerate(objects):
                 rect, rotation, factor = insert_placement(self.doc, self.model, self._area,
-                                                          (obj.w_mm, obj.h_mm), at, others)
+                                                          (obj.w_mm, obj.h_mm), at, others,
+                                                          rotate=self.settings.image_rotate)
                 others.append(rect)
                 shift = number * PASTE_OFFSET_MM if at is not None or not growing_axis(
                     self.doc) else 0.0

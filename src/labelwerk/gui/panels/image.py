@@ -1,8 +1,8 @@
 """Panel „Bild“: Bilder einfügen (Datei, Zwischenablage) und das gewählte Bild einstellen.
 
 Umwandlung in Schwarz/Weiß (Strich = harte Schwelle, Foto = Rasterpunkte), Schwelle,
-Umkehren, Zuschnitt (automatisch an/aus), Originalgröße 1:1, Seitenverhältnis und der
-Bereich „Position“ (``panels.position``, Größe immer änderbar). Gerechnet wird im Kern
+Umkehren, Zuschnitt (automatisch an/aus), Originalgröße 1:1, Seitenverhältnis, Drehen
+(Aktionen des Hauptfensters wie im Reiter Layout) und der Bereich „Position“ (``panels.position``, Größe immer änderbar). Gerechnet wird im Kern
 (``layout.set_crop`` …); Einfügen und Rahmenfelder führt das Hauptfenster aus.
 """
 from __future__ import annotations
@@ -12,12 +12,13 @@ from dataclasses import replace
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QHBoxLayout, QLabel, QPushButton,
-                               QRadioButton, QSlider)
+                               QRadioButton, QSlider, QToolButton)
 
 from ... import layout
 from ...document import Document, ImageObject
 from ...files import NOT_WHITE, crop_box
 from ...layout import Rect
+from ..symbols import SIZE, line_icon
 from ..widgets import SpinBox
 from . import Panel
 from .position import PositionSection
@@ -25,6 +26,8 @@ from .position import PositionSection
 HINT = "Bild aus einer Datei oder der Zwischenablage einfügen – oder aufs Etikett ziehen"
 CROP_FAILED = "Bild nicht zugeschnitten – nur weiße Fläche gefunden"
 _SOURCE_PX = 240                    # Quelle: längere Namen in der Mitte gekürzt (Tooltip)
+_ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (Attribut, Aktion, Symbol)
+           ("rotate_right", "object.rotate_right", "rotate-right"))
 
 
 class ImagePanel(Panel):
@@ -97,6 +100,20 @@ class ImagePanel(Panel):
         for widget in (self.crop, self.keep_ratio, self.original):
             self.layout_.addWidget(widget)
 
+        self.section("Drehen")
+        row = QHBoxLayout()
+        row.setSpacing(4)
+        for attr, _, _ in _ROTATE:
+            button = QToolButton()
+            button.setObjectName("layoutButton")
+            button.setAutoRaise(True)              # Symbol beim Darüberfahren: Modus „Active“
+            button.setIconSize(SIZE)
+            setattr(self, attr, button)
+            row.addWidget(button)
+        row.addStretch()
+        self.layout_.addLayout(row)
+        self.set_icon_style(True)
+
         self.section("Position (mm)")
         self.position = PositionSection()
         self.position.edited.connect(self._frame_changed)
@@ -124,6 +141,16 @@ class ImagePanel(Panel):
         self.from_file.clicked.connect(lambda: action.trigger())
         self.from_file.setToolTip(action.toolTip())
         action.changed.connect(lambda: self.from_file.setToolTip(action.toolTip()))
+        # Drehen: dieselben Aktionen wie im Reiter Layout (wirken auf die Auswahl = das Bild)
+        for attr, key, _ in _ROTATE:
+            button, rotate = getattr(self, attr), actions[key]
+            button.clicked.connect(lambda _=False, a=rotate: a.trigger())
+            button.setToolTip(rotate.toolTip())
+            rotate.changed.connect(lambda b=button, a=rotate: b.setToolTip(a.toolTip()))
+
+    def set_icon_style(self, dark_checked: bool) -> None:
+        for attr, _, icon in _ROTATE:
+            getattr(self, attr).setIcon(line_icon(icon, dark_checked, hover=True))
 
     @property
     def obj(self) -> ImageObject:
@@ -141,7 +168,8 @@ class ImagePanel(Panel):
 
     def _settings_widgets(self):
         return (self.line, self.photo, self.threshold_label, self.threshold, self.threshold_value,
-                self.invert, self.crop, self.keep_ratio, self.original, self.position)
+                self.invert, self.crop, self.keep_ratio, self.original, self.rotate_left,
+                self.rotate_right, self.position)
 
     # --- Modell → Panel -----------------------------------------------------
     def refresh(self) -> None:
