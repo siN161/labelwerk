@@ -2,33 +2,40 @@
 from __future__ import annotations
 
 import copy
+import math
+import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThreadPool, QTimer
+from PIL import Image
+from PySide6.QtCore import QMimeData, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
-                               QMessageBox,
+from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, QInputDialog,
+                               QLabel, QMainWindow, QMessageBox,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
-from ..document import Document, TextObject
+from ..document import Document, ImageObject, TextObject
+from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
-from ..labels import get_label
+from ..labels import DPI, get_label
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, growing_axis,
-                      match_objects, maximize_object, move, object_rect, outside_indices,
-                      printable_area, reorder, resize, rotate, set_frame, to_grid)
+                      insert_placement, match_objects, maximize_object, move, object_rect,
+                      outside_indices, printable_area, proportional, reorder, resize, rotate,
+                      set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
-from ..render import (Prepared, RenderedObject, compose, finish_object, font_warnings,
-                      label_size, prepare_object)
+from ..render import Renderer, RenderedObject, font_warnings
 from ..settings import Settings, load_settings, new_document
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
 from .history import History, restore
+from . import image_import
+from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS
 from .media_worker import MediaWorker
+from .panels.image import CROP_FAILED
 from .panels.text import DEFAULT_PT
 from .print_worker import PrintWorker
 from .settings_dialog import SettingsDialog
@@ -45,26 +52,24 @@ NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit U
 _DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
 OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
 PASTE_OFFSET_MM = 2.0      # Einfügen/Duplizieren: versetzt nach rechts und unten
+SHRUNK_HINT = "Bild auf {percent} verkleinert"                    # „37 %“
+CODES_HINT = " – Codes ggf. nicht mehr lesbar"                    # nur Strich (Codes)
+TURNED_HINT = "Bild um 90° gedreht, damit es 1:1 passt"
+NO_CLIPBOARD_IMAGE = "Kein Bild in der Zwischenablage."
 # Bearbeitungsleiste: Aktion und eigenes Symbol (gui/icons); None = Trenner
 EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
             ("edit.cut", "edit-cut"), ("edit.copy", "edit-copy"), ("edit.paste", "edit-paste"),
             None, ("edit.undo", "edit-undo"), ("edit.redo", "edit-redo"))
 _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
-SELECTION_PANELS = ("text", "layout")   # arbeiten mit der Auswahl: Wählen wechselt nicht weg
+OBJECT_PANELS = ("text", "image")       # Panel je Objektart (Text, Bild)
 
 
-@dataclass
-class _Cached:
-    """Gemessenes und gerendertes Objekt samt Stand, aus dem es entstand.
-
-    Gemessen wird nur bei Änderung des Objekts bzw. des Etiketts; gezeichnet zusätzlich,
-    wenn sich bei einem Objekt ohne Position (steht mittig) die Etikettgröße ändert."""
-    obj: TextObject            # hält das Objekt fest, damit seine id nicht neu vergeben wird
-    snapshot: TextObject
-    context: tuple
-    prepared: Prepared
-    size: tuple | None = None                  # Etikettgröße des Bilds (None = mit Position)
-    rendered: RenderedObject | None = None
+def shrunk_hint(factor: float, mode: str) -> str:
+    """Hinweis zum verkleinerten Bild: Prozent abgerundet (nie „100 %“, nie „0 %“); Codes
+    werden nur bei Strich erwähnt – ein Foto wird gerastert, Codes sind dort nicht gemeint."""
+    percent = math.floor(factor * 100 + 1e-9)
+    text = SHRUNK_HINT.format(percent=f"{percent} %" if percent else "< 1 %")
+    return text + CODES_HINT if mode == "line" else text
 
 
 class MainWindow(QMainWindow):
@@ -80,7 +85,7 @@ class MainWindow(QMainWindow):
         self._shown_size = (0, 0)                   # Etikettgröße der letzten gültigen Anzeige
         self._structure_dirty = False               # Objektliste seit der letzten Anzeige umgebaut
         self.rendered: list[RenderedObject] = []    # Objektbilder auf der Arbeitsfläche = im Druck
-        self._cache: dict[int, _Cached] = {}
+        self.renderer = Renderer()                  # rendert nur geänderte Objekte neu
         self._render_error: str | None = None
         self._hint: str | None = None               # Hinweis (ragt hinaus, Schrift ersetzt)
         self._print_signals = None
@@ -88,13 +93,17 @@ class MainWindow(QMainWindow):
         self._printer_present = False
         self._printing = False
         self._media_check_pending = False
-        self._clipboard: list[TextObject] = []      # interne Zwischenablage (Kopien)
+        self._clipboard: list[TextObject | ImageObject] = []   # interne Zwischenablage (Kopien)
+        self._clipboard_token = ""                  # Kennung der Kopie im System (MIME_OBJECTS)
+        self._system = _ClipboardState()            # Zwischenablage des Systems (beim Ändern)
+        self._text_pastes = 0                       # Text eingefügt seit dem letzten Ändern
+        self._notice: str | None = None             # Meldung zum Einfügen von Bildern
+        self._image_dir = ""                        # Ordner des zuletzt eingefügten Bilds
         self._merge_next = None                     # Pfeiltasten: Schritte zusammenfassen
         self._restoring = False                     # Rückgängig setzt gerade die Auswahl
         self._arranging = False                     # Auswahl wird intern umgestellt (Anlegen …)
         self._outside: list[int] = []               # Objekte, die über das Etikett ragen
         self._area = Rect(0, 0, 0, 0)               # bedruckbarer Bereich (mm), mit dem Bild
-        self._composed: tuple = (None, [], None)    # Druckbild und woraus es entstand
         # alle Kürzel kommen aus dem Verzeichnis (shortcuts.ACTIONS) und sind änderbar;
         # doppelt belegte (von Hand bearbeitete Datei): die spätere Aktion bleibt ohne Kürzel
         keys, key_warnings = without_conflicts(effective(self.settings.shortcuts))
@@ -147,6 +156,7 @@ class MainWindow(QMainWindow):
         self.canvas.edit_requested.connect(self.edit_text)
         self.canvas.selection_changed.connect(self._update_edit_actions)
         self.canvas.object_clicked.connect(self._show_object_panel)
+        self.canvas.dropped.connect(self._dropped)
         self.history = History(self.doc)
         self.history.changed.connect(self._update_edit_actions)
         self._connect_view_actions()
@@ -210,8 +220,12 @@ class MainWindow(QMainWindow):
         self._connect_edit_mode()
         self.render_now()
         self.canvas.selection_changed.connect(self._on_selection)
-        self.panel("text").frame_edited.connect(self._edit_frame)
-        self._update_edit_actions()
+        for key in OBJECT_PANELS:
+            self.panel(key).frame_edited.connect(
+                lambda field, value, k=key: self._edit_frame(k, field, value))
+        self.panel("image").paste_requested.connect(self.paste_image)
+        self.panel("image").message.connect(self._set_result)
+        self._clipboard_changed()
         self.refresh_printer()
         if self.settings.warnings or key_warnings:
             self._set_result(" · ".join(self.settings.warnings + key_warnings), "error")
@@ -248,7 +262,8 @@ class MainWindow(QMainWindow):
                     "edit.cut": self.cut_selected, "edit.copy": self.copy_selected,
                     "edit.paste": self.paste, "edit.duplicate": self.duplicate_selected,
                     "tool.select": lambda: self._choose_tool("select"),
-                    "tool.text": lambda: self._choose_tool("text")}
+                    "tool.text": lambda: self._choose_tool("text"),
+                    "image.insert": self.insert_image_file}
         handlers["text.start_edit"] = handlers["text.start_edit_enter"] = self.edit_selected
         for key, handler in handlers.items():
             self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
@@ -270,9 +285,9 @@ class MainWindow(QMainWindow):
         editor = self.panel("text").edit
         for signal in (editor.copyAvailable, editor.undoAvailable, editor.redoAvailable):
             signal.connect(self._update_edit_actions)
-        # Einfügen-Knopf folgt der Zwischenablage des Systems (PySide trennt die Verbindung
+        # Einfügen-Knöpfe folgen der Zwischenablage des Systems (PySide trennt die Verbindung
         # mit dem Fenster, ein späteres Ändern der Zwischenablage trifft nichts Gelöschtes)
-        QApplication.clipboard().dataChanged.connect(self._update_edit_actions)
+        QApplication.clipboard().dataChanged.connect(self._clipboard_changed)
 
     def _connect_layout_actions(self) -> None:
         """Reiter „Layout“: Ausrichten, Größe angleichen, Drehen, Reihenfolge (auch per Kürzel)."""
@@ -343,9 +358,9 @@ class MainWindow(QMainWindow):
             self.canvas.set_tool("text")
 
     def _on_selection(self, indices: list[int]) -> None:
-        """Auswahl auf der Arbeitsfläche: Panel des Objekts zeigen – außer ein Panel, das mit
-        der Auswahl arbeitet (Text, Layout), ist schon zu sehen. Ein leerer Textrahmen, den
-        die Auswahl verlässt, entfällt."""
+        """Auswahl auf der Arbeitsfläche: Panel des Objekts zeigen (Text oder Bild) – außer
+        der Reiter „Layout“ ist zu sehen. Ein leerer Textrahmen, den die Auswahl verlässt,
+        entfällt."""
         if self._arranging:                         # Anlegen, Umnummerieren: nur mitführen
             self._follow_selection(indices)
             return
@@ -389,49 +404,49 @@ class MainWindow(QMainWindow):
         return indices
 
     def _show_object_panel(self) -> None:
-        """Vom Papier-Reiter zum Panel des Objekts (auch beim Klick auf ein schon gewähltes)."""
-        if not any(self.panels.currentWidget() is self.panel(key) for key in SELECTION_PANELS):
-            self._show_tool("text")
+        """Zum Panel des zuletzt gewählten Objekts – Text oder Bild (auch beim Klick auf ein
+        schon gewähltes); der Reiter „Layout“ arbeitet mit jeder Auswahl und bleibt."""
+        if self.panels.currentWidget() is self.panel("layout"):
+            return
+        selection = self.canvas.selection()
+        if selection and 0 <= selection[-1] < len(self.doc.objects):
+            key = _panel_for(self.doc.objects[selection[-1]])
+            if self.panels.currentWidget() is not self.panel(key):
+                self._show_tool(key)
 
     def _follow_selection(self, indices: list[int]) -> None:
-        """Panels erfahren die Auswahl; das Text-Panel bearbeitet das zuletzt gewählte Objekt."""
+        """Panels erfahren die Auswahl; das Panel seiner Art bearbeitet das zuletzt gewählte
+        Objekt, das andere keins."""
         for panel in self._panel_by_key.values():
             panel.set_selection(indices)
-        self.panel("text").set_object(indices[-1] if indices else None)
+        last = indices[-1] if indices and indices[-1] < len(self.doc.objects) else None
+        kind = _panel_for(self.doc.objects[last]) if last is not None else None
+        for key in OBJECT_PANELS:
+            self.panel(key).set_object(last if kind == key else None)
         self._update_frame()
 
     def _update_frame(self) -> None:
         """Bereich „Position“: Rahmen des bearbeiteten Objekts, wie er gerendert ist."""
-        panel = self.panel("text")
-        index = panel.index
-        if index is None or index >= len(self.rendered) or index >= len(self.doc.objects):
-            panel.show_frame(None)
-        else:
-            panel.show_frame(exact_rect(self.doc.objects[index], self.rendered[index]))
+        for key in OBJECT_PANELS:
+            panel = self.panel(key)
+            index = panel.index
+            if index is None or not self._valid(index):
+                panel.show_frame(None)
+            else:
+                panel.show_frame(exact_rect(self.doc.objects[index], self.rendered[index]))
 
     def _update_edit_actions(self) -> None:
-        if self.edit_session.active:                # Knöpfe wirken auf den Text im Editor
-            editor = self.panel("text").edit
-            marked = editor.textCursor().hasSelection()
-            enabled = {"edit.cut": marked, "edit.copy": marked, "edit.paste": editor.canPaste(),
-                       "edit.duplicate": False, "edit.delete": False,
-                       "edit.undo": (editor.document().isUndoAvailable()
-                                     or self.history.can_undo(self.doc)),
-                       "edit.redo": (editor.document().isRedoAvailable()
-                                     or self.history.can_redo(self.doc)),
-                       "text.end_edit": True, "text.start_edit": False,
-                       "text.start_edit_enter": False}
-            for key, value in enabled.items():
-                self.shortcut_actions[key].setEnabled(value)
+        if self.edit_session.update_actions(self.shortcut_actions):   # wirken auf den Editor
             return
         self.shortcut_actions["text.end_edit"].setEnabled(False)
-        single = len(self.canvas.selection()) == 1
+        selection = self.canvas.selection()
+        single_text = (len(selection) == 1 and selection[0] < len(self.doc.objects)
+                       and isinstance(self.doc.objects[selection[0]], TextObject))
         for key in ("text.start_edit", "text.start_edit_enter"):
-            self.shortcut_actions[key].setEnabled(single)
-        selected = bool(self.canvas.selection())
+            self.shortcut_actions[key].setEnabled(single_text)
         for key in _SELECTION_ACTIONS:
-            self.shortcut_actions[key].setEnabled(selected)
-        self.shortcut_actions["edit.paste"].setEnabled(bool(self._clipboard))
+            self.shortcut_actions[key].setEnabled(bool(selection))
+        self.shortcut_actions["edit.paste"].setEnabled(self._can_paste())
         self.shortcut_actions["edit.undo"].setEnabled(self.history.can_undo(self.doc))
         self.shortcut_actions["edit.redo"].setEnabled(self.history.can_redo(self.doc))
 
@@ -445,12 +460,9 @@ class MainWindow(QMainWindow):
             self._timer.start()
             return
         try:
-            # jedes Objekt höchstens einmal messen und zeichnen; Größe, Fläche und
-            # „ragt hinaus“ folgen aus den gerenderten Objekten
-            entries = self._prepare_objects()
-            size = label_size(self.doc, self.model, prepared=[e.prepared for e in entries])
-            rendered = self._render_objects(entries, size)
-            image = self._compose(rendered, size)
+            # jedes Objekt höchstens einmal messen und zeichnen; Fläche und „ragt hinaus“
+            # folgen aus den gerenderten Objekten
+            result = self.renderer.render(self.doc, self.model)
         except ValueError as e:
             # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
             self._render_error = str(e)
@@ -464,6 +476,7 @@ class MainWindow(QMainWindow):
         if self._hint is not None and self.result.text() == self._hint:
             self._set_result("", "")   # alten Hinweis nur löschen, wenn er noch dasteht
         self._hint = None
+        size, rendered = result.size, result.objects
         area = printable_area(self.doc, self.model, size)
         outside = outside_indices(rendered, size, self.doc.objects)
         hints = ([OUTSIDE_HINT] if outside else []) + font_warnings(self.doc)
@@ -471,15 +484,21 @@ class MainWindow(QMainWindow):
             self._hint = " · ".join(hints)
             self._set_result(self._hint, "error")
         self.panel("text").show_error(None)
-        self.image = image
+        self.image = result.image
         self.rendered = rendered
         self._shown_size = size
         self._structure_dirty = False
         self._outside = outside
         self._area = area
+        # Anfasser: Ecken halten das Seitenverhältnis bei Text ohne feste Rahmengröße und bei
+        # Bildern mit „Seitenverhältnis beibehalten“ – Bilder dann auch an den Kanten
+        images = [isinstance(obj, ImageObject) for obj in self.doc.objects]
         self.canvas.set_document(get_label(self.doc.label_id), size, rendered, self.doc.orientation,
-                                 area, keep_ratio=[not obj.fit for obj in self.doc.objects],
-                                 grow=growing_axis(self.doc))
+                                 area, keep_ratio=[obj.keep_ratio if image else not obj.fit
+                                                   for obj, image in zip(self.doc.objects, images)],
+                                 grow=growing_axis(self.doc),
+                                 keep_aspect=[image and obj.keep_ratio
+                                              for obj, image in zip(self.doc.objects, images)])
         self.panel("layout").set_growing(growing_axis(self.doc))
         self._update_frame()
         self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
@@ -497,40 +516,6 @@ class MainWindow(QMainWindow):
                                  self.doc.orientation,
                                  self._area, keep_ratio=[], grow=growing_axis(self.doc))
 
-    def _prepare_objects(self) -> list[_Cached]:
-        """Objekte messen; unveränderte kommen aus dem Cache."""
-        doc = self.doc
-        context = (self.model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm)
-        cache: dict[int, _Cached] = {}
-        for obj in doc.objects:
-            entry = self._cache.get(id(obj))
-            if (entry is None or entry.obj is not obj or entry.context != context
-                    or entry.snapshot != obj):
-                entry = _Cached(obj, copy.deepcopy(obj), context,
-                                prepare_object(obj, doc, self.model))
-            cache[id(obj)] = entry
-        self._cache = cache
-        return [cache[id(obj)] for obj in doc.objects]
-
-    def _render_objects(self, entries: list[_Cached], size: tuple[int, int]) -> list[RenderedObject]:
-        """Gemessene Objekte zeichnen; ein Objekt ohne Position steht mittig und wird deshalb
-        auch neu gezeichnet, wenn sich die Etikettgröße ändert."""
-        for entry in entries:
-            key = None if entry.obj.positioned else size
-            if entry.rendered is None or entry.size != key:
-                entry.rendered = finish_object(entry.prepared, self.doc, size, self.model)
-                entry.size = key
-        return [entry.rendered for entry in entries]
-
-    def _compose(self, rendered: list[RenderedObject], size: tuple[int, int]):
-        """Druckbild – unverändert, solange dieselben Objektbilder auf derselben Größe liegen."""
-        key = (size, self.doc.orientation)
-        if (self.image is None or key != self._composed[0]
-                or len(rendered) != len(self._composed[1])
-                or any(a is not b for a, b in zip(rendered, self._composed[1]))):
-            self._composed = (key, list(rendered), compose(rendered, size, self.doc.orientation))
-        return self._composed[2]
-
     # --- Rückgängig -------------------------------------------------------
     def _commit(self, merge=None) -> None:
         """Stand nach einer abgeschlossenen Aktion festhalten (ohne Änderung kein Schritt).
@@ -545,38 +530,15 @@ class MainWindow(QMainWindow):
         self._update_edit_actions()
 
     def undo(self) -> None:
-        """Rückgängig – im Schreibmodus innerhalb der Bearbeitung (Editor); ist dort nichts
-        mehr zurückzunehmen, endet der Schreibmodus und es geht im Dokument weiter (Knopf und
-        Strg+Z gleich). Ein leerer neuer Rahmen entfällt dabei – das ist dann der ganze
-        Schritt."""
-        if self.edit_session.active:
-            editor = self.panel("text").edit
-            if editor.document().isUndoAvailable():
-                editor.undo()
-                return
-            obj = self.doc.objects[self.edit_session.index]
-            if obj.positioned and obj.is_empty():
-                selection = self.history.selection  # Auswahl vor dem Anlegen
-                self.finish_editing()
-                self.canvas.set_selection(selection)
-                return
-            if not self.history.can_undo(self.doc):
-                return                              # nichts zurückzunehmen: weiter schreiben
-            self.finish_editing()
-        self._restore(self.history.undo(self.doc, self.canvas.selection()))
+        """Rückgängig – im Schreibmodus erst innerhalb der Bearbeitung (``TextEditSession.undo``),
+        dann im Dokument (Knopf und Strg+Z gleich)."""
+        if not self.edit_session.undo():
+            self._restore(self.history.undo(self.doc, self.canvas.selection()))
 
     def redo(self) -> None:
-        """Wiederherstellen – im Schreibmodus im Editor; hat er nichts mehr, endet der
-        Schreibmodus und es geht im Dokument weiter (wie bei ``undo``)."""
-        if self.edit_session.active:
-            editor = self.panel("text").edit
-            if editor.document().isRedoAvailable():
-                editor.redo()
-                return
-            if not self.history.can_redo(self.doc):
-                return                              # nichts zu wiederholen: weiter schreiben
-            self.finish_editing()
-        self._restore(self.history.redo(self.doc, self.canvas.selection()))
+        """Wiederherstellen – im Schreibmodus erst im Editor, dann im Dokument (wie ``undo``)."""
+        if not self.edit_session.redo():
+            self._restore(self.history.redo(self.doc, self.canvas.selection()))
 
     def _restore(self, snapshot: Document | None) -> None:
         """Stand zurückholen – samt der Auswahl, die zu ihm gehörte (dieselben Objekte)."""
@@ -631,8 +593,7 @@ class MainWindow(QMainWindow):
         if not self._valid(index):
             return
         self._commit()
-        resized = resize(self.doc.objects[index], rect, self.rendered[index],
-                         corner=len(handle) == 2)
+        resized = resize(self.doc.objects[index], rect, self.rendered[index], handle)
         # nur die gezogenen Kanten auf 0,1 mm (wie die Felder) – die anderen bleiben genau
         self.doc.objects[index] = to_grid(resized, x="l" in handle, y="t" in handle,
                                           w="l" in handle or "r" in handle,
@@ -648,10 +609,7 @@ class MainWindow(QMainWindow):
         self.finish_editing()
         self._structure_changing()
         self._commit()
-        family = None if self.settings.font_family == DEFAULT_FAMILY else self.settings.font_family
-        # linksbündig: Schreibmarke am Klickpunkt, der Text wächst nach rechts (wie P-touch)
-        obj = TextObject.plain("", size_pt=self.settings.font_size_pt or DEFAULT_PT, align="left",
-                               family=family)
+        obj = self._new_text("")
         obj.x_mm, obj.y_mm = round(x_mm, 1), round(y_mm, 1)
         self.doc.objects[:] = [o for o in self.doc.objects if not o.is_empty()]
         self.doc.objects.append(obj)
@@ -665,6 +623,13 @@ class MainWindow(QMainWindow):
         self.canvas.set_selection([index])
         self.edit_text(index)                       # Anlegen und Schreiben: ein Schritt
 
+    def _new_text(self, text: str) -> TextObject:
+        """Neuer Text mit der Schrift aus den Einstellungen (automatische Größe → 19 pt),
+        linksbündig: Er wächst von seiner Position nach rechts (wie P-touch)."""
+        family = None if self.settings.font_family == DEFAULT_FAMILY else self.settings.font_family
+        return TextObject.plain(text, size_pt=self.settings.font_size_pt or DEFAULT_PT,
+                                align="left", family=family)
+
     def edit_selected(self) -> None:
         """F2/Enter: Schreibmodus für das einzige gewählte Objekt, Schreibmarke am Textende."""
         selection = self.canvas.selection()
@@ -673,7 +638,11 @@ class MainWindow(QMainWindow):
 
     def edit_text(self, index: int, point=None) -> None:
         """Schreibmodus für ein Objekt: auswählen, Text-Panel zeigen, Schreibmarke an
-        ``point`` (QPointF, Druckpunkte in Leserichtung – z. B. Doppelklick) bzw. ans Ende."""
+        ``point`` (QPointF, Druckpunkte in Leserichtung – z. B. Doppelklick) bzw. ans Ende.
+        Bilder haben keinen Schreibmodus."""
+        if 0 <= index < len(self.doc.objects) and not isinstance(self.doc.objects[index],
+                                                                 TextObject):
+            return
         if self.edit_session.active:
             if self.edit_session.index == index:
                 return
@@ -716,15 +685,20 @@ class MainWindow(QMainWindow):
         self.render_now()
         self._commit()
 
-    def _edit_frame(self, key: str, value: float) -> None:
-        """Zahl im Bereich „Position“ geändert: Objekt verschieben bzw. Rahmen ändern."""
+    def _edit_frame(self, panel: str, key: str, value: float) -> None:
+        """Zahl im Bereich „Position“ des Panels ``panel`` geändert: Objekt verschieben bzw.
+        Rahmen ändern; ein Bild mit „Seitenverhältnis beibehalten“ ändert beide Maße."""
         self.finish_editing()
-        index = self.panel("text").index
+        index = self.panel(panel).index
         if index is None or not self._valid(index):
             return
         self._commit()
         obj = self.doc.objects[index]
-        rect = replace(exact_rect(obj, self.rendered[index]), **{key: round(value, 3)})
+        exact = exact_rect(obj, self.rendered[index])
+        if isinstance(obj, ImageObject) and obj.keep_ratio and key in "wh":
+            rect = proportional(exact, key, round(value, 3))
+        else:
+            rect = replace(exact, **{key: round(value, 3)})
         self.doc.objects[index] = set_frame(obj, rect, self.rendered[index])
         self._objects_changed([index])
         self._commit()
@@ -787,31 +761,86 @@ class MainWindow(QMainWindow):
     def copy_selected(self) -> None:
         """Ausgewählte Objekte (in Zeichenreihenfolge) in die interne Zwischenablage kopieren –
         im Schreibmodus den markierten Text in die Zwischenablage des Systems."""
-        if self.edit_session.active:
-            self.panel("text").edit.copy()
+        if self.edit_session.copy():
             self._update_edit_actions()             # Einfügen ist jetzt möglich
             return
         indices = sorted(self.canvas.selection())
         if indices:
             self._clipboard = [self._placed_copy(i) for i in indices]
+            self._announce_copy()
             self._update_edit_actions()
 
+    def _announce_copy(self) -> None:
+        """Kopie in der Zwischenablage des Systems kennzeichnen (``MIME_OBJECTS`` mit eigener
+        Kennung, dazu der Text der Textobjekte für andere Programme). Die Objekte selbst
+        bleiben in der internen Zwischenablage; kopiert jemand danach etwas anderes, fügt
+        Strg+V das ein."""
+        self._clipboard_token = uuid.uuid4().hex
+        mime = QMimeData()
+        mime.setData(MIME_OBJECTS, self._clipboard_token.encode())
+        text = "\n".join(obj.text for obj in self._clipboard
+                         if isinstance(obj, TextObject) and not obj.is_empty())
+        if text:
+            mime.setText(text)
+        QApplication.clipboard().setMimeData(mime)
+        self._system = _ClipboardState(token=self._clipboard_token, text=bool(text),
+                                       empty=False)    # auch ohne (verspätetes) dataChanged
+
     def cut_selected(self) -> None:
-        if self.edit_session.active:
-            self.panel("text").edit.cut()
-            return
-        self.copy_selected()
-        self.delete_selected()
+        if not self.edit_session.cut():
+            self.copy_selected()
+            self.delete_selected()
 
     def paste(self) -> None:
-        """Zwischenablage einfügen – jedes Mal 2 mm weiter versetzt; Eingefügtes ist ausgewählt.
-        Im Schreibmodus Text aus der Zwischenablage des Systems (als reiner Text)."""
-        if self.edit_session.active:
-            self.panel("text").edit.paste()
+        """Einfügen, was die Zwischenablage des Systems oben hat, in dieser Reihenfolge:
+        hier kopierte Objekte (jedes Mal 2 mm weiter versetzt; ist die Zwischenablage leer,
+        die zuletzt kopierten) › lokale Dateien (wie „Aus Datei“) › Text (neuer Textrahmen –
+        auch wenn ein Bild dabei ist, z. B. Tabellenzellen; das Bild bleibt über „Aus
+        Zwischenablage“ erreichbar) › Bild (Mitte des bedruckbaren Bereichs). Eingefügtes ist
+        ausgewählt. Im Schreibmodus Text in den Text (als reiner Text). Nur hier werden die
+        Daten der Zwischenablage gelesen."""
+        if self.edit_session.paste():
             return
-        if self._clipboard:
+        if self._owns_clipboard() or (self._clipboard and self._system.empty):
             self._clipboard = [_offset(obj) for obj in self._clipboard]
             self._insert(copy.deepcopy(self._clipboard))
+            return
+        mime = QApplication.clipboard().mimeData()
+        if paths := image_import.mime_files(mime):
+            self.insert_image_files(paths)
+        elif text := image_import.mime_text(mime):
+            self._paste_text(text)
+        elif (image := image_import.mime_image(mime)) is not None:
+            self._insert_picture(image, CLIPBOARD)
+
+    def _owns_clipboard(self) -> bool:
+        """Liegt die zuletzt hier kopierte Auswahl oben in der Zwischenablage des Systems?"""
+        return bool(self._clipboard) and self._system.token == self._clipboard_token
+
+    def _can_paste(self) -> bool:
+        system = self._system
+        return (self._owns_clipboard() or (bool(self._clipboard) and system.empty)
+                or system.files or system.text or system.image)
+
+    def _clipboard_changed(self) -> None:
+        """Zwischenablage des Systems geändert: Stand einmal merken (ohne Bild- und Textdaten
+        zu holen – die liest erst ``paste``), Knöpfe „Einfügen“ und „Aus Zwischenablage“."""
+        self._system = _ClipboardState.of(QApplication.clipboard().mimeData())
+        self._text_pastes = 0
+        self.panel("image").set_clipboard_image(self._system.image)
+        self._update_edit_actions()
+
+    def _paste_text(self, text: str) -> None:
+        """Text aus der Zwischenablage als neuer Textrahmen links oben im bedruckbaren
+        Bereich (wie „Text anlegen“), ausgewählt – ohne Schreibmodus. Derselbe Text noch
+        einmal eingefügt: jedes Mal 2 mm weiter versetzt (wie Objekte)."""
+        if self._timer.isActive():
+            self.render_now()                       # aktueller bedruckbarer Bereich
+        obj = self._new_text(text)
+        shift = self._text_pastes * PASTE_OFFSET_MM
+        obj.x_mm, obj.y_mm = round(self._area.x + shift, 3), round(self._area.y + shift, 3)
+        self._text_pastes += 1
+        self._insert([obj])
 
     def duplicate_selected(self) -> None:
         """Auswahl 2 mm versetzt verdoppeln; die Zwischenablage bleibt unberührt."""
@@ -819,7 +848,7 @@ class MainWindow(QMainWindow):
         if indices:
             self._insert([_offset(self._placed_copy(i)) for i in indices])
 
-    def _placed_copy(self, index: int) -> TextObject:
+    def _placed_copy(self, index: int) -> TextObject | ImageObject:
         """Kopie mit Position: ein mittiges Objekt bekommt seine Lage und Schriftgröße fest."""
         obj = self.doc.objects[index]
         if obj.positioned or index >= len(self.rendered):
@@ -827,7 +856,7 @@ class MainWindow(QMainWindow):
         rendered = self.rendered[index]
         return move(obj, object_rect(rendered), rendered)
 
-    def _insert(self, objects: list[TextObject]) -> None:
+    def _insert(self, objects: list[TextObject | ImageObject]) -> None:
         self.finish_editing()
         self._structure_changing()
         self._commit()
@@ -837,9 +866,137 @@ class MainWindow(QMainWindow):
         self.canvas.set_selection(list(range(start, len(self.doc.objects))))
         self._commit()
 
+    # --- Bilder einfügen ---------------------------------------------------
+    def insert_image_file(self) -> None:
+        """„Bild einfügen …“: Datei wählen; das Bild kommt in die Mitte des bedruckbaren
+        Bereichs."""
+        path = self.ask_image_file()
+        if path:
+            self.insert_image_files([Path(path)])
+
+    def ask_image_file(self) -> str | None:
+        """Dateidialog „Bilder und PDF“ (in Tests ersetzbar); None = abgebrochen."""
+        path, _ = QFileDialog.getOpenFileName(self, "Bild einfügen", self._image_dir,
+                                              image_import.FILE_FILTER)
+        if path:
+            self._image_dir = str(Path(path).parent)
+        return path or None
+
+    def ask_pdf_page(self, path: Path, count: int) -> int | None:
+        """Seitenwahl für ein PDF mit mehreren Seiten (in Tests ersetzbar); None = abgebrochen."""
+        page, ok = QInputDialog.getInt(self, "PDF-Seite wählen",
+                                       f"{path.name} hat {count} Seiten. Welche einfügen?",
+                                       1, 1, count)
+        return page if ok else None
+
+    def insert_image_files(self, paths: list, at: tuple[float, float] | None = None,
+                           page: int | None = None) -> None:
+        """Bilddateien einfügen – mittig auf ``at`` (mm, Ablagepunkt) bzw. in der Mitte des
+        bedruckbaren Bereichs. Bei einem PDF mit mehreren Seiten wird die Seite erfragt
+        (``page`` gibt sie vor). Fehler stehen verständlich in der Statusleiste; was sich
+        laden ließ, wird eingefügt (ein Schritt)."""
+        objects, notes, failed = [], [], False
+        for path in map(Path, paths):
+            pdf = path.suffix.lower() == ".pdf"
+            try:
+                number = page or (self._choose_page(path) if pdf else 1)
+                if number is None:
+                    continue                        # Seitenwahl abgebrochen
+                image, dpi = image_import.load(path, number)
+            except (ValueError, OSError) as e:
+                notes.append(str(e))
+                failed = True
+                continue
+            objects.append(self._new_image(image, dpi, path.name, number if pdf else None, notes))
+        self._insert_images(objects, at, notes, "error" if failed else "warn")
+
+    def _choose_page(self, path: Path) -> int | None:
+        count = image_import.page_count(path)
+        return 1 if count <= 1 else self.ask_pdf_page(path, count)
+
+    def paste_image(self) -> None:
+        """„Aus Zwischenablage“: Bild der Zwischenablage in die Mitte des bedruckbaren Bereichs."""
+        image = image_import.mime_image(QApplication.clipboard().mimeData())
+        if image is None:
+            self._show_notice([NO_CLIPBOARD_IMAGE], "error")
+            return
+        self._insert_picture(image, CLIPBOARD)
+
+    def _dropped(self, paths: list[Path], image: Image.Image | None, x_mm: float,
+                 y_mm: float) -> None:
+        """Bilddateien oder Bilddaten auf die Arbeitsfläche abgelegt: an der Ablagestelle
+        (kommt nach dem Ablegen, ``Canvas.dropped`` – ein PDF-Seitendialog ist dann möglich)."""
+        if paths:
+            self.insert_image_files(paths, at=(x_mm, y_mm))
+        elif image is not None:
+            self._insert_picture(image, DROPPED, at=(x_mm, y_mm))
+
+    def _insert_picture(self, image: Image.Image, source: str,
+                        at: tuple[float, float] | None = None) -> None:
+        """Bild ohne Auflösungsangabe (Zwischenablage, Bilddaten) mit 300 dpi einfügen."""
+        notes: list[str] = []
+        self._insert_images([self._new_image(image, DPI, source, None, notes)], at, notes)
+
+    def _new_image(self, image: Image.Image, dpi: float, source: str, page: int | None,
+                   notes: list[str]) -> ImageObject:
+        """Bild-Objekt 1:1, automatisch zugeschnitten (alles, was nicht weiß ist; Einstellung
+        ``image_crop``); ist das Bild ganz weiß, bleibt es ganz – mit Hinweis in ``notes``."""
+        if not self.settings.image_crop:
+            return ImageObject.from_image(image, dpi, source, page, None)
+        crop = crop_box(image, dpi, ink=NOT_WHITE)
+        if crop is None and CROP_FAILED not in notes:
+            notes.append(CROP_FAILED)
+        return ImageObject.from_image(image, dpi, source, page, crop)
+
+    def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
+                       notes: list[str], state: str = "warn") -> None:
+        """Bilder platzieren (``layout.insert_placement``: mittig; passt ein Bild nur um 90°
+        gedreht 1:1, kommt es mit Einstellung ``image_rotate`` gedreht; auf einem Endlosband mit automatischer Länge hinter den
+        vorhandenen Objekten statt darüber, sonst wird ein zu großes proportional verkleinert und
+        danach auf höchstens 600 dpi der neuen Größe begrenzt; mehrere je 2 mm versetzt) und
+        einfügen – ein Schritt, ausgewählt."""
+        if objects:
+            if self._timer.isActive():
+                self.render_now()                   # aktueller bedruckbarer Bereich
+            smallest, shrunk_mode, turned = 1.0, "line", False
+            # vorhandene Objekte: auf einem Endlosband kommt das Bild dahinter, nicht darüber
+            others = [object_rect(r) for o, r in zip(self.doc.objects, self.rendered)
+                      if not o.is_empty()]
+            for number, obj in enumerate(objects):
+                rect, rotation, factor = insert_placement(self.doc, self.model, self._area,
+                                                          (obj.w_mm, obj.h_mm), at, others,
+                                                          rotate=self.settings.image_rotate)
+                others.append(rect)
+                shift = number * PASTE_OFFSET_MM if at is not None or not growing_axis(
+                    self.doc) else 0.0
+                obj.x_mm, obj.y_mm = rect.x + shift, rect.y + shift
+                obj.w_mm, obj.h_mm = (rect.h, rect.w) if rotation else (rect.w, rect.h)
+                obj.rotation = rotation
+                turned = turned or bool(rotation)
+                if factor < 1:
+                    objects[number] = obj.limit_resolution()
+                if factor < smallest:
+                    smallest, shrunk_mode = factor, obj.mode
+            self._insert(objects)
+            if turned:
+                notes.append(TURNED_HINT)
+            if smallest < 1:
+                notes.append(shrunk_hint(smallest, shrunk_mode))
+        self._show_notice(notes, state)
+
+    def _show_notice(self, notes: list[str], state: str) -> None:
+        """Meldungen zum Einfügen in der Statusleiste; ohne Meldung verschwindet eine ältere."""
+        if notes:
+            self._notice = " · ".join(notes)
+            self._set_result(self._notice, state)
+        elif self._notice is not None and self.result.text() == self._notice:
+            self._set_result("", "")
+            self._notice = None
+
     def _objects_changed(self, indices: list[int]) -> None:
-        if self.panel("text").index in indices:
-            self.panel("text").refresh()   # z. B. Anfasser schaltet feste Rahmengröße ein
+        for key in OBJECT_PANELS:
+            if self.panel(key).index in indices:
+                self.panel(key).refresh()   # z. B. Anfasser schaltet feste Rahmengröße ein
         self.render_now()
 
     def _on_length_dragged(self, length_mm) -> None:
@@ -1034,7 +1191,33 @@ class MainWindow(QMainWindow):
         self.refresh_printer()
 
 
-def _offset(obj: TextObject) -> TextObject:
+def _panel_for(obj: TextObject | ImageObject) -> str:
+    """Panel, das ein Objekt bearbeitet."""
+    return "image" if isinstance(obj, ImageObject) else "text"
+
+
+@dataclass(frozen=True)
+class _ClipboardState:
+    """Was die Zwischenablage des Systems anbietet – gemerkt beim Ändern, damit das Freigeben
+    der Knöpfe (bei jedem Schritt) keine Daten holt. ``token``: Kennung einer hier kopierten
+    Auswahl (``MIME_OBJECTS``, wenige Bytes)."""
+    token: str = ""
+    files: bool = False
+    text: bool = False
+    image: bool = False
+    empty: bool = True
+
+    @classmethod
+    def of(cls, mime: QMimeData | None) -> "_ClipboardState":
+        if mime is None or not mime.formats():
+            return cls()
+        token = (bytes(mime.data(MIME_OBJECTS)).decode(errors="replace")
+                 if mime.hasFormat(MIME_OBJECTS) else "")
+        return cls(token=token, files=bool(image_import.mime_files(mime)),
+                   text=bool(image_import.mime_text(mime)), image=mime.hasImage(), empty=False)
+
+
+def _offset(obj: TextObject | ImageObject) -> TextObject | ImageObject:
     """Kopie, um ``PASTE_OFFSET_MM`` nach rechts und unten versetzt."""
     moved = copy.deepcopy(obj)
     moved.x_mm = round((obj.x_mm or 0.0) + PASTE_OFFSET_MM, 3)

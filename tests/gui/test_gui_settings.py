@@ -112,6 +112,16 @@ def test_dialog_theme_roundtrip(qtbot):
     assert dialog.values().theme == "rawblock"
 
 
+def test_dialog_image_import_roundtrip(qtbot):
+    dialog = SettingsDialog(Settings(image_crop=False, image_rotate=True))
+    qtbot.addWidget(dialog)
+    assert not dialog.image_crop.isChecked() and dialog.image_rotate.isChecked()
+    assert (dialog.values().image_crop, dialog.values().image_rotate) == (False, True)
+    dialog.image_crop.setChecked(True)
+    dialog.image_rotate.setChecked(False)
+    assert (dialog.values().image_crop, dialog.values().image_rotate) == (True, False)
+
+
 def test_apply_theme_sets_and_clears_stylesheet(qapp):
     from labelwerk.gui.app import apply_theme
     try:

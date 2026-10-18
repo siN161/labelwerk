@@ -45,13 +45,15 @@ labelwerk-gui
 labelwerk install-desktop    # im Starter (Super-Taste) eintragen; --remove entfernt den Eintrag wieder
 ```
 
-Aufbau wie im P-touch Editor: Werkzeugleiste (Papier, Text, Layout), Bearbeitungsleiste, Eigenschaften links, Etikett in echter Größe und Form mit mm-Linealen. Bei Endlosband lässt sich die Länge am Anfasser unter dem Etikett ziehen (Doppelklick = automatisch). Zoom mit Strg+Mausrad oder −/+ unten rechts.
+Aufbau wie im P-touch Editor: Werkzeugleiste (Papier, Text, Bild, Layout), Bearbeitungsleiste, Eigenschaften links, Etikett in echter Größe und Form mit mm-Linealen. Bei Endlosband lässt sich die Länge am Anfasser unter dem Etikett ziehen (Doppelklick = automatisch). Zoom mit Strg+Mausrad oder −/+ unten rechts.
 
 Papier: Etikett, Länge, Ränder und Ausrichtung (Horizontal = Text längs zum Band, z. B. Versandetikett; Vertikal = quer). „Medium prüfen“ liest die eingelegte Rolle vom Drucker und wählt das passende Etikett. Der Drucker wird live erkannt (Einschalten genügt). Unter „Einstellungen“ legst du Standardwerte für neue Etiketten fest (gilt auch für die CLI) und wählst das Design (RawBlock oder Klassisch = Qt-Systemstil); gespeichert in `~/.config/labelwerk/settings.json`.
 
 Text: Geschrieben wird direkt auf dem Etikett. Mit dem Knopf „A“ (Text anlegen, Taste T) und einem Klick entsteht ein Rahmen, in den man sofort tippt (linksbündig ab dem Klickpunkt); ein Doppelklick auf einen Text setzt die Schreibmarke an die Klickstelle (ein einfacher Klick wählt den Rahmen nur); bei gewähltem Rahmen startet **F2** oder **Enter** den Schreibmodus mit der Schreibmarke am Textende. Im Schreibmodus markiert Ziehen Text, Doppelklick ein Wort, Umschalt+Klick erweitert; Pfeiltasten, Pos1/Ende, Entf, Enter, Strg+A/C/X/V und Strg+Z wirken auf den Text. **Esc** oder ein Klick neben den Rahmen beendet den Schreibmodus – die ganze Bearbeitung ist dann ein Schritt für Rückgängig. Ohne feste Rahmengröße wächst der Rahmen beim Tippen an der Kante seiner Textposition (links, rechts, Mitte). Schriftart, Größe (pt), fett/kursiv/unterstrichen und Textposition wirken zeichenweise wie im P-touch Editor: im Schreibmodus auf die Markierung bzw. das Weitertippen, sonst auf den ganzen Text. „Feste Rahmengröße“ skaliert den Text passend in den Rahmen. Unter „Position“ stehen X, Y, Breite und Höhe in mm.
 
 Freies Platzieren: Mehrere Textrahmen pro Etikett. Mit „A“ in der Bearbeitungsleiste (oder im Reiter „Text“ ohne Auswahl) und einem Klick aufs Etikett einen Rahmen anlegen – bleibt er leer, verschwindet er wieder, sobald man den Schreibmodus verlässt. Klick wählt, Strg+Klick ergänzt. Ziehen verschiebt (rastet an Kanten und Mitten ein, Alt hält das Einrasten aus; Lage und Größe landen auf 0,1 mm wie in den Feldern), Ecken skalieren die Schrift, Kanten ändern den Rahmen. Pfeiltasten verschieben um 0,1 mm (mit Umschalt 1 mm). Die Bearbeitungsleiste bietet Ausschneiden, Kopieren, Einfügen, Rückgängig und Wiederherstellen. Der Reiter „Layout“ richtet aus (aneinander oder am Papier), gleicht Größen an, dreht um 90° und ändert die Reihenfolge. Ragt ein Objekt über das Etikett, fragt „Drucken“ nach.
+
+Bild: Im Reiter „Bild“ fügt „Aus Datei …“ (Strg+Umschalt+I) PNG, JPG, GIF, BMP, WebP, SVG oder eine PDF-Seite ein (bei mehreren Seiten fragt ein Dialog nach der Seite), „Aus Zwischenablage“ ein kopiertes Bild. Bilddateien und Bilder lassen sich auch aufs Etikett ziehen (landen an der Ablagestelle). Strg+V auf der Arbeitsfläche fügt ein, was die Zwischenablage oben hat: in labelwerk kopierte Objekte, sonst kopierte Bilddateien (Dateimanager), sonst Text als neuen Textrahmen (auch wenn ein Bild dabei ist, etwa bei Tabellenzellen – das Bild fügt „Aus Zwischenablage“ ein), sonst ein Bild. Bilder kommen in Originalgröße 1:1 (aus der Auflösung der Datei, sonst 300 dpi) und automatisch zugeschnitten (Schnittmarken und weißer Rand fallen weg – z. B. bei der Internetmarke); zu große werden proportional eingepasst, die Statusleiste nennt den Faktor (Codes ggf. nicht mehr lesbar). Das Panel stellt die Umwandlung in Schwarz/Weiß ein: Strich (harte Schwelle – Codes, Schrift, Logos) oder Foto (Rasterpunkte), Schwelle (höher = mehr Schwarz), Umkehren; dazu Zuschnitt an/aus, Originalgröße 1:1 und Seitenverhältnis beibehalten (dann halten auch die Kanten-Anfasser das Verhältnis). Bilder lassen sich verschieben, skalieren, drehen, ausrichten, kopieren und rückgängig machen wie Text; ein Doppelklick auf ein Bild startet keinen Schreibmodus.
 
 Tastenkürzel (Standard):
 
@@ -61,8 +63,9 @@ Tastenkürzel (Standard):
 | Strg+Z · Strg+Umschalt+Z | Rückgängig · Wiederherstellen |
 | Strg++ · Strg+− · Strg+0 | Zoom größer · kleiner · echte Größe |
 | T · Esc | Werkzeug „Text anlegen“ · Auswahl-Pfeil (Arbeitsfläche) |
+| Strg+Umschalt+I | Bild einfügen … (Arbeitsfläche) |
 | F2 · Enter | Schreibmodus für den gewählten Text starten (Arbeitsfläche) |
-| Strg+X/C/V · Strg+D · Entf · Strg+A | Ausschneiden/Kopieren/Einfügen · Duplizieren · Löschen · alles wählen |
+| Strg+X/C/V · Strg+D · Entf · Strg+A | Ausschneiden/Kopieren/Einfügen (Objekte, Bild oder Text) · Duplizieren · Löschen · alles wählen |
 | Pfeiltasten · Umschalt+Pfeiltasten | verschieben um 0,1 mm · 1 mm |
 | Strg+L · Strg+R | 90° nach links · rechts drehen |
 | Strg+Bild↑ · Strg+Bild↓ | nach vorne · nach hinten |
@@ -82,6 +85,7 @@ document.py Etikett-Dokument (Etikett, Länge, Objekte)
 settings.py Einstellungen (JSON)
 fonts.py    Schriften (fontconfig)
 media.py    Medium prüfen (Statusabfrage des Druckers)
+imaging.py  Bilder: Schwarz/Weiß-Umwandlung (Strich/Foto), Größe begrenzen
 layout.py   Platzieren: Einrasten, Ausrichten, Größe angleichen, ragt hinaus
 shortcuts.py Tastenkürzel-Verzeichnis (Standard, Konflikte, Prüfung)
 gui/        PySide6-Oberfläche (nur Anzeige/Bearbeitung, kein Druckcode)

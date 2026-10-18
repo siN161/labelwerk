@@ -177,6 +177,17 @@ def test_width_and_height_only_editable_with_fixed_frame(window):
     assert window.canvas.objects[0].frame_mm().w == pytest.approx(30, abs=DOT_MM)
 
 
+def test_size_edit_without_fixed_frame_is_ignored_by_the_panel(window):
+    """Auch wenn der Bereich Position eine Größe meldet: ohne feste Rahmengröße nicht."""
+    window.canvas.set_selection([0])
+    panel = window.panel("text")
+    seen = []
+    panel.frame_edited.connect(lambda key, value: seen.append((key, value)))
+    panel._frame_changed("w", 30)
+    panel._frame_changed("x", 6)
+    assert seen == [("x", 6)]
+
+
 def test_turning_fixed_frame_on_keeps_current_frame_size(window):
     window.canvas.set_selection([0])
     shown = window.canvas.objects[0].frame_mm()

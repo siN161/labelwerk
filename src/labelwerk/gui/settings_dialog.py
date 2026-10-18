@@ -90,6 +90,15 @@ class SettingsDialog(QDialog):
         self.font_family.currentFontChanged.connect(self._family_changed)
         form.addRow("Schriftart", self.font_family)
 
+        form = self._section(layout, "Bilder einfügen")
+        self.image_crop = QCheckBox("Automatisch zuschneiden (ohne Schnittmarken und Leerraum)")
+        self.image_crop.setChecked(settings.image_crop)
+        form.addRow(self.image_crop)
+        self.image_rotate = QCheckBox("Drehen, wenn das Bild nur gedreht 1:1 passt")
+        self.image_rotate.setToolTip("Aus: zu große Bilder werden verkleinert – spart Band")
+        self.image_rotate.setChecked(settings.image_rotate)
+        form.addRow(self.image_rotate)
+
         form = self._section(layout, "Drucker")
         self.check_media = QCheckBox("Rolle beim Start und beim Einschalten prüfen")
         self.check_media.setChecked(settings.check_media_on_start)
@@ -108,7 +117,8 @@ class SettingsDialog(QDialog):
         self.theme.setCurrentIndex(max(0, self.theme.findData(settings.theme)))
         form.addRow("Design", self.theme)
 
-        hint = QLabel("Gilt für neue Etiketten bzw. ab dem nächsten Start.")
+        hint = QLabel("„Neues Etikett“ gilt für neue Etiketten, der Startzoom ab dem nächsten "
+                      "Start, alles andere sofort.")
         hint.setWordWrap(True)
         layout.addWidget(hint)
         layout.addStretch()
@@ -277,6 +287,8 @@ class SettingsDialog(QDialog):
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
             theme=self.theme.currentData(),
+            image_crop=self.image_crop.isChecked(),
+            image_rotate=self.image_rotate.isChecked(),
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},
         )

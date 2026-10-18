@@ -5,18 +5,22 @@ gleicher Zeilenabstand (Unterkante von „A“ + 4 Punkte), gleiche Ausrichtungs
 reiner Text sieht dadurch pixelgleich aus wie früher.
 Das Ergebnis (``TextLayout``) zeichnet das Rendern; dieselben Zahlen liefern der
 Arbeitsfläche Schreibmarke, Treffer und Markierung.
+Bild-Objekte werden auf ihren Rahmen skaliert und in Schwarz/Weiß umgewandelt
+(``imaging.to_layers``).
 """
 from __future__ import annotations
 
+import copy
+import io
 import math
 from dataclasses import dataclass, field
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 from PIL import Image, ImageDraw, ImageOps
 
-from . import fonts
+from . import fonts, imaging
 from .document import (ALIGNMENTS, MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS,
-                       Document, Paragraph, Span, TextObject)
+                       Document, ImageObject, Paragraph, Span, TextObject)
 from .labels import DPI, get_label, length_limits
 
 MARGIN = 12            # Punkte, ca. 1 mm
@@ -56,6 +60,8 @@ def font_warnings(doc: Document) -> list[str]:
     """Hinweise zu ersetzten Schriften (je Familie einmal)."""
     warnings: list[str] = []
     for obj in doc.objects:
+        if not isinstance(obj, TextObject):
+            continue
         for para in obj.paragraphs:
             for span in para.spans:
                 if span.family is None:
@@ -72,12 +78,13 @@ class RenderedObject:
     """Einzeln gerendertes Objekt in Druckpunkten, in Leserichtung.
 
     ``x``/``y``/``w``/``h``: Rahmen auf dem Etikett (Auswahl, Einrasten, Layout);
-    ``base_pt``: wirksame Grundgröße.
+    ``base_pt``: wirksame Grundgröße (Bild-Objekte: 0).
     ``image``: Graustufen (L), weißer Grund, Tinte schwarz – deckt den Rahmen und die ganze
     Tinte ab (Anschnitt: Kantenglättung, Unterstreichung, Glyphen wie „J“ reichen etwas über
     den Rahmen); seine linke obere Ecke liegt bei ``x + image_dx``, ``y + image_dy``
-    (``image_dx``/``image_dy`` ≤ 0).
-    ``layout``: der Zeilensatz, aus dem das Bild gezeichnet wurde (Schreibmarke, Treffer).
+    (``image_dx``/``image_dy`` ≤ 0; Bild-Objekte: genau der Rahmen, 0).
+    ``layout``: der Zeilensatz, aus dem das Bild gezeichnet wurde (Schreibmarke, Treffer);
+    None bei Bild-Objekten.
     """
     image: Image.Image
     x: int
@@ -90,7 +97,8 @@ class RenderedObject:
     layout: TextLayout | None = field(default=None, compare=False, repr=False)
 
 
-def render_object(obj: TextObject, doc: Document, model: str = "QL-600") -> RenderedObject:
+def render_object(obj: TextObject | ImageObject, doc: Document,
+                  model: str = "QL-600") -> RenderedObject:
     """Ein Objekt einzeln rendern (Arbeitsfläche); Position bezogen auf das Etikett von ``doc``."""
     return _finish(*_measure(obj, doc, model))
 
@@ -98,10 +106,13 @@ def render_object(obj: TextObject, doc: Document, model: str = "QL-600") -> Rend
 def text_layout(obj: TextObject, doc: Document, model: str = "QL-600") -> TextLayout:
     """Zeilensatz eines Objekts ohne Bild – derselbe, den ``render_object`` zeichnet
     (``RenderedObject.layout``)."""
+    if not isinstance(obj, TextObject):
+        raise TypeError("Einen Zeilensatz gibt es nur für Text-Objekte.")
     return _place(*_measure(obj, doc, model))[0]
 
 
-def _measure(obj: TextObject, doc: Document, model: str) -> tuple[Prepared, _Sheet, int, int]:
+def _measure(obj: TextObject | ImageObject, doc: Document,
+             model: str) -> tuple[Prepared, _Sheet, int, int]:
     """Objekt messen; Etikettgröße nur für ein Objekt ohne Position (mittig), sonst 0."""
     sheet = _sheet(doc, model)
     prep = _prepare(obj, sheet)
@@ -154,7 +165,8 @@ def label_size(doc: Document, model: str = "QL-600",
     return _label_size(sheet, prepared)
 
 
-def prepare_object(obj: TextObject, doc: Document, model: str = "QL-600") -> Prepared:
+def prepare_object(obj: TextObject | ImageObject, doc: Document,
+                   model: str = "QL-600") -> Prepared:
     """Objekt messen (Grundgröße, Zeilen, Rahmengröße) – unabhängig von der Etikettgröße.
 
     Zusammen mit ``label_size(..., prepared=)`` und ``finish_object`` rendert die
@@ -168,6 +180,88 @@ def finish_object(prep: Prepared, doc: Document, size: tuple[int, int],
     """Gemessenes Objekt auf dem Etikett ``size`` (wie ``label_size``) rendern – dasselbe
     Ergebnis wie ``render_object``."""
     return _finish(prep, _sheet(doc, model), *size)
+
+
+@dataclass
+class Rendered:
+    """Ergebnis von ``Renderer.render``: Etikettgröße (Druckpunkte in Leserichtung), die
+    einzelnen Objektbilder (je Objekt in ``doc.objects``) und das Druckbild daraus."""
+    size: tuple[int, int]
+    objects: list[RenderedObject]
+    image: Image.Image
+
+
+@dataclass
+class _Cached:
+    """Gemessenes und gerendertes Objekt samt Stand, aus dem es entstand."""
+    obj: TextObject | ImageObject  # hält das Objekt fest, damit seine id nicht neu vergeben wird
+    snapshot: TextObject | ImageObject     # Bilder: die PNG-Bytes werden geteilt, nicht kopiert
+    context: tuple
+    prepared: Prepared
+    size: tuple | None = None                  # Etikettgröße des Bilds (None = mit Position)
+    rendered: RenderedObject | None = None
+
+
+class Renderer:
+    """Rendert ein Dokument wiederholt und dabei nur, was sich geändert hat (Arbeitsfläche).
+
+    Gemessen wird ein Objekt nur, wenn es selbst oder sein Kontext (Modell, Etikett,
+    Ausrichtung, Rand, Länge) sich ändert; gezeichnet zusätzlich, wenn sich bei einem Objekt
+    ohne Position (steht mittig) die Etikettgröße ändert. Das Druckbild wird nur neu
+    zusammengesetzt, wenn sich ein Objektbild oder die Größe ändert. Ergebnis wie
+    ``render_document`` – Vorschau = Druck.
+
+    Schlüssel ist der ganze Objektinhalt (Schnappschuss) – bei Bildern also auch alle
+    Einstellungen. Das bleibt billig: ``copy.deepcopy`` teilt unveränderliche PNG-Bytes, und
+    der Vergleich derselben Bytes ist ein Identitätsvergleich. Ändert sich nur die
+    Umwandlung (Schwelle, Foto, Umkehren), kommt das skalierte Bild aus ``_scaled_source``.
+    """
+
+    def __init__(self):
+        self._cache: dict[int, _Cached] = {}
+        self._composed: tuple = (None, [], None)   # Druckbild und woraus es entstand
+
+    def render(self, doc: Document, model: str = "QL-600") -> Rendered:
+        """Dokument rendern; ``ValueError`` (z. B. ``TextTooLarge``) lässt den Cache stehen."""
+        entries = self._prepare_all(doc, model)
+        size = label_size(doc, model, prepared=[e.prepared for e in entries])
+        objects = self._draw(entries, doc, model, size)
+        return Rendered(size, objects, self._compose(objects, size, doc.orientation))
+
+    def _prepare_all(self, doc: Document, model: str) -> list[_Cached]:
+        """Objekte messen; unveränderte kommen aus dem Cache."""
+        context = (model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm)
+        cache: dict[int, _Cached] = {}
+        for obj in doc.objects:
+            entry = self._cache.get(id(obj))
+            if (entry is None or entry.obj is not obj or entry.context != context
+                    or entry.snapshot != obj):
+                entry = _Cached(obj, copy.deepcopy(obj), context,
+                                prepare_object(obj, doc, model))
+            cache[id(obj)] = entry
+        self._cache = cache
+        return [cache[id(obj)] for obj in doc.objects]
+
+    @staticmethod
+    def _draw(entries: list[_Cached], doc: Document, model: str,
+              size: tuple[int, int]) -> list[RenderedObject]:
+        """Gemessene Objekte zeichnen; ein Objekt ohne Position steht mittig und wird deshalb
+        auch neu gezeichnet, wenn sich die Etikettgröße ändert."""
+        for entry in entries:
+            key = None if entry.obj.positioned else size
+            if entry.rendered is None or entry.size != key:
+                entry.rendered = finish_object(entry.prepared, doc, size, model)
+                entry.size = key
+        return [entry.rendered for entry in entries]
+
+    def _compose(self, objects: list[RenderedObject], size: tuple[int, int],
+                 orientation: str) -> Image.Image:
+        """Druckbild – unverändert, solange dieselben Objektbilder auf derselben Größe liegen."""
+        key = (size, orientation)
+        if (key != self._composed[0] or len(objects) != len(self._composed[1])
+                or any(a is not b for a, b in zip(objects, self._composed[1]))):
+            self._composed = (key, list(objects), compose(objects, size, orientation))
+        return self._composed[2]
 
 
 def label_margins(doc: Document, model: str = "QL-600") -> tuple[int, int]:
@@ -216,8 +310,9 @@ def _dots(mm: float) -> int:
 
 @dataclass
 class Prepared:
-    """Gemessenes Objekt: Grundgröße, Zeilen (an der breitesten Zeile ausgerichtet), Tintenbox."""
-    obj: TextObject
+    """Gemessenes Objekt: Grundgröße, Zeilen (an der breitesten Zeile ausgerichtet), Tintenbox.
+    Bild-Objekte: keine Zeilen, Tintenbox = Rahmen."""
+    obj: TextObject | ImageObject
     base: int
     lines: list
     box: tuple[int, int, int, int]
@@ -230,7 +325,9 @@ class Prepared:
         return (h, w) if self.obj.rotation in (90, 270) else (w, h)
 
 
-def _prepare(obj: TextObject, sheet: _Sheet) -> Prepared:
+def _prepare(obj: TextObject | ImageObject, sheet: _Sheet) -> Prepared:
+    if isinstance(obj, ImageObject):
+        return _prepare_image(obj)
     for para in obj.paragraphs:
         if para.align not in ALIGNMENTS:
             raise ValueError(f"Unbekannte Textposition {para.align!r} – erlaubt: links, zentriert, "
@@ -321,6 +418,8 @@ def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedO
     """Objektbild aus dem Zeilensatz (``_place``) zeichnen und auf dem Etikett platzieren;
     Bild, Rahmen und Bildlage werden mit der Fläche gedreht."""
     obj = prep.obj
+    if isinstance(obj, ImageObject):
+        return _finish_image(prep)
     text, frame, area, origin = _place(prep, sheet, width, height)
     image, (ix, iy) = _paint(text.pieces, text.x0, text.y0, *frame[2:],
                              at=(origin[0] + frame[0], origin[1] + frame[1]))
@@ -391,6 +490,77 @@ def _paint(lines: list, x0: int, y0: int, width: int, height: int,
         left, top = min(left, ink[0]), min(top, ink[1])
         right, bottom = max(right, ink[2]), max(bottom, ink[3])
     return canvas.crop((left, top, right, bottom)), (left - px, top - py)
+
+
+# --- Bild-Objekte -------------------------------------------------------------------
+def _prepare_image(obj: ImageObject) -> Prepared:
+    """Bild-Objekt prüfen und messen: Rahmen in Druckpunkten (ungedreht) aus ``w_mm``/``h_mm``."""
+    if obj.rotation not in ROTATIONS:
+        raise ValueError(f"Unbekannte Drehung {obj.rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
+    imaging.check(obj.mode, obj.threshold)
+    if not (obj.w_mm > 0 and obj.h_mm > 0):
+        raise ValueError(f"Größe des Bilds muss größer als 0 sein, nicht "
+                         f"{obj.w_mm:g} × {obj.h_mm:g} mm.")
+    frame = (max(1, _dots(obj.w_mm)), max(1, _dots(obj.h_mm)))
+    return Prepared(obj, 0, [], (0, 0, *frame), frame)
+
+
+def _finish_image(prep: Prepared) -> RenderedObject:
+    """Bild auf den Rahmen skalieren, in Schwarz/Weiß umwandeln und drehen (wie Text).
+
+    Mit ``keep_ratio`` wird nicht verzerrt: Passt das Seitenverhältnis des Rahmens nicht,
+    steht das Bild eingepasst in seiner Mitte (der Rest bleibt Papier, auch mit ``invert``).
+    """
+    obj = prep.obj
+    w, h = prep.frame
+    crop = tuple(obj.crop) if obj.crop is not None else None
+    picture = _scaled_source(obj.png, crop, (w, h), obj.keep_ratio)
+    black = imaging.to_layers(picture, obj.mode, obj.threshold, obj.invert)["black"]
+    image = Image.new("L", (w, h), 255)
+    image.paste(black.convert("L"), ((w - picture.width) // 2, (h - picture.height) // 2))
+    frame = (0, 0, w, h)
+    if obj.rotation:
+        image = image.transpose(_TRANSPOSE[obj.rotation])
+        frame = _turn(frame, (w, h), obj.rotation)
+    return RenderedObject(image, _dots(obj.x_mm), _dots(obj.y_mm), frame[2], frame[3], 0.0)
+
+
+@lru_cache(maxsize=2)
+def _source(png: bytes, crop: tuple[int, int, int, int] | None) -> Image.Image:
+    """Original (RGB), auf den Ausschnitt zugeschnitten.
+
+    Gecacht, damit Ziehen am Anfasser nicht jedes Mal dekodiert: Python merkt sich den Hash
+    eines ``bytes``-Objekts, der Schlüssel kostet nach dem ersten Mal fast nichts.
+    Das Ergebnis wird geteilt und darf nicht verändert werden.
+    """
+    with Image.open(io.BytesIO(png)) as img:
+        img = img.convert("RGB")
+    if crop is not None:
+        l, t, r, b = crop
+        if not (0 <= l < r <= img.width and 0 <= t < b <= img.height):
+            raise ValueError(f"Ausschnitt {crop} liegt nicht im Bild "
+                             f"({img.width} × {img.height} Pixel).")
+        img = img.crop(crop)
+    return img
+
+
+@lru_cache(maxsize=8)
+def _scaled_source(png: bytes, crop: tuple[int, int, int, int] | None, size: tuple[int, int],
+                   keep_ratio: bool) -> Image.Image:
+    """Ausschnitt auf ``size`` skaliert (Lanczos); mit ``keep_ratio`` eingepasst, nicht
+    verzerrt. Gecacht: Schwelle, Foto und Umkehren ändern nur die Umwandlung danach."""
+    src = _source(png, crop)
+    w, h = size
+    if keep_ratio:
+        scale = min(w / src.width, h / src.height)
+        fitted = (max(1, round(src.width * scale)), max(1, round(src.height * scale)))
+        if abs(fitted[0] - w) > 1 or abs(fitted[1] - h) > 1:   # sonst nur Rundung: füllen
+            w, h = fitted
+    if src.size == (w, h):
+        return src
+    # reducing_gap: stark verkleinert erst ganzzahlig reduzieren (schnell), dann Lanczos;
+    # vergrößert und bis 2× verkleinert genau wie reines Lanczos (Codes bleiben exakt)
+    return src.resize((w, h), Image.Resampling.LANCZOS, reducing_gap=2.0)
 
 
 # --- Schriftgrößen ----------------------------------------------------------

@@ -185,3 +185,22 @@ def test_esc_from_settings_file_is_rejected(tmp_path):
     settings = load_settings(path)
     assert settings.shortcuts == {}
     assert any("nicht belegbar" in w for w in settings.warnings)
+
+
+# --- Bilder einfügen ----------------------------------------------------------------
+def test_image_import_defaults_and_roundtrip(tmp_path):
+    s = Settings()
+    assert (s.image_crop, s.image_rotate) == (True, False)     # zuschneiden, nicht drehen
+    path = tmp_path / "s.json"
+    save_settings(Settings(image_crop=False, image_rotate=True), path)
+    loaded = load_settings(path)
+    assert (loaded.image_crop, loaded.image_rotate) == (False, True)
+    assert loaded.warnings == []
+
+
+def test_invalid_image_import_settings_fall_back_with_warning(tmp_path):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"image_crop": "ja", "image_rotate": 1}))
+    s = load_settings(path)
+    assert (s.image_crop, s.image_rotate) == (True, False)
+    assert sum("image_" in w for w in s.warnings) == 2

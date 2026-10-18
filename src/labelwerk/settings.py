@@ -28,6 +28,8 @@ class Settings:
     check_media_on_start: bool = True
     start_zoom: int = 200
     theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
+    image_crop: bool = True                # Bilder beim Einfügen auf den Inhalt zuschneiden
+    image_rotate: bool = False             # Bilder drehen, wenn sie nur gedreht 1:1 passen
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
@@ -48,6 +50,8 @@ def _rules(model: str) -> dict:
         "check_media_on_start": lambda v: isinstance(v, bool),
         "start_zoom": lambda v: _is_int(v) and 25 <= v <= 400,
         "theme": lambda v: v in THEMES,
+        "image_crop": lambda v: isinstance(v, bool),
+        "image_rotate": lambda v: isinstance(v, bool),
     }
 
 
