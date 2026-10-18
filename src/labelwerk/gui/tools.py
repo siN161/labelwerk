@@ -28,7 +28,7 @@ class Tool:
 START_TOOL = "paper"                           # Reiter beim Start
 
 TOOLS = [
-    Tool("file", "★", "", FilePanel, "Datei und Favoriten"),
+    Tool("file", "Datei", "document-open", FilePanel, "Datei und Favoriten"),
     Tool("paper", "Papier", "document-page-setup", PaperPanel),
     Tool("text", "Text", "insert-text", TextPanel),
     Tool("image", "Bild", "insert-image", ImagePanel),

@@ -1,4 +1,4 @@
-"""Reiter ★ (Etappe 3c): Neu/Öffnen/Speichern, ungespeicherte Änderungen, Favoriten, Zuletzt
+"""Reiter Datei (Etappe 3c): Neu/Öffnen/Speichern, ungespeicherte Änderungen, Favoriten, Zuletzt
 geöffnet, Start mit Datei oder Favorit. Dialoge und Rückfragen sind ersetzt."""
 import pytest
 from PySide6.QtCore import Qt
@@ -46,11 +46,11 @@ def _type(win, text):
 
 
 # --- Reiter, Aktionen ------------------------------------------------------------------
-def test_star_tab_comes_first_and_window_starts_on_paper(qtbot):
+def test_file_tab_comes_first_and_window_starts_on_paper(qtbot):
     assert [tool.key for tool in TOOLS][:2] == ["file", "paper"]
     win = _window(qtbot)
     action = win.tool_actions["file"]
-    assert action.text() == "★" and action.toolTip() == "Datei und Favoriten"
+    assert action.text() == "DATEI" and action.toolTip() == "Datei und Favoriten"
     assert win.panels.currentWidget() is win.panel("paper")
 
 

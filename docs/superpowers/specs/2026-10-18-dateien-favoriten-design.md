@@ -1,6 +1,6 @@
 # Neu/Öffnen/Speichern + Favoriten (Etappe 3c) – Design
 
-Stand: 2026-10-18 · Status: abgestimmt (Favoriten = Vorlagen + Schnellzugriff + Zuletzt geöffnet, Reiter ★,
+Stand: 2026-10-18 · Status: abgestimmt (Favoriten = Vorlagen + Schnellzugriff + Zuletzt geöffnet, Reiter DATEI,
 Start mit Favorit)
 
 ## Ziel
@@ -45,7 +45,7 @@ Unterordner bei Favoriten, Import fremder Formate (P-touch `.lbx`: Roadmap 5), S
 
 ## 2 – GUI
 
-- **Reiter ★** ganz links (vor PAPIER), Titel nur „★“, Tooltip „Datei und Favoriten“:
+- **Reiter DATEI** ganz links (vor PAPIER; nach der Abnahme statt „★“), Tooltip „Datei und Favoriten“:
   - Knöpfe NEU (Strg+N), ÖFFNEN … (Strg+O), SPEICHERN (Strg+S), SPEICHERN UNTER … (Strg+Umschalt+S) – Aktionen
     `file.new`, `file.open`, `file.save`, `file.save_as` im Kürzel-Verzeichnis (global, änderbar).
   - **Favoriten:** Knopf „+ AKTUELL“ (aktuelles Etikett als Favorit; Name erfragen, vorgeschlagen: Dateiname

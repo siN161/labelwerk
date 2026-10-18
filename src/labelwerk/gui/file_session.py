@@ -1,5 +1,5 @@
 """Datei-Sitzung des Hauptfensters: Neu/Öffnen/Speichern, ungespeicherte Änderungen,
-Favoriten und Zuletzt geöffnet (Reiter ★).
+Favoriten und Zuletzt geöffnet (Reiter Datei).
 
 Gerechnet wird im Kern (``storage``, ``favorites``); hier liegen Dialoge, Rückfragen und das
 Ersetzen des Dokuments. Das Dokument-Objekt bleibt dasselbe (Panels halten es fest) – es wird

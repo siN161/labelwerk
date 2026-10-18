@@ -1,4 +1,4 @@
-"""Panel „★“: Neu/Öffnen/Speichern, Favoriten (mit Vorschau, ⎙ je Favorit) und Zuletzt geöffnet.
+"""Panel „Datei“: Neu/Öffnen/Speichern, Favoriten (mit Vorschau, ⎙ je Favorit) und Zuletzt geöffnet.
 
 Nur Anzeige: Knöpfe lösen die Aktionen des Hauptfensters aus, Listen melden per Signal, was
 gewählt wurde – ausgeführt wird in ``gui.file_session.FileSession``.

@@ -183,7 +183,7 @@ class MainWindow(QMainWindow):
         self.canvas.symbol_dropped.connect(self._symbol_dropped)
         self.history = History(self.doc)
         self.history.changed.connect(self._update_edit_actions)
-        # Datei und Favoriten (Reiter ★): Neu/Öffnen/Speichern, Rückfrage bei Änderungen
+        # Datei und Favoriten (Reiter Datei): Neu/Öffnen/Speichern, Rückfrage bei Änderungen
         self.files = FileSession(self)
         for key, handler in (("file.new", self.files.new), ("file.open", self.files.open),
                              ("file.save", self.files.save), ("file.save_as", self.files.save_as)):
@@ -1311,7 +1311,7 @@ class MainWindow(QMainWindow):
             self.apply_theme_icons()
             apply_shortcuts(self.shortcut_actions,
                             without_conflicts(effective(self.settings.shortcuts))[0])
-            self.files.refresh_lists()                  # „Beim Start“ im Reiter ★
+            self.files.refresh_lists()                  # „Beim Start“ im Reiter Datei
             self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
 
     # --- Medium prüfen ----------------------------------------------------
