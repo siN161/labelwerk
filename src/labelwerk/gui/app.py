@@ -51,6 +51,9 @@ def main() -> int:
     window = MainWindow()
     apply_theme(app, window.settings.theme)
     window.show()
+    # labelwerk-gui [DATEI]: Datei öffnen (Doppelklick im Dateimanager), sonst Start-Favorit
+    paths = [a for a in app.arguments()[1:] if not a.startswith("-")]
+    window.start(paths[0] if paths else None)
     return app.exec()
 
 

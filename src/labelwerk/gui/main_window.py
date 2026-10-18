@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, Q
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
-from .. import clipart
+from .. import clipart, favorites
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
 from ..document import Document, ImageObject, TextObject
@@ -25,10 +25,11 @@ from ..fonts import DEFAULT_FAMILY
 from ..labels import DPI, get_label
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, growing_axis,
                       insert_placement, match_objects, maximize_object, move, object_rect,
-                      outside_indices, printable_area, proportional, reorder, resize, rotate,
+                      objects_outside, outside_indices, printable_area, proportional, reorder, resize, rotate,
                       set_frame, to_grid)
 from ..printer import DEFAULT_MODEL
-from ..render import Renderer, RenderedObject, font_warnings, set_svg_rasterizer
+from ..render import (Renderer, RenderedObject, font_warnings, render_document,
+                      set_svg_rasterizer)
 from ..settings import Settings, load_settings, new_document, save_settings
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
@@ -39,13 +40,14 @@ from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS, SCREENSHOT, SYMBOL_S
 from .media_worker import MediaWorker
 from .panels.image import CROP_FAILED
 from .panels.text import DEFAULT_PT
+from .file_session import FileSession
 from .print_worker import PrintWorker
 from .screenshot import FAILED as SCREENSHOT_FAILED, ScreenshotPortal
 from .symbol_dialog import SymbolDialog
 from .settings_dialog import SettingsDialog
 from .symbols import SIZE, line_icon
 from .text_edit_mode import TextEditSession
-from .tools import TOOLS, Tool
+from .tools import START_TOOL, TOOLS, Tool
 
 RENDER_DELAY_MS = 150
 PANEL_WIDTH = 280          # Eigenschaften-Panels; bei wenig Höhe rollbar
@@ -146,12 +148,15 @@ class MainWindow(QMainWindow):
             self.panels.addWidget(panel)
             self._panel_by_key[tool.key] = panel
             action = QAction(QIcon.fromTheme(tool.icon), tool.title.upper(), self)
+            action.setToolTip(tool.tip or tool.title)
             action.setCheckable(True)
             action.triggered.connect(lambda _=False, key=tool.key: self._tool_triggered(key))
             group.addAction(action)
             toolbar.addAction(action)
             self.tool_actions[tool.key] = action
-        next(iter(self.tool_actions.values())).setChecked(True)
+        start = START_TOOL if START_TOOL in self.tool_actions else next(iter(self.tool_actions))
+        self.tool_actions[start].setChecked(True)
+        self.panels.setCurrentWidget(self._panel_by_key[start])
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(spacer)
@@ -178,6 +183,12 @@ class MainWindow(QMainWindow):
         self.canvas.symbol_dropped.connect(self._symbol_dropped)
         self.history = History(self.doc)
         self.history.changed.connect(self._update_edit_actions)
+        # Datei und Favoriten (Reiter ★): Neu/Öffnen/Speichern, Rückfrage bei Änderungen
+        self.files = FileSession(self)
+        for key, handler in (("file.new", self.files.new), ("file.open", self.files.open),
+                             ("file.save", self.files.save), ("file.save_as", self.files.save_as)):
+            self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
+            self.addAction(self.shortcut_actions[key])
         self._connect_view_actions()
         self._connect_canvas_actions()
         self._connect_layout_actions()
@@ -483,6 +494,7 @@ class MainWindow(QMainWindow):
 
     def render_now(self) -> None:
         self._timer.stop()
+        self.files.update_title()                   # „•“ bei ungespeicherten Änderungen
         if self.canvas.is_dragging():   # Ziehen nicht unterbrechen – nach dem Loslassen rendern
             self._timer.start()
             return
@@ -1248,7 +1260,24 @@ class MainWindow(QMainWindow):
             self._media_check_pending = False
             self.check_media()
 
+    def start(self, path: str | None = None) -> None:
+        """Nach dem Öffnen des Fensters: Datei aus der Befehlszeile, sonst der Start-Favorit
+        (als neues Etikett), sonst bleibt das leere Etikett."""
+        if path:
+            self.files.open(path, ask=False)
+            return
+        name = self.settings.start_favorite
+        if name:
+            favorite = favorites.find(name)
+            if favorite is None:
+                self._set_result(f"Start-Favorit „{name}“ nicht gefunden – leeres Etikett", "error")
+            else:
+                self.files.open_favorite(favorite)
+
     def closeEvent(self, event) -> None:
+        if not self.files.maybe_save():
+            event.ignore()                          # Abbrechen: Fenster bleibt offen
+            return
         self._printer_timer.stop()
         if self.symbol_window is not None:
             self.symbol_window.close()              # sonst hielte es die App offen
@@ -1281,6 +1310,7 @@ class MainWindow(QMainWindow):
             self.apply_theme_icons()
             apply_shortcuts(self.shortcut_actions,
                             without_conflicts(effective(self.settings.shortcuts))[0])
+            self.files.refresh_lists()                  # „Beim Start“ im Reiter ★
             self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
 
     # --- Medium prüfen ----------------------------------------------------
@@ -1301,9 +1331,13 @@ class MainWindow(QMainWindow):
         QThreadPool.globalInstance().start(worker)
 
     def _media_found(self, media, label_id) -> None:
+        """Rolle erkannt: ein neues Etikett folgt ihr (war es unberührt, bleibt es das); eine
+        geöffnete Datei oder ein Favorit bleibt bei ihrem Etikett – das Panel zeigt „passt nicht“."""
         self._media_finished()
-        adjusted = label_id is not None and label_id != self.doc.label_id
+        adjusted = (label_id is not None and label_id != self.doc.label_id
+                    and self.files.may_follow_roll())
         if adjusted:
+            unchanged = not self.files.modified()
             editing = self.edit_session.active
             if editing:     # Stand vor der Bearbeitung mit neuer Rolle: eigener Schritt davor
                 before = self.history.current()
@@ -1316,6 +1350,8 @@ class MainWindow(QMainWindow):
                 self._update_edit_actions()
             else:
                 self._commit()
+            if unchanged:
+                self.files.mark_unchanged()
         self.panel("paper").show_media(media, label_id, adjusted)
 
     def _media_failed(self, message: str) -> None:
@@ -1347,21 +1383,40 @@ class MainWindow(QMainWindow):
             self.render_now()
         if self.image is None or self._render_error is not None:
             return   # Fehler steht bereits in der Statusleiste
+        self._print(self.image, self.doc, self._outside)
+
+    def print_document(self, doc: Document) -> None:
+        """Anderes Etikett drucken (Favorit), ohne das offene anzutasten – gleiche Rückfragen."""
+        if self.is_printing():
+            self._set_result("Druck läuft – bitte warten.", "error")
+            return
+        try:
+            image = render_document(doc, self.model)
+            outside = objects_outside(doc, self.model)
+        except ValueError as e:
+            self._set_result(str(e), "error")
+            return
+        except Exception as e:  # fremde Datei: Meldung statt Traceback
+            self._set_result(f"Etikett kann nicht gedruckt werden ({type(e).__name__})", "error")
+            return
+        self._print(image, doc, outside)
+
+    def _print(self, image, doc: Document, outside: list[int]) -> None:
         if self.is_checking_media():
             self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
             return
         # Druck sperrt die Medium-Prüfung schon vor dem Dialog (Timer läuft währenddessen weiter)
         self._set_printing(True)
-        if self.doc.is_empty() and not self.confirm_empty():
+        if doc.is_empty() and not self.confirm_empty():
             self._set_printing(False)
             return
-        if self._outside and not self.confirm_outside():
+        if outside and not self.confirm_outside():
             self._set_printing(False)
             return
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
         self.result.style().polish(self.result)
         self.result.setText("Drucke …")
-        worker = PrintWorker(self.image, self.doc.label_id, self.model)
+        worker = PrintWorker(image, doc.label_id, self.model)
         self._print_signals = worker.signals  # Referenz bis zum Ende des Drucks
         worker.signals.done.connect(self._print_done)
         worker.signals.failed.connect(self._print_failed)
@@ -1370,6 +1425,7 @@ class MainWindow(QMainWindow):
     def _set_printing(self, printing: bool) -> None:
         self._printing = printing
         self.print_action.setEnabled(not printing)
+        self.panel("file").set_printing(printing)
         self.panel("paper").check.setEnabled(not printing)
 
     def _print_done(self, status: dict) -> None:

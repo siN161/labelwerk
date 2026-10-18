@@ -33,6 +33,22 @@ else:
         monkeypatch.setattr("labelwerk.gui.screenshot.session_bus",
                             lambda: QDBusConnection("labelwerk-test-kein-bus"))
 
+    @pytest.fixture(autouse=True, scope="session")
+    def discard_changes_on_close():
+        """Schließen mit Änderungen fragt nach – in Tests ohne Dialog: verwerfen (einzelne Tests
+        ersetzen die Antwort selbst). Für die ganze Sitzung: auch Fenster, die erst am Ende
+        geschlossen werden, dürfen keinen echten Dialog öffnen (der hinge)."""
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr("labelwerk.gui.file_session.FileSession.ask_save_changes",
+                          lambda self: "discard")
+            yield
+
+    @pytest.fixture(autouse=True)
+    def no_file_manager(monkeypatch):
+        """Kein Test öffnet den echten Dateimanager (Ordner öffnen ist sonst ersetzt)."""
+        monkeypatch.setattr("PySide6.QtGui.QDesktopServices.openUrl",
+                            lambda url: pytest.fail(f"Dateimanager geöffnet: {url}"))
+
     @pytest.fixture(autouse=True)
     def no_printer(monkeypatch):
         """Kein Test liest echte Druckerdaten aus /sys."""

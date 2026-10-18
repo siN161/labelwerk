@@ -277,7 +277,7 @@ def test_window_title_and_app_name_use_app_name(window, qapp):
     from labelwerk.desktop import APP_NAME
     from labelwerk.gui.app import apply_identity
     apply_identity(qapp)
-    assert window.windowTitle() == APP_NAME
+    assert window.windowTitle() == f"Unbenannt – {APP_NAME}"       # Etappe 3c: Dateiname
     assert qapp.applicationName() == APP_NAME
 
 

@@ -27,6 +27,10 @@ class Action:
 
 
 ACTIONS: tuple[Action, ...] = (
+    Action("file.new", "Neues Etikett", "Ctrl+N", "global"),
+    Action("file.open", "Öffnen …", "Ctrl+O", "global"),
+    Action("file.save", "Speichern", "Ctrl+S", "global"),
+    Action("file.save_as", "Speichern unter …", "Ctrl+Shift+S", "global"),
     Action("file.print", "Drucken", "Ctrl+P", "global"),
     Action("app.settings", "Einstellungen", "Ctrl+,", "global"),
     Action("view.zoom_in", "Vergrößern (Zoom)", "Ctrl++", "global"),
