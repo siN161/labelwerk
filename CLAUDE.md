@@ -22,8 +22,11 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Zierrahmen ums Etikett: Reiter PAPIER → Rahmen (Einfach, Doppelt, Dick-dünn, Gestrichelt, Gepunktet, Nur Ecken; abgerundet,
   Linie, Randabstand, Innenabstand); runde Etiketten: Kreis; automatischer Text, Ausrichten/Maximieren und neue Bilder/Symbole
   bleiben im Innenraum.
+- Serien (Etappe 3e): Reiter SERIE – Tabelle (CSV/Excel) oder Nummerierung, Platzhalter {Spalte} im Text (Spaltenliste fügt
+  ein), Zeilen mit Häkchen, Vorschau ◀ Zeile n/N ▶ auf der Arbeitsfläche, DRUCKEN druckt die gewählten Zeilen in einem
+  Auftrag (Schnitt nach jedem Etikett oder nur am Ende); die Datei merkt sich die Tabelle und liest sie neu.
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
-- 1920 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 1963 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -63,7 +66,8 @@ src/labelwerk/
               Etiketten = ein Auftrag; _Raster: schneiden alle n über ESC i A n, Folgeseiten markiert, bytearray statt
               bytes += – sonst quadratisch langsam), cut_interval(each|end, Anzahl)
               print_image(image | [images], ..., cut_every) -> status-dict; Serien in Teilaufträgen (MAX_JOB_EACH bzw.
-              cut_every Etiketten), jeder geprüft – Fehler nennt „Etikett k–m von N“
+              cut_every Etiketten), jeder geprüft – Fehler nennt „Etikett k–m von N“; to_print_mode (1 Bit, bitgleich
+              zur Schwelle von brother_ql: 100 − THRESHOLD %)
   detect.py   find_brother_lp() -> "file:///dev/usb/lpN" | None
   document.py Etikett-Dokument (Etikett, Länge, Objekte), UI-unabhängig; Span/Paragraph/TextObject (zeichenweise Formatierung, fit);
               TextObject: Position x_mm/y_mm (None = mittig wie bisher), Rahmen w_mm/h_mm (mit fit), Drehen rotation 0/90/180/270
@@ -123,9 +127,18 @@ src/labelwerk/
                     höchstens quer zum Band; Zuletzt verwendet/Favoriten still gespeichert), Strg+V nach Zwischenablage des Systems (eigene Kopie › Dateien › Text › Bild; Stand beim Ändern gemerkt,
                     Daten erst beim Einfügen gelesen); Auswahl zeigt Panel der Objektart; Ausrichten/Maximieren „am Etikett“
                     sowie Bilder/Symbole einfügen nutzen mit Zierrahmen seinen Innenraum (_paper_area);
-                    accept_pending_input (getippte Zahl ohne Enter vor Drucken/Speichern/Rückgängig übernehmen); start(path) (Datei bzw. Start-Favorit),
+                    accept_pending_input (getippte Zahl ohne Enter vor Drucken/Speichern/Rückgängig übernehmen);
+                    Serie: _view_doc (Arbeitsfläche = gefüllte Vorschau-Zeile, Objekt im Schreibmodus mit Platzhaltern: edit_text
+                    rendert vorher mit _keep, finish_editing danach), _series_error („Zeile n:“), choose_series_table/ask_series_file,
+                    insert_column (Reiter SERIE bleibt), _print_series (Prüfungen und ask_print_count vor dem Rendern, eigener
+                    Renderer, confirm_outside_rows, 1 Bit, ein Auftrag mit cut_interval), print_document druckt Serien-Favoriten
+                    ganz; start(path) (Datei bzw. Start-Favorit),
                     print_document(doc) (anderes Etikett drucken, gleiche Rückfragen); closeEvent fragt bei Änderungen
-    tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Layout; neue Werkzeuge als Eintrag; START_TOOL = Papier)
+    panels/series.py Reiter Serie: Quelle (TABELLE …/NUMMERIERUNG/ENTFERNEN, Blatt, Start/Schritt/Anzahl/Stellen – ungültig: nicht
+                    übernommen), Spalten (itemActivated → insert_column), Zeilen mit Häkchen (checked_rows), Vorschau-Zeile (preview,
+                    current_row), Schnitt; liest nur bei geänderter Quelle/Blatt/Nummerierung, check_file (Datei geändert, vor dem
+                    Drucken), reload (Öffnen); Fehler und unbekannte Platzhalter als Hinweis
+    tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Layout, Serie; neue Werkzeuge als Eintrag; START_TOOL = Papier)
     file_session.py FileSession: Neu/Öffnen/Speichern, modified/update_title („•“), maybe_save (Rückfrage), Dokument an Ort und
                     Stelle ersetzen (Verlauf neu), Etikett muss zum Drucker passen, origin new|file|favorite (nur „new“ folgt
                     der geprüften Rolle, may_follow_roll; Speichern macht daraus „file“; modified() ohne leere Textrahmen; Neu nimmt die eingelegte Rolle), Favoriten (Vorlage öffnen, drucken über

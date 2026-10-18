@@ -73,21 +73,27 @@ Häkchen (nach dem Öffnen ist jede Zeile gewählt), mehrere Etiketten nebeneina
 - **Reiter SERIE** (nach LAYOUT), Panel „Serie“:
   - Quelle: Knöpfe **TABELLE …** (Dialog CSV/XLSX) und **NUMMERIERUNG**; Dateiname, Blatt-Auswahl (Excel),
     Felder Start/Schritt/Anzahl/Stellen (Nummerierung); **ENTFERNEN** (Serie aus dem Etikett nehmen).
-  - **Spalten:** Liste der Spaltennamen; Doppelklick/Enter fügt `{Spalte}` ein – im Schreibmodus an der
-    Schreibmarke, sonst in das gewählte Textobjekt (Ende, Schreibmodus startet), sonst als neuer Textrahmen
-    links oben im Innenraum. Hinweis bei Platzhaltern ohne Spalte („Unbekannte Spalte: X“).
+  - **Spalten:** Liste der Spaltennamen; Doppelklick/Enter fügt `{Spalte}` ein – ans Ende des gewählten
+    Textobjekts (mit Leerzeichen davor, wenn nötig), sonst als neuer Textrahmen links oben im Innenraum; der
+    Reiter SERIE bleibt dabei offen (auch beim Klick auf Objekte). An einer Stelle im Text: dort `{Spalte}`
+    tippen. Hinweis bei Platzhaltern ohne Spalte („Unbekannte Spalte: X“).
   - **Zeilen:** Tabelle (erste Spalten) mit Häkchen je Zeile, „Alle“/„Keine“, Anzahl gewählt.
   - **Vorschau:** ◀ Zeile n/N ▶ – die Arbeitsfläche zeigt das Etikett mit dieser Zeile; Klick auf eine Zeile
     der Tabelle springt dorthin.
   - **Schnitt:** Auswahl „Nach jedem Etikett“ / „Nur am Ende“ (gespeichert in `Series.cut`).
 - **Arbeitsfläche:** zeigt mit Serie das gefüllte Etikett der Vorschau-Zeile; das Objekt im Schreibmodus
-  zeigt seine Platzhalter (Schreibmarke passt). Auswahl, Ziehen und Layout wirken auf das Etikett selbst.
-- **DRUCKEN** mit Serie druckt alle gewählten Zeilen in einem Auftrag – vorher Rückfrage „N Etiketten
-  drucken?“ (auch bei 1), dieselben Prüfungen wie bisher (leer, ragt über – an der Vorschau-Zeile); jedes
-  Etikett wird für sich gerendert (automatische Länge je Zeile). Fehler beim Rendern einer Zeile →
-  Meldung mit Zeilennummer, nichts gedruckt.
-- **Datei/Favorit:** beim Öffnen wird die Tabelle neu eingelesen; fehlt sie → Hinweis, Serie bleibt im Etikett
-  (Panel zeigt den Pfad, TABELLE … wählt neu). Direktdruck eines Favoriten mit Serie druckt alle Zeilen
+  zeigt seine Platzhalter (vor der Schreibmarke gerendert, Marke ans Ende – die Lage bleibt), danach wieder
+  die Werte. Auswahl, Ziehen und Layout wirken auf das Etikett selbst. Renderfehler nennen die Zeile („Zeile
+  n: …“) bzw. im Schreibmodus die Platzhalter.
+- **DRUCKEN** mit Serie: Tabelle seit dem Lesen geändert → neu einlesen, Hinweis, nicht drucken; Tabelle ohne
+  Zeilen / keine gewählt → Meldung; Rolle wird geprüft / Druck läuft → Meldung; dann Rückfrage „N Etiketten
+  drucken?“ (auch bei 1), erst danach jede Zeile rendern (automatische Länge je Zeile, 1 Bit, Fortschritt in
+  der Statusleiste); Fehler einer Zeile → „Zeile n: …“, nichts gedruckt; Zeilen, die über das Etikett ragen,
+  werden genannt und erfragt; ein Auftrag (Teilaufträge im Drucker-Modul).
+- **Datei/Favorit:** beim Öffnen wird die Tabelle neu eingelesen (alle Zeilen gewählt, Vorschau Zeile 1); fehlt
+  sie → Hinweis, Serie bleibt im Etikett (Panel zeigt den Pfad, TABELLE … wählt neu – der Dialog beginnt im
+  Ordner der Tabelle). Rückgängig liest nicht neu. Fehlt das gewählte Excel-Blatt, bleibt die Blattauswahl.
+  Nummerierungsfelder: ungültige Werte (Schritt 0, Zahlen zu groß) werden nicht übernommen, Hinweis. Direktdruck eines Favoriten mit Serie druckt alle Zeilen
   (Rückfrage mit Anzahl).
 
 ## Tests

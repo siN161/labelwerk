@@ -172,6 +172,7 @@ class FileSession(QObject):
         window.history.reset(window.doc)
         for panel in window._panel_by_key.values():
             panel.refresh()
+        window.panel("series").reload()     # Tabelle frisch lesen, alle Zeilen gewählt
         window.render_now()
         self.path = path
         self.origin = "file" if path is not None else origin
@@ -209,6 +210,9 @@ class FileSession(QObject):
         self._dir = str(path.parent)
         self._remember(path)
         error = self.window._render_error     # render_now im Ersetzen hat ihn schon gemeldet
+        series_panel = self.window.panel("series")
+        if error is None and doc.series is not None and series_panel.error:
+            error = f"Serie: {series_panel.error}"      # z. B. Tabelle nicht gefunden
         if error is None:
             self.window._set_result(f"Geöffnet: {path.name}", "ok")
         else:

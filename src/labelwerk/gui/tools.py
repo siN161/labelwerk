@@ -13,6 +13,7 @@ from .panels.file import FilePanel
 from .panels.image import ImagePanel
 from .panels.layout import LayoutPanel
 from .panels.paper import PaperPanel
+from .panels.series import SeriesPanel
 from .panels.text import TextPanel
 
 
@@ -33,4 +34,5 @@ TOOLS = [
     Tool("text", "Text", "insert-text", TextPanel),
     Tool("image", "Bild", "insert-image", ImagePanel),
     Tool("layout", "Layout", "align-horizontal-left", LayoutPanel),
+    Tool("series", "Serie", "view-list-text", SeriesPanel, "Serien aus Tabelle oder Nummerierung"),
 ]

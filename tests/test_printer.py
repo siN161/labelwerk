@@ -222,3 +222,16 @@ def test_error_in_a_part_stops_and_names_the_labels(monkeypatch):
                                          rf"{MAX_JOB_EACH + 2}.*Keine Rolle"):
         print_image(_blank(MAX_JOB_EACH + 2), "62", printer="file:///dev/usb/lp0")
     assert len(sent) == 2
+
+
+def test_print_mode_images_print_exactly_the_same():
+    """1-Bit-Bilder (Serien: wenig Speicher) ergeben dieselben Rasterdaten wie das Druckbild."""
+    from PIL import ImageDraw
+    from labelwerk.printer import to_print_mode
+    img = Image.new("RGB", (696, 120), "white")
+    draw = ImageDraw.Draw(img)
+    for x in range(0, 256):
+        draw.line((x * 2, 0, x * 2, 119), fill=(x, x, x))        # alle Grautöne
+    small = to_print_mode(img)
+    assert small.mode == "1"
+    assert build_instructions(small, "62") == build_instructions(img, "62")

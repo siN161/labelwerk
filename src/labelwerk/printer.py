@@ -34,6 +34,14 @@ MAX_CUT_EVERY = 255         # Brother ESC i A n: höchstens alle 255 Etiketten
 # lange Serien gehen deshalb in Teilen hinaus, jeder wird geprüft. „Nur am Ende“ schneidet nach
 # jedem Teil (er ist so lang wie der Schnittabstand), „nach jedem“ merkt nichts davon.
 MAX_JOB_EACH = 50
+THRESHOLD = 70.0            # brother_ql: ein Punkt druckt ab (100 − THRESHOLD) % Schwarz
+
+
+def to_print_mode(image: Image.Image) -> Image.Image:
+    """Druckbild als 1-Bit-Bild mit derselben Schwelle wie brother_ql – druckt bitgleich, braucht
+    aber nur ein Vierundzwanzigstel des Speichers von RGB (Serien mit vielen Etiketten)."""
+    level = min(255, max(0, int((100.0 - THRESHOLD) / 100.0 * 255)))   # wie brother_ql.convert
+    return image.convert("L").point(lambda v: 0 if 255 - v >= level else 255, mode="1")
 
 
 def cut_interval(mode: str, count: int) -> int:
@@ -81,7 +89,7 @@ def build_instructions(
         images=images,
         label=label_id,
         rotate="0",
-        threshold=70.0,
+        threshold=THRESHOLD,
         dither=False,
         compress=False,
         red=False,

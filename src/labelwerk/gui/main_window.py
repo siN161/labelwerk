@@ -17,10 +17,10 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileD
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
-from .. import clipart, favorites
+from .. import clipart, favorites, series
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
-from ..document import Document, ImageObject, TextObject
+from ..document import Document, ImageObject, Series, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
 from ..labels import DPI, get_label
@@ -28,7 +28,7 @@ from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, 
                       growing_axis, insert_placement, match_objects, maximize_object, move,
                       object_rect, objects_outside, outside_indices, printable_area, proportional,
                       reorder, resize, rotate, set_frame, to_grid)
-from ..printer import DEFAULT_MODEL
+from ..printer import DEFAULT_MODEL, cut_interval, to_print_mode
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
 from ..settings import Settings, load_settings, new_document, save_settings
@@ -59,6 +59,7 @@ NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit U
 _DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
 OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
 PASTE_OFFSET_MM = 2.0      # Einfügen/Duplizieren: versetzt nach rechts und unten
+PROGRESS_EVERY = 25        # Serie drucken: Fortschritt alle so viele Etiketten
 SHRUNK_HINT = "Bild auf {percent} verkleinert"                    # „37 %“
 CODES_HINT = " – Codes ggf. nicht mehr lesbar"                    # nur Strich (Codes)
 TURNED_HINT = "Bild um 90° gedreht, damit es 1:1 passt"
@@ -256,6 +257,7 @@ class MainWindow(QMainWindow):
 
         # Schreibmodus direkt auf dem Etikett (Editor des Text-Panels als Eingabepuffer)
         self.edit_session = TextEditSession(self)
+        self._keep: int | None = None               # Objekt mit Platzhaltern zeigen (Schreibmodus-Start)
         self.panel("text").changed.connect(self.edit_session.content_changed)
         self._connect_edit_mode()
         self.render_now()
@@ -265,6 +267,8 @@ class MainWindow(QMainWindow):
                 lambda field, value, k=key: self._edit_frame(k, field, value))
         self.panel("image").paste_requested.connect(self.paste_image)
         self.panel("image").message.connect(self._set_result)
+        self.panel("series").table_requested.connect(self.choose_series_table)
+        self.panel("series").insert_column.connect(self.insert_column)
         self._clipboard_changed()
         self.refresh_printer()
         if self.settings.warnings or key_warnings:
@@ -448,8 +452,8 @@ class MainWindow(QMainWindow):
     def _show_object_panel(self) -> None:
         """Zum Panel des zuletzt gewählten Objekts – Text oder Bild (auch beim Klick auf ein
         schon gewähltes); der Reiter „Layout“ arbeitet mit jeder Auswahl und bleibt."""
-        if self.panels.currentWidget() is self.panel("layout"):
-            return
+        if self.panels.currentWidget() in (self.panel("layout"), self.panel("series")):
+            return                                  # beide arbeiten mit jeder Auswahl
         selection = self.canvas.selection()
         if selection and 0 <= selection[-1] < len(self.doc.objects):
             key = _panel_for(self.doc.objects[selection[-1]])
@@ -505,10 +509,10 @@ class MainWindow(QMainWindow):
         try:
             # jedes Objekt höchstens einmal messen und zeichnen; Fläche und „ragt hinaus“
             # folgen aus den gerenderten Objekten
-            result = self.renderer.render(self.doc, self.model)
+            result = self.renderer.render(self._view_doc(), self.model)
         except ValueError as e:
             # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
-            self._render_error = str(e)
+            self._render_error = self._series_error(str(e))
             self._drop_stale_view()
             self.panel("text").show_error(self._render_error)
             self._set_result(self._render_error, "error")
@@ -523,6 +527,11 @@ class MainWindow(QMainWindow):
         area = printable_area(self.doc, self.model, size)
         outside = outside_indices(rendered, size, self.doc.objects)
         hints = ([OUTSIDE_HINT] if outside else []) + font_warnings(self.doc)
+        series_panel = self.panel("series")
+        if self.doc.series is not None and series_panel.error:
+            hints.append(f"Serie: {series_panel.error}")
+        series_panel.show_missing(series.missing(self.doc, series_panel.table.columns)
+                                  if series_panel.table is not None else [])
         if hints and not self.result.text():
             self._hint = " · ".join(hints)
             self._set_result(self._hint, "error")
@@ -672,6 +681,69 @@ class MainWindow(QMainWindow):
         self.canvas.set_selection([index])
         self.edit_text(index)                       # Anlegen und Schreiben: ein Schritt
 
+    def _view_doc(self) -> Document:
+        """Was die Arbeitsfläche zeigt: mit Serie das Etikett der Vorschau-Zeile – das Objekt im
+        Schreibmodus mit seinen Platzhaltern (Schreibmarke passt zum Text)."""
+        row = self.panel("series").preview()
+        if row is None:
+            return self.doc
+        keep = self._keep if self._keep is not None else self.edit_session.index
+        return series.fill(self.doc, *row, keep=keep)
+
+    def _series_error(self, message: str) -> str:
+        """Renderfehler mit Serie: welche Zeile – bzw. dass es im Schreibmodus an den
+        Platzhaltern liegt (sie stehen statt der Werte da)."""
+        if self.panel("series").preview() is None:
+            return message
+        if self._keep is not None or self.edit_session.active:
+            return f"{message} – mit Platzhaltern im Schreibmodus (kleinere Schrift wählen)"
+        return f"Zeile {self.panel('series').current_row()}: {message}"
+
+    def ask_series_file(self) -> str | None:
+        """Dialog für die Tabelle einer Serie (in Tests ersetzbar); beginnt im Ordner der
+        aktuellen Tabelle."""
+        current = self.doc.series.source if self.doc.series is not None else None
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Tabelle für die Serie", str(Path(current).parent) if current else "",
+            "Tabellen (*.csv *.xlsx *.xlsm *.tsv *.txt);;Alle Dateien (*)")
+        return path or None
+
+    def choose_series_table(self) -> None:
+        """TABELLE …: Datei wählen, lesen (Fehler → Meldung, nichts geändert), verknüpfen."""
+        path = self.ask_series_file()
+        if not path:
+            return
+        path = str(Path(path).resolve())
+        try:
+            table = series.load_table(path)
+        except series.SeriesError as e:
+            self._set_result(str(e), "error")
+            return
+        cut = self.doc.series.cut if self.doc.series is not None else "each"
+        self.panel("series").set_series(Series(source=path, cut=cut), table)   # einmal gelesen
+
+    def insert_column(self, name: str) -> None:
+        """Spalte als ``{Name}`` einfügen: ans Ende des gewählten Textobjekts (seine letzte
+        Formatierung), sonst als neuer Text links oben – ein Schritt."""
+        self.finish_editing()
+        placeholder = "{" + name + "}"
+        selection = [i for i in self.canvas.selection() if self._valid(i)]
+        if len(selection) == 1 and isinstance(self.doc.objects[selection[0]], TextObject):
+            self._commit()                          # noch nicht Festgehaltenes zuerst
+            obj = self.doc.objects[selection[0]]
+            last = obj.paragraphs[-1].spans[-1]
+            gap = " " if obj.text and not obj.text[-1].isspace() else ""   # {A} {B}, nicht {A}{B}
+            last.text += gap + placeholder
+            self._objects_changed(selection)
+            self._commit()
+            return
+        if self._timer.isActive():
+            self.render_now()                       # aktueller Innenraum
+        obj = self._new_text(placeholder)
+        area = self._paper_area()
+        obj.x_mm, obj.y_mm = round(area.x, 3), round(area.y, 3)
+        self._insert([obj])
+
     def _new_text(self, text: str) -> TextObject:
         """Neuer Text mit der Schrift aus den Einstellungen (automatische Größe → 19 pt),
         linksbündig: Er wächst von seiner Position nach rechts (wie P-touch)."""
@@ -702,7 +774,16 @@ class MainWindow(QMainWindow):
             self.canvas.set_selection([index])
             index = self.canvas.selection()[-1]     # ggf. umnummeriert (leerer Rahmen entfiel)
         self._show_tool("text")
-        if self._timer.isActive():
+        if self.panel("series").preview() is not None:
+            # Serie: das Objekt zeigt im Schreibmodus seine Platzhalter – vor der Schreibmarke
+            # rendern, sonst passen Zeilensatz und Text nicht (die Lage wanderte beim Tippen);
+            # die Klickstelle im gefüllten Text lässt sich nicht übertragen: Marke ans Ende
+            self._keep, point = index, None
+            try:
+                self.render_now()
+            finally:
+                self._keep = None
+        elif self._timer.isActive():
             self.render_now()                       # Klick trifft den aktuellen Zeilensatz
         self.edit_session.start(index, point)
         self._update_edit_actions()
@@ -719,6 +800,8 @@ class MainWindow(QMainWindow):
                 and self.doc.objects[index].is_empty()):
             self.canvas.set_selection([])           # leerer Rahmen entfällt (_on_selection)
         self._commit()
+        if self.panel("series").preview() is not None:
+            self.render_now()                       # wieder die Werte statt der Platzhalter
 
     def delete_selected(self) -> None:
         """Ausgewählte Objekte löschen (auch das letzte – das Etikett ist dann leer)."""
@@ -1412,6 +1495,19 @@ class MainWindow(QMainWindow):
         self.accept_pending_input()
         if self._timer.isActive():
             self.render_now()
+        if self.doc.series is not None:             # rendert jede Zeile selbst (Fehler: „Zeile n“)
+            panel = self.panel("series")
+            if panel.check_file():                  # Tabelle draußen geändert: Auswahl ist neu
+                self.render_now()
+                self._set_result(f"Serie: {panel.error}" if panel.error else
+                                 "Tabelle wurde geändert und neu eingelesen – Auswahl prüfen und "
+                                 "erneut drucken.", "error")
+                return
+            if panel.error:
+                self._set_result(f"Serie: {panel.error}", "error")
+                return
+            self._print_series(self.doc, panel.table, panel.checked_rows())
+            return
         if self._render_error is not None:
             self._set_result(self._render_error, "error")   # nicht still nichts tun
             return
@@ -1419,10 +1515,82 @@ class MainWindow(QMainWindow):
             return
         self._print(self.image, self.doc, self._outside)
 
-    def print_document(self, doc: Document) -> None:
-        """Anderes Etikett drucken (Favorit), ohne das offene anzutasten – gleiche Rückfragen."""
+    def _print_series(self, doc: Document, table: series.Table,
+                      rows: list[tuple[int, list[str]]]) -> None:
+        """Gewählte Zeilen drucken: erst Rolle/Druck prüfen und nach der Anzahl fragen, dann
+        jede Zeile rendern (Fortschritt in der Statusleiste), Zeilen, die über das Etikett
+        ragen, nennen und fragen – ein Auftrag. Scheitert eine Zeile, wird nichts gedruckt."""
+        if not table.rows:
+            self._set_result("Tabelle hat keine Zeilen – nichts gedruckt.", "error")
+            return
+        if not rows:
+            self._set_result("Keine Zeile gewählt – nichts gedruckt.", "error")
+            return
+        if self.is_checking_media():
+            self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
+            return
         if self.is_printing():
             self._set_result("Druck läuft – bitte warten.", "error")
+            return
+        if not self.ask_print_count(len(rows)):
+            return
+        images, outside = [], []
+        renderer = Renderer()                       # unveränderte Objekte aus dem Cache
+        self._set_printing(True)                    # gesperrt, solange vorbereitet wird
+        try:
+            for done, (number, values) in enumerate(rows):
+                if done % PROGRESS_EVERY == 0 and len(rows) > PROGRESS_EVERY:
+                    self._set_result(f"Bereite {done + 1}/{len(rows)} vor …", "")
+                    QApplication.processEvents()
+                try:
+                    result = renderer.render(series.fill(doc, table.columns, values), self.model)
+                except ValueError as e:
+                    self._set_result(f"Zeile {number}: {e}", "error")
+                    return
+                if outside_indices(result.objects, result.size, doc.objects):
+                    outside.append(number)
+                images.append(to_print_mode(result.image))   # 1 Bit: wenig Speicher
+        finally:
+            self._set_printing(False)
+        if outside and not self.confirm_outside_rows(outside):
+            self._set_result("", "")
+            return
+        self._print(images, doc, [], cut_interval(doc.series.cut, len(images)))
+
+    def confirm_outside_rows(self, numbers: list[int]) -> bool:
+        """Rückfrage: Zeilen, in denen etwas über das Etikett ragt (in Tests ersetzbar)."""
+        shown = ", ".join(map(str, numbers[:10])) + (" …" if len(numbers) > 10 else "")
+        text = (f"Zeile {shown} ragt" if len(numbers) == 1 else f"Zeilen {shown} ragen")
+        return QMessageBox.question(
+            self, "Objekt ragt hinaus",
+            f"{text} über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+
+    def ask_print_count(self, count: int) -> bool:
+        """Rückfrage vor dem Drucken einer Serie (in Tests ersetzbar)."""
+        text = "1 Etikett drucken?" if count == 1 else f"{count} Etiketten drucken?"
+        return QMessageBox.question(
+            self, "Serie drucken", text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes) == QMessageBox.StandardButton.Yes
+
+    def print_document(self, doc: Document) -> None:
+        """Anderes Etikett drucken (Favorit), ohne das offene anzutasten – gleiche Rückfragen;
+        mit Serie alle Zeilen."""
+        if self.is_printing():
+            self._set_result("Druck läuft – bitte warten.", "error")
+            return
+        if doc.series is not None:
+            try:
+                table = series.table_for(doc.series)
+            except ValueError as e:                  # SeriesError
+                self._set_result(str(e), "error")
+                return
+            except Exception as e:  # fremde Datei: Meldung statt Traceback
+                self._set_result(f"Serie kann nicht gelesen werden ({type(e).__name__})", "error")
+                return
+            self._print_series(doc, table, list(enumerate(table.rows, start=1)))
             return
         try:
             image = render_document(doc, self.model)
@@ -1435,7 +1603,8 @@ class MainWindow(QMainWindow):
             return
         self._print(image, doc, outside)
 
-    def _print(self, image, doc: Document, outside: list[int]) -> None:
+    def _print(self, image, doc: Document, outside: list[int], cut_every: int = 1) -> None:
+        """``image``: ein Druckbild oder eine Liste (Serie, ein Auftrag)."""
         if self.is_checking_media():
             self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
             return
@@ -1450,7 +1619,7 @@ class MainWindow(QMainWindow):
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
         self.result.style().polish(self.result)
         self.result.setText("Drucke …")
-        worker = PrintWorker(image, doc.label_id, self.model)
+        worker = PrintWorker(image, doc.label_id, self.model, cut_every)
         self._print_signals = worker.signals  # Referenz bis zum Ende des Drucks
         worker.signals.done.connect(self._print_done)
         worker.signals.failed.connect(self._print_failed)
