@@ -377,3 +377,10 @@ def test_dialog_keeps_symbol_lists(qtbot):
     qtbot.addWidget(dialog)
     values = dialog.values()
     assert (values.symbols_recent, values.symbols_favorites) == (["labelwerk/erde"], ["iso7010/W012"])
+
+
+def test_dialog_keeps_recent_files_and_start_favorite(qtbot):
+    dialog = SettingsDialog(Settings(recent_files=["/a.labelwerk"], start_favorite="Absender"))
+    qtbot.addWidget(dialog)
+    values = dialog.values()
+    assert (values.recent_files, values.start_favorite) == (["/a.labelwerk"], "Absender")

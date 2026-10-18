@@ -573,3 +573,16 @@ def test_ink_box_threshold_and_empty():
     assert ink_box(img) is None
     img.paste((249, 249, 249), (5, 5, 20, 20))
     assert ink_box(img) == (5, 5, 20, 20)
+
+
+def test_postscript_disguised_as_png_is_refused_without_ghostscript(tmp_path, monkeypatch):
+    """Pillow erkennt das Format am Inhalt – EPS liefe sonst durch Ghostscript."""
+    import subprocess
+    for name in ("Popen", "call", "check_call", "check_output", "run"):
+        monkeypatch.setattr(subprocess, name, lambda *a, **k: pytest.fail("Ghostscript gestartet"))
+    path = tmp_path / "bild.png"
+    path.write_bytes(b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 30 30\nshowpage\n%%EOF\n")
+    with pytest.raises(ValueError, match="kein lesbares Bild"):
+        load_image(path)
+    with pytest.raises(ValueError, match="kein lesbares Bild"):
+        load_file(path)

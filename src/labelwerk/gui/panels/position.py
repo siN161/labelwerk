@@ -8,10 +8,11 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QGridLayout, QLabel, QWidget
 
+from ...document import MAX_POSITION_MM
 from ...layout import Rect
 from ..widgets import DoubleSpinBox
 
-POSITION_MM = (-999.9, 999.9)    # Lage darf auch neben dem Etikett liegen (ragt hinaus)
+POSITION_MM = (-MAX_POSITION_MM, MAX_POSITION_MM)   # Lage darf auch neben dem Etikett liegen (ragt hinaus)
 SIZE_MM = (1.0, 999.9)
 FRAME_ONLY = "Nur mit fester Rahmengröße änderbar"
 _FIELDS = (("x", "X", "Abstand vom linken Etikettrand"),

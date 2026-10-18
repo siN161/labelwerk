@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QStyledItemDelegate, QTableWidget, QTableWidgetItem, QTabWidget,
                                QVBoxLayout, QWidget)
 
-from .. import shortcuts
+from .. import favorites, shortcuts
 from ..document import MAX_MARGIN_MM, MAX_PT, MIN_PT
 from ..labels import labels_for_model
 from ..printer import DEFAULT_MODEL
@@ -44,6 +44,7 @@ class SettingsDialog(QDialog):
         self.path = path
         self.saved: Settings | None = None
         self._symbols = (settings.symbols_recent, settings.symbols_favorites)   # nur durchgereicht
+        self._recent_files = settings.recent_files                             # nur durchgereicht
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
@@ -90,6 +91,16 @@ class SettingsDialog(QDialog):
         self._family_touched = False
         self.font_family.currentFontChanged.connect(self._family_changed)
         form.addRow("Schriftart", self.font_family)
+        self.start_favorite = QComboBox()
+        self.start_favorite.addItem("Leeres Etikett", None)
+        for favorite in favorites.favorites():
+            self.start_favorite.addItem(favorite.name, favorite.name)
+        if settings.start_favorite and self.start_favorite.findData(settings.start_favorite) < 0:
+            # gelöscht oder umbenannt: sichtbar lassen, nicht still auf „leer“ setzen
+            self.start_favorite.addItem(f"{settings.start_favorite} (fehlt)", settings.start_favorite)
+        self.start_favorite.setCurrentIndex(max(0, self.start_favorite.findData(settings.start_favorite)))
+        self.start_favorite.setToolTip("Etikett, mit dem labelwerk startet (Favorit als Vorlage)")
+        form.addRow("Beim Start", self.start_favorite)
 
         form = self._section(layout, "Bilder einfügen")
         self.image_crop = QCheckBox("Automatisch zuschneiden (ohne Schnittmarken und Leerraum)")
@@ -292,6 +303,8 @@ class SettingsDialog(QDialog):
             image_rotate=self.image_rotate.isChecked(),
             symbols_recent=list(self._symbols[0]),
             symbols_favorites=list(self._symbols[1]),
+            recent_files=list(self._recent_files),
+            start_favorite=self.start_favorite.currentData(),
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},
         )

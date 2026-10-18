@@ -160,7 +160,7 @@ def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tup
         sheet = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
         image, svg = _render(renderer, sheet, (0, 0, *sheet)), None if linked else data
     else:
-        with Image.open(io.BytesIO(data)) as img:
+        with Image.open(io.BytesIO(data), formats=["PNG"]) as img:     # nur PNG (kein EPS)
             image, svg = on_white(img), None
     crop = files.ink_box(image)
     l, t, r, b = crop or (0, 0, *image.size)
@@ -194,7 +194,7 @@ def to_pil(image: QImage) -> Image.Image:
     buffer = QBuffer()
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
     image.save(buffer, "PNG")
-    with Image.open(io.BytesIO(bytes(buffer.data()))) as img:
+    with Image.open(io.BytesIO(bytes(buffer.data())), formats=["PNG"]) as img:
         return on_white(img)
 
 

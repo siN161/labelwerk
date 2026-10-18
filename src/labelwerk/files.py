@@ -16,6 +16,8 @@ from .render import MARGIN
 _IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
 # Bild-Objekte: zusätzlich GIF (erstes Bild), BMP, WebP; SVG rastert die Oberfläche
 _OBJECT_SUFFIXES = (*_IMAGE_SUFFIXES, ".gif", ".bmp", ".webp")
+_IMAGE_FORMATS = ["PNG", "JPEG"]                       # Pillow-Formate zu den Endungen
+_OBJECT_FORMATS = [*_IMAGE_FORMATS, "GIF", "BMP", "WEBP"]
 
 INK = 128            # dunkler gilt als bedruckt
 INK_LEVEL = 250      # Symbole: heller als das zählt beim Zuschneiden als Papier
@@ -50,7 +52,8 @@ def load_image(path: str | Path, page: int = 1,
     with _readable(path):
         if path.suffix.lower() == ".pdf":
             return _load_pdf_page(path, page)
-        with Image.open(path) as src:                  # GIF: erstes Bild
+        # Formate fest: Pillow erkennt sie sonst am Inhalt (EPS liefe durch Ghostscript)
+        with Image.open(path, formats=_OBJECT_FORMATS) as src:     # GIF: erstes Bild
             x_dpi, y_dpi = _file_dpi(src) if dpi is None else (dpi, dpi)
             if src.getexif().get(0x0112, 1) in (5, 6, 7, 8):   # EXIF dreht um 90°
                 x_dpi, y_dpi = y_dpi, x_dpi
@@ -150,7 +153,7 @@ def _pdf_page(path: Path, page: int):
 
 
 def _load_image(path: Path) -> Image.Image:
-    with Image.open(path) as src:
+    with Image.open(path, formats=_IMAGE_FORMATS) as src:
         dpi = float(src.info.get("dpi", (DPI, DPI))[0]) or DPI
         img = to_8bit(src).convert("RGBA")             # 16-Bit-Graustufen skalieren
     img = Image.alpha_composite(Image.new("RGBA", img.size, "white"), img).convert("L")
