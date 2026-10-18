@@ -14,9 +14,14 @@ class PrintSignals(QObject):
 
 
 class PrintWorker(QRunnable):
-    def __init__(self, image: Image.Image, label_id: str, model: str):
+    """``image``: ein Etikett oder eine Liste (Serie, ein Auftrag); ``cut_every``: schneiden
+    alle n Etiketten (``printer.cut_interval``)."""
+
+    def __init__(self, image: Image.Image | list[Image.Image], label_id: str, model: str,
+                 cut_every: int = 1):
         super().__init__()
         self.image, self.label_id, self.model = image, label_id, model
+        self.cut_every = cut_every
         self.signals = PrintSignals()
 
     def run(self) -> None:
@@ -25,7 +30,8 @@ class PrintWorker(QRunnable):
             if printer is None:
                 self.signals.failed.emit(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
                 return
-            status = print_image(self.image, self.label_id, model=self.model, printer=printer)
+            status = print_image(self.image, self.label_id, model=self.model, printer=printer,
+                                 cut_every=self.cut_every)
         except PrintError as e:
             self.signals.failed.emit(str(e))
             return

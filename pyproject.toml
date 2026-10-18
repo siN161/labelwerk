@@ -12,7 +12,7 @@ license = "GPL-3.0-or-later AND MIT AND CC0-1.0"
 license-files = ["LICEN[CS]E*", "src/labelwerk/clipart_data/LICENSES.md"]
 requires-python = ">=3.10"
 dependencies = [
-    "brother_ql-inventree>=1.3",
+    "brother_ql-inventree>=1.3,<2",   # printer._Raster nutzt Interna (add_cut_every, page_number)
     "pillow>=10.1",
     "pypdfium2>=4",
     "openpyxl>=3.1",      # Excel-Tabellen für Serien (MIT)

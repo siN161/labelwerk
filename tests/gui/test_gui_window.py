@@ -439,3 +439,19 @@ def test_print_inside_label_does_not_ask(window, qtbot, monkeypatch):
     window.panel("text").edit.setPlainText("Hallo")
     window.print_label()
     qtbot.waitUntil(lambda: window.print_action.isEnabled(), timeout=3000)
+
+
+def test_print_worker_passes_several_labels_and_the_cut(monkeypatch):
+    from PIL import Image
+    from labelwerk.gui.print_worker import PrintWorker
+    monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp0")
+    sent = {}
+
+    def fake_print(images, label_id, **kw):
+        sent.update(images=images, cut_every=kw["cut_every"])
+        return {"outcome": "printed", "did_print": True}
+    monkeypatch.setattr("labelwerk.gui.print_worker.print_image", fake_print)
+    images = [Image.new("RGB", (10, 10), "white")] * 3
+    worker = PrintWorker(images, "62", "QL-600", cut_every=3)
+    worker.run()
+    assert sent == {"images": images, "cut_every": 3}

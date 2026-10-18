@@ -60,8 +60,10 @@ Häkchen (nach dem Öffnen ist jede Zeile gewählt), mehrere Etiketten nebeneina
   `missing(doc, columns) -> list[str]` (Platzhalter ohne Spalte).
 - **Drucken mehrerer Etiketten** (`printer.py`): `build_instructions(images, label_id, model, cut=True,
   cut_every=1)` nimmt eine Liste (ein Bild bleibt erlaubt); `cut_every` = n schneidet alle n Etiketten
-  (Brother `ESC i A n`, 1–255) und am Ende. „Nur am Ende“ = `cut_every = min(Anzahl, 255)`. `print_images`
-  wie `print_image` für eine Liste.
+  (Brother `ESC i A n`, 1–255) und am Ende. „Nur am Ende“ = `cut_every = min(Anzahl, 255)`. `print_image`
+  nimmt auch eine Liste: Teilaufträge (50 Etiketten bei „nach jedem“, sonst `cut_every`), jeder mit eigener
+  Statusprüfung – der Drucker meldet Fehler nur kurz nach dem Senden; ein Fehler bricht ab („Etikett k–m von
+  N“). Rasterdaten in einem `bytearray` (lange Serien), Folgeseiten markiert (ESC i z n9 = 1).
 - **Speichern** (`storage.py`): Eintrag `series` (null = keine), Schema `SERIES`/`NUMBERING` mit Grenzen;
   `source` absolut – liegt die Tabelle im Ordner der Datei (oder darunter), relativ dazu (kein Benutzername in
   weitergegebenen Etiketten); nie leer, kein NUL.
