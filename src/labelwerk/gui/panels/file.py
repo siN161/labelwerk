@@ -161,7 +161,7 @@ class FilePanel(Panel):
         start = menu.addAction("Beim Start öffnen", lambda: self.favorite_start.emit(favorite))
         start.setCheckable(True)
         start.setChecked(favorite.name == self._start)
-        menu.addAction("Ordner öffnen", self.favorites_folder)
+        menu.addAction("Ordner öffnen", lambda: self.favorites_folder.emit())
         return menu
 
     def _favorite_context(self, pos) -> None:

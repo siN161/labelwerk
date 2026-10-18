@@ -292,6 +292,17 @@ def test_favorite_context_menu_actions(qtbot):
     assert menu.actions()[4].isCheckable()
 
 
+def test_favorite_menu_opens_the_folder(qtbot):
+    """Rechtsklick → Ordner öffnen: der Menüeintrag selbst (nicht nur die Funktion) öffnet."""
+    favorites.add(_doc(), "Absender")
+    win = _window(qtbot)
+    opened = []
+    win.files.open_url = lambda url: opened.append(url.toLocalFile())
+    menu = win.panel("file").favorite_menu(0)
+    menu.actions()[-1].trigger()
+    assert opened == [str(favorites.favorites_dir())]
+
+
 def test_empty_favorites_show_a_hint(qtbot):
     win = _window(qtbot)
     panel = win.panel("file")
