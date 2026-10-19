@@ -354,3 +354,65 @@ def test_fonts_all_default_and_validation(tmp_path):
     path.write_text(json.dumps({"fonts_all": "ja"}))
     s = load_settings(path)
     assert s.fonts_all is False and s.warnings
+
+
+def test_image_defaults_for_new_images(tmp_path):
+    s = Settings()
+    assert (s.image_mode, s.image_threshold) == ("line", 128)  # wie bisher: Strich, Mitte
+    path = tmp_path / "s.json"
+    save_settings(Settings(image_mode="photo", image_threshold=90), path)
+    loaded = load_settings(path)
+    assert (loaded.image_mode, loaded.image_threshold) == ("photo", 90)
+    assert loaded.warnings == []
+
+
+@pytest.mark.parametrize("raw", [{"image_mode": "grau"}, {"image_threshold": 256},
+                                 {"image_threshold": -1}, {"image_threshold": True},
+                                 {"image_threshold": 12.5}, {"image_threshold": "90"}])
+def test_invalid_image_defaults_fall_back_with_warning(tmp_path, raw):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps(raw))
+    s = load_settings(path)
+    assert (s.image_mode, s.image_threshold) == ("line", 128)
+    assert len(s.warnings) == 1 and next(iter(raw)) in s.warnings[0]
+
+
+# --- Reiter beim Start --------------------------------------------------------------
+def test_start_tool_defaults_and_roundtrip(tmp_path):
+    from labelwerk.settings import START_TOOLS
+    s = Settings()
+    assert (s.start_tool, s.last_tool) == ("paper", "")         # wie bisher: Papier
+    assert START_TOOLS[0] == "last" and "paper" in START_TOOLS
+    path = tmp_path / "s.json"
+    save_settings(Settings(start_tool="last", last_tool="series"), path)
+    loaded = load_settings(path)
+    assert (loaded.start_tool, loaded.last_tool) == ("last", "series")
+    assert loaded.warnings == []
+
+
+@pytest.mark.parametrize("raw", [{"start_tool": "druck"}, {"start_tool": ""}, {"start_tool": 3}])
+def test_invalid_start_tool_falls_back_with_warning(tmp_path, raw):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps(raw))
+    s = load_settings(path)
+    assert s.start_tool == "paper"
+    assert len(s.warnings) == 1 and "start_tool" in s.warnings[0]
+
+
+@pytest.mark.parametrize("value", ["last", "druck", 3, None])
+def test_invalid_last_tool_is_dropped_quietly(tmp_path, value):
+    """Zuletzt benutzter Reiter ist nur ein gemerkter Wert: ungültig → leer, ohne Hinweis."""
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"last_tool": value}))
+    s = load_settings(path)
+    assert s.last_tool == "" and s.warnings == []
+
+
+def test_start_tool_needs_a_restart():
+    from labelwerk.settings import RESTART_KEYS, restart_pending, started_values
+    assert "start_tool" in RESTART_KEYS
+    started = started_values(Settings(start_tool="paper"))
+    assert started["start_tool"] == "paper"
+    language = started["language"]
+    assert not restart_pending(language, 200, "paper", started)
+    assert restart_pending(language, 200, "last", started)

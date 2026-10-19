@@ -922,3 +922,41 @@ def test_insert_on_growing_tape_goes_behind_existing_text(qtbot):
     text, image = (layout.object_rect(r) for r in win.rendered)
     assert image.y >= text.bottom + 2 - 0.2
     assert layout.label_rect(win.doc).h > before
+
+
+# --- Standard für neue Bilder (Einstellungen) ---------------------------------------
+def test_new_images_take_mode_and_threshold_from_the_settings(qtbot, tmp_path):
+    win = _window(qtbot, image_mode="photo", image_threshold=90)
+    _insert_file(win, _file(tmp_path))                              # aus Datei
+    QApplication.clipboard().setImage(_qimage(_picture()))
+    win.panel("image").from_clipboard.click()                       # aus der Zwischenablage
+    mime = QMimeData()
+    mime.setImageData(_qimage(_picture()))
+    _drop(win.canvas, mime, QPointF(win.canvas.viewport().rect().center()))   # abgelegt
+    assert len(win.doc.objects) == 4
+    assert [(o.mode, o.threshold) for o in win.doc.objects[1:]] == [("photo", 90)] * 3
+
+
+def test_ctrl_v_image_takes_the_image_default(qtbot):
+    win = _window(qtbot, image_mode="photo", image_threshold=60)
+    QApplication.clipboard().setImage(_qimage(_picture()))
+    win.paste()
+    obj = win.doc.objects[1]
+    assert isinstance(obj, ImageObject) and (obj.mode, obj.threshold) == ("photo", 60)
+
+
+def test_symbols_stay_line_art_whatever_the_image_default(qtbot):
+    from labelwerk import clipart
+    win = _window(qtbot, image_mode="photo", image_threshold=40)
+    win.insert_symbol(clipart.find("labelwerk/motor"))
+    assert (win.doc.objects[1].mode, win.doc.objects[1].threshold) == ("line", 128)
+
+
+def test_image_panel_without_selection_shows_the_default(qtbot):
+    win = _window(qtbot, image_mode="photo", image_threshold=90)
+    panel = win.panel("image")
+    panel.refresh()
+    assert panel.photo.isChecked() and panel.threshold.value() == 90
+    assert panel.threshold_value.value() == 90
+    panel.set_defaults("line", 200)                                  # nach dem Speichern
+    assert panel.line.isChecked() and panel.threshold.value() == 200

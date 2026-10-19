@@ -16,14 +16,18 @@ from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, Tex
 from .fonts import DEFAULT_FAMILY
 from . import i18n
 from .i18n import N_, _
+from .imaging import MODES
 from .labels import labels_for_model, sized_label
 from . import zpl
 from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
 THEMES = ("rawblock", "classic")
-RESTART_KEYS = ("language", "start_zoom")   # wirken erst nach einem Neustart (Hinweis in der GUI)
+RESTART_KEYS = ("language", "start_zoom", "start_tool")   # wirken erst nach einem Neustart (Hinweis)
+# Reiter beim Start: „last“ = zuletzt benutzter, sonst Schlüssel der Werkzeuge (gui/tools.py TOOLS)
+START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series")
 SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")
+QUIET_KEYS = ("last_tool",)   # nur gemerkt, nicht vom Nutzer eingestellt: ungültig → Standard ohne Hinweis
 
 
 @dataclass
@@ -36,9 +40,13 @@ class Settings:
     fonts_all: bool = False                # Schriftauswahl: alle Familien statt der kurzen Liste
     check_media_on_start: bool = True
     start_zoom: int = 200
+    start_tool: str = "paper"              # Reiter beim Start (START_TOOLS; "last" = zuletzt benutzter)
+    last_tool: str = ""                    # zuletzt benutzter Reiter (still gespeichert)
     theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
     image_crop: bool = True                # Bilder beim Einfügen auf den Inhalt zuschneiden
     image_rotate: bool = False             # Bilder drehen, wenn sie nur gedreht 1:1 passen
+    image_mode: str = "line"               # neue Bilder: Strich ("line") oder Foto ("photo")
+    image_threshold: int = 128             # neue Bilder: Schwelle 0–255
     symbols_recent: list[str] = field(default_factory=list)      # Symbol-ids, neueste zuerst
     symbols_favorites: list[str] = field(default_factory=list)   # Symbol-ids
     recent_files: list[str] = field(default_factory=list)   # Zuletzt geöffnet (Pfade), neueste zuerst
@@ -75,6 +83,10 @@ def _rules(model: str | None = None) -> dict:
         "theme": lambda v: v in THEMES,
         "image_crop": lambda v: isinstance(v, bool),
         "image_rotate": lambda v: isinstance(v, bool),
+        "image_mode": lambda v: v in MODES,
+        "image_threshold": lambda v: _is_int(v) and 0 <= v <= 255,
+        "start_tool": lambda v: v in START_TOOLS,
+        "last_tool": lambda v: v == "" or (v in START_TOOLS and v != "last"),
         "symbols_recent": lambda v: isinstance(v, list),
         "symbols_favorites": lambda v: isinstance(v, list),
         "recent_files": lambda v: isinstance(v, list),
@@ -117,11 +129,12 @@ def started_values(settings: Settings) -> dict:
     return {**{key: getattr(settings, key) for key in RESTART_KEYS}, "language": i18n.language()}
 
 
-def restart_pending(language: str, start_zoom: int, started: dict) -> bool:
+def restart_pending(language: str, start_zoom: int, start_tool: str, started: dict) -> bool:
     """Wirkt eine Einstellung erst nach einem Neustart anders als jetzt? Sprache wirksam verglichen
-    ("" = Systemsprache), Start-Zoom mit dem Wert beim Start."""
+    ("" = Systemsprache), Start-Zoom und Reiter beim Start mit dem Wert beim Start."""
     effective = language if language in i18n.available() else i18n.system_language()
-    return effective != started["language"] or start_zoom != started["start_zoom"]
+    return (effective != started["language"] or start_zoom != started["start_zoom"]
+            or start_tool != started["start_tool"])
 
 
 def configured_language(path: str | Path | None = None) -> str:
@@ -177,7 +190,7 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
             elif key == "printer_options":
                 value = _printer_options(value, settings.warnings)
             setattr(settings, key, value)
-        else:
+        elif key not in QUIET_KEYS:
             settings.warnings.append(_("Setting {key!r} invalid ({value!r}) – using default "
                                        "{default!r}.").format(key=key, value=value,
                                                               default=getattr(settings, key)))

@@ -42,7 +42,8 @@ def test_restart_notice_stays_next_to_save(qtbot, tmp_path):
     """Der Hinweis steht unten neben SPEICHERN – auch im Reiter Tastenkürzel sichtbar – und
     vergleicht mit dem Stand beim Start: wieder zurückgestellt, kein Hinweis."""
     dialog = SettingsDialog(Settings(language="en"), tmp_path / "s.json",
-                            started={"language": "en", "start_zoom": 200})
+                            started={"language": "en", "start_zoom": 200,
+                                     "start_tool": "paper"})
     qtbot.addWidget(dialog)
     dialog.show()
     assert dialog.restart_hint.isHidden()
@@ -57,7 +58,8 @@ def test_restart_notice_stays_next_to_save(qtbot, tmp_path):
 def test_saved_but_not_restarted_still_shows_the_notice(qtbot, tmp_path):
     """Gespeichert, aber noch nicht neu gestartet: beim nächsten Öffnen steht der Hinweis gleich da."""
     dialog = SettingsDialog(Settings(language="en"), tmp_path / "s.json",
-                            started={"language": "de", "start_zoom": 200})
+                            started={"language": "de", "start_zoom": 200,
+                                     "start_tool": "paper"})
     qtbot.addWidget(dialog)
     assert not dialog.restart_hint.isHidden()
 

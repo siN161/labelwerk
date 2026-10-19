@@ -202,7 +202,9 @@ def test_numbers_in_label_content_follow_the_region():
 
 def test_restart_pending():
     from labelwerk.settings import restart_pending
-    started = {"language": "de", "start_zoom": 200}
-    assert not restart_pending("", 200, started)            # Automatisch = Systemsprache (de)
-    assert not restart_pending("de", 200, started)
-    assert restart_pending("en", 200, started) and restart_pending("de", 150, started)
+    started = {"language": "de", "start_zoom": 200, "start_tool": "paper"}
+    assert not restart_pending("", 200, "paper", started)   # Automatisch = Systemsprache (de)
+    assert not restart_pending("de", 200, "paper", started)
+    assert restart_pending("en", 200, "paper", started)
+    assert restart_pending("de", 150, "paper", started)
+    assert restart_pending("de", 200, "last", started)

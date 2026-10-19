@@ -178,9 +178,12 @@ class MainWindow(QMainWindow):
             group.addAction(action)
             toolbar.addAction(action)
             self.tool_actions[tool.key] = action
-        start = START_TOOL if START_TOOL in self.tool_actions else next(iter(self.tool_actions))
+        start = self._start_tool()
         self.tool_actions[start].setChecked(True)
         self.panels.setCurrentWidget(self._panel_by_key[start])
+        self.panels.currentChanged.connect(self._remember_tool)    # erst nach dem Start-Reiter
+        self._stored_tool = self.settings.last_tool   # zuletzt benutzter Reiter, wie in der Datei
+        self.panel("image").set_defaults(self.settings.image_mode, self.settings.image_threshold)
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(spacer)
@@ -263,6 +266,7 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(self.cancel_button)
         # Stand beim Start: der Einstellungsdialog zeigt danach, was erst ein Neustart ändert
         self._started = started_values(self.settings)
+        self._sync_tool()                           # Start im Reiter Text: „Text anlegen“
         self.zoom_label = QLabel()
         for text, delta in (("−", -ZOOM_STEP), ("+", ZOOM_STEP)):
             button = QToolButton()
@@ -416,6 +420,25 @@ class MainWindow(QMainWindow):
                 bar.addSeparator()
             else:
                 bar.addAction(self.shortcut_actions[entry[0]])   # Symbol setzt apply_theme_icons
+
+    def _start_tool(self) -> str:
+        """Reiter beim Start: Einstellung ``start_tool`` („last“ = zuletzt benutzter); ohne
+        gültigen Wert ``START_TOOL``."""
+        wanted = self.settings.start_tool
+        if wanted == "last":
+            wanted = self.settings.last_tool
+        for key in (wanted, START_TOOL):
+            if key in self.tool_actions:
+                return key
+        return next(iter(self.tool_actions))
+
+    def _remember_tool(self, _index: int = 0) -> None:
+        """Gezeigten Reiter als zuletzt benutzten merken (``last_tool``) – nur im Speicher: jeder
+        Klick auf ein Objekt kann den Reiter wechseln; auf die Platte kommt er beim Schließen."""
+        key = next((k for k, panel in self._panel_by_key.items()
+                    if panel is self.panels.currentWidget()), "")
+        if key:
+            self.settings.last_tool = key
 
     def _show_tool(self, key: str) -> None:
         """Panel eines Werkzeugs zeigen (wie ein Klick auf seinen Knopf)."""
@@ -1345,6 +1368,7 @@ class MainWindow(QMainWindow):
         """Einstellungen still speichern (Zuletzt verwendet, Favoriten); Fehler in die Statusleiste."""
         try:
             save_settings(self.settings)
+            self._stored_tool = self.settings.last_tool
         except OSError as e:
             self._set_result(str(e), "error")
 
@@ -1374,13 +1398,16 @@ class MainWindow(QMainWindow):
                    notes: list[str], svg: bytes | None = None) -> ImageObject:
         """Bild-Objekt 1:1, automatisch zugeschnitten (alles, was nicht weiß ist; Einstellung
         ``image_crop``); ist das Bild ganz weiß, bleibt es ganz – mit Hinweis in ``notes``.
-        Mit ``svg`` ein Vektorbild (``image`` ist dessen Vorschau)."""
-        if not self.settings.image_crop:
-            return ImageObject.from_image(image, dpi, source, page, None, svg)
-        crop = crop_box(image, dpi, ink=NOT_WHITE)
-        if crop is None and _(CROP_FAILED) not in notes:
-            notes.append(_(CROP_FAILED))
-        return ImageObject.from_image(image, dpi, source, page, crop, svg)
+        Mit ``svg`` ein Vektorbild (``image`` ist dessen Vorschau). Strich/Foto und Schwelle aus
+        den Einstellungen (``image_mode``, ``image_threshold``)."""
+        crop = None
+        if self.settings.image_crop:
+            crop = crop_box(image, dpi, ink=NOT_WHITE)
+            if crop is None and _(CROP_FAILED) not in notes:
+                notes.append(_(CROP_FAILED))
+        obj = ImageObject.from_image(image, dpi, source, page, crop, svg)
+        obj.mode, obj.threshold = self.settings.image_mode, self.settings.image_threshold
+        return obj
 
     def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
                        notes: list[str], state: str = "warn", rotate: bool | None = None) -> None:
@@ -1632,6 +1659,12 @@ class MainWindow(QMainWindow):
         self._shot_pending = False                  # keine Auswahl und kein Einfügen mehr
         if self._shooting:
             self._end_shooting()
+        if self.settings.last_tool != self._stored_tool:   # zuletzt benutzter Reiter, still
+            try:
+                save_settings(self.settings)
+                self._stored_tool = self.settings.last_tool
+            except OSError:
+                pass                                # beim Beenden: nichts mehr zu melden
         super().closeEvent(event)
 
     # --- Einstellungen ----------------------------------------------------
@@ -1658,6 +1691,7 @@ class MainWindow(QMainWindow):
             # während der Dialog offen war, kann sich Drucker/letztes Modell geändert haben
             saved.printer, saved.last_model = self.settings.printer, self.settings.last_model
             saved.printer_options = self.settings.printer_options
+            saved.last_tool = self.settings.last_tool
             if saved.printer.startswith(("tcp://", "zpl+tcp://")) and saved.printer not in {
                     p.uri for p in network_printers(network_entries(saved))}:
                 saved.printer = ""                  # Netzwerkdrucker entfernt/geändert: automatisch
@@ -1671,6 +1705,7 @@ class MainWindow(QMainWindow):
             apply_shortcuts(self.shortcut_actions,
                             without_conflicts(effective(self.settings.shortcuts))[0])
             self.files.refresh_lists()                  # „Beim Start“ im Reiter Datei
+            self.panel("image").set_defaults(self.settings.image_mode, self.settings.image_threshold)
             self.refresh_printer()                      # Netzwerkdrucker, Ersatzmodell
             self._set_result(_("Settings saved – they apply to new labels."), "ok")
 

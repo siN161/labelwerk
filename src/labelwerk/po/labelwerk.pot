@@ -470,7 +470,12 @@ msgid "Continuous"
 msgstr ""
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Conversion"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Conversion of new images (symbols stay line art)"
 msgstr ""
 
 #: src/labelwerk/shortcuts.py
@@ -1153,6 +1158,10 @@ msgstr ""
 msgid "Larger font"
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Last used"
+msgstr ""
+
 #: src/labelwerk/gui/panels/layout.py
 #: src/labelwerk/gui/tools.py
 msgid "Layout"
@@ -1167,6 +1176,7 @@ msgid "Line"
 msgstr ""
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Line art"
 msgstr ""
 
@@ -1603,6 +1613,7 @@ msgid "Peel off (dispenser only)"
 msgstr ""
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Photo"
 msgstr ""
 
@@ -2227,6 +2238,10 @@ msgstr ""
 msgid "TABLE …"
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Tab at startup"
+msgstr ""
+
 #: src/labelwerk/gui/main_window.py
 msgid "Table for the series"
 msgstr ""
@@ -2320,12 +2335,17 @@ msgid "Thick-thin"
 msgstr ""
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Threshold"
 msgstr ""
 
 #: src/labelwerk/imaging.py
 #, python-brace-format
 msgid "Threshold must be a whole number from 0 to 255, not {threshold!r}."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Threshold of new images – higher = darker"
 msgstr ""
 
 #: src/labelwerk/gui/main_window.py
@@ -3079,7 +3099,7 @@ msgid "Ø {width} mm · round"
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
-msgid "“New label” applies to new labels, start zoom and language from the next start, everything else immediately."
+msgid "“New label” applies to new labels, start zoom, tab at startup and language from the next start, everything else immediately."
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py

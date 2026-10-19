@@ -479,8 +479,13 @@ msgid "Continuous"
 msgstr "Endlos"
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Conversion"
 msgstr "Umwandlung"
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Conversion of new images (symbols stay line art)"
+msgstr "Umwandlung neuer Bilder (Symbole bleiben Strich)"
 
 #: src/labelwerk/shortcuts.py
 msgid "Copy"
@@ -1162,6 +1167,10 @@ msgstr "Sprache"
 msgid "Larger font"
 msgstr "Schrift größer"
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Last used"
+msgstr "Zuletzt benutzter"
+
 #: src/labelwerk/gui/panels/layout.py
 #: src/labelwerk/gui/tools.py
 msgid "Layout"
@@ -1176,6 +1185,7 @@ msgid "Line"
 msgstr "Linie"
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Line art"
 msgstr "Strich"
 
@@ -1620,6 +1630,7 @@ msgid "Peel off (dispenser only)"
 msgstr "Ablösen (nur mit Spender)"
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Photo"
 msgstr "Foto"
 
@@ -2248,6 +2259,10 @@ msgstr "Symbol: {name}"
 msgid "TABLE …"
 msgstr "TABELLE …"
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Tab at startup"
+msgstr "Reiter beim Start"
+
 #: src/labelwerk/gui/main_window.py
 msgid "Table for the series"
 msgstr "Tabelle für die Serie"
@@ -2341,6 +2356,7 @@ msgid "Thick-thin"
 msgstr "Dick-dünn"
 
 #: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Threshold"
 msgstr "Schwelle"
 
@@ -2348,6 +2364,10 @@ msgstr "Schwelle"
 #, python-brace-format
 msgid "Threshold must be a whole number from 0 to 255, not {threshold!r}."
 msgstr "Schwelle muss eine ganze Zahl von 0 bis 255 sein, nicht {threshold!r}."
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Threshold of new images – higher = darker"
+msgstr "Schwelle neuer Bilder – höher = mehr Schwarz"
 
 #: src/labelwerk/gui/main_window.py
 msgid "Tools"
@@ -3102,8 +3122,8 @@ msgid "Ø {width} mm · round"
 msgstr "Ø {width} mm · rund"
 
 #: src/labelwerk/gui/settings_dialog.py
-msgid "“New label” applies to new labels, start zoom and language from the next start, everything else immediately."
-msgstr "„Neues Etikett“ gilt für neue Etiketten, Startzoom und Sprache ab dem nächsten Start, alles andere sofort."
+msgid "“New label” applies to new labels, start zoom, tab at startup and language from the next start, everything else immediately."
+msgstr "„Neues Etikett“ gilt für neue Etiketten, Startzoom, Reiter beim Start und Sprache ab dem nächsten Start, alles andere sofort."
 
 #: src/labelwerk/gui/settings_dialog.py
 #, python-brace-format

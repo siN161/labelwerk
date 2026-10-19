@@ -246,3 +246,12 @@ def test_screenshot_ends_text_editing_first(qtbot, portal):
     assert win.edit_session.active
     _start(win, qtbot, portal)
     assert not win.edit_session.active
+
+
+def test_screenshot_takes_the_image_default(qtbot, portal, tmp_path):
+    win = _window(qtbot, image_mode="photo", image_threshold=60)
+    _start(win, qtbot, portal)
+    assert win._shot_pending
+    win.screenshot_finished(_shot(tmp_path), None)
+    obj = win.doc.objects[1]
+    assert (obj.mode, obj.threshold) == ("photo", 60)

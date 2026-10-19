@@ -24,6 +24,7 @@ from ..printer import DEFAULT_MODEL
 from ..printers import SUPPORTED_MODELS, capabilities
 from ..settings import (Settings, restart_pending, save_settings, started_values,
                         valid_host)
+from .tools import TOOLS
 from .widgets import DoubleSpinBox, FontCombo, SpinBox
 
 # englisch (N_), angezeigt wird _(…)
@@ -56,6 +57,7 @@ class SettingsDialog(QDialog):
         self._recent_files = settings.recent_files                             # nur durchgereicht
         self._printer, self._last_model = settings.printer, settings.last_model   # nur durchgereicht
         self._printer_options = settings.printer_options                          # nur durchgereicht
+        self._last_tool = settings.last_tool                                      # nur durchgereicht
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
@@ -129,6 +131,17 @@ class SettingsDialog(QDialog):
         self.image_rotate.setToolTip(_("Off: images that are too large are reduced – saves tape"))
         self.image_rotate.setChecked(settings.image_rotate)
         form.addRow(self.image_rotate)
+        self.image_mode = QComboBox()
+        self.image_mode.addItem(_("Line art"), "line")
+        self.image_mode.addItem(_("Photo"), "photo")
+        self.image_mode.setCurrentIndex(max(0, self.image_mode.findData(settings.image_mode)))
+        self.image_mode.setToolTip(_("Conversion of new images (symbols stay line art)"))
+        form.addRow(_("Conversion"), self.image_mode)
+        self.image_threshold = SpinBox()
+        self.image_threshold.setRange(0, 255)
+        self.image_threshold.setValue(settings.image_threshold)
+        self.image_threshold.setToolTip(_("Threshold of new images – higher = darker"))
+        form.addRow(_("Threshold"), self.image_threshold)
 
         form = self._section(layout, _("Printer"))
         self.check_media = QCheckBox(_("Check the roll at startup and when the printer is switched on"))
@@ -176,6 +189,12 @@ class SettingsDialog(QDialog):
         self.zoom.setSingleStep(10)
         self.zoom.setValue(settings.start_zoom)
         form.addRow(_("Start zoom"), self.zoom)
+        self.start_tool = QComboBox()
+        self.start_tool.addItem(_("Last used"), "last")
+        for tool in TOOLS:
+            self.start_tool.addItem(_(tool.title), tool.key)
+        self.start_tool.setCurrentIndex(max(0, self.start_tool.findData(settings.start_tool)))
+        form.addRow(_("Tab at startup"), self.start_tool)
         self.theme = QComboBox()
         self.theme.addItem("RawBlock", "rawblock")
         self.theme.addItem(_("Classic"), "classic")
@@ -206,9 +225,10 @@ class SettingsDialog(QDialog):
         self.restart_hint.hide()
         self.language.currentIndexChanged.connect(self._update_restart_hint)
         self.zoom.valueChanged.connect(self._update_restart_hint)
+        self.start_tool.currentIndexChanged.connect(self._update_restart_hint)
 
-        hint = QLabel(_("“New label” applies to new labels, start zoom and language from the next "
-                        "start, everything else immediately."))
+        hint = QLabel(_("“New label” applies to new labels, start zoom, tab at startup and language "
+                        "from the next start, everything else immediately."))
         hint.setWordWrap(True)
         layout.addWidget(hint)
         layout.addStretch()
@@ -402,7 +422,8 @@ class SettingsDialog(QDialog):
     def restart_needed(self) -> bool:
         """Wirkt eine gewählte Einstellung erst nach einem Neustart anders als jetzt? (Liest nur die
         Felder der Neustart-Einstellungen – keine Prüfung anderer Felder.)"""
-        return restart_pending(self.language.currentData(), self.zoom.value(), self._started)
+        return restart_pending(self.language.currentData(), self.zoom.value(),
+                               self.start_tool.currentData(), self._started)
 
     def _update_restart_hint(self) -> None:
         self.restart_hint.setVisible(self.restart_needed())
@@ -418,9 +439,13 @@ class SettingsDialog(QDialog):
             fonts_all=self.fonts_all.isChecked(),
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
+            start_tool=self.start_tool.currentData(),
+            last_tool=self._last_tool,
             theme=self.theme.currentData(),
             image_crop=self.image_crop.isChecked(),
             image_rotate=self.image_rotate.isChecked(),
+            image_mode=self.image_mode.currentData(),
+            image_threshold=self.image_threshold.value(),
             symbols_recent=list(self._symbols[0]),
             symbols_favorites=list(self._symbols[1]),
             recent_files=list(self._recent_files),

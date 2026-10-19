@@ -410,3 +410,60 @@ def test_dialog_keeps_recent_files_and_start_favorite(qtbot):
     qtbot.addWidget(dialog)
     values = dialog.values()
     assert (values.recent_files, values.start_favorite) == (["/a.labelwerk"], "Absender")
+
+
+def test_dialog_start_tool_choice(qtbot, tmp_path):
+    path = tmp_path / "s.json"
+    dialog = SettingsDialog(Settings(start_tool="series", last_tool="image"), path)
+    qtbot.addWidget(dialog)
+    combo = dialog.start_tool
+    assert combo.currentData() == "series"
+    assert [combo.itemData(i) for i in range(combo.count())] == [
+        "last", "file", "paper", "text", "image", "barcode", "layout", "series"]
+    assert combo.itemText(0) == "Zuletzt benutzter" and combo.itemText(2) == "Papier"
+    assert dialog.restart_hint.isHidden()
+    combo.setCurrentIndex(combo.findData("last"))
+    assert not dialog.restart_hint.isHidden()                       # wirkt erst beim Start
+    dialog.accept()
+    saved = load_settings(path)
+    assert (saved.start_tool, saved.last_tool) == ("last", "image")  # zuletzt benutzter bleibt
+
+
+def test_dialog_image_defaults(qtbot, tmp_path):
+    path = tmp_path / "s.json"
+    dialog = SettingsDialog(Settings(image_mode="photo", image_threshold=90), path)
+    qtbot.addWidget(dialog)
+    assert dialog.image_mode.currentData() == "photo" and dialog.image_threshold.value() == 90
+    assert [dialog.image_mode.itemText(i) for i in range(2)] == ["Strich", "Foto"]
+    dialog.image_mode.setCurrentIndex(dialog.image_mode.findData("line"))
+    dialog.image_threshold.setValue(150)
+    assert dialog.restart_hint.isHidden()                           # sofort wirksam
+    dialog.accept()
+    saved = load_settings(path)
+    assert (saved.image_mode, saved.image_threshold) == ("line", 150)
+
+
+def test_saved_image_defaults_apply_at_once(qtbot, monkeypatch):
+    from labelwerk.document import Document, TextObject
+    from labelwerk.gui import main_window as mw
+    win = MainWindow(doc=Document("62", objects=[TextObject("A")]),
+                     settings=Settings(check_media_on_start=False))
+    qtbot.addWidget(win)
+
+    class Dialog:
+        DialogCode = mw.SettingsDialog.DialogCode
+
+        def __init__(self, settings, **kwargs):
+            self.saved = Settings(**{**vars(settings), "image_mode": "photo",
+                                     "image_threshold": 70, "warnings": []})
+
+        def exec(self):
+            return self.DialogCode.Accepted
+
+        def deleteLater(self):
+            pass
+
+    monkeypatch.setattr(mw, "SettingsDialog", Dialog)
+    win.open_settings()
+    panel = win.panel("image")
+    assert panel.photo.isChecked() and panel.threshold.value() == 70

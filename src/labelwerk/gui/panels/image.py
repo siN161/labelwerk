@@ -20,6 +20,7 @@ from ...document import Document, ImageObject
 from ...files import NOT_WHITE, crop_box, ink_box
 from ...i18n import N_, _
 from ...layout import Rect
+from ...settings import Settings
 from ..image_import import is_symbol_source, source_title
 from ..symbols import SIZE, line_icon
 from ..widgets import SpinBox
@@ -42,6 +43,8 @@ class ImagePanel(Panel):
     def __init__(self, doc: Document):
         super().__init__(doc, _("Image"))
         self.index: int | None = None   # bearbeitetes Bild; None = keins ausgewählt
+        # ohne Auswahl gezeigt: Standard für neue Bilder (set_defaults; vorher der aus Settings)
+        self._defaults = (Settings.image_mode, Settings.image_threshold)
         self._updating = False
 
         self.hint = QLabel(_(HINT))
@@ -183,6 +186,11 @@ class ImagePanel(Panel):
                 self.rotate_right, self.position)
 
     # --- Modell → Panel -----------------------------------------------------
+    def set_defaults(self, mode: str, threshold: int) -> None:
+        """Standard für neue Bilder (Einstellungen) – zeigt das Panel ohne Auswahl."""
+        self._defaults = (mode, threshold)
+        self.refresh()
+
     def refresh(self) -> None:
         if self.index is not None and not (0 <= self.index < len(self.doc.objects)
                                            and isinstance(self.obj, ImageObject)):
@@ -195,9 +203,10 @@ class ImagePanel(Panel):
         try:
             if not selected:
                 self._show_source("")
-                self.line.setChecked(True)
-                self.threshold.setValue(128)
-                self.threshold_value.setValue(128)
+                mode, threshold = self._defaults
+                (self.photo if mode == "photo" else self.line).setChecked(True)
+                self.threshold.setValue(threshold)
+                self.threshold_value.setValue(threshold)
                 for box in (self.invert, self.crop, self.keep_ratio):
                     box.setChecked(False)
                 self.show_frame(None)

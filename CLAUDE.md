@@ -47,10 +47,11 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   zpl+file://, zpl+tcp:// mit -m zpl:203.
 - Übersetzungen (Etappe 7): Deutsch und Englisch – Quellsprache im Code Englisch (`_()`), Deutsch in
   `src/labelwerk/po/de.po`; Sprache des Systems, Einstellung „Sprache“ (nach Neustart; farbiger Hinweis
-  „Änderungen erst nach Neustart aktiv“ im Einstellungsfenster neben SPEICHERN, für Sprache und Start-Zoom),
+  „Änderungen erst nach Neustart aktiv“ im Einstellungsfenster neben SPEICHERN, für Sprache, Start-Zoom und Reiter beim Start),
   CLI `--lang` (auch argparse-Texte); Zahlen mit dem Dezimaltrenner der Sprache (Eingabe Komma und Punkt),
   Excel-Zahlen im Etikett nach der Region des Systems; `{Nummer}`/`{Number}` und „Spalte n“/„Column n“ in
   jeder Sprache; Symbole mit deutschen und englischen Namen (Suche in beiden); Layout-Test je Sprache.
+- Einstellungen: Reiter beim Start (fest oder zuletzt benutzter), Standard für neue Bilder (Strich/Foto, Schwelle).
 - 2536 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
@@ -146,13 +147,16 @@ src/labelwerk/
               Strichcodes), rotation, text, error (QR_LEVELS); kein w_mm – Breite aus dem Inhalt; nie leer
               Frame (frozen): style FRAME_STYLES (single/double/thick_thin/dashed/dotted/corners), rounded, line_mm 0,1–3,
               inset_mm/padding_mm 0–10; Document.frame (None = kein Rahmen)
-  settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings); Feld `theme` (rawblock/classic), `image_crop`/`image_rotate` (Bilder einfügen),
+  settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings); Feld `theme` (rawblock/classic), `image_crop`/`image_rotate`/`image_mode`/
+              `image_threshold` (Bilder einfügen: Zuschnitt, Drehen, Strich/Foto, Schwelle neuer Bilder; Symbole nicht),
+              `start_tool` (Reiter beim Start: START_TOOLS = „last“ + Werkzeug-Schlüssel, gleich mit gui/tools.py TOOLS – Test)/
+              `last_tool` (zuletzt benutzter Reiter: GUI merkt ihn im Speicher, schreibt beim Schließen; ungültig → "" ohne Hinweis, QUIET_KEYS),
               `symbols_recent` (höchstens 24)/`symbols_favorites` (Symbol-ids), `recent_files` (höchstens 10)/`start_favorite`
               (der Einstellungsdialog reicht sie durch); Drucker: `printer` (gewählte URI, "" = automatisch), `printer_model`
               (Ersatz), `last_model` (zuletzt erkannt), `network_printers` ({name, host, model}; valid_host: IPv4/Name ohne
               Port/Schema/Steuerzeichen; Modell auch zpl:…), network_entries(settings); `printer_options` (Modell →
               Druck-Optionen: CUPS-Schnitt-Optionen, Zebra-Modus; je Eintrag geprüft, leerer Wert erlaubt), `zebra_dpi`
-              (0 = erkannt), `language` ("" = System); RESTART_KEYS (language, start_zoom), started_values/
+              (0 = erkannt), `language` ("" = System); RESTART_KEYS (language, start_zoom, start_tool), started_values/
               restart_pending (wirksamer Vergleich mit dem Start), configured_language (vor allem anderen gelesen);
               load_settings(path, model=None): Etikett muss nur ein bekanntes Etikett sein (auch
               „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI)
@@ -246,7 +250,8 @@ src/labelwerk/
     symbol_dialog.py Fenster „Symbol einfügen“ (SymbolDialog, Werkzeugfenster, nicht modal; Enter/Esc/Kontextmenü): Suche, Gruppen + Untergruppe, Raster über
                     SymbolModel (Vorschau erst bei Bedarf gerastert), Ziehen (MIME_SYMBOL = id), ★ Favorit, Ordner öffnen (open_url ersetzbar)
     panels/image.py Reiter Bild: Aus Datei/Aus Zwischenablage/Bildschirmfoto/Symbol, Quelle, Strich/Foto, Schwelle (Regler = ein Schritt), Umkehren,
-                    Zuschnitt (Symbole: Tintenbox, sonst Schnittmarken-Erkennung; Fallback ohne Inhalt: ganzes Bild + Hinweis), Originalgröße 1:1, Seitenverhältnis, Drehen (Aktionen), Position
+                    Zuschnitt (Symbole: Tintenbox, sonst Schnittmarken-Erkennung; Fallback ohne Inhalt: ganzes Bild + Hinweis), Originalgröße 1:1, Seitenverhältnis, Drehen (Aktionen), Position;
+                    ohne Auswahl Standard für neue Bilder (set_defaults aus den Einstellungen)
     image_import.py Bilder beschaffen: rasterize_svg (Raster-Funktion für Vektorbilder); load (SVG per QSvgRenderer bei 300 dpi, Maße mit Einheit selbst gelesen: svg_size; sonst files.load_image), load_symbol (Symbol: Vorschau 600 dpi bei SYMBOL_MM,
                     auf die Tinte zugeschnitten, SVG-Bytes), SYMBOL_SOURCE/is_symbol_source (Panel schneidet Symbole mit files.ink_box zu), MIME_SYMBOL; load_screenshot (Bildschirmfoto: 300 dpi, Dateiangabe gilt nicht;
                     Quelle SCREENSHOT), page_count,
