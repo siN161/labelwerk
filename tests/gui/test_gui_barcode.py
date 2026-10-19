@@ -171,9 +171,9 @@ def test_changing_the_kind_replaces_only_the_sample(qtbot):
 
 def test_module_is_shown_in_millimetres(qtbot):
     win, panel = _with_barcode(qtbot, "code128")
-    assert panel.module.text() == "0.25 mm"
+    assert panel.module.text() == "0,25 mm"                    # Deutsch: Komma
     panel.module.setValue(4)
-    assert win.doc.objects[0].module == 4 and panel.module.text() == "0.34 mm"
+    assert win.doc.objects[0].module == 4 and panel.module.text() == "0,34 mm"
     assert panel.module.valueFromText("0.5") == 6 and panel.module.valueFromText("0,5") == 6
     assert panel.module.valueFromText("x") == 4
     win.undo()
@@ -395,3 +395,10 @@ def test_barcode_error_in_a_series_names_the_row_while_writing(qtbot):
     win.render_now()
     assert "Zeile 1: EAN-8 braucht" in win.result.text()
     assert "Schreibmodus" not in win.result.text()
+
+
+def test_module_in_english_uses_a_point(qtbot):
+    from labelwerk import i18n
+    i18n.set_language("en")
+    win, panel = _with_barcode(qtbot, "code128")
+    assert panel.module.text() == "0.25 mm" and panel.module.valueFromText("0,5") == 6

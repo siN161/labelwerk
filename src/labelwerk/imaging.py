@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from PIL import Image, ImageChops
 
+from .i18n import _
+
 MODES = ("line", "photo")      # Strich (harte Schwelle) | Foto (Rasterpunkte)
 MAX_DPI = 600                  # feiner druckt der QL nicht (300 dpi) – mehr kostet nur Speicher
 MAX_PIXELS = 6000              # längste Seite in Pixeln (Speicher; bei 300 dpi gut 50 cm)
@@ -57,9 +59,11 @@ def limit_size(img: Image.Image, dpi: float,
 def check(mode: str, threshold: int) -> None:
     """Umwandlung und Schwelle prüfen; ``ValueError`` mit verständlicher Meldung."""
     if mode not in MODES:
-        raise ValueError(f"Unbekannte Umwandlung {mode!r} – erlaubt: Strich, Foto (line, photo)")
+        raise ValueError(_("Unknown conversion {mode!r} – allowed: line art, photo (line, photo)").format(
+            mode=mode))
     if isinstance(threshold, bool) or not isinstance(threshold, int) or not 0 <= threshold <= 255:
-        raise ValueError(f"Schwelle muss eine ganze Zahl von 0 bis 255 sein, nicht {threshold!r}.")
+        raise ValueError(_("Threshold must be a whole number from 0 to 255, not {threshold!r}.").format(
+            threshold=threshold))
 
 
 def photo_curve(threshold: int) -> list[int]:

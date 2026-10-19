@@ -5,14 +5,16 @@ from pathlib import Path
 
 from brother_ql.backends.helpers import discover as _discover
 
+from .i18n import N_
+
 BROTHER_VENDOR_ID = "04f9"
 
-# Meldungen für CLI und GUI
-PRINTER_NOT_FOUND = ("Brother-Drucker unter /dev/usb/lp* nicht gefunden.\n"
-                     "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', 'lsmod | grep usblp'.")
-BUSY_MESSAGE = ("Brother-Drucker ist per USB angeschlossen, aber von einem anderen Programm belegt\n"
-                "(z. B. VM mit USB-Durchreichung). Dort freigeben und den Drucker kurz aus- und\n"
-                "wieder einschalten.")
+# Meldungen für CLI und GUI – nur markiert, beim Anzeigen mit ``_()`` übersetzen
+PRINTER_NOT_FOUND = N_("Brother printer not found under /dev/usb/lp*.\n"
+                       "Check: switched on, Editor Lite LED off, 'lsusb', 'lsmod | grep usblp'.")
+BUSY_MESSAGE = N_("Brother printer is connected via USB but in use by another program\n"
+                  "(e.g. a VM with USB passthrough). Release it there and switch the printer\n"
+                  "off and on again.")
 
 
 def find_brother_lp(sys_root: str | Path = "/sys/class/usbmisc",

@@ -505,3 +505,31 @@ def test_table_knows_the_sheet_it_came_from(tmp_path):
     table = load_table(path)
     assert table.sheet == "Sichtbar" and table.sheets == ["Versteckt", "Sichtbar"]
     assert load_table(_csv(tmp_path, "A\n1\n")).sheet is None
+
+
+def test_numbering_placeholder_in_every_language():
+    from labelwerk import i18n
+    from labelwerk.document import Numbering
+    from labelwerk.series import fill, missing, numbering_table
+    doc = Document("62", objects=[TextObject("{Nummer}/{Number}")])
+    i18n.set_language("en")
+    table = numbering_table(Numbering(count=2))
+    assert table.columns == ["Number"] and missing(doc, table.columns) == []
+    assert fill(doc, table.columns, table.rows[0]).objects[0].text == "1/1"
+    i18n.set_language("de")
+    table = numbering_table(Numbering(count=2))
+    assert table.columns == ["Nummer"] and fill(doc, table.columns, ["7"]).objects[0].text == "7/7"
+    assert missing(Document("62", objects=[TextObject("{Numero}")]), table.columns) == ["Numero"]
+
+
+def test_unnamed_columns_in_every_language(tmp_path):
+    from labelwerk import i18n
+    from labelwerk.series import fill, load_table, missing
+    path = tmp_path / "t.csv"
+    path.write_text("Klemme;;Ort\nX1;24V;A\n", encoding="utf-8")
+    i18n.set_language("en")
+    table = load_table(path)
+    assert table.columns == ["Klemme", "Column 2", "Ort"]
+    doc = Document("62", objects=[TextObject("{Spalte 2} {Column 2}")])
+    assert missing(doc, table.columns) == []
+    assert fill(doc, table.columns, table.rows[0]).objects[0].text == "24V 24V"

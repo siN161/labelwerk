@@ -233,7 +233,7 @@ SOFTWARE.
 | Nicht zulässig für Seitenschleifen (P032) | [ISO 7010 P032.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P032.svg) | Original: Unbekannt Vektor: MaxxL | Public domain |
 | Nicht zulässig für Nassschleifen (P033) | [ISO 7010 P033.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P033.svg) | Original: ISO Vektor: Uploader | Public domain |
 | Nicht zulässig für Freihand- und handgeführtes Schleifen (P034) | [ISO 7010 P034.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P034.svg) | Original: ISO Vektor: Uploader | Public domain |
-| Do not wear metal-studded footwear (P035) | [ISO 7010 P035 PD.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P035_PD.svg) | Clemenspool | CC0 |
+| Benutzen mit genagelten Schuhen verboten (P035) | [ISO 7010 P035 PD.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P035_PD.svg) | Clemenspool | CC0 |
 | Kein Zutritt für Kinder (P036) | [ISO 7010 P036.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P036.svg) | ISO | Public domain |
 | Schleppspur verlassen verboten (P037) | [ISO 7010 P037.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P037.svg) | ISO | Public domain |
 | Schaukeln im Sessel verboten (P038) | [ISO 7010 P038.svg](https://commons.wikimedia.org/wiki/File%3AISO_7010_P038.svg) | ISO | Public domain |

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field, replace
 from . import barcodes
 from .document import (BARCODE_MM, MAX_PT, MIN_PT, ROTATIONS, BarcodeObject, Document,
                        ImageObject, TextObject)
+from .i18n import _
 from .labels import DPI, get_label, length_limits
 from .render import (PT, REF_PT, RenderedObject, frame_box, span_dots, label_margins, label_size,
                      render_object)
@@ -178,7 +179,8 @@ def align(rects: list[Rect], mode: str, area: Rect | None = None) -> list[Rect]:
     ohne ``area`` bleibt, wo es ist.
     """
     if mode not in ALIGN_MODES:
-        raise ValueError(f"Unbekannte Ausrichtung {mode!r} – erlaubt: {', '.join(ALIGN_MODES)}")
+        raise ValueError(_("Unknown alignment {mode!r} – allowed: {allowed}").format(
+            mode=mode, allowed=", ".join(ALIGN_MODES)))
     if area is None:
         if len(rects) < 2:
             return list(rects)
@@ -197,7 +199,8 @@ def align(rects: list[Rect], mode: str, area: Rect | None = None) -> list[Rect]:
 def match_size(rects: list[Rect], mode: str) -> list[Rect]:
     """Größe an das erste Rechteck angleichen (``same``, ``width``, ``height``); Ecke bleibt."""
     if mode not in SIZE_MODES:
-        raise ValueError(f"Unbekannte Größenangleichung {mode!r} – erlaubt: {', '.join(SIZE_MODES)}")
+        raise ValueError(_("Unknown size matching {mode!r} – allowed: {allowed}").format(
+            mode=mode, allowed=", ".join(SIZE_MODES)))
     if not rects:
         return []
     ref = rects[0]
@@ -240,7 +243,7 @@ def _needs_size(obj: Object) -> bool:
 
 def _text_only(obj: Object) -> None:
     if not isinstance(obj, TextObject):
-        raise TypeError(f"Nur für Text-Objekte, nicht für {type(obj).__name__}.")
+        raise TypeError(_("Only for text objects, not for {type}.").format(type=type(obj).__name__))
 
 
 def place(obj: Object, rect: Rect, dpi: int = DPI) -> Object:
@@ -527,12 +530,12 @@ def new_barcode(doc: Document, model: str, area: Rect, kind: str,
         fits = module >= 1 and (kind == "qr" or h >= BARCODE_MM[0])
         if best is None or (fits, module) > best[:2]:  # gleich gut: ungedreht
             best = (fits, module, turn, h)
-    _, module, obj.rotation, h = best
+    __, module, obj.rotation, h = best
     obj.module = max(1, module)
     if kind != "qr":
         obj.h_mm = math.floor(min(max(h, BARCODE_MM[0]), obj.h_mm) * 1000 + _EPS) / 1000
     shown = barcode_rect(obj, dpi)
-    rect, _, _ = insert_placement(doc, model, area, (shown.w, shown.h), others=others,
+    rect, __, __ = insert_placement(doc, model, area, (shown.w, shown.h), others=others,
                                   rotate=False)
     obj.x_mm = round(rect.cx - shown.w / 2, _DECIMALS)
     obj.y_mm = round(rect.cy - shown.h / 2, _DECIMALS)
@@ -614,22 +617,22 @@ def scale_text(obj: TextObject, factor: float, base_pt: float | None = None) -> 
     """
     _text_only(obj)
     if factor <= 0:
-        raise ValueError(f"Faktor muss größer als 0 sein, nicht {factor!r}.")
+        raise ValueError(_("Factor must be greater than 0, not {factor!r}.").format(factor=factor))
     scaled = copy.deepcopy(obj)
     spans = [span for para in scaled.paragraphs for span in para.spans
              if span.size_pt is not None]
     if obj.size_pt is None:
         if base_pt is None:
-            raise ValueError("Text mit automatischer Schriftgröße braucht die wirksame "
-                             "Grundgröße (base_pt) zum Skalieren.")
+            raise ValueError(_("Text with automatic font size needs the effective base size "
+                               "(base_pt) for scaling."))
         if base_pt <= 0:
-            raise ValueError(f"Schriftgröße muss größer als 0 sein, nicht {base_pt!r}.")
+            raise ValueError(_("Font size must be greater than 0, not {size!r}.").format(size=base_pt))
         for span in spans:                     # Bezug 12 pt → Bezug Grundgröße
             span.size_pt = span.size_pt * base_pt / REF_PT
         scaled.size_pt = base_pt
     sizes = [scaled.size_pt, *(span.size_pt for span in spans)]
     if min(sizes) <= 0:
-        raise ValueError(f"Schriftgröße muss größer als 0 sein, nicht {min(sizes)!r}.")
+        raise ValueError(_("Font size must be greater than 0, not {size!r}.").format(size=min(sizes)))
     low, high = MIN_PT / min(sizes), MAX_PT / max(sizes)
     if low <= high:                            # Grenze nur in Richtung des Faktors
         factor = min(max(factor, min(low, 1.0)), max(high, 1.0))
@@ -746,7 +749,7 @@ def maximize_object(obj: Object, rendered: RenderedObject, area: Rect, doc: Docu
     factor = target.w / shown.w if shown.w else 1.0
     scaled = scale_text(obj, factor, base_pt=rendered.base_pt)
     best = None
-    for _ in range(6):                       # Schrift wächst nicht ganz linear: nachregeln
+    for __ in range(6):                       # Schrift wächst nicht ganz linear: nachregeln
         scaled.x_mm, scaled.y_mm = area.x, area.y
         size = object_rect(render_object(scaled, doc, model))
         if not (size.w and size.h):
@@ -876,8 +879,9 @@ def from_object(point: tuple[float, float], rendered: RenderedObject,
 def _unturned(frame: tuple[float, float, float, float], rotation: int) -> tuple[float, float]:
     """Rahmengröße (Breite, Höhe) vor der Drehung."""
     if rotation not in ROTATIONS:
-        raise ValueError(f"Unbekannte Drehung {rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
-    _, _, w, h = frame
+        raise ValueError(_("Unknown rotation {rotation!r} – allowed: 0, 90, 180, 270 degrees").format(
+            rotation=rotation))
+    __, __, w, h = frame
     return (h, w) if rotation in (90, 270) else (w, h)
 
 

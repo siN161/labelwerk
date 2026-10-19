@@ -14,6 +14,8 @@ from pathlib import Path
 
 from brother_ql.models import ModelsManager
 
+from .i18n import N_, _
+
 BROTHER_VENDOR_ID = "04f9"
 SYS_ROOT = "/sys/class/usbmisc"             # Tests setzen ein leeres Verzeichnis
 DEFAULT_MODEL = "QL-600"
@@ -27,7 +29,7 @@ PRODUCT_IDS = {
     "209b": "QL-800", "209c": "QL-810W", "209d": "QL-820NWB", "2020": "QL-1050",
     "202a": "QL-1060N", "20a7": "QL-1100", "20a8": "QL-1110NWB", "20ab": "QL-1115NWB",
 }
-UNTESTED_HINT = "ungeprüft – Rückmeldung erwünscht"
+UNTESTED_HINT = N_("untested – feedback welcome")   # beim Anzeigen mit _() übersetzen
 
 
 def _models() -> dict:
@@ -88,7 +90,7 @@ def capabilities(model: str) -> Capabilities:
         return Capabilities(model, False, False, 104, GENERIC_LENGTH, False)
     m = _models().get(model)
     if m is None:
-        raise ValueError(f"Unbekanntes Druckermodell: {model!r}")
+        raise ValueError(_("Unknown printer model: {model!r}").format(model=model))
     return Capabilities(model, bool(m.cutting), bool(m.two_color),
                         104 if m.number_bytes_per_row >= 162 else 62,
                         tuple(m.min_max_length_dots), model in TESTED_MODELS)
@@ -140,7 +142,7 @@ def _read(path: Path) -> str:
 def _ieee1284_model(text: str) -> str | None:
     """„MFG:Brother;CMD:PT-CBP;MDL:QL-600;CLS:PRINTER;“ → „QL-600“."""
     for part in text.split(";"):
-        key, _, value = part.partition(":")
+        key, __, value = part.partition(":")
         if key.strip().upper() in ("MDL", "MODEL"):
             return value.strip()
     return None
@@ -160,7 +162,7 @@ def usb_printers(sys_root: str | Path | None = None,
                          or known_model(_read(node / "product"))
                          or PRODUCT_IDS.get(_read(node / "idProduct").lower()))
                 found.append(Printer(f"file://{dev_root}/{entry.name}", model,
-                                     f"{model or 'Brother-Drucker'} · {entry.name}"))
+                                     f"{model or _('Brother printer')} · {entry.name}"))
             break
     return found
 
@@ -200,10 +202,14 @@ def network_printers(entries: list[NetworkEntry]) -> list[Printer]:
     """Eingetragene Netzwerkdrucker: Brother (``tcp://``) bzw. Zebra (Modell „zpl:…“,
     ``zpl+tcp://``)."""
     from . import zpl
-    return [Printer(f"zpl+tcp://{e.host}:{NETWORK_PORT}", e.model, f"{e.name or e.host} · Netzwerk",
-                    "zebra") if zpl.is_model(e.model) else
-            Printer(f"tcp://{e.host}:{NETWORK_PORT}", e.model, f"{e.name or e.host} · Netzwerk",
-                    "network") for e in entries]
+    return [Printer(f"zpl+tcp://{e.host}:{NETWORK_PORT}", e.model, _network_name(e), "zebra")
+            if zpl.is_model(e.model) else
+            Printer(f"tcp://{e.host}:{NETWORK_PORT}", e.model, _network_name(e), "network")
+            for e in entries]
+
+
+def _network_name(entry: NetworkEntry) -> str:
+    return _("{name} · Network").format(name=entry.name or entry.host)
 
 
 def choose(printers: list[Printer], wanted: str = "") -> Printer | None:

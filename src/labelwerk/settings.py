@@ -14,12 +14,15 @@ from . import shortcuts as _shortcuts
 from .clipart import RECENT_LIMIT
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .fonts import DEFAULT_FAMILY
+from . import i18n
+from .i18n import N_, _
 from .labels import labels_for_model, sized_label
 from . import zpl
 from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
 THEMES = ("rawblock", "classic")
+RESTART_KEYS = ("language", "start_zoom")   # wirken erst nach einem Neustart (Hinweis in der GUI)
 SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")
 
 
@@ -45,6 +48,7 @@ class Settings:
     network_printers: list[dict] = field(default_factory=list)   # {name, host, model}
     printer_options: dict[str, dict[str, str]] = field(default_factory=dict)  # Modell → Druck-Optionen
     zebra_dpi: int = 0                  # Auflösung der Zebras am USB, 0 = erkannt
+    language: str = ""                  # "" = Sprache des Systems, sonst "de", "en" …
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
@@ -78,6 +82,7 @@ def _rules(model: str | None = None) -> dict:
                                      "zpl+tcp://"))),
         "printer_model": lambda v: v == "" or v in SUPPORTED_MODELS,
         "last_model": lambda v: v == "" or is_model(v),
+        "language": lambda v: v == "" or v in i18n.available(),
         "zebra_dpi": lambda v: v in (0, *zpl.RESOLUTIONS) and not isinstance(v, bool),
         "printer_options": lambda v: isinstance(v, dict),
         "network_printers": lambda v: isinstance(v, list),
@@ -85,6 +90,7 @@ def _rules(model: str | None = None) -> dict:
 
 
 _KEYS = (*_rules(), "shortcuts")
+_DISCARDED = N_("Setting {key!r}: invalid entries discarded.")
 
 
 def _option_word(value, empty: bool = False) -> bool:
@@ -99,8 +105,32 @@ def _printer_options(value: dict, warnings: list[str]) -> dict[str, dict[str, st
     valid = {k: {a: b for a, b in o.items() if _option_word(a) and _option_word(b, empty=True)}
              for k, o in value.items() if isinstance(k, str) and isinstance(o, dict)}
     if len(valid) != len(value) or any(len(valid[k]) != len(value[k]) for k in valid):
-        warnings.append("Einstellung 'printer_options': ungültige Einträge verworfen.")
+        warnings.append(_(_DISCARDED).format(key="printer_options"))
     return {k: o for k, o in valid.items() if o}
+
+
+def started_values(settings: Settings) -> dict:
+    """Was beim Start galt (für ``restart_pending``): die gesetzte Sprache und die Neustart-
+    Einstellungen."""
+    return {**{key: getattr(settings, key) for key in RESTART_KEYS}, "language": i18n.language()}
+
+
+def restart_pending(language: str, start_zoom: int, started: dict) -> bool:
+    """Wirkt eine Einstellung erst nach einem Neustart anders als jetzt? Sprache wirksam verglichen
+    ("" = Systemsprache), Start-Zoom mit dem Wert beim Start."""
+    effective = language if language in i18n.available() else i18n.system_language()
+    return effective != started["language"] or start_zoom != started["start_zoom"]
+
+
+def configured_language(path: str | Path | None = None) -> str:
+    """Eingestellte Sprache ("" = System) – vor allem anderen gelesen (die Meldungen beim Laden der
+    Einstellungen kommen schon in dieser Sprache); unlesbar oder ungültig → ""."""
+    try:
+        raw = json.loads(Path(path or settings_path()).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    value = raw.get("language") if isinstance(raw, dict) else None
+    return value if isinstance(value, str) and value in i18n.available() else ""
 
 
 def settings_path() -> Path:
@@ -116,11 +146,12 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
-            raise ValueError("kein JSON-Objekt")
+            raise ValueError(_("not a JSON object"))
     except FileNotFoundError:
         return settings
     except (OSError, ValueError) as e:
-        settings.warnings.append(f"Einstellungen nicht lesbar ({path}): {e} – Standardwerte aktiv.")
+        settings.warnings.append(_("Settings not readable ({path}): {error} – using defaults.")
+                                 .format(path=path, error=e))
         return settings
     _migrate_font_size(raw, settings)
     if model is None:
@@ -145,8 +176,9 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
                 value = _printer_options(value, settings.warnings)
             setattr(settings, key, value)
         else:
-            settings.warnings.append(f"Einstellung {key!r} ungültig ({value!r}) – "
-                                     f"Standardwert {getattr(settings, key)!r} aktiv.")
+            settings.warnings.append(_("Setting {key!r} invalid ({value!r}) – using default "
+                                       "{default!r}.").format(key=key, value=value,
+                                                              default=getattr(settings, key)))
     if "shortcuts" in raw:                 # eigene Prüfung je Kürzel: gültige bleiben erhalten
         settings.shortcuts, warnings = _shortcuts.validate(raw["shortcuts"])
         settings.warnings.extend(warnings)
@@ -157,7 +189,7 @@ def _text_list(key: str, value: list, warnings: list[str]) -> list[str]:
     """Liste von Texten: ungültige Einträge einzeln verworfen (mit Hinweis), Doppelte entfernt."""
     valid = [i for i in value if isinstance(i, str) and i]
     if len(valid) != len(value):
-        warnings.append(f"Einstellung {key!r}: ungültige Einträge verworfen.")
+        warnings.append(_(_DISCARDED).format(key=key))
     return list(dict.fromkeys(valid))
 
 
@@ -171,7 +203,7 @@ def _network(value: list, warnings: list[str]) -> list[dict]:
                                              or zpl.is_model(e.get("model")))
              and isinstance(e.get("name", ""), str)]
     if len(valid) != len(value):
-        warnings.append("Einstellung 'network_printers': ungültige Einträge verworfen.")
+        warnings.append(_(_DISCARDED).format(key="network_printers"))
     return valid
 
 
@@ -204,10 +236,11 @@ def _migrate_font_size(raw: dict, settings: Settings) -> None:
         raw["font_size_pt"] = None
     elif _is_int(old) and old > 0:
         raw["font_size_pt"] = min(max(round(old * 72 / 300), int(MIN_PT)), int(MAX_PT))
-        settings.warnings.append(f"Schriftgröße von {old} Druckpunkten auf "
-                                 f"{raw['font_size_pt']} pt umgerechnet.")
+        settings.warnings.append(_("Font size converted from {old} dots to {new} pt.").format(
+            old=old, new=raw["font_size_pt"]))
     else:
-        settings.warnings.append(f"Einstellung 'font_size' ungültig ({old!r}) – automatisch.")
+        settings.warnings.append(_("Setting 'font_size' invalid ({value!r}) – automatic.").format(
+            value=old))
 
 
 def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
@@ -224,8 +257,8 @@ def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
         finally:
             tmp.unlink(missing_ok=True)
     except OSError as e:
-        raise OSError(f"Einstellungen konnten nicht gespeichert werden ({path}): "
-                      f"{e.strerror or e}") from e
+        raise OSError(_("Settings could not be saved ({path}): {reason}").format(
+            path=path, reason=e.strerror or e)) from e
     return path
 
 

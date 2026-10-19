@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from brother_ql.reader import RESP_MEDIA_TYPES, interpret_response
 
+from .i18n import _
 from .labels import labels_for_model
 
 # Puffer leeren (Invalidate), initialisieren (ESC @), Status anfragen (ESC i S)
@@ -28,10 +29,11 @@ class Media:
 
     def describe(self) -> str:
         if self.kind == "none":
-            return "keine Rolle eingelegt"
+            return _("no roll loaded")
         if self.kind == "endless":
-            return f"{self.width_mm} mm endlos"
-        return f"{self.width_mm} × {self.length_mm} mm gestanzt"
+            return _("{width} mm continuous").format(width=self.width_mm)
+        return _("{width} × {length} mm die-cut").format(width=self.width_mm,
+                                                          length=self.length_mm)
 
 
 def read_media(printer: str, timeout: float = TIMEOUT_S) -> Media:
@@ -41,18 +43,19 @@ def read_media(printer: str, timeout: float = TIMEOUT_S) -> Media:
 
 def parse_media(data: bytes) -> Media:
     if len(data) > 11 and data[11] not in RESP_MEDIA_TYPES:
-        raise MediaError(f"Unbekannte Rolle (Code 0x{data[11]:02X})")
+        raise MediaError(_("Unknown roll (code 0x{code:02X})").format(code=data[11]))
     try:
         status = interpret_response(data)
     except Exception as e:  # brother_ql wirft je nach Fehler NameError, UnboundLocalError …
-        raise MediaError(f"Unverständliche Antwort vom Drucker: {e}") from None
+        raise MediaError(_("Unintelligible answer from the printer: {error}").format(error=e)) \
+            from None
     kind = _KINDS.get(status["media_type"])
     if kind is None:
-        raise MediaError(f"Unbekannte Rolle: {status['media_type']}")
+        raise MediaError(_("Unknown roll: {media}").format(media=status["media_type"]))
     if kind == "none" or status["media_width"] == 0:
         return Media(0, 0, "none")
     if status["errors"]:
-        raise MediaError("Drucker meldet: " + ", ".join(status["errors"]))
+        raise MediaError(_("Printer reports: {errors}").format(errors=", ".join(status["errors"])))
     return Media(status["media_width"], status["media_length"], kind)
 
 
@@ -75,23 +78,24 @@ def _open_device(path: str) -> int:
 def query_status(printer: str, timeout: float = TIMEOUT_S, opener=_open_device) -> bytes:
     """Statusabfrage senden und die 32-Byte-Antwort lesen – mit festem Zeitlimit, nie blockierend."""
     if not printer.startswith("file://"):
-        raise MediaError("Medium prüfen geht nur über /dev/usb/lpN (Backend linux_kernel).")
+        raise MediaError(_("Check media only works via /dev/usb/lpN (backend linux_kernel)."))
     try:
         fd = opener(printer[len("file://"):])
     except FileNotFoundError:
-        raise MediaError(f"Drucker nicht gefunden: {printer}") from None
+        raise MediaError(_("Printer not found: {printer}").format(printer=printer)) from None
     except PermissionError:
-        raise MediaError(f"Keine Berechtigung für {printer} – Benutzer in Gruppe 'lp'?") from None
+        raise MediaError(_("No permission for {device} – is the user in group 'lp'?")
+                         .format(device=printer)) from None
     except OSError as e:
-        raise MediaError(f"Drucker nicht erreichbar: {e}") from None
+        raise MediaError(_("Printer not reachable: {error}").format(error=e)) from None
     try:
         os.write(fd, STATUS_REQUEST)
         data, deadline = b"", time.monotonic() + timeout
         while len(data) < 32:
             left = deadline - time.monotonic()
             if left <= 0:
-                raise MediaError("Keine Antwort vom Drucker auf die Statusabfrage.")
-            ready, _, _ = select.select([fd], [], [], min(left, 0.1))
+                raise MediaError(_("No answer from the printer to the status request."))
+            ready, __, __ = select.select([fd], [], [], min(left, 0.1))
             if ready:
                 try:
                     data += os.read(fd, 32 - len(data))
@@ -99,6 +103,6 @@ def query_status(printer: str, timeout: float = TIMEOUT_S, opener=_open_device) 
                     pass
         return data
     except OSError as e:
-        raise MediaError(f"Fehler bei der Statusabfrage: {e}") from None
+        raise MediaError(_("Error during the status request: {error}").format(error=e)) from None
     finally:
         os.close(fd)

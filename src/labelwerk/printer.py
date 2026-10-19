@@ -10,23 +10,25 @@ from brother_ql.raster import BrotherQLRaster
 from PIL import Image
 
 from .document import CUTS
+from .i18n import N_, _, ngettext
 from .labels import get_label, labels_for_model
 from .printers import DEFAULT_MODEL, backend_for, capabilities, route_fits
 
 DEFAULT_BACKEND = "linux_kernel"
 DEFAULT_PRINTER = "file:///dev/usb/lp0"
 
-# Fehlertexte aus brother_ql.reader -> verständliche Meldung
+# Fehlertexte aus brother_ql.reader -> verständliche Meldung (übersetzt beim Melden)
 _PRINTER_ERRORS = {
-    "Replace media error": "Eingelegte Rolle passt nicht zum Etikett {label!r} – "
-                           "Rolle prüfen oder anderes Etikett wählen.",
-    "No media when printing": "Keine Rolle eingelegt.",
-    "End of media (die-cut size only)": "Etikettenrolle ist leer.",
+    "Replace media error": N_("The loaded roll does not match the label {label!r} – "
+                              "check the roll or choose another label."),
+    "No media when printing": N_("No roll loaded."),
+    "End of media (die-cut size only)": N_("The label roll is empty."),
     "Media cannot be fed (also when the media end is detected)":
-        "Band kann nicht transportiert werden – Rolle leer oder falsch eingelegt?",
-    "Tape cutter jam": "Schneidwerk blockiert.",
-    "Cover opened while printing (Except QL-500)": "Deckel während des Drucks geöffnet.",
+        N_("The tape cannot be fed – roll empty or loaded incorrectly?"),
+    "Tape cutter jam": N_("Cutter jammed."),
+    "Cover opened while printing (Except QL-500)": N_("Cover opened while printing."),
 }
+_PRINTER_ERROR = N_("Printer error: {err}")      # andere Fehler von brother_ql
 
 
 class PrintError(Exception):
@@ -39,8 +41,9 @@ class PrintCancelled(Exception):
 
     def __init__(self, printed: int, total: int):
         self.printed, self.total = printed, total
-        super().__init__(f"Abgebrochen – {printed} von {total} Etiketten gedruckt" if printed
-                         else "Abgebrochen – nichts gedruckt")
+        super().__init__(ngettext("Cancelled – {printed} of {total} label printed",
+                                  "Cancelled – {printed} of {total} labels printed", total).format(
+            printed=printed, total=total) if printed else _("Cancelled – nothing printed"))
 
 
 MAX_CUT_EVERY = 255         # Brother ESC i A n: höchstens alle 255 Etiketten
@@ -51,6 +54,8 @@ MAX_CUT_EVERY = 255         # Brother ESC i A n: höchstens alle 255 Etiketten
 MAX_JOB_EACH = 10
 THRESHOLD = 70.0            # brother_ql: ein Punkt druckt ab (100 − THRESHOLD) % Schwarz
 CONNECT_TIMEOUT_S = 5       # Netzwerkdrucker: so lange auf die Verbindung warten
+_UNREACHABLE = N_("Network printer {printer} not reachable ({reason}) – switched on, in the same "
+                  "network, address correct?")
 
 
 _LEVEL = min(255, max(0, int((100.0 - THRESHOLD) / 100.0 * 255)))   # wie brother_ql.convert
@@ -71,7 +76,7 @@ def pure_colors(image: Image.Image) -> Image.Image:
     Schwarz-Weiß-Etikett (brother_ql nähme sonst nur sehr dunkle Punkte als Schwarz, Text würde
     dünner als in der Vorschau). Schwarze Tinte senkt alle Kanäle, rote nur Grün und Blau:
     Schwarz, wo Rot dunkel genug ist; Rot, wo sonst Grün dunkel genug ist."""
-    r, g, _ = image.convert("RGB").split()
+    r, g, __ = image.convert("RGB").split()
     black = r.point(lambda v: 255 if 255 - v >= _LEVEL else 0, mode="1")
     red = g.point(lambda v: 255 if 255 - v >= _LEVEL else 0, mode="1")
     out = Image.new("RGB", image.size, "white")
@@ -84,7 +89,8 @@ def cut_interval(mode: str, count: int) -> int:
     """Schneiden alle n Etiketten: „each“ → 1, „end“ → alle (bei mehr als 255 Etiketten
     zusätzlich nach je 255 – mehr kann der Drucker nicht)."""
     if mode not in CUTS:
-        raise ValueError(f"Unbekannter Schnitt {mode!r} – erlaubt: {', '.join(CUTS)}")
+        raise ValueError(_("Unknown cut {mode!r} – allowed: {allowed}").format(
+            mode=mode, allowed=", ".join(CUTS)))
     return 1 if mode == "each" else max(1, min(count, MAX_CUT_EVERY))
 
 
@@ -115,13 +121,13 @@ def build_instructions(
     (``cut_interval``) und am Ende. Etiketten Rot/Schwarz (62red) mit Rot-Ebene."""
     images = [images] if isinstance(images, Image.Image) else list(images)
     if not images:
-        raise ValueError("Keine Etiketten zum Drucken")
+        raise ValueError(_("No labels to print"))
     if not isinstance(cut_every, int) or isinstance(cut_every, bool) or cut_every < 1:
-        raise ValueError(f"Schneiden alle n Etiketten: n muss eine ganze Zahl ab 1 sein, "
-                         f"nicht {cut_every!r}")
+        raise ValueError(_("Cut every n labels: n must be a whole number from 1, not {value!r}")
+                         .format(value=cut_every))
     if label_id not in {label.id for label in labels_for_model(model)}:
-        raise ValueError(f"Etikett {label_id!r} passt nicht zum {model} – siehe "
-                         f"'labelwerk -m {model} labels'")
+        raise ValueError(_("Label {label!r} does not fit the {model} – see "
+                           "'labelwerk -m {model} labels'").format(label=label_id, model=model))
     qlr = _Raster(model, cut_every)
     qlr.exception_on_warning = True
     red = get_label(label_id).two_color          # nur Zweifarb-Modelle haben 62red (oben geprüft)
@@ -166,10 +172,12 @@ def print_image(
     backend = backend or backend_for(printer)
     images = [image] if isinstance(image, Image.Image) else list(image)
     if label_id not in {label.id for label in labels_for_model(model)}:
-        raise PrintError(f"Etikett {label_id!r} passt nicht zum Drucker ({model}).")
+        raise PrintError(_("Label {label!r} does not fit the printer ({model}).").format(
+            label=label_id, model=model))
     if not route_fits(backend, model):
-        raise PrintError(f"Modell {model} passt nicht zum Drucker {printer} – für CUPS cups:NAME, "
-                         "für Zebra zpl:203/300/600, sonst ein Brother-QL angeben.")
+        raise PrintError(_("Model {model} does not fit the printer {printer} – give cups:NAME for "
+                           "CUPS, zpl:203/300/600 for Zebra, otherwise a Brother QL.").format(
+            model=model, printer=printer))
     if backend == "cups":
         return _print_cups(printer[len("cups:"):], images, label_id, options, cancelled)
     if backend == "zpl":
@@ -193,8 +201,9 @@ def print_image(
             if start == 0:                  # noch nichts gedruckt: Meldung wie bei einem Etikett
                 raise
             # der Drucker meldet verzögert – der Fehler kann auch zu Etiketten davor gehören
-            raise PrintError(f"Fehler bei Etikett {start + 1}–{start + len(chunk)} von {len(images)} "
-                             f"(auch die davor prüfen): {e}") from None
+            raise PrintError(_("Error at label {first}–{last} of {total} (check the ones before "
+                               "too): {error}").format(first=start + 1, last=start + len(chunk),
+                                                       total=len(images), error=e)) from None
         if progress is not None:
             progress(start + len(chunk), len(images))
     return status
@@ -235,18 +244,19 @@ def _send(data: bytes, label_id: str, printer: str, backend: str) -> dict:
     except OSError as e:                  # pyusb: USBError ist ein OSError
         if backend != "network":
             raise _usb_error(e, printer) from None
-        raise PrintError(f"Netzwerkdrucker {printer} nicht erreichbar ({e.strerror or e}) – "
-                         "eingeschaltet, im selben Netz, Adresse richtig?") from None
+        raise PrintError(_(_UNREACHABLE).format(printer=printer, reason=e.strerror or e)) \
+            from None
     except ValueError as e:
         if str(e) != "Device not found":  # pyusb
             raise
-        raise PrintError(f"Drucker nicht gefunden: {printer}\n"
-                         "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb'.") from None
+        raise PrintError(_("Printer not found: {printer}\n"
+                           "Check: switched on, Editor Lite LED off, 'lsusb'.").format(
+            printer=printer)) from None
 
     errors = (status.get("printer_state") or {}).get("errors") or []
     if errors:
         raise PrintError("\n".join(
-            _PRINTER_ERRORS.get(err, "Druckerfehler: {err}").format(label=label_id, err=err)
+            _(_PRINTER_ERRORS.get(err, _PRINTER_ERROR)).format(label=label_id, err=err)
             for err in errors))
     return status
 
@@ -254,22 +264,24 @@ def _send(data: bytes, label_id: str, printer: str, backend: str) -> dict:
 def _usb_error(e: OSError, printer: str) -> PrintError:
     """Verständliche Meldung für ein fehlendes, gesperrtes oder belegtes USB-Gerät."""
     if isinstance(e, PermissionError):
-        return PrintError(f"Keine Berechtigung für {printer} – Benutzer in Gruppe 'lp'?")
+        return PrintError(_("No permission for {device} – is the user in group 'lp'?")
+                          .format(device=printer))
     if isinstance(e, FileNotFoundError):
-        return PrintError(f"Drucker nicht gefunden: {printer}\n"
-                          "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', "
-                          "'lsmod | grep usblp'.")
-    return PrintError(f"Drucker {printer} nicht bereit ({e.strerror or e}) – belegt oder "
-                      "gerade beschäftigt? Kurz warten bzw. aus- und einschalten.")
+        return PrintError(_("Printer not found: {printer}\n"
+                            "Check: switched on, Editor Lite LED off, 'lsusb', "
+                            "'lsmod | grep usblp'.").format(printer=printer))
+    return PrintError(_("Printer {printer} not ready ({reason}) – in use or busy? Wait a moment "
+                        "or switch it off and on.").format(printer=printer,
+                                                           reason=e.strerror or e))
 
 
 def _reachable(printer: str) -> None:
     """Netzwerkdrucker vorab mit Zeitlimit ansprechen – brother_ql wartet sonst ohne Grenze
     (bei einer falschen Adresse rund zwei Minuten)."""
-    host, _, port = printer[len("tcp://"):].partition(":")
+    host, __, port = printer[len("tcp://"):].partition(":")
     try:
         socket.create_connection((host, int(port or 9100)), timeout=CONNECT_TIMEOUT_S).close()
     except (OSError, ValueError) as e:
-        reason = "keine Antwort" if isinstance(e, TimeoutError) else getattr(e, "strerror", None) or e
-        raise PrintError(f"Netzwerkdrucker {printer} nicht erreichbar ({reason}) – "
-                         "eingeschaltet, im selben Netz, Adresse richtig?") from None
+        reason = _("no answer") if isinstance(e, TimeoutError) \
+            else getattr(e, "strerror", None) or e
+        raise PrintError(_(_UNREACHABLE).format(printer=printer, reason=reason)) from None

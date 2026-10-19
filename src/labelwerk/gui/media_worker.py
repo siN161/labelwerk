@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, QRunnable, Signal
 
+from ..i18n import _
 from ..detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp
 from ..media import MediaError, label_for_media, read_media
 
@@ -23,13 +24,13 @@ class MediaWorker(QRunnable):
         try:
             printer = self.printer or find_brother_lp()
             if printer is None:
-                self.signals.failed.emit(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
+                self.signals.failed.emit(_(BUSY_MESSAGE) if brother_busy() else _(PRINTER_NOT_FOUND))
                 return
             media = read_media(printer)
         except MediaError as e:
             self.signals.failed.emit(str(e))
             return
         except Exception as e:  # kein Absturz des Threads; Meldung statt Traceback
-            self.signals.failed.emit(f"Unerwarteter Fehler beim Prüfen der Rolle: {e}")
+            self.signals.failed.emit(_("Unexpected error while checking the roll: {error}").format(error=e))
             return
         self.signals.found.emit(media, label_for_media(media, self.model))

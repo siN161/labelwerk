@@ -341,7 +341,7 @@ def test_removed_network_printer_is_no_longer_chosen(qtbot, monkeypatch, tmp_pat
     class Dialog:
         DialogCode = SettingsDialog.DialogCode
 
-        def __init__(self, settings, model=None, parent=None):
+        def __init__(self, settings, model=None, parent=None, started=None):
             self.saved = Settings(check_media_on_start=False)       # Eintrag entfernt
 
         def exec(self):

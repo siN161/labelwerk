@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..document import Document
+from ..i18n import N_
 from .panels import Panel
 from .panels.barcode import BarcodePanel
 from .panels.file import FilePanel
@@ -21,20 +22,21 @@ from .panels.text import TextPanel
 @dataclass(frozen=True)
 class Tool:
     key: str
-    title: str
+    title: str                                 # englisch (N_), angezeigt wird _(title)
     icon: str                                  # Name im Freedesktop-Icon-Theme
     panel: Callable[[Document], Panel]
-    tip: str = ""                              # Tooltip (sonst der Titel)
+    tip: str = ""                              # Tooltip (sonst der Titel), englisch (N_)
 
 
 START_TOOL = "paper"                           # Reiter beim Start
 
 TOOLS = [
-    Tool("file", "Datei", "document-open", FilePanel, "Datei und Favoriten"),
-    Tool("paper", "Papier", "document-page-setup", PaperPanel),
-    Tool("text", "Text", "insert-text", TextPanel),
-    Tool("image", "Bild", "insert-image", ImagePanel),
-    Tool("barcode", "Barcode", "view-barcode-qr", BarcodePanel, "Barcodes und QR-Codes"),
-    Tool("layout", "Layout", "align-horizontal-left", LayoutPanel),
-    Tool("series", "Serie", "view-list-text", SeriesPanel, "Serien aus Tabelle oder Nummerierung"),
+    Tool("file", N_("File"), "document-open", FilePanel, N_("File and favorites")),
+    Tool("paper", N_("Paper"), "document-page-setup", PaperPanel),
+    Tool("text", N_("Text"), "insert-text", TextPanel),
+    Tool("image", N_("Image"), "insert-image", ImagePanel),
+    Tool("barcode", N_("Barcode"), "view-barcode-qr", BarcodePanel, N_("Barcodes and QR codes")),
+    Tool("layout", N_("Layout"), "align-horizontal-left", LayoutPanel),
+    Tool("series", N_("Series"), "view-list-text", SeriesPanel,
+         N_("Series from a table or numbering")),
 ]

@@ -27,6 +27,7 @@ from ..printers import (UNTESTED_HINT, Printer, capabilities, choose, cups_print
 from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, Series, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
+from ..i18n import N_, _, ngettext
 from ..labels import DPI, get_label, labels_for_model
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, change_label, exact_rect,
                       fill_anchored, frame_area, growing_axis, insert_placement, match_objects,
@@ -35,7 +36,8 @@ from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, change_label
 from ..printer import DEFAULT_MODEL, cut_interval, to_print_mode
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
-from ..settings import Settings, load_settings, network_entries, new_document, save_settings
+from ..settings import (Settings, load_settings, network_entries, new_document, save_settings,
+                        started_values)
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
@@ -61,15 +63,14 @@ PRINTER_POLL_MS = 2000     # Druckererkennung: nur Blick in /sys, kein USB-Zugri
 ZOOM_STEP = 10             # Prozentpunkte je Klick bzw. Kürzel
 NUDGE_MM = {"": 0.1, "_coarse": 1.0}                  # Pfeiltasten fein / mit Umschalt
 _DIRECTIONS = {"left": (-1, 0), "right": (1, 0), "up": (0, -1), "down": (0, 1)}
-OUTSIDE_HINT = "Objekt ragt über das Etikett hinaus"
+OUTSIDE_HINT = N_("Object extends beyond the label")
 PASTE_OFFSET_MM = 2.0      # Einfügen/Duplizieren: versetzt nach rechts und unten
 PROGRESS_EVERY = 25        # Serie drucken: Fortschritt alle so viele Etiketten
-SHRUNK_HINT = "Bild auf {percent} verkleinert"                    # „37 %“
-CODES_HINT = " – Codes ggf. nicht mehr lesbar"                    # nur Strich (Codes)
-TURNED_HINT = "Bild um 90° gedreht, damit es 1:1 passt"
-NO_CLIPBOARD_IMAGE = "Kein Bild in der Zwischenablage."
-NO_SCREENSHOT = ("Bildschirmfoto nicht verfügbar (kein XDG-Portal) – mit dem System-Werkzeug in "
-                 "die Zwischenablage kopieren und mit Strg+V einfügen")
+# Hinweise: englisch (N_), angezeigt wird _(…)
+TURNED_HINT = N_("Image rotated by 90° so that it fits 1:1")
+NO_CLIPBOARD_IMAGE = N_("No image in the clipboard.")
+NO_SCREENSHOT = N_("Screenshot not available (no XDG portal) – copy it to the clipboard with the "
+                   "system tool and paste it with Ctrl+V")
 SYMBOL_MM = 15.0           # Symbol: längere Seite beim Einfügen (höchstens quer zum Band)
 LIBRARY_ERRORS = (OSError, zipfile.BadZipFile, KeyError, ValueError)   # Archiv fehlt/beschädigt
 HIDE_DELAY_MS = 300        # Bildschirmfoto: so lange nimmt der Desktop das Fenster weg
@@ -81,14 +82,19 @@ EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
             None, ("edit.undo", "edit-undo"), ("edit.redo", "edit-redo"))
 _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
 OBJECT_PANELS = ("text", "image", "barcode")   # Panel je Objektart (Text, Bild, Barcode)
+CHECKING_ROLL = N_("Checking the roll – please print again in a moment.")
+PRINTING_WAIT = N_("Printing – please wait.")
 
 
 def shrunk_hint(factor: float, mode: str) -> str:
     """Hinweis zum verkleinerten Bild: Prozent abgerundet (nie „100 %“, nie „0 %“); Codes
     werden nur bei Strich erwähnt – ein Foto wird gerastert, Codes sind dort nicht gemeint."""
     percent = math.floor(factor * 100 + 1e-9)
-    text = SHRUNK_HINT.format(percent=f"{percent} %" if percent else "< 1 %")
-    return text + CODES_HINT if mode == "line" else text
+    shown = _("{percent}%").format(percent=percent) if percent else _("< 1%")    # „37 %“
+    if mode == "line":
+        return _("Image reduced to {percent} – codes may no longer be readable").format(
+            percent=shown)
+    return _("Image reduced to {percent}").format(percent=shown)
 
 
 class MainWindow(QMainWindow):
@@ -148,7 +154,7 @@ class MainWindow(QMainWindow):
         self.shortcut_actions = build_actions(self, keys)
 
         # Werkzeugleiste + Panels aus der Registry
-        toolbar = QToolBar("Werkzeuge")
+        toolbar = QToolBar(_("Tools"))
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.addToolBar(toolbar)
@@ -165,8 +171,8 @@ class MainWindow(QMainWindow):
             panel.edited.connect(self._commit)
             self.panels.addWidget(panel)
             self._panel_by_key[tool.key] = panel
-            action = QAction(QIcon.fromTheme(tool.icon), tool.title.upper(), self)
-            action.setToolTip(tool.tip or tool.title)
+            action = QAction(QIcon.fromTheme(tool.icon), _(tool.title).upper(), self)
+            action.setToolTip(_(tool.tip or tool.title))
             action.setCheckable(True)
             action.triggered.connect(lambda _=False, key=tool.key: self._tool_triggered(key))
             group.addAction(action)
@@ -179,9 +185,9 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(spacer)
         self.settings_action = self._toolbar_action("app.settings", "preferences-system",
-                                                    "EINSTELLUNGEN", self.open_settings)
+                                                    _("SETTINGS"), self.open_settings)
         toolbar.addAction(self.settings_action)
-        self.print_action = self._toolbar_action("file.print", "document-print", "DRUCKEN",
+        self.print_action = self._toolbar_action("file.print", "document-print", _("PRINT"),
                                                  self.print_label)
         toolbar.addAction(self.print_action)
         toolbar.widgetForAction(self.print_action).setObjectName("print")
@@ -247,13 +253,15 @@ class MainWindow(QMainWindow):
         self.media_status.hide()
         self.statusBar().addWidget(self.media_status)
         self.statusBar().addWidget(self.result, 1)
-        self.cancel_button = QPushButton("ABBRECHEN")   # Serie: beim Vorbereiten und Drucken
+        self.cancel_button = QPushButton(_("CANCEL"))   # Serie: beim Vorbereiten und Drucken
         self.cancel_button.setObjectName("cancelPrint")
-        self.cancel_button.setToolTip("Serie abbrechen – ein schon gesendeter Teil (bis zu 10 "
-                                      "Etiketten, bei „Nur am Ende“ der ganze Auftrag) läuft zu Ende")
+        self.cancel_button.setToolTip(_("Cancel the series – a part already sent (up to 10 labels, "
+                                        "with “Only at the end” the whole job) is still printed"))
         self.cancel_button.clicked.connect(self.cancel_print)
         self.cancel_button.hide()
         self.statusBar().addWidget(self.cancel_button)
+        # Stand beim Start: der Einstellungsdialog zeigt danach, was erst ein Neustart ändert
+        self._started = started_values(self.settings)
         self.zoom_label = QLabel()
         for text, delta in (("−", -ZOOM_STEP), ("+", ZOOM_STEP)):
             button = QToolButton()
@@ -262,8 +270,9 @@ class MainWindow(QMainWindow):
             self.statusBar().addPermanentWidget(button)
             if text == "−":
                 self.statusBar().addPermanentWidget(self.zoom_label)
-        self.canvas.zoom_changed.connect(lambda z: self.zoom_label.setText(f"{z} %"))
-        self.zoom_label.setText(f"{self.canvas.zoom} %")
+        self.canvas.zoom_changed.connect(
+            lambda z: self.zoom_label.setText(_("{percent}%").format(percent=z)))
+        self.zoom_label.setText(_("{percent}%").format(percent=self.canvas.zoom))
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -387,7 +396,7 @@ class MainWindow(QMainWindow):
 
     def _build_edit_bar(self) -> None:
         """Bearbeitungsleiste unter der Werkzeugleiste: Werkzeug, Zwischenablage, Rückgängig."""
-        bar = QToolBar("Bearbeiten")
+        bar = QToolBar(_("Edit"))
         bar.setObjectName("editBar")
         bar.setMovable(False)
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
@@ -565,10 +574,10 @@ class MainWindow(QMainWindow):
         size, rendered = result.size, result.objects
         area = printable_area(self.doc, self.model, size)
         outside = outside_indices(rendered, size, self.doc.objects)
-        hints = ([OUTSIDE_HINT] if outside else []) + font_warnings(self.doc)
+        hints = ([_(OUTSIDE_HINT)] if outside else []) + font_warnings(self.doc)
         series_panel = self.panel("series")
         if self.doc.series is not None and series_panel.error:
-            hints.append(f"Serie: {series_panel.error}")
+            hints.append(_("Series: {error}").format(error=series_panel.error))
         series_panel.show_missing(series.missing(self.doc, series_panel.table.columns)
                                   if series_panel.table is not None else [])
         if hints and not self.result.text():
@@ -742,16 +751,18 @@ class MainWindow(QMainWindow):
             return message
         kept = self._keep if self._keep is not None else self.edit_session.index
         if kept is not None and index in (None, kept):
-            return f"{message} – mit Platzhaltern im Schreibmodus (kleinere Schrift wählen)"
-        return f"Zeile {self.panel('series').current_row()}: {message}"
+            return _("{message} – with placeholders in text editing (choose a smaller font)"
+                     ).format(message=message)
+        return _("Row {row}: {message}").format(row=self.panel("series").current_row(),
+                                                 message=message)
 
     def ask_series_file(self) -> str | None:
         """Dialog für die Tabelle einer Serie (in Tests ersetzbar); beginnt im Ordner der
         aktuellen Tabelle."""
         current = self.doc.series.source if self.doc.series is not None else None
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Tabelle für die Serie", str(Path(current).parent) if current else "",
-            "Tabellen (*.csv *.xlsx *.xlsm *.tsv *.txt);;Alle Dateien (*)")
+        path, _filter = QFileDialog.getOpenFileName(
+            self, _("Table for the series"), str(Path(current).parent) if current else "",
+            _("Tables (*.csv *.xlsx *.xlsm *.tsv *.txt);;All files (*)"))
         return path or None
 
     def choose_series_table(self) -> None:
@@ -781,7 +792,8 @@ class MainWindow(QMainWindow):
             sample = obj.data == barcodes.SAMPLES.get(obj.kind)
             data = placeholder if sample else obj.data + placeholder
             if len(data) > MAX_BARCODE_DATA:
-                self._set_result(f"Inhalt zu lang (höchstens {MAX_BARCODE_DATA} Zeichen)", "error")
+                self._set_result(_("Content too long (at most {count} characters)").format(
+                    count=MAX_BARCODE_DATA), "error")
                 return
             self.doc.objects[selection[0]] = replace(obj, data=data)
             self._objects_changed(selection)
@@ -1106,7 +1118,7 @@ class MainWindow(QMainWindow):
 
     def ask_image_file(self) -> str | None:
         """Dateidialog „Bilder und PDF“ (in Tests ersetzbar); None = abgebrochen."""
-        path, _ = QFileDialog.getOpenFileName(self, "Bild einfügen", self._image_dir,
+        path, _filter = QFileDialog.getOpenFileName(self, _("Insert image"), self._image_dir,
                                               image_import.FILE_FILTER)
         if path:
             self._image_dir = str(Path(path).parent)
@@ -1114,8 +1126,9 @@ class MainWindow(QMainWindow):
 
     def ask_pdf_page(self, path: Path, count: int) -> int | None:
         """Seitenwahl für ein PDF mit mehreren Seiten (in Tests ersetzbar); None = abgebrochen."""
-        page, ok = QInputDialog.getInt(self, "PDF-Seite wählen",
-                                       f"{path.name} hat {count} Seiten. Welche einfügen?",
+        page, ok = QInputDialog.getInt(self, _("Choose PDF page"),
+                                       _("{name} has {count} pages. Which one to insert?").format(
+                                           name=path.name, count=count),
                                        1, 1, count)
         return page if ok else None
 
@@ -1150,7 +1163,7 @@ class MainWindow(QMainWindow):
         """„Aus Zwischenablage“: Bild der Zwischenablage in die Mitte des bedruckbaren Bereichs."""
         image = image_import.mime_image(QApplication.clipboard().mimeData())
         if image is None:
-            self._show_notice([NO_CLIPBOARD_IMAGE], "error")
+            self._show_notice([_(NO_CLIPBOARD_IMAGE)], "error")
             return
         self._insert_picture(image, CLIPBOARD)
 
@@ -1178,7 +1191,7 @@ class MainWindow(QMainWindow):
             return
         self.finish_editing()
         if not self.screenshot_available():
-            self._show_notice([NO_SCREENSHOT], "error")
+            self._show_notice([_(NO_SCREENSHOT)], "error")
             return
         self._shooting = self._shot_pending = True
         self.shortcut_actions["image.screenshot"].setEnabled(False)
@@ -1202,7 +1215,7 @@ class MainWindow(QMainWindow):
         try:
             self.take_screenshot()
         except Exception as e:  # Fenster sofort zurück; Meldung statt Traceback
-            self.screenshot_finished(None, f"{SCREENSHOT_FAILED} – {e}")
+            self.screenshot_finished(None, f"{_(SCREENSHOT_FAILED)} – {e}")
 
     def screenshot_finished(self, path: Path | None, error: str | None) -> None:
         """Antwort des Portals: Pfad → einfügen (300 dpi: 1 Bildschirmpixel = 1 Druckpunkt, wie
@@ -1221,7 +1234,7 @@ class MainWindow(QMainWindow):
         try:
             image, dpi = image_import.load_screenshot(Path(path))
         except (ValueError, OSError) as e:
-            self._show_notice([f"Bildschirmfoto: {e}"], "error")
+            self._show_notice([_("Screenshot: {error}").format(error=e)], "error")
             return
         self._insert_picture(image, SCREENSHOT, dpi=dpi)
 
@@ -1266,12 +1279,12 @@ class MainWindow(QMainWindow):
             image, dpi, crop, svg = image_import.load_symbol(symbol, self._symbol_mm())
         except (ValueError, OSError, KeyError, zipfile.BadZipFile,
                 Image.DecompressionBombError) as e:
-            self._show_notice([f"Symbol: {e}"], "error")
+            self._show_notice([_("Symbol: {error}").format(error=e)], "error")
             return
         obj = ImageObject.from_image(image, dpi, SYMBOL_SOURCE.format(name=symbol.name),
                                      crop=crop, svg=svg)
         # Größe passt schon quer zum Band – Drehen nach Einstellung gilt für Symbole nicht
-        self._insert_images([obj], at, [] if crop is not None else [CROP_FAILED], rotate=False)
+        self._insert_images([obj], at, [] if crop is not None else [_(CROP_FAILED)], rotate=False)
         self.settings.symbols_recent = clipart.add_recent(self.settings.symbols_recent, symbol.id)
         self._save_settings()
         if self.symbol_window is not None:
@@ -1318,7 +1331,7 @@ class MainWindow(QMainWindow):
 
     def _library_unreadable(self, error: Exception) -> None:
         """Archiv der Symbol-Bibliothek fehlt oder ist beschädigt: Meldung statt Traceback."""
-        self._set_result(f"Symbol-Bibliothek nicht lesbar: {error}", "error")
+        self._set_result(_("Symbol library unreadable: {error}").format(error=error), "error")
 
     def _favorites_changed(self, favorites: list[str]) -> None:
         self.settings.symbols_favorites = list(favorites)
@@ -1361,8 +1374,8 @@ class MainWindow(QMainWindow):
         if not self.settings.image_crop:
             return ImageObject.from_image(image, dpi, source, page, None, svg)
         crop = crop_box(image, dpi, ink=NOT_WHITE)
-        if crop is None and CROP_FAILED not in notes:
-            notes.append(CROP_FAILED)
+        if crop is None and _(CROP_FAILED) not in notes:
+            notes.append(_(CROP_FAILED))
         return ImageObject.from_image(image, dpi, source, page, crop, svg)
 
     def _insert_images(self, objects: list[ImageObject], at: tuple[float, float] | None,
@@ -1396,7 +1409,7 @@ class MainWindow(QMainWindow):
                     smallest, shrunk_mode = factor, obj.mode
             self._insert(objects)
             if turned:
-                notes.append(TURNED_HINT)
+                notes.append(_(TURNED_HINT))
             if smallest < 1:
                 notes.append(shrunk_hint(smallest, shrunk_mode))
         self._show_notice(notes, state)
@@ -1460,24 +1473,25 @@ class MainWindow(QMainWindow):
                     and chosen.uri != self.printer.uri)
         self.printers, self.printer = found or [], chosen
         if found is None:
-            text = "○ Druckerstatus unbekannt"
+            text = _("○ Printer status unknown")
         elif chosen is None and self.settings.printer:
-            text = "○ gewählter Drucker fehlt"
-            tip = f"{self.settings.printer} nicht gefunden – einschalten oder einen anderen wählen"
+            text = _("○ selected printer missing")
+            tip = _("{printer} not found – switch it on or choose another one").format(
+                printer=self.settings.printer)
         elif chosen is not None:
             text = f"● {chosen.name}"
             if chosen.model is None:
-                text += f" (als {self.model})"
-                tip = "Modell nicht erkannt – in den Einstellungen ein Ersatzmodell wählen"
+                text = _("● {name} (as {model})").format(name=chosen.name, model=self.model)
+                tip = _("Model not recognized – choose a fallback model in the settings")
             elif not capabilities(chosen.model).tested:
-                text += " · ungeprüft"
-                tip = f"{chosen.model}: {UNTESTED_HINT}"
+                text = _("● {name} · untested").format(name=chosen.name)
+                tip = f"{chosen.model}: {_(UNTESTED_HINT)}"
         elif busy:
-            text = "● Drucker belegt (andere Anwendung)"
+            text = _("● Printer busy (another application)")
         else:
-            text = "○ kein Drucker"
+            text = _("○ no printer")
         self.printer_status.setText(text)
-        self.printer_status.setToolTip(tip or "Drucker wählen")
+        self.printer_status.setToolTip(tip or _("Choose printer"))
         if chosen is not None and chosen.model and chosen.model != self.settings.last_model:
             self.settings.last_model = chosen.model     # gilt beim nächsten Start ohne Drucker
             self._save_settings()
@@ -1507,21 +1521,22 @@ class MainWindow(QMainWindow):
         """Menü am Druckerknopf: Automatisch, gefundene Drucker, Netzwerkdrucker eintragen."""
         menu = self.printer_menu
         menu.clear()
-        auto = menu.addAction("Automatisch (erster gefundener)")
+        auto = menu.addAction(_("Automatic (first found)"))
         auto.setCheckable(True)
         auto.setChecked(not self.settings.printer)
         auto.triggered.connect(lambda _=False: self.choose_printer(""))
         for printer in self.printers:
             untested = printer.model is not None and not capabilities(printer.model).tested
-            action = menu.addAction(printer.name + (" – ungeprüft" if untested else ""))
+            action = menu.addAction(_("{name} – untested").format(name=printer.name) if untested
+                                    else printer.name)
             action.setCheckable(True)
             action.setChecked(printer.uri == self.settings.printer)
-            action.setToolTip(UNTESTED_HINT if untested else printer.uri)
+            action.setToolTip(_(UNTESTED_HINT) if untested else printer.uri)
             action.triggered.connect(lambda _=False, uri=printer.uri: self.choose_printer(uri))
         if not self.printers:
-            menu.addAction("Kein Drucker gefunden").setEnabled(False)
+            menu.addAction(_("No printer found")).setEnabled(False)
         menu.addSeparator()
-        menu.addAction("Netzwerkdrucker eintragen …", self.open_settings)
+        menu.addAction(_("Add network printer …"), self.open_settings)
 
     def choose_printer(self, uri: str) -> None:
         """Drucker wählen (URI; "" = automatisch) – gespeichert."""
@@ -1547,7 +1562,7 @@ class MainWindow(QMainWindow):
         if self.model.startswith("cups:"):
             panel.set_driver_cuts(cups.queue_info(self.model[len("cups:"):]).cut_options, chosen)
         elif zpl.is_model(self.model):
-            panel.set_driver_cuts((zpl.CUT_OPTION,), chosen)
+            panel.set_driver_cuts((zpl.cut_option(),), chosen)
         else:
             panel.set_cutter(capabilities(self.model).cutter)
 
@@ -1573,11 +1588,13 @@ class MainWindow(QMainWindow):
             self.panel("paper").refresh()
             self.history.reset(self.doc)            # unberührt: kein Schritt zurück zum Unpassenden
             self.files.mark_unchanged()
-            self._set_result(f"Etikett {get_label(label).description} passt nicht zum {self.model} "
-                             f"– {get_label(self.doc.label_id).description} genommen", "warn")
+            self._set_result(_("Label {label} does not fit the {model} – using {new}").format(
+                label=get_label(label).description, model=self.model,
+                new=get_label(self.doc.label_id).description), "warn")
             return
-        self._set_result(f"Etikett {get_label(label).description} passt nicht zum Drucker "
-                         f"({self.model}) – im Reiter Papier ein anderes wählen", "error")
+        self._set_result(_("Label {label} does not fit the printer ({model}) – choose another one "
+                           "in the Paper tab").format(label=get_label(label).description,
+                                                      model=self.model), "error")
 
     def _run_pending_media_check(self) -> None:
         """Automatische Prüfung nachholen, sobald weder Druck noch Prüfung laufen."""
@@ -1595,7 +1612,8 @@ class MainWindow(QMainWindow):
         if name:
             favorite = favorites.find(name)
             if favorite is None:
-                self._set_result(f"Start-Favorit „{name}“ nicht gefunden – leeres Etikett", "error")
+                self._set_result(_("Start favorite “{name}” not found – empty label").format(
+                    name=name), "error")
             else:
                 self.files.open_favorite(favorite)
 
@@ -1623,7 +1641,7 @@ class MainWindow(QMainWindow):
                 self.shortcut_actions[entry[0]].setIcon(line_icon(entry[1], dark, hover=True))
 
     def open_settings(self) -> None:
-        dialog = SettingsDialog(self.settings, model=self.model, parent=self)
+        dialog = SettingsDialog(self.settings, model=self.model, parent=self, started=self._started)
         accepted = dialog.exec() == SettingsDialog.DialogCode.Accepted
         saved = dialog.saved
         dialog.deleteLater()                    # nicht bis zum Schließen des Fensters behalten
@@ -1644,7 +1662,7 @@ class MainWindow(QMainWindow):
                             without_conflicts(effective(self.settings.shortcuts))[0])
             self.files.refresh_lists()                  # „Beim Start“ im Reiter Datei
             self.refresh_printer()                      # Netzwerkdrucker, Ersatzmodell
-            self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
+            self._set_result(_("Settings saved – they apply to new labels."), "ok")
 
     # --- Medium prüfen ----------------------------------------------------
     def is_printing(self) -> bool:
@@ -1701,15 +1719,15 @@ class MainWindow(QMainWindow):
 
     def confirm_outside(self) -> bool:
         answer = QMessageBox.question(
-            self, "Objekt ragt hinaus",
-            "Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?",
+            self, _("Object sticks out"),
+            _("An object extends beyond the label and will be cut off. Print anyway?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)
         return answer == QMessageBox.StandardButton.Yes
 
     def confirm_empty(self) -> bool:
         answer = QMessageBox.question(
-            self, "Leeres Etikett", "Das Etikett ist leer. Trotzdem drucken?",
+            self, _("Empty label"), _("The label is empty. Print anyway?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel)
         return answer == QMessageBox.StandardButton.Yes
@@ -1735,12 +1753,12 @@ class MainWindow(QMainWindow):
             panel = self.panel("series")
             if panel.check_file():                  # Tabelle draußen geändert: Auswahl ist neu
                 self.render_now()
-                self._set_result(f"Serie: {panel.error}" if panel.error else
-                                 "Tabelle wurde geändert und neu eingelesen – Auswahl prüfen und "
-                                 "erneut drucken.", "error")
+                self._set_result(_("Series: {error}").format(error=panel.error) if panel.error
+                                 else _("The table has changed and was read again – check the "
+                                        "selection and print again."), "error")
                 return
             if panel.error:
-                self._set_result(f"Serie: {panel.error}", "error")
+                self._set_result(_("Series: {error}").format(error=panel.error), "error")
                 return
             self._print_series(self.doc, panel.table, panel.checked_rows())
             return
@@ -1757,16 +1775,16 @@ class MainWindow(QMainWindow):
         jede Zeile rendern (Fortschritt in der Statusleiste), Zeilen, die über das Etikett
         ragen, nennen und fragen – ein Auftrag. Scheitert eine Zeile, wird nichts gedruckt."""
         if not table.rows:
-            self._set_result("Tabelle hat keine Zeilen – nichts gedruckt.", "error")
+            self._set_result(_("The table has no rows – nothing printed."), "error")
             return
         if not rows:
-            self._set_result("Keine Zeile gewählt – nichts gedruckt.", "error")
+            self._set_result(_("No row selected – nothing printed."), "error")
             return
         if self.is_checking_media():
-            self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
+            self._set_result(_(CHECKING_ROLL), "error")
             return
         if self.is_printing():
-            self._set_result("Druck läuft – bitte warten.", "error")
+            self._set_result(_(PRINTING_WAIT), "error")
             return
         if not self._can_print(doc):
             return
@@ -1783,16 +1801,17 @@ class MainWindow(QMainWindow):
         try:
             for done, (number, values) in enumerate(rows):
                 if done % PROGRESS_EVERY == 0 and len(rows) > PROGRESS_EVERY:
-                    self._set_result(f"Bereite {done + 1}/{len(rows)} vor …", "")
+                    self._set_result(_("Preparing {current}/{total} …").format(
+                        current=done + 1, total=len(rows)), "")
                     QApplication.processEvents()    # auch „Abbrechen“
                     if self._cancel_requested:
-                        self._set_result("Abgebrochen – nichts gedruckt", "")
+                        self._set_result(_("Cancelled – nothing printed"), "")
                         return
                 try:
                     result = renderer.render(fill_anchored(doc, table.columns, values, model),
                                              model)
                 except ValueError as e:
-                    self._set_result(f"Zeile {number}: {e}", "error")
+                    self._set_result(_("Row {row}: {message}").format(row=number, message=e), "error")
                     return
                 if outside_indices(result.objects, result.size, doc.objects):
                     outside.append(number)
@@ -1809,18 +1828,19 @@ class MainWindow(QMainWindow):
     def confirm_outside_rows(self, numbers: list[int]) -> bool:
         """Rückfrage: Zeilen, in denen etwas über das Etikett ragt (in Tests ersetzbar)."""
         shown = ", ".join(map(str, numbers[:10])) + (" …" if len(numbers) > 10 else "")
-        text = (f"Zeile {shown} ragt" if len(numbers) == 1 else f"Zeilen {shown} ragen")
+        text = ngettext("Row {rows} extends beyond the label and will be cut off. Print anyway?",
+                        "Rows {rows} extend beyond the label and will be cut off. Print anyway?",
+                        len(numbers)).format(rows=shown)
         return QMessageBox.question(
-            self, "Objekt ragt hinaus",
-            f"{text} über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?",
+            self, _("Object sticks out"), text,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
 
     def ask_print_count(self, count: int) -> bool:
         """Rückfrage vor dem Drucken einer Serie (in Tests ersetzbar)."""
-        text = "1 Etikett drucken?" if count == 1 else f"{count} Etiketten drucken?"
+        text = ngettext("Print {count} label?", "Print {count} labels?", count).format(count=count)
         return QMessageBox.question(
-            self, "Serie drucken", text,
+            self, _("Print series"), text,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes) == QMessageBox.StandardButton.Yes
 
@@ -1828,7 +1848,7 @@ class MainWindow(QMainWindow):
         """Anderes Etikett drucken (Favorit), ohne das offene anzutasten – gleiche Rückfragen;
         mit Serie alle Zeilen."""
         if self.is_printing():
-            self._set_result("Druck läuft – bitte warten.", "error")
+            self._set_result(_(PRINTING_WAIT), "error")
             return
         if doc.series is not None:
             try:
@@ -1837,7 +1857,8 @@ class MainWindow(QMainWindow):
                 self._set_result(str(e), "error")
                 return
             except Exception as e:  # fremde Datei: Meldung statt Traceback
-                self._set_result(f"Serie kann nicht gelesen werden ({type(e).__name__})", "error")
+                self._set_result(_("Cannot read the series ({error})").format(
+                    error=type(e).__name__), "error")
                 return
             self._print_series(doc, table, list(enumerate(table.rows, start=1)))
             return
@@ -1848,23 +1869,24 @@ class MainWindow(QMainWindow):
             self._set_result(str(e), "error")
             return
         except Exception as e:  # fremde Datei: Meldung statt Traceback
-            self._set_result(f"Etikett kann nicht gedruckt werden ({type(e).__name__})", "error")
+            self._set_result(_("Cannot print the label ({error})").format(
+                error=type(e).__name__), "error")
             return
         self._print(image, doc, outside)
 
     def _can_print(self, doc: Document) -> bool:
         """Vor dem Rendern prüfbar: gewählter Drucker da, Etikett passt zum Modell (Meldung)."""
         if self.printer is None and self.settings.printer:
-            self._set_result("Gewählter Drucker nicht gefunden – einschalten oder in der "
-                             "Statusleiste einen anderen wählen.", "error")
+            self._set_result(_("Selected printer not found – switch it on or choose another one "
+                               "in the status bar."), "error")
             return False
         if self.printer is None and not printers_mod.brother_model(self.model):
-            self._set_result("Kein Drucker für dieses Etikett – in der Statusleiste einen Drucker "
-                             "wählen.", "error")
+            self._set_result(_("No printer for this label – choose a printer in the status bar."),
+                             "error")
             return False
         if doc.label_id not in {label.id for label in labels_for_model(self.model)}:
-            self._set_result(f"Etikett „{doc.label_id}“ passt nicht zum Drucker ({self.model}).",
-                             "error")
+            self._set_result(_("Label “{label}” does not fit the printer ({model}).").format(
+                label=doc.label_id, model=self.model), "error")
             return False
         return True
 
@@ -1873,7 +1895,7 @@ class MainWindow(QMainWindow):
         """``image``: ein Druckbild oder eine Liste (Serie, ein Auftrag); ``model``/``printer``:
         festgehalten beim Start einer Serie (sonst die jetzigen)."""
         if self.is_checking_media():
-            self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
+            self._set_result(_(CHECKING_ROLL), "error")
             return
         if model is None:
             if not self._can_print(doc):
@@ -1889,7 +1911,7 @@ class MainWindow(QMainWindow):
             return
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
         self.result.style().polish(self.result)
-        self.result.setText("Drucke …")
+        self.result.setText(_("Printing …"))
         options = (self.settings.printer_options.get(model, {})
                    if model.startswith("cups:") or zpl.is_model(model) else {})
         worker = PrintWorker(image, doc.label_id, model, cut_every,
@@ -1899,7 +1921,8 @@ class MainWindow(QMainWindow):
         worker.signals.done.connect(self._print_done)
         worker.signals.failed.connect(self._print_failed)
         worker.signals.progress.connect(
-            lambda done, total: self._set_result(f"Drucke … {done} von {total}", ""))
+            lambda done, total: self._set_result(
+                _("Printing … {done} of {total}").format(done=done, total=total), ""))
         worker.signals.cancelled.connect(self._print_cancelled)
         # übers Netz geht eine Serie als ein Auftrag hinaus (kein Status): nichts abzubrechen
         self.cancel_button.setVisible(isinstance(image, list) and len(image) > 1
@@ -1912,7 +1935,7 @@ class MainWindow(QMainWindow):
         self._cancel_requested = True
         if self._worker is not None:
             self._worker.cancel()
-            self._set_result("Wird abgebrochen …", "")
+            self._set_result(_("Cancelling …"), "")
 
     def _set_printing(self, printing: bool) -> None:
         self._printing = printing
@@ -1927,8 +1950,8 @@ class MainWindow(QMainWindow):
         missing = self.printer is None and bool(self.settings.printer)     # gewählter fehlt
         check.setEnabled(not self._printing and not network and not missing
                          and not self.is_checking_media())
-        check.setToolTip("Medium prüfen geht nur bei Brother-Druckern per USB" if network
-                         else "Eingelegte Rolle vom Drucker abfragen (druckt nichts)")
+        check.setToolTip(_("Check media only works with Brother printers via USB") if network
+                         else _("Ask the printer which roll is loaded (prints nothing)"))
 
     def _print_done(self, status: dict) -> None:
         ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
@@ -1936,11 +1959,13 @@ class MainWindow(QMainWindow):
         sent_only = status.get("outcome") == "sent" and not status.get("did_print")
         if status.get("job"):
             self.result.setProperty("state", "ok")
-            self.result.setText(f"An die Druckwarteschlange übergeben ✓ (Auftrag {status['job']})")
+            self.result.setText(_("Handed to the print queue ✓ (job {job})").format(
+                job=status["job"]))
             self._print_finished()
             return
-        self.result.setText(("Gesendet ✓ (der Drucker meldet keinen Status zurück)" if sent_only
-                             else "Gedruckt ✓") if ok else f"Status: {status.get('outcome')}")
+        self.result.setText((_("Sent ✓ (the printer reports no status)") if sent_only
+                             else _("Printed ✓")) if ok
+                            else _("Status: {outcome}").format(outcome=status.get("outcome")))
         self._print_finished()
 
     def _print_cancelled(self, message: str) -> None:

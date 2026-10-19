@@ -13,7 +13,9 @@ Was nicht passt, wird übersprungen und aufgelistet – außer bei den ausdrück
 ISO-7000-Zeichen: dann Abbruch. Der Stand der Commons-Dateien (SHA-1, Lizenz) steht in
 tools/clipart/commons.lock.json; weicht er ab, bricht das Skript ab (``--update`` schreibt ihn
 neu – danach die Änderungen prüfen). Deutsche Namen, Kategorien, Suchbegriffe:
-tools/clipart/de.json. Jede SVG wird mit Qt probehalber gerastert (leer/ungültig → übersprungen).
+tools/clipart/de.json, englische: tools/clipart/en.json (Pflicht für jedes Zeichen – die englischen
+Commons-Beschreibungen sind zu uneinheitlich). Jeder Eintrag hat ``names``/``subgroups`` je Sprache
+({"de", "en"}). Jede SVG wird mit Qt probehalber gerastert (leer/ungültig → übersprungen).
 
     .venv/bin/python tools/fetch_clipart.py [--cache ORDNER] [--update]
 
@@ -165,10 +167,15 @@ def tabler(de: dict, cache: Path | None) -> tuple[list[dict], dict[str, bytes], 
                     continue
                 path = f"tabler/{style}/{name}.svg"
                 files[path] = compact(read(f"icons/{style}/{name}.svg").decode()).encode()
+                plain_name = name.replace("-", " ")
+                subgroup = de["categories"].get(category, category)
                 entries.append({
                     "id": f"tabler/{style}/{name}", "group": "allgemein",
-                    "subgroup": de["categories"].get(category, category),
-                    "name": name.replace("-", " ") + (" (gefüllt)" if style == "filled" else ""),
+                    "subgroup": subgroup,
+                    "name": plain_name + (" (gefüllt)" if style == "filled" else ""),
+                    "names": {"de": plain_name + (" (gefüllt)" if style == "filled" else ""),
+                              "en": plain_name + (" (filled)" if style == "filled" else "")},
+                    "subgroups": {"de": subgroup, "en": category or "Other"},
                     "keywords": sorted({*map(str, icon.get("tags", [])), *synonyms.get(name, [])}),
                     "file": path, "source": f"Tabler Icons {TABLER_VERSION}",
                     "url": "https://tabler.io/icons", "author": "Paweł Kuna", "license": "MIT"})
@@ -198,11 +205,11 @@ def category_files(cache: Path | None) -> list[str]:
         more = {"cmcontinue": answer["continue"]["cmcontinue"]}
 
 
-def file_info(titles: list[str], cache: Path | None) -> dict[str, dict]:
+def file_info(titles: list[str], cache: Path | None, language: str = "de") -> dict[str, dict]:
     info: dict[str, dict] = {}
     for start in range(0, len(titles), 40):
         pages = api(cache, action="query", titles="|".join(titles[start:start + 40]),
-                    prop="imageinfo", iiprop="url|sha1|extmetadata", iiextmetadatalanguage="de",
+                    prop="imageinfo", iiprop="url|sha1|extmetadata", iiextmetadatalanguage=language,
                     iiextmetadatafilter="ImageDescription|LicenseShortName|License|Artist|"
                                         "Restrictions")["query"]["pages"]
         for page in pages:
@@ -226,7 +233,7 @@ def problem(title: str, meta: dict | None) -> str | None:
     return None
 
 
-def commons(de: dict, cache: Path | None, lock: dict, update: bool
+def commons(de: dict, en: dict, cache: Path | None, lock: dict, update: bool
             ) -> tuple[list[dict], dict[str, bytes], list[str], dict]:
     listed = [(f"File:ISO 7000 - Ref-No {ref}.svg", f"iso7000/{ref}") for ref in de["iso7000"]]
     candidates: dict[str, list[str]] = {}
@@ -270,15 +277,22 @@ def commons(de: dict, cache: Path | None, lock: dict, update: bool
         code = ident.split("/")[1]
         if group == "versand":
             name, subgroup, standard = de["iso7000"][code], "Packzeichen (ISO 780)", "ISO 780"
+            name_en, subgroup_en = en["iso7000"][code], en["subgroups"][subgroup]
         else:
             subgroup, standard = de["iso7010_kinds"][code[0]], "ISO 7010"
+            subgroup_en = en["iso7010_kinds"][code[0]]
             description = plain(ext.get("ImageDescription", {}).get("value", ""))
             name = f"{de['iso7010'].get(code) or iso_name(description) or title[5:-4]} ({code})"
+            if code not in en["iso7010"]:
+                raise SystemExit(f"{title}: englischer Name fehlt in en.json (iso7010/{code})")
+            name_en = f"{en['iso7010'][code]} ({code})"
         path = f"commons/{ident}.svg"
         files[path] = svg
         entries.append({
             "id": ident, "group": group, "subgroup": subgroup, "name": name,
-            "keywords": [code, standard, subgroup], "file": path, "source": title[5:],
+            "names": {"de": name, "en": name_en},
+            "subgroups": {"de": subgroup, "en": subgroup_en},
+            "keywords": [code, standard, subgroup, subgroup_en], "file": path, "source": title[5:],
             "url": f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}",
             "author": author(ext.get("Artist", {}).get("value", "")), "license": licence})
     if not update and set(lock) != set(new_lock):
@@ -288,20 +302,25 @@ def commons(de: dict, cache: Path | None, lock: dict, update: bool
 
 
 # --- eigene Zeichnungen ----------------------------------------------------------------------
-def own(de: dict) -> tuple[list[dict], dict[str, bytes]]:
+def own(de: dict, en: dict) -> tuple[list[dict], dict[str, bytes]]:
     entries, files = [], {}
     names = de["eigene"]
     found = {p.stem for p in (DATA / "eigene").glob("*.svg")}
     if found != set(names):
         raise SystemExit(f"tools/clipart/eigene und de.json passen nicht zusammen: "
                          f"{sorted(found ^ set(names))}")
+    if set(en["eigene"]) != set(names):
+        raise SystemExit(f"en.json und de.json (eigene) passen nicht zusammen: "
+                         f"{sorted(set(en['eigene']) ^ set(names))}")
     for stem, meta in sorted(names.items()):
         path = f"labelwerk/{stem}.svg"
         files[path] = (DATA / "eigene" / f"{stem}.svg").read_bytes()
+        subgroup = "Elektro" if meta["group"] == "elektro" else "Packzeichen (ISO 780)"
         entries.append({
-            "id": f"labelwerk/{stem}", "group": meta["group"],
-            "subgroup": "Elektro" if meta["group"] == "elektro" else "Packzeichen (ISO 780)",
-            "name": meta["name"], "keywords": meta["keywords"], "file": path,
+            "id": f"labelwerk/{stem}", "group": meta["group"], "subgroup": subgroup,
+            "name": meta["name"], "names": {"de": meta["name"], "en": en["eigene"][stem]},
+            "subgroups": {"de": subgroup, "en": en["subgroups"][subgroup]},
+            "keywords": meta["keywords"], "file": path,
             "source": "labelwerk (eigene Zeichnung)", "url": "", "author": "labelwerk",
             "license": OWN_LICENSE})
     return entries, files
@@ -354,9 +373,11 @@ def main() -> None:
                         help="geänderten Stand der Commons-Dateien übernehmen (commons.lock.json)")
     args = parser.parse_args()
     de = json.loads((DATA / "de.json").read_text(encoding="utf-8"))
+    en = json.loads((DATA / "en.json").read_text(encoding="utf-8"))
     lock = json.loads(LOCK.read_text(encoding="utf-8")) if LOCK.exists() else {}
-    own_entries, own_files = own(de)
-    commons_entries, commons_files, skipped, new_lock = commons(de, args.cache, lock, args.update)
+    own_entries, own_files = own(de, en)
+    commons_entries, commons_files, skipped, new_lock = commons(de, en, args.cache, lock,
+                                                                 args.update)
     tabler_entries, tabler_files, tabler_licence = tabler(de, args.cache)
     entries = own_entries + commons_entries + tabler_entries
     files = {**own_files, **commons_files, **tabler_files}

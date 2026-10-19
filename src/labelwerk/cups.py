@@ -5,7 +5,7 @@ Etikettengrößen und Auflösung kommen aus dem Treiber (PPD: ``*PaperDimension`
 ``*DefaultResolution``), sonst aus den Namen der Größen (``lpoptions -l``: „62x29mm“, „w288h432“
 in Punkt), sonst aus einer Liste je Hersteller (Dymo, Zebra). Schnitt-Optionen sind die
 Treiber-Optionen mit „Cut“ im Namen. Jeder Aufruf hat ein Zeitlimit, Meldungen kommen englisch
-(``LC_MESSAGES=C``, Namen bleiben UTF-8); Fehler werden zur deutschen ``CupsError``. Die Liste
+(``LC_MESSAGES=C``, Namen bleiben UTF-8); Fehler werden zur übersetzten ``CupsError``. Die Liste
 der Warteschlangen fragt ein Hintergrund-Thread ab – die Oberfläche wartet nie auf CUPS.
 """
 from __future__ import annotations
@@ -21,6 +21,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from .i18n import _
 from .labels import DPI, DPI_RANGE, SIZE_MM, sized_id
 
 PREFIX = "cups:"
@@ -80,7 +81,7 @@ class QueueInfo:
 
     def label_ids(self) -> list[str]:
         ids = []
-        for _, w, h in self.media:
+        for __, w, h in self.media:
             label_id = sized_id(w, h, self.dpi)
             if label_id not in ids:
                 ids.append(label_id)
@@ -114,12 +115,13 @@ def _run(*args: str, timeout: float = TIMEOUT_S) -> str:
         done = subprocess.run(args, capture_output=True, text=True, timeout=timeout,
                               check=False, env=_environment())
     except FileNotFoundError:
-        raise CupsError("CUPS-Befehle fehlen (Paket cups-client installieren)") from None
+        raise CupsError(_("CUPS commands missing (install the package cups-client)")) from None
     except subprocess.TimeoutExpired:
-        raise CupsError(f"CUPS antwortet nicht ({args[0]})") from None
+        raise CupsError(_("CUPS does not answer ({command})").format(command=args[0])) from None
     if done.returncode != 0:
         reason = (done.stderr or done.stdout).strip().splitlines()
-        raise CupsError(f"CUPS: {reason[-1] if reason else args[0] + ' gescheitert'}")
+        raise CupsError(_("CUPS: {reason}").format(reason=reason[-1]) if reason
+                        else _("CUPS: {command} failed").format(command=args[0]))
     return done.stdout
 
 
@@ -205,7 +207,7 @@ def _queue_info(name: str, options: dict) -> QueueInfo:
     dpi, media, source = DPI, (), "list"
     try:
         if not valid_name(name):
-            raise OSError("kein gültiger Name")
+            raise OSError("invalid queue name")      # intern, nie angezeigt
         dpi, media = _parse_ppd((PPD_DIR / f"{name}.ppd").read_text(errors="replace"))
         source = "ppd"
     except OSError:                        # nicht lesbar (Rechte) oder ohne PPD
@@ -230,7 +232,7 @@ def _options(name: str) -> dict[str, tuple[str, list[str], str]]:
         head, sep, values = line.partition(":")
         if not sep:
             continue
-        key, _, title = head.partition("/")
+        key, __, title = head.partition("/")
         choices = values.split()
         default = next((c[1:] for c in choices if c.startswith("*")), choices[0] if choices else "")
         out[key.strip()] = (title.strip() or key.strip(), [c.lstrip("*") for c in choices], default)
@@ -308,7 +310,7 @@ def print_images(name: str, images: list[Image.Image], w_mm: float, h_mm: float,
     in ``dpi`` (Seite = Etikett, 1:1 – ohne Einpassen und Drehen), Größe des Treibers bzw.
     eigene, dazu ``options`` (z. B. Schnitt). Zurück kommt die Auftrags-Kennung."""
     if not valid_name(name):
-        raise CupsError(f"Ungültiger Name der Warteschlange: {name!r}")
+        raise CupsError(_("Invalid queue name: {name!r}").format(name=name))
     info = queue_info(name)
     key = info.media_key(w_mm, h_mm)
     with tempfile.TemporaryDirectory(prefix="labelwerk-") as folder:

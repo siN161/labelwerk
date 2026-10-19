@@ -8,7 +8,9 @@ from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from .. import i18n
 from ..desktop import APP_ID, APP_NAME
+from ..settings import configured_language
 
 from .main_window import MainWindow
 
@@ -35,16 +37,28 @@ def apply_identity(app: QApplication) -> None:
 
 
 def install_translations(app: QApplication) -> QTranslator | None:
-    """Qt-eigene Texte (Speichern, Abbrechen, Ja …) auf Deutsch – passend zu labelwerk."""
+    """Qt-eigene Texte (Speichern, Abbrechen, Ja …) in der Sprache von labelwerk
+    (``i18n.language()``); Englisch braucht keine Übersetzung (None)."""
+    if i18n.language() == i18n.SOURCE:
+        return None
     translator = QTranslator(app)
-    if translator.load(QLocale(QLocale.Language.German, QLocale.Country.Germany), "qtbase", "_",
+    if translator.load(QLocale(i18n.language()), "qtbase", "_",
                        QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)):
         app.installTranslator(translator)
         return translator
     return None
 
 
+def set_language() -> str:
+    """Sprache aus den Einstellungen (sonst System) setzen – vor dem ersten Text; Zahlen in Feldern
+    mit ihrem Dezimaltrenner (``QLocale``)."""
+    language = i18n.set_language(configured_language())
+    QLocale.setDefault(QLocale(language))
+    return language
+
+
 def main() -> int:
+    set_language()
     app = QApplication(sys.argv)
     apply_identity(app)
     install_translations(app)

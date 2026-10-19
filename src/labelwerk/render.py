@@ -23,6 +23,8 @@ from . import barcodes, fonts, imaging
 from .document import (ALIGNMENTS, COLORS, FRAME_LINE_MM, FRAME_STYLES, MAX_FRAME_MM,
                        MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS, BarcodeObject,
                        Document, Frame, ImageObject, Paragraph, Span, TextObject)
+from . import i18n
+from .i18n import N_, _
 from .labels import DPI, get_label, length_limits
 from .printers import capabilities
 
@@ -42,17 +44,18 @@ class TextTooLarge(ValueError):
 
     def __init__(self, size_pt: float, max_pt: float | None, label_id: str):
         if max_pt is None:                     # passt nicht einmal in der kleinsten Größe
-            message = (f"Text passt nicht auf Etikett {label_id!r} – auch nicht in der "
-                       "kleinsten Schriftgröße.")
+            message = _("Text does not fit on label {label_id!r} – not even at the smallest font "
+                        "size.").format(label_id=label_id)
         else:
-            message = (f"Text passt nicht auf Etikett {label_id!r} bei Schriftgröße "
-                       f"{_fmt_pt(size_pt)} pt (höchstens {_fmt_pt(max_pt)} pt).")
+            message = _("Text does not fit on label {label_id!r} at font size {size} pt (at most "
+                        "{max_size} pt).").format(label_id=label_id, size=_fmt_pt(size_pt),
+                                                  max_size=_fmt_pt(max_pt))
         super().__init__(message)
         self.size_pt, self.max_pt = size_pt, max_pt
 
 
 def _fmt_pt(value: float) -> str:
-    return f"{value:g}".replace(".", ",")
+    return i18n.number(value)
 
 
 def render_text(text: str, label_id: str, size_pt: float | None = None,
@@ -73,7 +76,8 @@ def font_warnings(doc: Document) -> list[str]:
                 if span.family is None:
                     continue
                 match = fonts.resolve(span.family, span.bold, span.italic)
-                text = f"Schrift „{span.family}“ nicht gefunden – ersetzt durch „{match.family}“."
+                text = _("Font “{family}” not found – replaced by “{replacement}”.").format(
+                    family=span.family, replacement=match.family)
                 if match.family.casefold() != span.family.casefold() and text not in warnings:
                     warnings.append(text)
     return warnings
@@ -116,7 +120,7 @@ def text_layout(obj: TextObject, doc: Document, model: str = "QL-600") -> TextLa
     """Zeilensatz eines Objekts ohne Bild – derselbe, den ``render_object`` zeichnet
     (``RenderedObject.layout``)."""
     if not isinstance(obj, TextObject):
-        raise TypeError("Einen Zeilensatz gibt es nur für Text-Objekte.")
+        raise TypeError(_("Line layout exists only for text objects."))
     return _place(*_measure(obj, doc, model))[0]
 
 
@@ -391,7 +395,8 @@ class _Sheet:
 
 def _sheet(doc: Document, model: str) -> _Sheet:
     if doc.orientation not in ORIENTATIONS:
-        raise ValueError(f"Unbekannte Ausrichtung {doc.orientation!r} – erlaubt: horizontal, vertical")
+        raise ValueError(_("Unknown orientation {orientation!r} – allowed: horizontal, vertical").format(
+            orientation=doc.orientation))
     label = get_label(doc.label_id)
     min_len, max_len = length_limits(model)
     # Rand ringsum ab Papierkante: der Streifen, den der Drucker dort nicht bedruckt, zählt mit
@@ -413,14 +418,14 @@ def _sheet(doc: Document, model: str) -> _Sheet:
                   label.two_color and capabilities(model).two_color, label.dpi)
 
 
-FRAME_TOO_BIG = "Rahmen passt nicht aufs Etikett – Abstand, Strichstärke oder Innenabstand verkleinern"
+FRAME_TOO_BIG = N_("Border does not fit on the label – reduce inset, line width or padding")
 
 
 def _check_room(sheet: _Sheet) -> None:
     """Rahmen ohne Innenraum → Meldung. Nur beim Rendern geprüft – Ränder und bedruckbarer
     Bereich bleiben auch dann bestimmbar (die GUI fragt sie außerhalb des Renderns ab)."""
     if sheet.frame is not None and min(sheet.room()) <= 0:
-        raise ValueError(FRAME_TOO_BIG)
+        raise ValueError(_(FRAME_TOO_BIG))
 
 
 def _dots(mm: float, dpi: int = DPI) -> int:
@@ -448,7 +453,7 @@ class Prepared:
 
 def _prepare(obj: TextObject | ImageObject | BarcodeObject, sheet: _Sheet) -> Prepared:
     if obj.color not in COLORS:
-        raise ValueError(f"Unbekannte Farbe {obj.color!r} – erlaubt: schwarz, rot (black, red)")
+        raise ValueError(_("Unknown color {color!r} – allowed: black, red").format(color=obj.color))
     if isinstance(obj, ImageObject):
         return _prepare_image(obj, sheet.dpi)
     if isinstance(obj, BarcodeObject):
@@ -456,10 +461,11 @@ def _prepare(obj: TextObject | ImageObject | BarcodeObject, sheet: _Sheet) -> Pr
         return Prepared(obj, 0, [], (0, 0, *frame), frame, dpi=sheet.dpi)
     for para in obj.paragraphs:
         if para.align not in ALIGNMENTS:
-            raise ValueError(f"Unbekannte Textposition {para.align!r} – erlaubt: links, zentriert, "
-                             "rechts, Blocksatz (left, center, right, justify)")
+            raise ValueError(_("Unknown text alignment {align!r} – allowed: left, center, right, "
+                               "justify").format(align=para.align))
     if obj.rotation not in ROTATIONS:
-        raise ValueError(f"Unbekannte Drehung {obj.rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
+        raise ValueError(_("Unknown rotation {rotation!r} – allowed: 0, 90, 180, 270 degrees").format(
+            rotation=obj.rotation))
     max_w, max_h = sheet.room(inner=not obj.positioned)   # frei platziert: Rahmen gilt nicht
     if obj.rotation in (90, 270):
         max_w, max_h = max_h, max_w
@@ -638,11 +644,12 @@ def _paint(lines: list, x0: int, y0: int, width: int, height: int,
 def _prepare_image(obj: ImageObject, dpi: int = DPI) -> Prepared:
     """Bild-Objekt prüfen und messen: Rahmen in Druckpunkten (ungedreht) aus ``w_mm``/``h_mm``."""
     if obj.rotation not in ROTATIONS:
-        raise ValueError(f"Unbekannte Drehung {obj.rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
+        raise ValueError(_("Unknown rotation {rotation!r} – allowed: 0, 90, 180, 270 degrees").format(
+            rotation=obj.rotation))
     imaging.check(obj.mode, obj.threshold)
     if not (obj.w_mm > 0 and obj.h_mm > 0):
-        raise ValueError(f"Größe des Bilds muss größer als 0 sein, nicht "
-                         f"{obj.w_mm:g} × {obj.h_mm:g} mm.")
+        raise ValueError(_("Image size must be greater than 0, not {width} × {height} mm.").format(
+            width=i18n.number(obj.w_mm), height=i18n.number(obj.h_mm)))
     frame = (max(1, _dots(obj.w_mm, dpi)), max(1, _dots(obj.h_mm, dpi)))
     return Prepared(obj, 0, [], (0, 0, *frame), frame, dpi=dpi)
 
@@ -716,12 +723,14 @@ def _vector_source(svg: bytes, png: bytes, crop: tuple[int, int, int, int] | Non
     fx, fy = w / (r - l), h / (b - t)
     full = (round(sheet[0] * fx), round(sheet[1] * fy))
     if max(full) > MAX_SHEET:
-        raise ValueError("Vektorbild: Ausschnitt zu stark vergrößert – bitte kleiner skalieren "
-                         "oder den Zuschnitt ausschalten.")
+        raise ValueError(_("Vector image: crop enlarged too much – please scale it down or turn "
+                           "cropping off."))
     picture = _svg_rasterizer(svg, full, (round(l * fx), round(t * fy), w, h))
     if picture.size != (w, h):
-        raise ValueError(f"Vektorbild konnte nicht gerastert werden ({picture.width} × "
-                         f"{picture.height} statt {w} × {h} Pixel).")
+        raise ValueError(_("Vector image could not be rasterized ({got_w} × {got_h} instead of "
+                           "{width} × {height} pixels).").format(got_w=picture.width,
+                                                                  got_h=picture.height,
+                                                                  width=w, height=h))
     return picture if picture.mode == "RGB" else picture.convert("RGB")
 
 
@@ -729,8 +738,8 @@ def _check_crop(crop: tuple[int, int, int, int], size: tuple[int, int]) -> None:
     """Ausschnitt (l, t, r, b) muss eine Fläche im Bild der Größe ``size`` sein."""
     l, t, r, b = crop
     if not (0 <= l < r <= size[0] and 0 <= t < b <= size[1]):
-        raise ValueError(f"Ausschnitt {crop} liegt nicht im Bild "
-                         f"({size[0]} × {size[1]} Pixel).")
+        raise ValueError(_("Crop {crop} is not inside the image ({width} × {height} pixels).").format(
+            crop=crop, width=size[0], height=size[1]))
 
 
 def _fitted(source: tuple[int, int], size: tuple[int, int], keep_ratio: bool) -> tuple[int, int]:
@@ -849,9 +858,9 @@ def _shape(obj: TextObject, base: int, mode: str = "L",
             start += len(span.text)
         rows.append((para, pieces))
 
-    widths = [sum(p.font.getlength(p.text, mode) for p in pieces) for _, pieces in rows]
+    widths = [sum(p.font.getlength(p.text, mode) for p in pieces) for __, pieces in rows]
     # Unterlängen großer Stücke brauchen Platz unter der Zeile; bei einheitlicher Schrift 0
-    min_descent = min(p.font.getmetrics()[1] for _, pieces in rows for p in pieces)
+    min_descent = min(p.font.getmetrics()[1] for __, pieces in rows for p in pieces)
     max_width = max(widths, default=0)
     ref = max_width if frame is None else frame
     top = 0.0
@@ -1010,8 +1019,8 @@ class TextLayout:
         Bezugskante passt; bei gemischten Ausrichtungen gilt die linke Kante.
         """
         if align not in ALIGNMENTS:
-            raise ValueError(f"Unbekannte Textposition {align!r} – erlaubt: links, zentriert, "
-                             "rechts, Blocksatz (left, center, right, justify)")
+            raise ValueError(_("Unknown text alignment {align!r} – allowed: left, center, right, "
+                               "justify").format(align=align))
         left = min(line.stops[0] for line in self.lines)
         right = max(line.stops[-1] for line in self.lines)
         share = {"left": 0.0, "justify": 0.0, "center": 0.5, "right": 1.0}[align]
@@ -1141,21 +1150,25 @@ def _draw_slanted(img: Image.Image, p: _Piece, x: float, y: float) -> None:
 # --- Zierrahmen ---------------------------------------------------------------------
 def _check_frame(frame: Frame) -> None:
     if frame.style not in FRAME_STYLES:
-        raise ValueError(f"Unbekannte Rahmenart {frame.style!r} – erlaubt: "
-                         f"{', '.join(FRAME_STYLES)}")
+        raise ValueError(_("Unknown border style {style!r} – allowed: {allowed}").format(
+            style=frame.style, allowed=", ".join(FRAME_STYLES)))
     if not isinstance(frame.rounded, bool):
-        raise ValueError(f"„abgerundet“ des Rahmens muss ja oder nein sein, nicht {frame.rounded!r}")
-    for value, (low, high), name in ((frame.line_mm, FRAME_LINE_MM, "Strichstärke"),
-                                     (frame.inset_mm, (0.0, MAX_FRAME_MM), "Abstand zum Rand"),
-                                     (frame.padding_mm, (0.0, MAX_FRAME_MM), "Innenabstand")):
+        raise ValueError(_("Border “rounded” must be yes or no, not {rounded!r}").format(
+            rounded=frame.rounded))
+    for value, (low, high), message in (
+            (frame.line_mm, FRAME_LINE_MM,
+             N_("Line width of the border must be between {low} and {high} mm")),
+            (frame.inset_mm, (0.0, MAX_FRAME_MM),
+             N_("Distance of the border from the edge must be between {low} and {high} mm")),
+            (frame.padding_mm, (0.0, MAX_FRAME_MM),
+             N_("Padding of the border must be between {low} and {high} mm"))):
         if (not isinstance(value, (int, float)) or isinstance(value, bool)
                 or not math.isfinite(value) or not low <= value <= high):
-            raise ValueError(f"{name} des Rahmens muss zwischen {_fmt_mm(low)} und "
-                             f"{_fmt_mm(high)} mm liegen")
+            raise ValueError(_(message).format(low=_fmt_mm(low), high=_fmt_mm(high)))
 
 
 def _fmt_mm(value: float) -> str:
-    return f"{value:g}".replace(".", ",")
+    return i18n.number(value)
 
 
 def _line(frame: Frame, dpi: int = DPI) -> int:
@@ -1184,7 +1197,7 @@ def _outer(sheet: _Sheet, width: int, height: int) -> tuple[int, int, int, int]:
 
 def _circle_room(sheet: _Sheet) -> int:
     """Seite des Quadrats im Kreisrahmen (Innenraum runder Etiketten) in Druckpunkten."""
-    x0, _, x1, _ = _outer(sheet, sheet.across, sheet.across)   # runde Etiketten sind quadratisch
+    x0, __, x1, __ = _outer(sheet, sheet.across, sheet.across)   # runde Etiketten sind quadratisch
     radius = (x1 - x0) / 2 - _band(sheet.frame, sheet.dpi) - sheet.dots(sheet.frame.padding_mm)
     return int(radius * math.sqrt(2)) if radius > 0 else 0
 
@@ -1224,7 +1237,7 @@ def _frame_mask(sheet: _Sheet, width: int, height: int) -> Image.Image | None:
     if style == "corners":
         leg = min(sheet.dots(FRAME_CORNER_MM), min(w, h) // 4)
         if leg < 2 * lw:                     # sonst blieben nur Quadrate (oder nichts)
-            raise ValueError(FRAME_TOO_BIG)
+            raise ValueError(_(FRAME_TOO_BIG))
         keep = Image.new("L", mask.size, 0)
         corners = ImageDraw.Draw(keep)
         for x, y in ((box[0], box[1]), (box[2] - leg, box[1]), (box[0], box[3] - leg),

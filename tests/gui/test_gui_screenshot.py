@@ -8,6 +8,7 @@ from labelwerk import shortcuts
 from labelwerk.document import Document, ImageObject, TextObject
 from labelwerk.gui import main_window
 from labelwerk.gui.main_window import NO_SCREENSHOT, SCREENSHOT, MainWindow
+from labelwerk.i18n import _
 from labelwerk.settings import Settings
 
 MM = 300 / 25.4
@@ -55,7 +56,7 @@ def _start(win, qtbot, portal):
 # --- Aktion und Knopf ----------------------------------------------------------------
 def test_screenshot_action_has_no_default_key(qtbot):
     entry = shortcuts.action("image.screenshot")
-    assert (entry.name, entry.default, entry.scope) == ("Bildschirmfoto einfügen", "", "canvas")
+    assert (_(entry.name), entry.default, entry.scope) == ("Bildschirmfoto einfügen", "", "canvas")
     win = _window(qtbot)
     assert win.shortcut_actions["image.screenshot"] in win.canvas.actions()
     button = win.panel("image").screenshot
@@ -207,7 +208,7 @@ def test_without_portal_window_stays_and_hint_names_clipboard(qtbot):
     win = _window(qtbot)
     win.panel("image").screenshot.click()
     assert win.isVisible()
-    assert win.result.text() == NO_SCREENSHOT and "Strg+V" in NO_SCREENSHOT
+    assert win.result.text() == _(NO_SCREENSHOT) and "Strg+V" in _(NO_SCREENSHOT)
     assert win.result.property("state") == "error"
 
 

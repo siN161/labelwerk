@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QHBoxLayo
 
 from ...document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
 from ...fonts import DEFAULT_FAMILY
+from ... import i18n
+from ...i18n import N_, _, pgettext
 from ...layout import Rect
 from ...render import REF_PT
 from ..symbols import line_icon
@@ -31,7 +33,7 @@ _P = QTextFormat.Property
 
 SIZES_PT = (6, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72)
 DEFAULT_PT = 19
-HINT = "Auf das Etikett klicken, um einen Textrahmen anzulegen"
+HINT = N_("Click on the label to create a text frame")
 _ALIGN_TO_QT = {"left": Qt.AlignmentFlag.AlignLeft, "center": Qt.AlignmentFlag.AlignHCenter,
                 "right": Qt.AlignmentFlag.AlignRight, "justify": Qt.AlignmentFlag.AlignJustify}
 
@@ -89,7 +91,7 @@ class TextPanel(Panel):
             button.setIcon(_align_icon(key, dark_checked))
 
     def __init__(self, doc: Document):
-        super().__init__(doc, "Text")
+        super().__init__(doc, _("Text"))
         self.dark_checked_icons = True
         self.index: int | None = None   # bearbeitetes Objekt; None = kein Text ausgewählt
         self._editing = False           # Schreibmodus (``set_editing``)
@@ -101,7 +103,7 @@ class TextPanel(Panel):
         self._base = {"family": DEFAULT_FAMILY, "pt": float(DEFAULT_PT), "bold": True,
                       "italic": False, "underline": False}
 
-        self.hint = QLabel(HINT)
+        self.hint = QLabel(_(HINT))
         self.hint.setObjectName("hint")
         self.hint.setWordWrap(True)
         self.layout_.addWidget(self.hint)
@@ -117,7 +119,7 @@ class TextPanel(Panel):
         option.setWrapMode(QTextOption.WrapMode.NoWrap)
         self.edit.document().setDefaultTextOption(option)
 
-        self.section("Schrift")
+        self.section(pgettext("text panel", "Font"))
         self.family = QFontComboBox()
         self.layout_.addWidget(self.family)
         row = QHBoxLayout()
@@ -125,19 +127,19 @@ class TextPanel(Panel):
         self.size.setEditable(True)
         self.size.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)   # Eingaben nicht an die Liste anhängen
         self.size.addItems([str(s) for s in SIZES_PT])
-        self.size.setToolTip("Schriftgröße in pt")
-        self.grow = _button("A⁺", "Schrift größer", checkable=False)
-        self.shrink = _button("A⁻", "Schrift kleiner", checkable=False)
+        self.size.setToolTip(_("Font size in pt"))
+        self.grow = _button("A⁺", _("Larger font"), checkable=False)
+        self.shrink = _button("A⁻", _("Smaller font"), checkable=False)
         row.addWidget(self.size, 1)
         row.addWidget(self.grow)
         row.addWidget(self.shrink)
         self.layout_.addLayout(row)
 
-        self.section("Stil")
+        self.section(_("Style"))
         row = QHBoxLayout()
-        self.bold = _button("B", "Fett")            # Tooltip mit Kürzel: use_actions
-        self.italic = _button("I", "Kursiv")
-        self.underline = _button("U", "Unterstrichen")
+        self.bold = _button("B", _("Bold"))            # Tooltip mit Kürzel: use_actions
+        self.italic = _button("I", _("Italic"))
+        self.underline = _button("U", _("Underline"))
         for button, attr in ((self.bold, "bold"), (self.italic, "italic"),
                              (self.underline, "underline")):
             button.setProperty("style", attr)
@@ -147,12 +149,12 @@ class TextPanel(Panel):
             row.addWidget(button)
         self.layout_.addLayout(row)
 
-        self.section("Textposition")
+        self.section(_("Text alignment"))
         row = QHBoxLayout()
         self.align_group = QButtonGroup(self)
         self.align_buttons = {}
-        for key, tip in (("left", "Linksbündig"), ("center", "Zentriert"),
-                         ("right", "Rechtsbündig"), ("justify", "Blocksatz")):
+        for key, tip in (("left", _("Align left")), ("center", _("Centered")),
+                         ("right", _("Align right")), ("justify", _("Justified"))):
             button = _button("", tip)
             button.setIcon(_align_icon(key))
             button.setIconSize(QSize(16, 16))
@@ -162,10 +164,10 @@ class TextPanel(Panel):
             row.addWidget(button)
         self.layout_.addLayout(row)
 
-        self.fit = _button("FESTE RAHMENGRÖSSE", "Text automatisch so skalieren, dass er passt")
+        self.fit = _button(_("FIXED FRAME SIZE"), _("Scale the text automatically so that it fits"))
         self.layout_.addWidget(self.fit)
 
-        self.section("Position (mm)")
+        self.section(_("Position (mm)"))
         self.position = PositionSection()
         self.pos_x, self.pos_y, self.pos_w, self.pos_h = (self.position.spins[k] for k in "xywh")
         self.position.edited.connect(self._frame_changed)
@@ -186,7 +188,7 @@ class TextPanel(Panel):
         step = self._step     # Knöpfe und Felder: jede Änderung ein eigener Schritt
         self.family.currentFontChanged.connect(
             lambda font: step(self._format, family=font.family()))
-        self.size.activated.connect(lambda _: step(self._size_entered))
+        self.size.activated.connect(lambda _index: step(self._size_entered))
         self.size.lineEdit().editingFinished.connect(lambda: step(self._size_entered))
         self.grow.clicked.connect(lambda: step(self._step_size, +1))
         self.shrink.clicked.connect(lambda: step(self._step_size, -1))
@@ -194,8 +196,8 @@ class TextPanel(Panel):
         self.italic.clicked.connect(lambda on: step(self._format, italic=on))
         self.underline.clicked.connect(lambda on: step(self._format, underline=on))
         for key, button in self.align_buttons.items():
-            button.clicked.connect(lambda _=False, k=key: step(self._align, k))
-        self.fit.toggled.connect(lambda _: step(self._apply))
+            button.clicked.connect(lambda _checked=False, k=key: step(self._align, k))
+        self.fit.toggled.connect(lambda _checked: step(self._apply))
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
         """Kürzel für Fett/Kursiv/Unterstrichen: wirken, solange das Panel den Fokus hat.
@@ -203,7 +205,7 @@ class TextPanel(Panel):
         for key, button in (("text.bold", self.bold), ("text.italic", self.italic),
                             ("text.underline", self.underline)):
             action = actions[key]
-            action.triggered.connect(lambda _=False, b=button: b.click())
+            action.triggered.connect(lambda _checked=False, b=button: b.click())
             self.addAction(action)
             button.setToolTip(action.toolTip())
             action.changed.connect(lambda b=button, a=action: b.setToolTip(a.toolTip()))
@@ -554,7 +556,7 @@ class TextPanel(Panel):
         for w in widgets:
             w.blockSignals(True)
         self.family.setCurrentFont(QFont(props["family"]))
-        self.size.setEditText("" if len(mixed) > 1 else f"{props['pt']:g}")
+        self.size.setEditText("" if len(mixed) > 1 else i18n.number(props["pt"]))
         self.bold.setChecked(props["bold"])
         self.italic.setChecked(props["italic"])
         self.underline.setChecked(props["underline"])

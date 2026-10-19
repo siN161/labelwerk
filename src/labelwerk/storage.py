@@ -30,6 +30,7 @@ from .document import (ALIGNMENTS, BARCODE_KINDS, BARCODE_MM, COLORS, CUTS, FRAM
                        MAX_NUMBER, MODULE_LIMIT, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS,
                        QR_LEVELS, ROTATIONS, BarcodeObject, Document, Frame, ImageObject, Numbering,
                        Paragraph, Series, Span, TextObject)
+from .i18n import _
 from .imaging import MAX_PIXELS, MODES
 from .labels import get_label
 
@@ -133,16 +134,16 @@ class StorageError(ValueError):
 def os_reason(error: OSError) -> str:
     """Grund eines Datei-Fehlers auf Deutsch (statt englischem Text des Betriebssystems)."""
     if isinstance(error, FileNotFoundError):
-        return "Ordner fehlt"
+        return _("folder missing")
     if isinstance(error, IsADirectoryError):
-        return "ist ein Ordner"
+        return _("is a folder")
     if isinstance(error, PermissionError):
-        return "keine Berechtigung"
+        return _("no permission")
     if getattr(error, "errno", None) == 36:     # ENAMETOOLONG
-        return "Name zu lang"
+        return _("name too long")
     if getattr(error, "errno", None) == 28:     # ENOSPC
-        return "kein Platz auf dem Datenträger"
-    return "Fehler beim Zugriff"
+        return _("no space left on the disk")
+    return _("access error")
 
 
 def exists(path: str | Path) -> bool:
@@ -204,9 +205,11 @@ def save(doc: Document, path: str | Path) -> Path:
                           allow_nan=False) + "\n"
         text.encode("utf-8")                # einzelne Surrogates lassen sich nicht schreiben
     except UnicodeEncodeError as e:
-        raise OSError(f"{path.name} wurde nicht gespeichert: ungültige Zeichen im Text") from e
+        raise OSError(_("{name} was not saved: invalid characters in the text").format(
+            name=path.name)) from e
     except ValueError as e:
-        raise OSError(f"{path.name} wurde nicht gespeichert: ungültige Zahlen im Etikett") from e
+        raise OSError(_("{name} was not saved: invalid numbers in the label").format(
+            name=path.name)) from e
     tmp = None
     try:
         for attempt in range(100):          # freier Name für die temporäre Datei
@@ -227,7 +230,8 @@ def save(doc: Document, path: str | Path) -> Path:
         os.replace(tmp, target)
         tmp = None
     except OSError as e:
-        raise OSError(f"{path.name} wurde nicht gespeichert ({os_reason(e)})") from e
+        raise OSError(_("{name} was not saved ({reason})").format(name=path.name,
+                                                              reason=os_reason(e))) from e
     finally:
         if tmp is not None:
             Path(tmp).unlink(missing_ok=True)
@@ -243,31 +247,43 @@ def _check(value, kind: str, key: str, where: str):
         return None
     if not _KINDS[kind](value):
         if kind == "label":
-            raise StorageError(f"Etikett{where} unbekannt: {reprlib.repr(value)}")
-        raise StorageError(f"Wert für „{key}“{where} ungültig: {reprlib.repr(value)}")
+            # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+            raise StorageError(_("Unknown label{where}: {value}").format(where=where,
+                                                                      value=reprlib.repr(value)))
+        # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+        raise StorageError(_("Invalid value for “{key}”{where}: {value}").format(
+            key=key, where=where, value=reprlib.repr(value)))
     if kind == "span_text" and any(c in value for c in LINE_BREAKS):
-        raise StorageError(f"Zeilenumbruch in „{key}“{where} – Zeilen sind eigene Absätze")
+        # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+        raise StorageError(_("Line break in “{key}”{where} – lines are separate paragraphs").format(
+            key=key, where=where))
     if kind == "bytes":
         try:
             return base64.b64decode(value, validate=True)
         except (binascii.Error, ValueError) as e:
-            raise StorageError(f"Bilddaten „{key}“{where} nicht lesbar") from e
+            # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+            raise StorageError(_("Image data “{key}”{where} not readable").format(
+                key=key, where=where)) from e
     return value
 
 
 def _load(data, schema: dict, where: str, required: tuple[str, ...] = ()) -> dict:
     if not isinstance(data, dict):
-        raise StorageError(f"Eintrag{where} ist kein Objekt")
+        # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+        raise StorageError(_("Entry{where} is not an object").format(where=where))
     for key in required:
         if key not in data:
-            raise StorageError(f"„{key}“{where} fehlt")
+            # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+            raise StorageError(_("“{key}”{where} missing").format(key=key, where=where))
     return {key: _check(data[key], kind, key, where) for key, kind in schema.items() if key in data}
 
 
 def _list(data: dict, key: str, where: str) -> list:
     value = data.get(key, [])
     if not isinstance(value, list):
-        raise StorageError(f"Wert für „{key}“{where} ungültig: {reprlib.repr(value)}")
+        # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+        raise StorageError(_("Invalid value for “{key}”{where}: {value}").format(
+            key=key, where=where, value=reprlib.repr(value)))
     return value
 
 
@@ -277,27 +293,34 @@ def _image(data: dict, where: str) -> ImageObject:
         with Image.open(io.BytesIO(values["png"]), formats=["PNG"]) as img:
             size = img.size
             if max(size) > MAX_PIXELS:
-                raise StorageError(f"Bild{where} zu groß ({size[0]} × {size[1]} Pixel, "
-                                   f"höchstens {MAX_PIXELS})")
+                # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+                raise StorageError(_("Image{where} too large ({width} × {height} pixels, at most "
+                                     "{limit})").format(where=where, width=size[0], height=size[1],
+                                                        limit=MAX_PIXELS))
             img.load()                      # ganz dekodieren: kaputte Daten fallen jetzt auf
     except StorageError:
         raise
     except Exception as e:  # Pillow wirft je nach Schaden verschiedene Fehler
-        raise StorageError(f"Bilddaten{where} nicht lesbar (nur PNG)") from e
+        # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+        raise StorageError(_("Image data{where} not readable (PNG only)").format(where=where)) from e
     crop = values.get("crop")
     if crop is not None and not (0 <= crop[0] < crop[2] <= size[0]
                                  and 0 <= crop[1] < crop[3] <= size[1]):
-        raise StorageError(f"Wert für „crop“{where} liegt nicht im Bild: {crop}")
+        # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+        raise StorageError(_("Value for “crop”{where} is not inside the image: {crop}").format(
+            where=where, crop=crop))
     return ImageObject(**values)
 
 
 def _series(data) -> Series:
-    values = _load(data, SERIES, " in der Serie")
+    # Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+    values = _load(data, SERIES, _(" in the series"))
     numbering = data.get("numbering")
     if numbering is not None:
-        values["numbering"] = Numbering(**_load(numbering, NUMBERING, " in der Nummerierung"))
+        # Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+        values["numbering"] = Numbering(**_load(numbering, NUMBERING, _(" in the numbering")))
     if (values.get("source") is None) == (numbering is None):
-        raise StorageError("Serie braucht genau eins: Tabelle oder Nummerierung")
+        raise StorageError(_("A series needs exactly one: table or numbering"))
     return Series(**values)
 
 
@@ -332,18 +355,20 @@ def _relative(source: str, base: str | Path) -> str:
 def from_dict(data, base: str | Path | None = None) -> Document:
     """``base``: Ordner der Datei – relative Tabellenpfade gelten von dort aus."""
     if not isinstance(data, dict) or data.get("format") != FORMAT:
-        raise StorageError("keine labelwerk-Datei")
+        raise StorageError(_("not a labelwerk file"))
     version = data.get("version")
     if not _int(version) or version < 1:
-        raise StorageError(f"keine labelwerk-Datei (Format-Version {reprlib.repr(version)})")
+        raise StorageError(_("not a labelwerk file (format version {version})").format(
+            version=reprlib.repr(version)))
     if version > VERSION:
-        raise StorageError(f"mit einem neueren labelwerk gespeichert (Format-Version {version}) "
-                           f"– bitte labelwerk aktualisieren")
+        raise StorageError(_("saved with a newer labelwerk (format version {version}) – please "
+                             "update labelwerk").format(version=version))
     document = data.get("document")
     values = _load(document, DOCUMENT, "")
     frame = document.get("frame")
     if frame is not None:                   # fehlt oder null: kein Rahmen
-        values["frame"] = Frame(**_load(frame, FRAME, " im Rahmen"))
+        # Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+        values["frame"] = Frame(**_load(frame, FRAME, _(" in the border")))
     if document.get("series") is not None:  # fehlt oder null: keine Serie
         values["series"] = _series(document["series"])
         source = values["series"].source
@@ -352,10 +377,12 @@ def from_dict(data, base: str | Path | None = None) -> Document:
                                        source=str(Path(os.path.realpath(base)) / source))
     items = _list(document, "objects", "")
     if len(items) > MAX_OBJECTS:
-        raise StorageError(f"Etikett zu groß ({len(items)} Objekte, höchstens {MAX_OBJECTS})")
+        raise StorageError(_("Label too large ({count} objects, at most {limit})").format(
+            count=len(items), limit=MAX_OBJECTS))
     objects = []
     for number, item in enumerate(items, start=1):
-        where = f" in Objekt {number}"
+        # Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+        where = _(" in object {number}").format(number=number)
         kind = item.get("type") if isinstance(item, dict) else None
         if kind == "text":
             objects.append(_text_object(item, where))
@@ -364,16 +391,18 @@ def from_dict(data, base: str | Path | None = None) -> Document:
         elif kind == "barcode":
             objects.append(BarcodeObject(**_load(item, BARCODE, where, required=("kind", "data"))))
         else:
-            raise StorageError(f"Objektart{where} unbekannt: {reprlib.repr(kind)}")
+            # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+            raise StorageError(_("Unknown object type{where}: {kind}").format(where=where,
+                                                                               kind=reprlib.repr(kind)))
     total = sum(len(o.data) for o in objects if isinstance(o, BarcodeObject))
     if total > MAX_BARCODE_TOTAL:
-        raise StorageError(f"Etikett zu groß (Barcode-Inhalte zusammen {total} Zeichen, höchstens "
-                           f"{MAX_BARCODE_TOTAL})")
+        raise StorageError(_("Label too large (barcode contents together {total} characters, at "
+                             "most {limit})").format(total=total, limit=MAX_BARCODE_TOTAL))
     dpi = get_label(values.get("label_id", Document().label_id)).dpi
     dots = sum(_dots(o, dpi) for o in objects)
     if dots > MAX_FRAME_DOTS:
-        raise StorageError(f"Etikett zu groß (Objekte zusammen {dots / 1e6:.0f} Mio. Druckpunkte, "
-                           f"höchstens {MAX_FRAME_DOTS // 1_000_000})")
+        raise StorageError(_("Label too large (objects together {dots:.0f} million dots, at most "
+                             "{limit})").format(dots=dots / 1e6, limit=MAX_FRAME_DOTS // 1_000_000))
     return Document(**values, objects=objects)
 
 
@@ -394,7 +423,7 @@ def _dots(obj, dpi: int) -> float:
 
 
 def _reject_constant(name: str):
-    raise ValueError(f"{name} ist keine Zahl")
+    raise ValueError(f"{name} is not a number")      # nur intern (json)
 
 
 def load(path: str | Path) -> Document:
@@ -405,28 +434,31 @@ def load(path: str | Path) -> Document:
         if stat.S_ISDIR(info.st_mode):
             raise IsADirectoryError(path)
         if not stat.S_ISREG(info.st_mode):      # ein FIFO o. Ä. würde beim Lesen hängen
-            raise StorageError(f"{path.name}: keine Datei")
+            raise StorageError(_("{name}: not a file").format(name=path.name))
         if info.st_size > MAX_FILE_BYTES:
-            raise StorageError(f"{path.name}: Datei zu groß")
+            raise StorageError(_("{name}: file too large").format(name=path.name))
         text = path.read_text(encoding="utf-8-sig")       # auch mit BOM (Windows-Editoren)
     except FileNotFoundError as e:
-        raise StorageError(f"Datei nicht gefunden: {path}") from e
+        raise StorageError(_("File not found: {path}").format(path=path)) from e
     except OSError as e:
-        raise StorageError(f"{path.name} kann nicht gelesen werden ({os_reason(e)})") from e
+        raise StorageError(_("{name} cannot be read ({reason})").format(
+            name=path.name, reason=os_reason(e))) from e
     except UnicodeDecodeError as e:
-        raise StorageError(f"{path.name}: keine labelwerk-Datei (kein UTF-8-Text)") from e
+        raise StorageError(_("{name}: not a labelwerk file (not UTF-8 text)").format(
+            name=path.name)) from e
     try:
         data = json.loads(text, parse_constant=_reject_constant)   # NaN, Infinity
     except RecursionError as e:
-        raise StorageError(f"{path.name}: Datei beschädigt (zu tief verschachtelt)") from e
+        raise StorageError(_("{name}: file damaged (nested too deeply)").format(
+            name=path.name)) from e
     except ValueError as e:
-        raise StorageError(f"{path.name}: keine labelwerk-Datei oder beschädigt") from e
+        raise StorageError(_("{name}: not a labelwerk file or damaged").format(name=path.name)) from e
     try:
         return from_dict(data, path.parent)
     except StorageError as e:
         raise StorageError(f"{path.name}: {e}") from e
     except (TypeError, AttributeError, KeyError, RecursionError, OverflowError) as e:
-        raise StorageError(f"{path.name}: Datei beschädigt") from e   # Sicherheitsnetz
+        raise StorageError(_("{name}: file damaged").format(name=path.name)) from e   # Sicherheitsnetz
 
 
 def add_recent_file(recent: list[str], path: str, limit: int = RECENT_FILES) -> list[str]:

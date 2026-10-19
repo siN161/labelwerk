@@ -7,10 +7,11 @@ from PIL import Image
 
 from labelwerk import clipart
 from labelwerk.clipart import ALLOWED_LICENSES, GROUPS, Symbol
+from labelwerk.i18n import _
 
 
 def test_groups_in_fixed_order_with_german_names():
-    assert [(key, name) for key, name in GROUPS] == [
+    assert [(key, _(name)) for key, name in GROUPS] == [     # Namen übersetzt beim Anzeigen
         ("elektro", "Elektro"), ("versand", "Versand"), ("sicherheit", "Sicherheit"),
         ("allgemein", "Allgemein"), ("eigene", "Eigene")]
 
@@ -208,3 +209,29 @@ def test_resolve_skips_unknown_ids():
 def test_symbol_is_hashable_value():
     a = clipart.find("labelwerk/erde")
     assert isinstance(a, Symbol) and {a: 1}[clipart.find("labelwerk/erde")] == 1
+
+
+def test_names_in_the_language_and_search_in_both():
+    from labelwerk import i18n
+    i18n.set_language("en")
+    earth = clipart.find("labelwerk/erde")
+    assert (earth.name, earth.subgroup) == ("Earth", "Electrical")
+    assert clipart.find("iso7000/0621").name == "Fragile"
+    found = [s.id for s in clipart.search("erde", "elektro")]
+    assert found[0] == "labelwerk/erde"                     # deutsch gesucht, englisch angezeigt
+    i18n.set_language("de")
+    earth = clipart.find("labelwerk/erde")
+    assert (earth.name, earth.subgroup) == ("Erde", "Elektro")
+    assert clipart.search("earth", "elektro")[0].id == "labelwerk/erde"
+    assert clipart.search("fragile", "versand")[0].id == "iso7000/0621"
+    tabler = clipart.find("tabler/filled/home")
+    assert tabler.name == "home (gefüllt)" and "home (filled)" in tabler.names
+
+
+def test_every_symbol_has_both_languages():
+    import json
+    import zipfile
+    entries = json.loads(zipfile.ZipFile(clipart.ARCHIVE).read("catalog.json"))["symbols"]
+    for e in entries:
+        assert set(e["names"]) == {"de", "en"} and all(e["names"].values()), e["id"]
+        assert set(e["subgroups"]) == {"de", "en"} and all(e["subgroups"].values()), e["id"]

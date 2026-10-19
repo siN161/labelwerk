@@ -573,3 +573,11 @@ def test_backend_cups_takes_the_first_queue(cups_queue, capsys):
 def test_cups_is_not_asked_without_need(cups_queue):
     main(["print", "Hallo", "-l", "62", "--preview", "/dev/null"])
     assert not any(c[0] == "lpstat" for c in cups_queue)
+
+
+def test_cli_speaks_english_with_lang(capsys):
+    assert main(["--lang", "en", "print", "X", "-l", "999"]) == 2
+    err = capsys.readouterr().err
+    assert "Unknown label" in err or "unknown" in err.lower()
+    assert main(["print", "X", "-l", "999"]) == 2                 # ohne --lang: Deutsch (conftest)
+    assert "Unbekanntes Etikett" in capsys.readouterr().err

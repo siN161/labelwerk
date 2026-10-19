@@ -208,7 +208,8 @@ def test_media_status_lives_in_footer_not_in_panel(window, qtbot, monkeypatch):
 
 def test_long_media_error_is_elided_in_footer(window):
     from labelwerk.detect import BUSY_MESSAGE
-    window.panel("paper").show_media_error(BUSY_MESSAGE)
+    from labelwerk.i18n import _
+    window.panel("paper").show_media_error(_(BUSY_MESSAGE))
     label = window.media_status
     assert label.sizeHint().width() <= 360
     assert label.text().endswith("…")

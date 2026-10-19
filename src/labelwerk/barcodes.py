@@ -17,9 +17,11 @@ from PIL import Image, ImageDraw
 from . import fonts
 from .document import (BARCODE_KINDS, BARCODE_MM, MAX_BARCODE_DATA, MAX_MODULE, MODULE_LIMIT, QR_LEVELS,
                        ROTATIONS, BarcodeObject)
+from . import i18n
+from .i18n import N_, _
 from .labels import DPI
 
-TITLES = {"qr": "QR-Code", "code128": "Code 128", "code39": "Code 39", "ean13": "EAN-13",
+TITLES = {"qr": N_("QR code"), "code128": "Code 128", "code39": "Code 39", "ean13": "EAN-13",
           "ean8": "EAN-8"}
 SAMPLES = {"qr": "labelwerk", "code128": "ABC-123", "code39": "ABC-123", "ean13": "590123412345",
            "ean8": "9638507"}                 # Beispielinhalt beim Einfügen
@@ -63,35 +65,37 @@ class Code:
 def encode(kind: str, data: str, error: str = "M") -> Code:
     """Inhalt kodieren (``error``: QR-Fehlerkorrektur, sonst ohne Bedeutung)."""
     if not isinstance(kind, str) or kind not in BARCODE_KINDS:
-        raise BarcodeError(f"Unbekannte Barcode-Art {kind!r}")
+        raise BarcodeError(_("Unknown barcode type {kind!r}").format(kind=kind))
     if not isinstance(data, str):
-        raise BarcodeError(f"Inhalt muss Text sein, nicht {type(data).__name__}")
+        raise BarcodeError(_("Content must be text, not {type}").format(type=type(data).__name__))
     if not isinstance(error, str):
-        raise BarcodeError(f"Unbekannte Fehlerkorrektur {error!r} – erlaubt: L, M, Q, H")
+        raise BarcodeError(_("Unknown error correction {error!r} – allowed: L, M, Q, H").format(error=error))
     return _encode(kind, data, error)
 
 
 @lru_cache(maxsize=256)
 def _encode(kind: str, data: str, error: str) -> Code:
     if not data:
-        raise BarcodeError("Barcode ohne Inhalt")
+        raise BarcodeError(_("Barcode without content"))
     if len(data) > MAX_BARCODE_DATA:
-        raise BarcodeError(f"Inhalt zu lang ({len(data)} Zeichen, höchstens {MAX_BARCODE_DATA})")
+        raise BarcodeError(_("Content too long ({count} characters, at most {limit})").format(
+            count=len(data), limit=MAX_BARCODE_DATA))
     if kind == "qr":
         return _qr(data, error)
     if len(data) > MAX_LINEAR:
-        raise BarcodeError(f"{TITLES[kind]}: Inhalt zu lang ({len(data)} Zeichen, höchstens "
-                           f"{MAX_LINEAR})")
+        raise BarcodeError(_("{title}: content too long ({count} characters, at most {limit})").format(
+            title=_(TITLES[kind]), count=len(data), limit=MAX_LINEAR))
     return {"code128": _code128, "code39": _code39, "ean13": _ean13, "ean8": _ean8}[kind](data)
 
 
 def _qr(data: str, error: str) -> Code:
     if error not in QR_LEVELS:
-        raise BarcodeError(f"Unbekannte Fehlerkorrektur {error!r} – erlaubt: L, M, Q, H")
+        raise BarcodeError(_("Unknown error correction {error!r} – allowed: L, M, Q, H").format(error=error))
     try:
         qr = segno.make_qr(data, error=error, boost_error=False)
     except segno.DataOverflowError as e:
-        raise BarcodeError(f"Inhalt zu lang für einen QR-Code (Fehlerkorrektur {error})") from e
+        raise BarcodeError(_("Content too long for a QR code (error correction {error})").format(
+            error=error)) from e
     rows = tuple("".join("1" if v else "0" for v in row) for row in qr.matrix)
     return Code(rows, matrix=True, readable=data)
 
@@ -124,7 +128,8 @@ _ASCII = "".join(chr(c) for c in range(32, 127))
 def _code128(data: str) -> Code:
     for c in data:
         if not 32 <= ord(c) <= 126:
-            raise BarcodeError(f"Code 128 kann „{c}“ nicht darstellen (nur ASCII ohne Umlaute)")
+            raise BarcodeError(_("Code 128 cannot encode “{char}” (ASCII only, no umlauts)").format(
+                char=c))
     values = _code128_values(data)
     check = (values[0] + sum(i * v for i, v in enumerate(values[1:], start=1))) % 103
     bars = "".join(_bars(_C128[v]) for v in [*values, check]) + _bars(_C128_STOP)
@@ -136,8 +141,8 @@ def _code128_values(data: str) -> list[int]:
     C (zwei Ziffern je Wert), Wechsel kostet einen Wert – kürzester Weg über alle Positionen."""
     n = len(data)
     inf = n * 4 + 8
-    cost = [[inf, inf] for _ in range(n + 1)]   # [B, C]: Werte, bis Position i kodiert ist
-    prev: list[list[tuple[int, int] | None]] = [[None, None] for _ in range(n + 1)]
+    cost = [[inf, inf] for __ in range(n + 1)]   # [B, C]: Werte, bis Position i kodiert ist
+    prev: list[list[tuple[int, int] | None]] = [[None, None] for __ in range(n + 1)]
     cost[0] = [1, 1]                            # Startzeichen B bzw. C
     for i in range(n + 1):
         for s in (0, 1):                        # Wechsel an dieser Stelle
@@ -183,8 +188,8 @@ def _code39(data: str) -> Code:
     for c in data:
         upper = c.upper() if "a" <= c <= "z" else c    # Kleinbuchstaben werden groß gedruckt
         if upper not in _C39 or upper == "*":
-            raise BarcodeError(f"Code 39 kann „{c}“ nicht darstellen (erlaubt: 0–9, A–Z, "
-                               f"Leerzeichen und - . $ / + %)")
+            raise BarcodeError(_("Code 39 cannot encode “{char}” (allowed: 0–9, A–Z, space and "
+                                 "- . $ / + %)").format(char=c))
         text += upper
     parts = ["".join(("1" if k % 2 == 0 else "0") * (WIDE if w == "1" else 1)
                      for k, w in enumerate(_C39[c])) for c in f"*{text}*"]
@@ -209,19 +214,21 @@ def check_digit(digits: str) -> int:
 
 
 def _ean_digits(kind: str, data: str) -> str:
-    title, length = TITLES[kind], 13 if kind == "ean13" else 8
+    title, length = _(TITLES[kind]), 13 if kind == "ean13" else 8
     digits = "".join(data.split())              # Leerzeichen zählen nicht
     for c in digits:
         if c not in _DIGITS:
-            raise BarcodeError(f"{title} kann nur Ziffern darstellen, nicht „{c}“")
+            raise BarcodeError(_("{title} can only encode digits, not “{char}”").format(title=title,
+                                                                                    char=c))
     if len(digits) == length - 1:
         return digits + str(check_digit(digits))
     if len(digits) != length:
-        raise BarcodeError(f"{title} braucht {length - 1} oder {length} Ziffern "
-                           f"({len(digits)} eingegeben)")
+        raise BarcodeError(_("{title} needs {short} or {length} digits ({count} entered)").format(
+            title=title, short=length - 1, length=length, count=len(digits)))
     right = check_digit(digits[:-1])
     if int(digits[-1]) != right:
-        raise BarcodeError(f"{title}: Prüfziffer falsch – richtig wäre {right}")
+        raise BarcodeError(_("{title}: wrong check digit – it should be {right}").format(
+            title=title, right=right))
     return digits
 
 
@@ -254,18 +261,21 @@ def _number(v) -> bool:
 def check(obj: BarcodeObject) -> Code:
     """Einstellungen prüfen und den Inhalt kodieren."""
     if obj.rotation not in ROTATIONS:
-        raise BarcodeError(f"Unbekannte Drehung {obj.rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
+        raise BarcodeError(_("Unknown rotation {rotation!r} – allowed: 0, 90, 180, 270 degrees").format(
+            rotation=obj.rotation))
     if not isinstance(obj.module, int) or isinstance(obj.module, bool) \
             or not 1 <= obj.module <= MODULE_LIMIT:
-        raise BarcodeError(f"Modulbreite {obj.module!r} ungültig – erlaubt: 1–{MODULE_LIMIT} "
-                           f"Druckpunkte")
+        raise BarcodeError(_("Module width {module!r} invalid – allowed: 1–{limit} dots").format(
+            module=obj.module, limit=MODULE_LIMIT))
     if not isinstance(obj.text, bool):
-        raise BarcodeError(f"Klartext muss an oder aus sein, nicht {obj.text!r}")
+        raise BarcodeError(_("Human-readable text must be on or off, not {text!r}").format(
+            text=obj.text))
     if obj.error not in QR_LEVELS:
-        raise BarcodeError(f"Unbekannte Fehlerkorrektur {obj.error!r} – erlaubt: L, M, Q, H")
+        raise BarcodeError(_("Unknown error correction {error!r} – allowed: L, M, Q, H").format(
+            error=obj.error))
     if obj.kind != "qr" and not (_number(obj.h_mm) and BARCODE_MM[0] <= obj.h_mm <= BARCODE_MM[1]):
-        raise BarcodeError(f"Höhe {obj.h_mm!r} mm ungültig – erlaubt: {BARCODE_MM[0]:g}–"
-                           f"{BARCODE_MM[1]:g} mm")
+        raise BarcodeError(_("Height {height!r} mm invalid – allowed: {low}–{high} mm").format(
+            height=obj.h_mm, low=i18n.number(BARCODE_MM[0]), high=i18n.number(BARCODE_MM[1])))
     return encode(obj.kind, obj.data, obj.error if obj.kind == "qr" else "M")
 
 
@@ -321,7 +331,8 @@ def _layout(obj: BarcodeObject, code: Code, dpi: int = DPI) -> _Layout:
     font, top, bottom, gap = _text_font(code, m, height, dpi)
     bars = height - gap - top - bottom
     if bars < _dots(MIN_BARS_MM, dpi):
-        raise BarcodeError("Barcode zu niedrig für den Klartext – höher ziehen oder Klartext aus")
+        raise BarcodeError(_("Barcode too short for the human-readable text – make it taller or "
+                             "turn the text off"))
     return _Layout(width, height, bars, bars + (gap + top) // 2, font, bars + gap + top)
 
 
@@ -353,7 +364,7 @@ def _text_font(code: Code, m: int, height: int, dpi: int = DPI):
     path = _font_path()
     while True:
         font = fonts.load(path, dots)
-        _, top, _, bottom = font.getbbox(code.glyphs, anchor="ls")
+        __, top, __, bottom = font.getbbox(code.glyphs, anchor="ls")
         top, bottom, gap = -top, max(0, bottom), max(2, dots // 8)
         over = max(font.getlength(text) / ((end - start) * m) for text, start, end in code.text)
         over = max(over, (gap + top + bottom) / (TEXT_SHARE * height))

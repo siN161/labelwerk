@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QGridLayout, 
 
 from ... import layout
 from ...document import FRAME_LINE_MM, MAX_FRAME_MM, MAX_MARGIN_MM, Document, Frame
+from ...i18n import N_, _
 from ...labels import DPI, get_label, labels_for_model, length_limits, mm_text
 from ...media import Media
 from ...printer import DEFAULT_MODEL
@@ -17,12 +18,12 @@ from ...render import frame_mask
 from ..widgets import DoubleSpinBox
 from . import Panel
 
-_GROUPS = (("endless", "Endlos"), ("die_cut", "Gestanzt"), ("round", "Rund"))
-FRAME_TITLES = (("Kein", None), ("Einfach", "single"), ("Doppelt", "double"),
-                ("Dick-dünn", "thick_thin"), ("Gestrichelt", "dashed"), ("Gepunktet", "dotted"),
-                ("Nur Ecken", "corners"))
+_GROUPS = (("endless", N_("Continuous")), ("die_cut", N_("Die-cut")), ("round", N_("Round")))
+FRAME_TITLES = ((N_("No border"), None), (N_("Single"), "single"), (N_("Double"), "double"),
+                (N_("Thick-thin"), "thick_thin"), (N_("Dashed"), "dashed"), (N_("Dotted"), "dotted"),
+                (N_("Corners only"), "corners"))
 FRAME_ICON = QSize(56, 22)
-ROUND_TIP = "Auf runden Etiketten wird jeder Rahmen ein Kreis."
+ROUND_TIP = N_("On round labels every border becomes a circle.")
 
 
 def frame_icon(style: str | None) -> QIcon:
@@ -55,26 +56,26 @@ class PaperPanel(Panel):
     media_status_changed = Signal(str, str)   # Text, Zustand (ok/warn/error/"") für die Fußzeile
 
     def __init__(self, doc: Document, model: str = DEFAULT_MODEL):
-        super().__init__(doc, "Papier")
+        super().__init__(doc, _("Paper"))
         self.media: Media | None = None          # zuletzt erkannte Rolle
         self.media_label: str | None = None      # passendes Etikett dazu
         self.media_adjusted = False              # Etikett wurde automatisch angepasst
 
-        self.section("Etikett")
+        self.section(_("Label"))
         self.combo = QComboBox()
         self.model = model
         self._fill_labels()
         self.layout_.addWidget(self.combo)
-        self.check = QPushButton("MEDIUM PRÜFEN")
-        self.check.setToolTip("Eingelegte Rolle vom Drucker abfragen (druckt nichts)")
+        self.check = QPushButton(_("CHECK MEDIA"))
+        self.check.setToolTip(_("Ask the printer which roll is loaded (prints nothing)"))
         self.check.clicked.connect(self.check_media_requested)
         self.layout_.addWidget(self.check)
 
-        self.length_title = self.section("Länge")
+        self.length_title = self.section(_("Length"))
         self.length_box = QWidget()
         row = QHBoxLayout(self.length_box)
         row.setContentsMargins(0, 0, 0, 0)
-        self.length_auto = QCheckBox("Automatisch")
+        self.length_auto = QCheckBox(_("Automatic"))
         self.length = DoubleSpinBox()
         self.length.setSuffix(" mm")
         self.length.setDecimals(1)
@@ -89,46 +90,47 @@ class PaperPanel(Panel):
         self.fixed_size.setObjectName("fixedSize")
         self.layout_.addWidget(self.fixed_size)
 
-        self.section("Ausrichtung")
-        self.horizontal = QRadioButton("Horizontal")
-        self.horizontal.setToolTip("Etikett im Querformat – Leserichtung längs zum Band")
-        self.vertical = QRadioButton("Vertikal")
-        self.vertical.setToolTip("Etikett im Hochformat – Leserichtung quer zum Band")
+        self.section(_("Orientation"))
+        self.horizontal = QRadioButton(_("Horizontal"))
+        self.horizontal.setToolTip(_("Label in landscape – text runs along the tape"))
+        self.vertical = QRadioButton(_("Vertical"))
+        self.vertical.setToolTip(_("Label in portrait – text runs across the tape"))
         self.orientation_group = QButtonGroup(self)
         for button in (self.horizontal, self.vertical):
             self.orientation_group.addButton(button)
             self.layout_.addWidget(button)
-        self.section("Ränder")
+        self.section(_("Margins"))
         self.margin = DoubleSpinBox()
         self.margin.setSuffix(" mm")
         self.margin.setDecimals(1)
         self.margin.setSingleStep(0.5)
         self.margin.setRange(0.0, MAX_MARGIN_MM)
-        self.margin.setToolTip("Abstand zur Papierkante ringsum (quer lässt der Drucker ohnehin "
-                               "rund 1,5 mm frei)")
+        self.margin.setToolTip(_("Distance from the paper edge all around (across the tape the "
+                                 "printer leaves about 1.5 mm free anyway)"))
         self.layout_.addWidget(self.margin)
 
-        self.section("Rahmen")
+        self.section(_("Border"))
         self.frame_style = QComboBox()
         self.frame_style.setIconSize(FRAME_ICON)
         for title, style in FRAME_TITLES:
-            self.frame_style.addItem(frame_icon(style), title, style)
+            self.frame_style.addItem(frame_icon(style), _(title), style)
         self.layout_.addWidget(self.frame_style)
-        self.frame_rounded = QCheckBox("Abgerundet")
+        self.frame_rounded = QCheckBox(_("Rounded"))
         self.layout_.addWidget(self.frame_rounded)
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setColumnStretch(1, 1)              # Felder füllen die Breite (wie die übrigen)
         defaults = Frame()
-        self.frame_line = _spin(*FRAME_LINE_MM, 0.1, "Strichstärke der Linie")
-        self.frame_inset = _spin(0.0, MAX_FRAME_MM, 0.5, "Abstand des Rahmens vom bedruckbaren Rand")
+        self.frame_line = _spin(*FRAME_LINE_MM, 0.1, _("Line width"))
+        self.frame_inset = _spin(0.0, MAX_FRAME_MM, 0.5,
+                                 _("Distance of the border from the printable edge"))
         self.frame_padding = _spin(0.0, MAX_FRAME_MM, 0.5,
-                                   "Abstand zwischen Rahmen und automatisch gesetztem Text")
+                                   _("Distance between the border and automatically placed text"))
         self.frame_labels: list[QLabel] = []
         for row, (title, box, value) in enumerate((
-                ("Linie", self.frame_line, defaults.line_mm),
-                ("Randabstand", self.frame_inset, defaults.inset_mm),
-                ("Innenabstand", self.frame_padding, defaults.padding_mm))):
+                (_("Line"), self.frame_line, defaults.line_mm),
+                (_("Inset"), self.frame_inset, defaults.inset_mm),
+                (_("Padding"), self.frame_padding, defaults.padding_mm))):
             box.setValue(value)
             label = QLabel(title)
             label.setToolTip(box.toolTip())
@@ -192,15 +194,15 @@ class PaperPanel(Panel):
             group = [lbl for lbl in labels if lbl.shape == shape]
             if not group:
                 continue
-            self.combo.addItem(f"— {title} —")
+            self.combo.addItem(f"— {_(title)} —")
             self.combo.model().item(self.combo.count() - 1).setEnabled(False)
             for lbl in group:
                 self.combo.addItem(lbl.description, lbl.id)
         self._unfit = None
         if self.combo.findData(self.doc.label_id) < 0:      # gewählt bleibt es, wählbar nicht
             self._unfit = self.doc.label_id
-            self.combo.addItem(f"{get_label(self.doc.label_id).description} – passt nicht zum "
-                               f"{self.model}", self.doc.label_id)
+            self.combo.addItem(_("{label} – does not fit the {model}").format(
+                label=get_label(self.doc.label_id).description, model=self.model), self.doc.label_id)
             self.combo.model().item(self.combo.count() - 1).setEnabled(False)
 
     def _set_length_range(self) -> None:
@@ -251,7 +253,7 @@ class PaperPanel(Panel):
     # --- Medium prüfen ----------------------------------------------------
     def set_checking(self, running: bool) -> None:
         self.check.setEnabled(not running)
-        self.check.setText("PRÜFE …" if running else "MEDIUM PRÜFEN")
+        self.check.setText(_("CHECKING …") if running else _("CHECK MEDIA"))
 
     def show_media(self, media: Media, label_id: str | None, adjusted: bool = False) -> None:
         self.media, self.media_label, self.media_adjusted = media, label_id, adjusted
@@ -269,14 +271,16 @@ class PaperPanel(Panel):
         if self.media is None:
             return
         if self.media.kind == "none":
-            self._set_media_status("Rolle: keine eingelegt", "warn")
+            self._set_media_status(_("Roll: none loaded"), "warn")
         elif self.media_label is None:
-            self._set_media_status(f"Rolle: {self.media.describe()} – kein passendes Etikett", "warn")
+            self._set_media_status(_("Roll: {media} – no matching label").format(
+                media=self.media.describe()), "warn")
         elif self.media_label == self.doc.label_id:
-            hint = " – Etikett angepasst" if self.media_adjusted else ""
-            self._set_media_status(f"Rolle: {self.media.describe()} ✓{hint}", "ok")
+            text = _("Roll: {media} ✓ – label adjusted") if self.media_adjusted else _("Roll: {media} ✓")
+            self._set_media_status(text.format(media=self.media.describe()), "ok")
         else:
-            self._set_media_status(f"Rolle: {self.media.describe()} – Auswahl passt nicht", "warn")
+            self._set_media_status(_("Roll: {media} – selection does not match").format(
+                media=self.media.describe()), "warn")
 
     def _set_media_status(self, text: str, state: str) -> None:
         self.media_status_changed.emit(text, state)
@@ -290,8 +294,8 @@ class PaperPanel(Panel):
         self.fixed_size.setVisible(not endless)
         w, h = label.size_mm
         w, h = mm_text(w), mm_text(h)
-        self.fixed_size.setText(f"Ø {w} mm · rund" if label.shape == "round"
-                                else f"{w} × {h} mm · gestanzt")
+        self.fixed_size.setText(_("Ø {width} mm · round").format(width=w) if label.shape == "round"
+                                else _("{width} × {height} mm · die-cut").format(width=w, height=h))
         self._update_frame_widgets()
 
     def _update_frame_widgets(self) -> None:
@@ -299,7 +303,7 @@ class PaperPanel(Panel):
         round_label = get_label(self.doc.label_id).shape == "round"
         corners = self.frame_style.findData("corners")
         self.frame_style.model().item(corners).setEnabled(not round_label)
-        self.frame_style.setToolTip(ROUND_TIP if round_label else "")
+        self.frame_style.setToolTip(_(ROUND_TIP) if round_label else "")
         active = self.doc.frame is not None
         self.frame_rounded.setEnabled(active and not round_label)
         for box in self._frame_boxes():

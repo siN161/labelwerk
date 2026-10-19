@@ -16,16 +16,19 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QTabWidget,
                                QVBoxLayout, QWidget)
 
-from .. import favorites, shortcuts, zpl
+from .. import favorites, i18n, shortcuts, zpl
 from ..document import MAX_MARGIN_MM, MAX_PT, MIN_PT
+from ..i18n import N_, _
 from ..labels import get_label, labels_for_model
 from ..printer import DEFAULT_MODEL
 from ..printers import SUPPORTED_MODELS, capabilities
-from ..settings import Settings, save_settings, valid_host
+from ..settings import (Settings, restart_pending, save_settings, started_values,
+                        valid_host)
 from .widgets import DoubleSpinBox, SpinBox
 
-SCOPE_NAMES = {"global": "Global", "canvas": "Arbeitsfläche", "edit": "Schreibmodus"}
-FIXED_TIP = "Kürzel fest – nicht änderbar"
+# englisch (N_), angezeigt wird _(…)
+SCOPE_NAMES = {"global": N_("Global"), "canvas": N_("Canvas"), "edit": N_("Text editing")}
+FIXED_TIP = N_("Fixed shortcut – cannot be changed")
 CONFLICT_COLOR = QColor("#FF0000")
 COL_ACTION, COL_SCOPE, COL_KEYS, COL_RESET = range(4)
 DIALOG_SIZE = (760, 680)     # Wunschgröße: Kürzel-Tabelle mit ungekürzten Aktionsnamen
@@ -35,11 +38,15 @@ _PORTABLE = QKeySequence.SequenceFormat.PortableText
 _NATIVE = QKeySequence.SequenceFormat.NativeText
 
 
+RESTART_NOTICE = N_("Changes take effect after a restart")
+RESTART_STYLE = "color: #CC7A00; font-weight: 600;"     # wie Hinweise (QSS „warn“), auch ohne QSS
+
+
 class SettingsDialog(QDialog):
     def __init__(self, settings: Settings, path: str | Path | None = None,
-                 model: str = DEFAULT_MODEL, parent=None):
+                 model: str = DEFAULT_MODEL, parent=None, started: dict | None = None):
         super().__init__(parent)
-        self.setWindowTitle("Einstellungen")
+        self.setWindowTitle(_("Settings"))
         self.setMinimumSize(*MIN_SIZE)
         screen = (parent.screen() if parent is not None else self.screen())
         self.resize(initial_size(screen.availableGeometry().size()))
@@ -57,32 +64,32 @@ class SettingsDialog(QDialog):
         scroll.setWidget(general)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.tabs.addTab(scroll, "Allgemein")
+        self.tabs.addTab(scroll, _("General"))
         layout = QVBoxLayout(general)
 
-        form = self._section(layout, "Neues Etikett")
+        form = self._section(layout, _("New label"))
         self.label = QComboBox()
         for lbl in labels_for_model(model):
             self.label.addItem(lbl.description, lbl.id)
         if self.label.findData(settings.label_id) < 0:    # anderer Drucker: nicht still ersetzen
-            self.label.addItem(f"{get_label(settings.label_id).description} – passt nicht zum "
-                               f"{model}", settings.label_id)
+            self.label.addItem(_("{label} – does not fit the {model}").format(
+                label=get_label(settings.label_id).description, model=model), settings.label_id)
         self.label.setCurrentIndex(max(0, self.label.findData(settings.label_id)))
-        form.addRow("Etikett", self.label)
+        form.addRow(_("Label"), self.label)
         self.orientation = QComboBox()
-        self.orientation.addItem("Horizontal", "horizontal")
-        self.orientation.addItem("Vertikal", "vertical")
+        self.orientation.addItem(_("Horizontal"), "horizontal")
+        self.orientation.addItem(_("Vertical"), "vertical")
         self.orientation.setCurrentIndex(self.orientation.findData(settings.orientation))
-        form.addRow("Ausrichtung", self.orientation)
+        form.addRow(_("Orientation"), self.orientation)
         self.margin = DoubleSpinBox()
         self.margin.setSuffix(" mm")
         self.margin.setDecimals(1)
         self.margin.setSingleStep(0.5)
         self.margin.setRange(0.0, MAX_MARGIN_MM)
         self.margin.setValue(settings.margin_mm)
-        form.addRow("Ränder", self.margin)
+        form.addRow(_("Margins"), self.margin)
         row = QHBoxLayout()
-        self.font_auto = QCheckBox("Automatisch")
+        self.font_auto = QCheckBox(_("Automatic"))
         self.font_size = DoubleSpinBox()
         self.font_size.setDecimals(1)
         self.font_size.setSingleStep(0.5)
@@ -94,62 +101,63 @@ class SettingsDialog(QDialog):
         self.font_auto.toggled.connect(lambda auto: self.font_size.setEnabled(not auto))
         row.addWidget(self.font_auto)
         row.addWidget(self.font_size)
-        form.addRow("Schriftgröße", row)
+        form.addRow(_("Font size"), row)
         self.font_family = QFontComboBox()
         self.font_family.setCurrentFont(QFont(settings.font_family))
         # Nicht installierte Schrift nicht stillschweigend durch Ersatz überschreiben
         self._orig_family = settings.font_family
         self._family_touched = False
         self.font_family.currentFontChanged.connect(self._family_changed)
-        form.addRow("Schriftart", self.font_family)
+        form.addRow(_("Font"), self.font_family)
         self.start_favorite = QComboBox()
-        self.start_favorite.addItem("Leeres Etikett", None)
+        self.start_favorite.addItem(_("Empty label"), None)
         for favorite in favorites.favorites():
             self.start_favorite.addItem(favorite.name, favorite.name)
         if settings.start_favorite and self.start_favorite.findData(settings.start_favorite) < 0:
             # gelöscht oder umbenannt: sichtbar lassen, nicht still auf „leer“ setzen
-            self.start_favorite.addItem(f"{settings.start_favorite} (fehlt)", settings.start_favorite)
+            self.start_favorite.addItem(_("{name} (missing)").format(name=settings.start_favorite),
+                                        settings.start_favorite)
         self.start_favorite.setCurrentIndex(max(0, self.start_favorite.findData(settings.start_favorite)))
-        self.start_favorite.setToolTip("Etikett, mit dem labelwerk startet (Favorit als Vorlage)")
-        form.addRow("Beim Start", self.start_favorite)
+        self.start_favorite.setToolTip(_("Label labelwerk starts with (favorite as a template)"))
+        form.addRow(_("At startup"), self.start_favorite)
 
-        form = self._section(layout, "Bilder einfügen")
-        self.image_crop = QCheckBox("Automatisch zuschneiden (ohne Schnittmarken und Leerraum)")
+        form = self._section(layout, _("Inserting images"))
+        self.image_crop = QCheckBox(_("Crop automatically (without crop marks and blank space)"))
         self.image_crop.setChecked(settings.image_crop)
         form.addRow(self.image_crop)
-        self.image_rotate = QCheckBox("Drehen, wenn das Bild nur gedreht 1:1 passt")
-        self.image_rotate.setToolTip("Aus: zu große Bilder werden verkleinert – spart Band")
+        self.image_rotate = QCheckBox(_("Rotate if the image only fits 1:1 when rotated"))
+        self.image_rotate.setToolTip(_("Off: images that are too large are reduced – saves tape"))
         self.image_rotate.setChecked(settings.image_rotate)
         form.addRow(self.image_rotate)
 
-        form = self._section(layout, "Drucker")
-        self.check_media = QCheckBox("Rolle beim Start und beim Einschalten prüfen")
+        form = self._section(layout, _("Printer"))
+        self.check_media = QCheckBox(_("Check the roll at startup and when the printer is switched on"))
         self.check_media.setChecked(settings.check_media_on_start)
         form.addRow(self.check_media)
-        self.printer_model = _model_combo("Automatisch (erkannt)")
+        self.printer_model = _model_combo(_("Automatic (detected)"))
         self.printer_model.setCurrentIndex(max(0, self.printer_model.findData(settings.printer_model)))
-        self.printer_model.setToolTip("Nur nötig, wenn labelwerk das Modell nicht erkennt "
-                                      "(gilt dann und ohne angeschlossenen Drucker)")
-        form.addRow("Druckermodell", self.printer_model)
+        self.printer_model.setToolTip(_("Only needed if labelwerk does not recognize the model "
+                                        "(then applies, and without a connected printer)"))
+        form.addRow(_("Printer model"), self.printer_model)
         self.zebra_dpi = QComboBox()
-        self.zebra_dpi.addItem("Automatisch (erkannt)", 0)
+        self.zebra_dpi.addItem(_("Automatic (detected)"), 0)
         for dpi in zpl.RESOLUTIONS:
             self.zebra_dpi.addItem(f"{dpi} dpi", dpi)
         self.zebra_dpi.setCurrentIndex(max(0, self.zebra_dpi.findData(settings.zebra_dpi)))
-        self.zebra_dpi.setToolTip("Auflösung der Zebra-Drucker am USB, falls labelwerk sie nicht "
-                                  "richtig erkennt (sonst 203 dpi)")
-        form.addRow("Zebra-Auflösung", self.zebra_dpi)
+        self.zebra_dpi.setToolTip(_("Resolution of Zebra printers on USB, in case labelwerk does "
+                                    "not detect it correctly (otherwise 203 dpi)"))
+        form.addRow(_("Zebra resolution"), self.zebra_dpi)
         self.network = QTableWidget(0, 3)
-        self.network.setHorizontalHeaderLabels(["Name", "Adresse", "Modell"])
+        self.network.setHorizontalHeaderLabels([_("Name"), _("Address"), _("Model")])
         self.network.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.network.verticalHeader().hide()
         self.network.setMinimumHeight(110)
         for entry in settings.network_printers:
             self._add_network(entry["name"], entry["host"], entry["model"])
         buttons = QHBoxLayout()
-        self.add_network = QPushButton("HINZUFÜGEN")
+        self.add_network = QPushButton(_("ADD"))
         self.add_network.clicked.connect(lambda: self._add_network("", "", "QL-720NW"))
-        self.remove_network = QPushButton("ENTFERNEN")
+        self.remove_network = QPushButton(_("REMOVE"))
         self.remove_network.clicked.connect(
             lambda: self.network.removeRow(self.network.currentRow())
             if self.network.currentRow() >= 0 else None)
@@ -159,23 +167,41 @@ class SettingsDialog(QDialog):
         box = QVBoxLayout()
         box.addWidget(self.network)
         box.addLayout(buttons)
-        form.addRow("Netzwerkdrucker", box)
+        form.addRow(_("Network printers"), box)
 
-        form = self._section(layout, "Ansicht")
+        form = self._section(layout, _("View"))
         self.zoom = SpinBox()
         self.zoom.setSuffix(" %")
         self.zoom.setRange(25, 400)
         self.zoom.setSingleStep(10)
         self.zoom.setValue(settings.start_zoom)
-        form.addRow("Startzoom", self.zoom)
+        form.addRow(_("Start zoom"), self.zoom)
         self.theme = QComboBox()
         self.theme.addItem("RawBlock", "rawblock")
-        self.theme.addItem("Klassisch", "classic")
+        self.theme.addItem(_("Classic"), "classic")
         self.theme.setCurrentIndex(max(0, self.theme.findData(settings.theme)))
-        form.addRow("Design", self.theme)
+        form.addRow(_("Theme"), self.theme)
+        self.language = QComboBox()
+        system = i18n.system_language()
+        self.language.addItem(_("Automatic (system language: {language})").format(
+            language=i18n.NAMES.get(system, system)), "")
+        for code in i18n.available():
+            self.language.addItem(i18n.NAMES.get(code, code), code)
+        self.language.setCurrentIndex(max(0, self.language.findData(settings.language)))
+        form.addRow(_("Language"), self.language)
+        # Einstellungen, die erst nach einem Neustart wirken: farbiger Hinweis neben SPEICHERN
+        # (unten im Fenster – sichtbar in jedem Reiter), sobald eine davon geändert ist
+        self._started = started if started is not None else started_values(settings)
+        self.restart_hint = QLabel(_(RESTART_NOTICE))
+        self.restart_hint.setObjectName("restartNotice")
+        self.restart_hint.setStyleSheet(RESTART_STYLE)
+        self.restart_hint.setWordWrap(True)
+        self.restart_hint.hide()
+        self.language.currentIndexChanged.connect(self._update_restart_hint)
+        self.zoom.valueChanged.connect(self._update_restart_hint)
 
-        hint = QLabel("„Neues Etikett“ gilt für neue Etiketten, der Startzoom ab dem nächsten "
-                      "Start, alles andere sofort.")
+        hint = QLabel(_("“New label” applies to new labels, start zoom and language from the next "
+                        "start, everything else immediately."))
         hint.setWordWrap(True)
         layout.addWidget(hint)
         layout.addStretch()
@@ -190,7 +216,11 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         self.save_button = buttons.button(QDialogButtonBox.StandardButton.Save)
-        outer.addWidget(buttons)
+        footer = QHBoxLayout()
+        footer.addWidget(self.restart_hint, 1)
+        footer.addWidget(buttons)
+        outer.addLayout(footer)
+        self._update_restart_hint()
         self._check_conflicts()
 
     def _section(self, layout: QVBoxLayout, title: str) -> QFormLayout:
@@ -210,12 +240,11 @@ class SettingsDialog(QDialog):
     # --- Reiter „Tastenkürzel“ ------------------------------------------------------
     def _build_shortcut_tab(self, overrides: dict[str, str]) -> None:
         page = QWidget()
-        self.tabs.addTab(page, "Tastenkürzel")
+        self.tabs.addTab(page, _("Shortcuts"))
         layout = QVBoxLayout(page)
         hint = self.shortcut_hint = QLabel(
-            "Zeile anklicken und die neue Tastenkombination drücken. Esc bricht ab, "
-            "✕ im Feld entfernt das Kürzel. Esc, Enter und Tab lassen sich hier nicht "
-            "belegen (sie bedienen die Tabelle).")
+            _("Click a row and press the new key combination. Esc cancels, ✕ in the field removes "
+              "the shortcut. Esc, Enter and Tab cannot be assigned here (they operate the table)."))
         hint.setWordWrap(True)
         layout.addWidget(hint)
         self.key_hint = self._error_label()          # verworfene Eingabe
@@ -223,7 +252,7 @@ class SettingsDialog(QDialog):
         self._keys = shortcuts.effective(overrides)       # Aktions-ID → Kürzel (Qt-Format)
         self._rows = [a.id for a in shortcuts.ACTIONS]
         table = self.shortcut_table = QTableWidget(len(self._rows), 4)
-        table.setHorizontalHeaderLabels(["Aktion", "Bereich", "Kürzel", ""])
+        table.setHorizontalHeaderLabels([_("Action"), _("Scope"), _("Shortcut"), ""])
         table.verticalHeader().hide()
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -235,14 +264,15 @@ class SettingsDialog(QDialog):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         fixed = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
         for row, entry in enumerate(shortcuts.ACTIONS):
-            for column, text in ((COL_ACTION, entry.name), (COL_SCOPE, SCOPE_NAMES[entry.scope])):
+            for column, text in ((COL_ACTION, _(entry.name)),
+                                 (COL_SCOPE, _(SCOPE_NAMES[entry.scope]))):
                 item = QTableWidgetItem(text)
                 item.setFlags(fixed)
                 table.setItem(row, column, item)
             item = QTableWidgetItem()
             if entry.fixed:
                 item.setFlags(fixed)
-                item.setToolTip(FIXED_TIP)
+                item.setToolTip(_(FIXED_TIP))
             else:
                 item.setFlags(fixed | Qt.ItemFlag.ItemIsEditable)
             table.setItem(row, COL_KEYS, item)
@@ -258,7 +288,7 @@ class SettingsDialog(QDialog):
         table.cellActivated.connect(self._edit_row)
         layout.addWidget(table, 1)
         row = QHBoxLayout()
-        self.reset_all = QPushButton("Alle zurücksetzen")
+        self.reset_all = QPushButton(_("Reset all"))
         self.reset_all.clicked.connect(self._reset_all)
         row.addWidget(self.reset_all)
         row.addStretch()
@@ -277,8 +307,9 @@ class SettingsDialog(QDialog):
 
     def reject_keys(self, action_id: str, seq: str) -> None:
         """Eingabe taugt nicht als Kürzel (z. B. nur Umschalt): melden, Kürzel bleibt."""
-        self.key_hint.setText(f"„{_native(seq) or seq}“ ist kein gültiges Kürzel – "
-                              f"„{shortcuts.action(action_id).name}“ bleibt unverändert.")
+        self.key_hint.setText(_("“{keys}” is not a valid shortcut – “{action}” stays unchanged.")
+                              .format(keys=_native(seq) or seq,
+                                      action=_(shortcuts.action(action_id).name)))
         self.key_hint.show()
 
     def _show_keys(self, action_id: str) -> None:
@@ -297,9 +328,9 @@ class SettingsDialog(QDialog):
             self.shortcut_table.setCellWidget(row, COL_RESET, button)
 
     def _reset_widget(self, default: str) -> QPushButton:
-        button = QPushButton("Standard")
+        button = QPushButton(_("Default"))
         button.setObjectName("tableButton")
-        button.setToolTip(f"Standard: {_native(default) or 'kein Kürzel'}")
+        button.setToolTip(_("Default: {keys}").format(keys=_native(default) or _("no shortcut")))
         return button
 
     def reset_button(self, action_id: str) -> QPushButton | None:
@@ -318,14 +349,14 @@ class SettingsDialog(QDialog):
     def _check_conflicts(self) -> None:
         """Doppelt belegte Kürzel rot markieren; solange es sie gibt, ist Speichern gesperrt."""
         found = shortcuts.conflicts(self._keys)
-        clashing = {action_id for _, ids in found for action_id in ids}
+        clashing = {action_id for _seq, ids in found for action_id in ids}
         for row, action_id in enumerate(self._rows):
             color = CONFLICT_COLOR if action_id in clashing else None
             for column in (COL_ACTION, COL_SCOPE, COL_KEYS):
                 self.shortcut_table.item(row, column).setData(Qt.ItemDataRole.ForegroundRole, color)
-        lines = [f"{_native(seq)}: " + ", ".join(shortcuts.action(i).name for i in ids)
+        lines = [f"{_native(seq)}: " + ", ".join(_(shortcuts.action(i).name) for i in ids)
                  for seq, ids in found]
-        self.conflict_hint.setText("Tastenkürzel doppelt belegt – zum Speichern eines ändern:\n"
+        self.conflict_hint.setText(_("Shortcuts assigned twice – change one to save:") + "\n"
                                    + "\n".join(lines))
         self.conflict_hint.setVisible(bool(found))
         self.save_button.setEnabled(not found)
@@ -349,8 +380,9 @@ class SettingsDialog(QDialog):
             if not name and not host:
                 continue
             if not valid_host(host):
-                self.error.setText(f"Netzwerkdrucker {name or row + 1}: Adresse „{host}“ ungültig – "
-                                   "nur IP-Adresse oder Name, ohne „tcp://“ und Port")
+                self.error.setText(_("Network printer {name}: address “{host}” invalid – only an "
+                                     "IP address or name, without “tcp://” and port").format(
+                                         name=name or row + 1, host=host))
                 self.error.show()
                 return None
             entries.append({"name": name, "host": host,
@@ -359,6 +391,14 @@ class SettingsDialog(QDialog):
 
     def _family_changed(self, _font) -> None:
         self._family_touched = True
+
+    def restart_needed(self) -> bool:
+        """Wirkt eine gewählte Einstellung erst nach einem Neustart anders als jetzt? (Liest nur die
+        Felder der Neustart-Einstellungen – keine Prüfung anderer Felder.)"""
+        return restart_pending(self.language.currentData(), self.zoom.value(), self._started)
+
+    def _update_restart_hint(self) -> None:
+        self.restart_hint.setVisible(self.restart_needed())
 
     def values(self) -> Settings:
         return Settings(
@@ -382,6 +422,7 @@ class SettingsDialog(QDialog):
             last_model=self._last_model,
             printer_options=dict(self._printer_options),
             zebra_dpi=self.zebra_dpi.currentData(),
+            language=self.language.currentData(),
             network_printers=self._network_values() or [],
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},
@@ -410,10 +451,12 @@ def _model_combo(automatic: str | None, zebra: bool = False) -> QComboBox:
     if automatic is not None:
         combo.addItem(automatic, "")
     for model in SUPPORTED_MODELS:
-        combo.addItem(model if capabilities(model).tested else f"{model} – ungeprüft", model)
+        combo.addItem(model if capabilities(model).tested
+                      else _("{model} – untested").format(model=model), model)
     if zebra:
         for dpi in zpl.RESOLUTIONS:
-            combo.addItem(f"Zebra (ZPL) {dpi} dpi – ungeprüft", zpl.model_for(dpi))
+            combo.addItem(_("Zebra (ZPL) {dpi} dpi – untested").format(dpi=dpi),
+                          zpl.model_for(dpi))
     return combo
 
 

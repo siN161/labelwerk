@@ -12,6 +12,7 @@ from labelwerk.document import Document, TextObject
 from labelwerk.gui.main_window import MainWindow
 from labelwerk.gui.panels.layout import LAYOUT_SECTIONS
 from labelwerk.gui.tools import TOOLS
+from labelwerk.i18n import _
 from labelwerk.labels import DPI
 from labelwerk.settings import Settings
 
@@ -79,9 +80,9 @@ def test_selecting_keeps_layout_panel(window):
 
 
 def test_panel_has_sections_like_p_touch(window):
-    titles = [title for title, _ in LAYOUT_SECTIONS]
+    titles = [_(title) for title, __ in LAYOUT_SECTIONS]
     assert titles == ["Gewählte Objekte ausrichten", "Am Papier ausrichten",
-                      "Vergrößern/Verkleinern", "Drehen", "Reihenfolge"]
+                      "Größe ändern", "Drehen", "Reihenfolge"]
     keys = [key for _, row in LAYOUT_SECTIONS for key, _ in row]
     assert set(keys) == set(FROM_ONE + FROM_TWO) and len(keys) == 20
     assert set(_panel(window).buttons) == set(keys)

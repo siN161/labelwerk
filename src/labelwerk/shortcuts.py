@@ -14,77 +14,79 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .i18n import N_, _
+
 SCOPES = ("global", "canvas", "edit")
 
 
 @dataclass(frozen=True)
 class Action:
     id: str          # z. B. "edit.copy"
-    name: str        # Anzeigename
+    name: str        # Anzeigename (englisch, mit N_ markiert – angezeigt wird _(name))
     default: str     # Standardkürzel, "" = keins
     scope: str       # global | canvas | edit
     fixed: bool = False   # Kürzel fest, in den Einstellungen nicht änderbar
 
 
 ACTIONS: tuple[Action, ...] = (
-    Action("file.new", "Neues Etikett", "Ctrl+N", "global"),
-    Action("file.open", "Öffnen …", "Ctrl+O", "global"),
-    Action("file.save", "Speichern", "Ctrl+S", "global"),
-    Action("file.save_as", "Speichern unter …", "Ctrl+Shift+S", "global"),
-    Action("file.print", "Drucken", "Ctrl+P", "global"),
-    Action("app.settings", "Einstellungen", "Ctrl+,", "global"),
-    Action("view.zoom_in", "Vergrößern (Zoom)", "Ctrl++", "global"),
-    Action("view.zoom_out", "Verkleinern (Zoom)", "Ctrl+-", "global"),
-    Action("view.zoom_reset", "Echte Größe (100 %)", "Ctrl+0", "global"),
-    Action("edit.undo", "Rückgängig", "Ctrl+Z", "global"),
-    Action("edit.redo", "Wiederherstellen", "Ctrl+Shift+Z", "global"),
-    Action("tool.select", "Werkzeug Auswahl", "Esc", "canvas"),
-    Action("tool.text", "Werkzeug Text anlegen", "T", "canvas"),
-    Action("image.insert", "Bild einfügen …", "Ctrl+Shift+I", "canvas"),
-    Action("image.screenshot", "Bildschirmfoto einfügen", "", "canvas"),
-    Action("image.symbol", "Symbol einfügen …", "", "canvas"),
-    Action("barcode.insert", "Barcode einfügen", "", "canvas"),
-    Action("edit.cut", "Ausschneiden", "Ctrl+X", "canvas"),
-    Action("edit.copy", "Kopieren", "Ctrl+C", "canvas"),
-    Action("edit.paste", "Einfügen", "Ctrl+V", "canvas"),
-    Action("edit.duplicate", "Duplizieren", "Ctrl+D", "canvas"),
-    Action("edit.delete", "Löschen", "Del", "canvas"),
-    Action("edit.select_all", "Alles auswählen", "Ctrl+A", "canvas"),
-    Action("object.nudge_left", "Nach links (0,1 mm)", "Left", "canvas"),
-    Action("object.nudge_right", "Nach rechts (0,1 mm)", "Right", "canvas"),
-    Action("object.nudge_up", "Nach oben (0,1 mm)", "Up", "canvas"),
-    Action("object.nudge_down", "Nach unten (0,1 mm)", "Down", "canvas"),
-    Action("object.nudge_left_coarse", "Nach links (1 mm)", "Shift+Left", "canvas"),
-    Action("object.nudge_right_coarse", "Nach rechts (1 mm)", "Shift+Right", "canvas"),
-    Action("object.nudge_up_coarse", "Nach oben (1 mm)", "Shift+Up", "canvas"),
-    Action("object.nudge_down_coarse", "Nach unten (1 mm)", "Shift+Down", "canvas"),
-    Action("object.rotate_left", "90° nach links drehen", "Ctrl+L", "canvas"),
-    Action("object.rotate_right", "90° nach rechts drehen", "Ctrl+R", "canvas"),
-    Action("object.bring_forward", "Nach vorne", "Ctrl+PgUp", "canvas"),
-    Action("object.send_backward", "Nach hinten", "Ctrl+PgDown", "canvas"),
-    Action("align.left", "Aneinander links ausrichten", "", "canvas"),
-    Action("align.hcenter", "Aneinander waagrecht mittig ausrichten", "", "canvas"),
-    Action("align.right", "Aneinander rechts ausrichten", "", "canvas"),
-    Action("align.top", "Aneinander oben ausrichten", "", "canvas"),
-    Action("align.vcenter", "Aneinander senkrecht mittig ausrichten", "", "canvas"),
-    Action("align.bottom", "Aneinander unten ausrichten", "", "canvas"),
-    Action("align.paper_left", "Am Papier links ausrichten", "", "canvas"),
-    Action("align.paper_hcenter", "Am Papier waagrecht mittig ausrichten", "", "canvas"),
-    Action("align.paper_right", "Am Papier rechts ausrichten", "", "canvas"),
-    Action("align.paper_top", "Am Papier oben ausrichten", "", "canvas"),
-    Action("align.paper_vcenter", "Am Papier senkrecht mittig ausrichten", "", "canvas"),
-    Action("align.paper_bottom", "Am Papier unten ausrichten", "", "canvas"),
-    Action("size.maximize", "Auf Papier maximieren", "", "canvas"),
-    Action("size.same", "Gleiche Größe", "", "canvas"),
-    Action("size.width", "Gleiche Breite", "", "canvas"),
-    Action("size.height", "Gleiche Höhe", "", "canvas"),
-    Action("text.start_edit", "Schreibmodus starten (Text der Auswahl)", "F2", "canvas"),
-    Action("text.start_edit_enter", "Schreibmodus starten (Enter)", "Return", "canvas",
+    Action("file.new", N_("New label"), "Ctrl+N", "global"),
+    Action("file.open", N_("Open …"), "Ctrl+O", "global"),
+    Action("file.save", N_("Save"), "Ctrl+S", "global"),
+    Action("file.save_as", N_("Save as …"), "Ctrl+Shift+S", "global"),
+    Action("file.print", N_("Print"), "Ctrl+P", "global"),
+    Action("app.settings", N_("Settings"), "Ctrl+,", "global"),
+    Action("view.zoom_in", N_("Zoom in"), "Ctrl++", "global"),
+    Action("view.zoom_out", N_("Zoom out"), "Ctrl+-", "global"),
+    Action("view.zoom_reset", N_("Actual size (100%)"), "Ctrl+0", "global"),
+    Action("edit.undo", N_("Undo"), "Ctrl+Z", "global"),
+    Action("edit.redo", N_("Redo"), "Ctrl+Shift+Z", "global"),
+    Action("tool.select", N_("Select tool"), "Esc", "canvas"),
+    Action("tool.text", N_("Add text tool"), "T", "canvas"),
+    Action("image.insert", N_("Insert image …"), "Ctrl+Shift+I", "canvas"),
+    Action("image.screenshot", N_("Insert screenshot"), "", "canvas"),
+    Action("image.symbol", N_("Insert symbol …"), "", "canvas"),
+    Action("barcode.insert", N_("Insert barcode"), "", "canvas"),
+    Action("edit.cut", N_("Cut"), "Ctrl+X", "canvas"),
+    Action("edit.copy", N_("Copy"), "Ctrl+C", "canvas"),
+    Action("edit.paste", N_("Paste"), "Ctrl+V", "canvas"),
+    Action("edit.duplicate", N_("Duplicate"), "Ctrl+D", "canvas"),
+    Action("edit.delete", N_("Delete"), "Del", "canvas"),
+    Action("edit.select_all", N_("Select all"), "Ctrl+A", "canvas"),
+    Action("object.nudge_left", N_("Move left (0.1 mm)"), "Left", "canvas"),
+    Action("object.nudge_right", N_("Move right (0.1 mm)"), "Right", "canvas"),
+    Action("object.nudge_up", N_("Move up (0.1 mm)"), "Up", "canvas"),
+    Action("object.nudge_down", N_("Move down (0.1 mm)"), "Down", "canvas"),
+    Action("object.nudge_left_coarse", N_("Move left (1 mm)"), "Shift+Left", "canvas"),
+    Action("object.nudge_right_coarse", N_("Move right (1 mm)"), "Shift+Right", "canvas"),
+    Action("object.nudge_up_coarse", N_("Move up (1 mm)"), "Shift+Up", "canvas"),
+    Action("object.nudge_down_coarse", N_("Move down (1 mm)"), "Shift+Down", "canvas"),
+    Action("object.rotate_left", N_("Rotate 90° left"), "Ctrl+L", "canvas"),
+    Action("object.rotate_right", N_("Rotate 90° right"), "Ctrl+R", "canvas"),
+    Action("object.bring_forward", N_("Bring forward"), "Ctrl+PgUp", "canvas"),
+    Action("object.send_backward", N_("Send backward"), "Ctrl+PgDown", "canvas"),
+    Action("align.left", N_("Align left edges"), "", "canvas"),
+    Action("align.hcenter", N_("Align horizontal centers"), "", "canvas"),
+    Action("align.right", N_("Align right edges"), "", "canvas"),
+    Action("align.top", N_("Align top edges"), "", "canvas"),
+    Action("align.vcenter", N_("Align vertical centers"), "", "canvas"),
+    Action("align.bottom", N_("Align bottom edges"), "", "canvas"),
+    Action("align.paper_left", N_("Align left on paper"), "", "canvas"),
+    Action("align.paper_hcenter", N_("Center horizontally on paper"), "", "canvas"),
+    Action("align.paper_right", N_("Align right on paper"), "", "canvas"),
+    Action("align.paper_top", N_("Align top on paper"), "", "canvas"),
+    Action("align.paper_vcenter", N_("Center vertically on paper"), "", "canvas"),
+    Action("align.paper_bottom", N_("Align bottom on paper"), "", "canvas"),
+    Action("size.maximize", N_("Maximize on paper"), "", "canvas"),
+    Action("size.same", N_("Same size"), "", "canvas"),
+    Action("size.width", N_("Same width"), "", "canvas"),
+    Action("size.height", N_("Same height"), "", "canvas"),
+    Action("text.start_edit", N_("Start text editing (selected text)"), "F2", "canvas"),
+    Action("text.start_edit_enter", N_("Start text editing (Enter)"), "Return", "canvas",
            fixed=True),
-    Action("text.end_edit", "Schreibmodus beenden", "Esc", "edit", fixed=True),
-    Action("text.bold", "Fett", "Ctrl+B", "edit"),
-    Action("text.italic", "Kursiv", "Ctrl+I", "edit"),
-    Action("text.underline", "Unterstrichen", "Ctrl+U", "edit"),
+    Action("text.end_edit", N_("End text editing"), "Esc", "edit", fixed=True),
+    Action("text.bold", N_("Bold"), "Ctrl+B", "edit"),
+    Action("text.italic", N_("Italic"), "Ctrl+I", "edit"),
+    Action("text.underline", N_("Underline"), "Ctrl+U", "edit"),
 )
 
 _BY_ID = {a.id: a for a in ACTIONS}
@@ -139,7 +141,7 @@ def normalize(seq: str) -> str:
         return ""
     parsed = _parse(seq) if isinstance(seq, str) else None
     if parsed is None:
-        raise ValueError(f"Ungültiges Tastenkürzel {seq!r}")
+        raise ValueError(_("Invalid shortcut {seq!r}").format(seq=seq))
     mods, key = parsed
     key = _KEY_ALIASES.get(key.casefold(), key.upper() if len(key) == 1 else key.capitalize())
     return "+".join([m for m in _MODIFIERS if m in mods] + [key])
@@ -192,8 +194,9 @@ def without_conflicts(mapping: dict[str, str]) -> tuple[dict[str, str], list[str
             kept.append((key, entry.id))
             continue
         clean[entry.id] = ""
-        warnings.append(f"Tastenkürzel doppelt belegt: {seq} ({_BY_ID[other].name}, "
-                        f"{entry.name}) – „{entry.name}“ ohne Kürzel.")
+        warnings.append(_("Shortcut assigned twice: {keys} ({first}, {second}) – “{second}” "
+                          "has no shortcut now.").format(keys=seq, first=_(_BY_ID[other].name),
+                                                         second=_(entry.name)))
     return clean, warnings
 
 
@@ -207,23 +210,28 @@ def validate(overrides) -> tuple[dict[str, str], list[str]]:
     Unbekannte Aktionen und ungültige Kürzel werden mit Warnung verworfen (Standard gilt);
     „“ ist erlaubt und heißt „kein Kürzel“."""
     if not isinstance(overrides, dict):
-        return {}, [f"Einstellung 'shortcuts' ungültig ({overrides!r}) – Standardkürzel aktiv."]
+        return {}, [_("Setting 'shortcuts' invalid ({value!r}) – default shortcuts active.")
+                    .format(value=overrides)]
     clean: dict[str, str] = {}
     warnings: list[str] = []
     for action_id, seq in overrides.items():
         if action_id not in _BY_ID:
-            warnings.append(f"Tastenkürzel für unbekannte Aktion {action_id!r} ignoriert.")
+            warnings.append(_("Shortcut for unknown action {action!r} ignored.")
+                            .format(action=action_id))
         elif not isinstance(seq, str) or not is_well_formed(seq):
-            warnings.append(f"Tastenkürzel für {action_id!r} ungültig ({seq!r}) – "
-                            f"Standard {_BY_ID[action_id].default!r} aktiv.")
+            warnings.append(_("Shortcut for {action!r} invalid ({keys!r}) – default {default!r} "
+                              "active.").format(action=action_id, keys=seq,
+                                                default=_BY_ID[action_id].default))
         elif (normalize(seq) in _RESERVED
               and normalize(seq) != normalize(_BY_ID[action_id].default)):
-            warnings.append(f"Tastenkürzel für {action_id!r} ungültig ({seq}) – Esc, Enter und "
-                            f"Tab sind nicht belegbar; Standard "
-                            f"{_BY_ID[action_id].default!r} aktiv.")
+            warnings.append(_("Shortcut for {action!r} invalid ({keys}) – Esc, Enter and Tab "
+                              "cannot be assigned; default {default!r} active.")
+                            .format(action=action_id, keys=seq,
+                                    default=_BY_ID[action_id].default))
         elif _BY_ID[action_id].fixed and normalize(seq) != normalize(_BY_ID[action_id].default):
-            warnings.append(f"Tastenkürzel für {action_id!r} ist fest "
-                            f"({_BY_ID[action_id].default}) – Einstellung ignoriert.")
+            warnings.append(_("Shortcut for {action!r} is fixed ({default}) – setting "
+                              "ignored.").format(action=action_id,
+                                                 default=_BY_ID[action_id].default))
         else:
             clean[action_id] = seq
     return clean, warnings

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QToolBar
 
 from labelwerk import shortcuts
 from labelwerk.document import Document, TextObject
+from labelwerk.i18n import _
 from labelwerk.gui.canvas import MM
 from labelwerk.gui.main_window import MainWindow
 from labelwerk.settings import Settings
@@ -99,7 +100,7 @@ def test_edit_bar_buttons_show_own_icons_only(window):
         button = window.edit_bar.widgetForAction(action)
         assert button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonIconOnly
         assert not action.icon().isNull()
-        name = shortcuts.action(action.objectName()).name
+        name = _(shortcuts.action(action.objectName()).name)
         assert action.toolTip().startswith(name)
     for name in ("tool-select", "tool-text", "edit-cut", "edit-copy", "edit-paste",
                  "edit-undo", "edit-redo"):

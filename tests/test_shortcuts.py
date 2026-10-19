@@ -4,6 +4,7 @@ import re
 import pytest
 
 from labelwerk import shortcuts
+from labelwerk.i18n import _
 from labelwerk.shortcuts import ACTIONS, SCOPES, Action
 
 
@@ -139,7 +140,7 @@ def test_formatting_and_end_edit_belong_to_edit_mode():
     for action_id in ("text.bold", "text.italic", "text.underline", "text.end_edit"):
         assert shortcuts.action(action_id).scope == "edit"
     end = shortcuts.action("text.end_edit")
-    assert (end.name, end.default, end.fixed) == ("Schreibmodus beenden", "Esc", True)
+    assert (_(end.name), end.default, end.fixed) == ("Schreibmodus beenden", "Esc", True)
     assert not shortcuts.action("text.bold").fixed
 
 

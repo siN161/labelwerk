@@ -11,9 +11,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .document import Document
+from .i18n import N_, _
 from .storage import SUFFIX, save
 
 MAX_NAME_BYTES = 200        # Dateiname höchstens 255 Bytes (Endung, Reserve)
+_EXISTS = N_("Favorite “{name}” already exists")
 
 
 @dataclass(frozen=True)
@@ -47,8 +49,9 @@ def _checked(name: str) -> str:
     name = unicodedata.normalize("NFC", name.strip())
     if (not name or len(name.encode("utf-8")) > MAX_NAME_BYTES or name.startswith(".")
             or any(c in "/\\" or unicodedata.category(c) == "Cc" for c in name)):
-        raise ValueError(f"Name für den Favoriten ungültig: „{name}“ (nicht leer, nicht zu lang, "
-                         f"ohne / und \\ und Steuerzeichen, nicht mit Punkt beginnend)")
+        raise ValueError(_("Invalid name for the favorite: “{name}” (not empty, not too long, "
+                           "without / and \\ and control characters, not starting with a dot)")
+                         .format(name=name))
     return name
 
 
@@ -57,7 +60,7 @@ def add(doc: Document, name: str, overwrite: bool = False) -> Favorite:
     name = _checked(name)
     path = favorites_dir() / f"{name}{SUFFIX}"
     if path.exists() and not overwrite:
-        raise FileExistsError(f"Favorit „{name}“ gibt es schon")
+        raise FileExistsError(_(_EXISTS).format(name=name))
     path.parent.mkdir(parents=True, exist_ok=True)
     save(doc, path)
     return Favorite(name, path)
@@ -67,9 +70,9 @@ def rename(favorite: Favorite, name: str) -> Favorite:
     name = _checked(name)
     path = favorite.path.with_name(f"{name}{SUFFIX}")
     if not favorite.path.exists():
-        raise FileNotFoundError(f"Favorit „{favorite.name}“ nicht gefunden")
+        raise FileNotFoundError(_("Favorite “{name}” not found").format(name=favorite.name))
     if path.exists() and not path.samefile(favorite.path):     # Groß/Klein-Dateisysteme
-        raise FileExistsError(f"Favorit „{name}“ gibt es schon")
+        raise FileExistsError(_(_EXISTS).format(name=name))
     favorite.path.rename(path)
     return Favorite(name, path)
 

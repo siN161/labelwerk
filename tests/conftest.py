@@ -2,6 +2,19 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def german(monkeypatch):
+    """Tests laufen auf Deutsch (ihre Erwartungen sind die deutschen Texte), auch wenn CLI/GUI die
+    Sprache des Systems nehmen (``LANGUAGE``); wer eine andere Sprache prüft, setzt sie selbst –
+    danach gilt wieder Deutsch."""
+    from labelwerk import i18n
+    monkeypatch.setenv("LANGUAGE", "de")
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")      # Gebietsschema „C“ hieße sonst Englisch
+    i18n.set_language("de")
+    yield
+    i18n.set_language("de")
+
+
+@pytest.fixture(autouse=True)
 def isolated_config(monkeypatch, tmp_path_factory):
     """Kein Test liest oder schreibt die echten Einstellungen oder Daten (eigene Symbole) des
     Nutzers."""

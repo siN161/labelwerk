@@ -18,15 +18,16 @@ from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QHeaderView,
 
 from ... import series
 from ...document import CUTS, MAX_DIGITS, MAX_NUMBER, MAX_SERIES_ROWS, Document, Numbering, Series
+from ...i18n import N_, _, ngettext
 from ...series import SeriesError, Table
 from ..widgets import SpinBox
 from . import Panel
 
-NO_SERIES = "Keine Serie"
-NUMBERING = "Nummerierung"
-CUT_TITLES = {"each": "Nach jedem Etikett", "end": "Nur am Ende"}
-NO_CUTTER = "Drucker ohne Abschneider – Etiketten von Hand abtrennen"
-DRIVER_CUTS = "Schneiden stellt der Druckertreiber ein (Druckerverwaltung des Systems)"
+NO_SERIES = N_("No series")
+NUMBERING = N_("Numbering")
+CUT_TITLES = {"each": N_("After each label"), "end": N_("Only at the end")}
+NO_CUTTER = N_("Printer without cutter – separate the labels by hand")
+DRIVER_CUTS = N_("Cutting is set by the printer driver (system printer settings)")
 SHOWN_COLUMNS = 3                   # Spalten in der Zeilentabelle (die Häkchen sitzen in der ersten)
 ROWS_HEIGHT = 180
 
@@ -37,7 +38,7 @@ class SeriesPanel(Panel):
     driver_cut_chosen = Signal(str, str)   # CUPS: Treiber-Option zum Schneiden, gewählter Wert
 
     def __init__(self, doc: Document):
-        super().__init__(doc, "Serie")
+        super().__init__(doc, _("Series"))
         self.table: Table | None = None
         self.error: str | None = None        # Tabelle nicht lesbar
         self._field_error: str | None = None  # Nummerierungsfeld ungültig (nicht übernommen)
@@ -46,47 +47,50 @@ class SeriesPanel(Panel):
         self._stamp = None                    # Änderungszeit der Datei beim Lesen
         self._current = 0                     # Vorschau-Zeile
 
-        self.section("Quelle")
-        self.table_button = QPushButton("TABELLE …")
-        self.table_button.setToolTip("CSV- oder Excel-Datei (.xlsx) – erste Zeile = Spaltennamen")
-        self.numbering_button = QPushButton("NUMMERIERUNG")
-        self.numbering_button.setToolTip("Zahlen ohne Datei: Spalte „Nummer“")
+        self.section(_("Source"))
+        self.table_button = QPushButton(_("TABLE …"))
+        self.table_button.setToolTip(_("CSV or Excel file (.xlsx) – first row = column names"))
+        self.numbering_button = QPushButton(_("NUMBERING"))
+        self.numbering_button.setToolTip(_("Numbers without a file: column “{column}”").format(
+            column=series.number_column()))
         for button in (self.table_button, self.numbering_button):   # volle Breite: lange Texte
             self.layout_.addWidget(button)
-        self.source_label = QLabel(NO_SERIES)
+        self.source_label = QLabel(_(NO_SERIES))
         self.source_label.setWordWrap(True)
         self.layout_.addWidget(self.source_label)
         self.sheet = QComboBox()
-        self.sheet.setToolTip("Blatt der Excel-Datei")
+        self.sheet.setToolTip(_("Sheet of the Excel file"))
         self.layout_.addWidget(self.sheet)
         self.numbering_box = QWidget()
         grid = QGridLayout(self.numbering_box)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setColumnStretch(1, 1)
-        self.start = self._spin(-MAX_NUMBER, MAX_NUMBER, "Erste Zahl")
-        self.step = self._spin(-MAX_NUMBER, MAX_NUMBER, "Abstand zur nächsten Zahl (nicht 0)")
-        self.count = self._spin(1, MAX_SERIES_ROWS, "Wie viele Etiketten")
-        self.digits = self._spin(0, MAX_DIGITS, "Mit Nullen auf so viele Stellen auffüllen (0 = nicht)")
-        for line, (title, box) in enumerate((("Start", self.start), ("Schritt", self.step),
-                                             ("Anzahl", self.count), ("Stellen", self.digits))):
+        self.start = self._spin(-MAX_NUMBER, MAX_NUMBER, _("First number"))
+        self.step = self._spin(-MAX_NUMBER, MAX_NUMBER, _("Step to the next number (not 0)"))
+        self.count = self._spin(1, MAX_SERIES_ROWS, _("How many labels"))
+        self.digits = self._spin(0, MAX_DIGITS,
+                                 _("Pad with zeros to this many digits (0 = no padding)"))
+        for line, (title, box) in enumerate(((_("Start"), self.start), (_("Step"), self.step),
+                                             (_("Count"), self.count), (_("Digits"), self.digits))):
             grid.addWidget(QLabel(title), line, 0)
             grid.addWidget(box, line, 1)
         self.layout_.addWidget(self.numbering_box)
-        self.remove_button = QPushButton("ENTFERNEN")
-        self.remove_button.setToolTip("Serie aus dem Etikett nehmen (Platzhalter bleiben stehen)")
+        self.remove_button = QPushButton(_("REMOVE"))
+        self.remove_button.setToolTip(_("Remove the series from the label (placeholders stay)"))
         self.layout_.addWidget(self.remove_button)
         self.error_label = QLabel()
         self.error_label.setObjectName("hint")
         self.error_label.setWordWrap(True)
         self.layout_.addWidget(self.error_label)
 
-        self.section("Spalten")
+        self.section(_("Columns"))
         self.columns = QListWidget()
-        self.columns.setToolTip("Doppelklick: als {Spalte} ins gewählte Textobjekt bzw. als neuer Text")
+        self.columns.setToolTip(_("Double-click: as {{column}} into the selected text object or as new "
+                                   "text").format())
         self.columns.setFixedHeight(90)
         self.layout_.addWidget(self.columns)
 
-        self.section("Zeilen")
+        self.section(_("Rows"))
         self.rows = QTableWidget(0, 0)
         self.rows.setFixedHeight(ROWS_HEIGHT)
         self.rows.verticalHeader().setVisible(False)
@@ -98,38 +102,38 @@ class SeriesPanel(Panel):
         self.rows.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.layout_.addWidget(self.rows)
         row = QHBoxLayout()
-        self.all_button = QPushButton("ALLE")
-        self.none_button = QPushButton("KEINE")
+        self.all_button = QPushButton(_("ALL"))
+        self.none_button = QPushButton(_("NONE"))
         row.addWidget(self.all_button)
         row.addWidget(self.none_button)
         self.layout_.addLayout(row)
         self.count_label = QLabel()
         self.layout_.addWidget(self.count_label)
 
-        self.section("Vorschau")
+        self.section(_("Preview"))
         row = QHBoxLayout()
         self.prev_button = QToolButton()
         self.prev_button.setText("◀")
-        self.prev_button.setToolTip("Vorige Zeile auf der Arbeitsfläche")
+        self.prev_button.setToolTip(_("Previous row on the canvas"))
         self.row_label = QLabel()
         self.row_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.next_button = QToolButton()
         self.next_button.setText("▶")
-        self.next_button.setToolTip("Nächste Zeile auf der Arbeitsfläche")
+        self.next_button.setToolTip(_("Next row on the canvas"))
         row.addWidget(self.prev_button)
         row.addWidget(self.row_label, 1)
         row.addWidget(self.next_button)
         self.layout_.addLayout(row)
 
-        self.cut_title = self.section("Schnitt")
+        self.cut_title = self.section(_("Cutting"))
         self.cut = QComboBox()
         for mode in CUTS:
-            self.cut.addItem(CUT_TITLES[mode], mode)
-        self.cut.setToolTip("Beim Drucken der Serie: nach jedem Etikett schneiden oder nur am Ende "
-                            "(Endlosband: zwischen den Etiketten bleiben einige mm Vorschub, "
-                            "ohne Trennmarke)")
+            self.cut.addItem(_(CUT_TITLES[mode]), mode)
+        self.cut.setToolTip(_("When printing the series: cut after each label or only at the end "
+                              "(continuous tape: a few mm of feed remain between the labels, "
+                              "without a separator mark)"))
         self.layout_.addWidget(self.cut)
-        self.no_cutter = QLabel(NO_CUTTER)
+        self.no_cutter = QLabel(_(NO_CUTTER))
         self.no_cutter.setObjectName("hint")
         self.no_cutter.setWordWrap(True)
         self.no_cutter.hide()
@@ -153,7 +157,7 @@ class SeriesPanel(Panel):
         # Doppelklick bzw. Enter (je nach Stil auch Einfachklick) – nur dieses Signal, sonst doppelt
         self.columns.itemActivated.connect(lambda item: self.insert_column.emit(item.text()))
         self.rows.itemChanged.connect(lambda _item: self._update_count())
-        self.rows.currentCellChanged.connect(lambda row, *_: self._go_to(row))
+        self.rows.currentCellChanged.connect(lambda row, *_args: self._go_to(row))
         self.all_button.clicked.connect(lambda: self._check_all(True))
         self.none_button.clicked.connect(lambda: self._check_all(False))
         self.prev_button.clicked.connect(lambda: self._go_to(self._current - 1))
@@ -183,10 +187,10 @@ class SeriesPanel(Panel):
             self._key = key
             self._load(value)
         if value is None:
-            self.source_label.setText(NO_SERIES)
+            self.source_label.setText(_(NO_SERIES))
             self.source_label.setToolTip("")
         elif value.numbering is not None:
-            self.source_label.setText(NUMBERING)
+            self.source_label.setText(_(NUMBERING))
             self.source_label.setToolTip("")
             n = value.numbering
             for box, v in ((self.start, n.start), (self.step, n.step), (self.count, n.count),
@@ -299,7 +303,8 @@ class SeriesPanel(Panel):
         if self.doc.series is not None and self._field_error:
             lines.append(self._field_error)
         if self.doc.series is not None and self.table is not None and self._missing:
-            lines.append("Unbekannte Spalte: " + ", ".join(self._missing))
+            lines.append(ngettext("Unknown column: {columns}", "Unknown columns: {columns}",
+                                  len(self._missing)).format(columns=", ".join(self._missing)))
         self.error_label.setText("\n".join(lines))
         self.error_label.setVisible(bool(lines))
 
@@ -344,7 +349,7 @@ class SeriesPanel(Panel):
         """Drucker mit bzw. ohne Abschneider: ohne gibt es keine Schnitt-Auswahl, nur den Hinweis."""
         self.cut_title.setVisible(cutter)
         self.cut.setVisible(cutter)
-        self.no_cutter.setText(NO_CUTTER)
+        self.no_cutter.setText(_(NO_CUTTER))
         self.no_cutter.setVisible(not cutter)
         self.driver_box.hide()
 
@@ -358,10 +363,10 @@ class SeriesPanel(Panel):
         for row, option in enumerate(options):
             combo = QComboBox()
             for choice, text in zip(option.choices, option.labels or option.choices):
-                combo.addItem(text, choice)
+                combo.addItem(text, choice)          # Treibertexte bleiben, Zebra schon übersetzt
             combo.setCurrentIndex(max(0, combo.findData(chosen.get(option.key, option.default))))
             combo.currentIndexChanged.connect(
-                lambda _=0, key=option.key, box=combo: self.driver_cut_chosen.emit(
+                lambda _unused=0, key=option.key, box=combo: self.driver_cut_chosen.emit(
                     key, box.currentData()))
             self.driver_grid.addWidget(QLabel(option.title), row, 0)
             self.driver_grid.addWidget(combo, row, 1)
@@ -369,7 +374,7 @@ class SeriesPanel(Panel):
         self.cut.hide()
         self.cut_title.setVisible(True)
         self.driver_box.setVisible(bool(options))
-        self.no_cutter.setText(DRIVER_CUTS)
+        self.no_cutter.setText(_(DRIVER_CUTS))
         self.no_cutter.setVisible(not options)
 
     def _apply_cut(self) -> None:
@@ -394,7 +399,8 @@ class SeriesPanel(Panel):
 
     def _update_count(self) -> None:
         total = self.rows.rowCount()
-        self.count_label.setText(f"{len(self.checked_rows())} von {total} gewählt" if total else "")
+        self.count_label.setText(_("{checked} of {total} selected").format(
+            checked=len(self.checked_rows()), total=total) if total else "")
 
     def _update_row_label(self) -> None:
         total = len(self.table.rows) if self.table is not None else 0
@@ -402,7 +408,8 @@ class SeriesPanel(Panel):
             self.rows.blockSignals(True)
             self.rows.setCurrentCell(self._current, 0)
             self.rows.blockSignals(False)
-        self.row_label.setText(f"Zeile {self._current + 1}/{total}" if total else "")
+        self.row_label.setText(_("Row {row}/{total}").format(row=self._current + 1, total=total)
+                                if total else "")
         self.prev_button.setEnabled(self._current > 0)
         self.next_button.setEnabled(self._current < total - 1)
 

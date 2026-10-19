@@ -19,21 +19,41 @@ from PySide6.QtSvg import QSvgRenderer
 
 from .. import clipart, files
 from ..clipart import Symbol
+from ..i18n import N_, _
 from ..imaging import MAX_DPI, MAX_PIXELS, on_white
 from ..labels import DPI
 
 SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".pdf")
 ALLOWED = "PNG, JPG, GIF, BMP, WebP, SVG, PDF"  # für Meldungen
-FILE_FILTER = ("Bilder und PDF (" + " ".join(f"*{s} *{s.upper()}" for s in SUFFIXES) + ");;"
-               "Alle Dateien (*)")              # Großschreibung: Kameras, Windows
-CLIPBOARD = "Zwischenablage"                    # Quelle eines eingefügten Bilds
+_PATTERNS = " ".join(f"*{s} *{s.upper()}" for s in SUFFIXES)   # Großschreibung: Kameras, Windows
+FILE_FILTER = f"Images and PDF ({_PATTERNS});;All files (*)"    # englisch; Dialoge: file_filter()
+# Quelle eines eingefügten Bilds: wird mit dem Etikett gespeichert und verglichen – deshalb fest
+# (deutsch, wie in älteren Dateien) und nur beim Anzeigen übersetzt (``source_title``)
+CLIPBOARD = "Zwischenablage"
 DROPPED = "Abgelegtes Bild"
 SCREENSHOT = "Bildschirmfoto"
 MIME_OBJECTS = "application/x-labelwerk-objects"   # kopierte Objekte (Kennung der Kopie)
 SYMBOL_SOURCE = "Symbol: {name}"                    # Quelle eines eingefügten Symbols
+_SOURCE_TITLES = {CLIPBOARD: N_("Clipboard"), DROPPED: N_("Dropped image"),
+                  SCREENSHOT: N_("Screenshot")}
 MIME_SYMBOL = "application/x-labelwerk-symbol"     # Symbol aus dem Fenster gezogen (id)
 SYMBOL_PROBE_PX = 512          # Symbol: erst grob rastern, um den Inhalt zu finden
 SVG_DPI = 96                                    # SVG: 1 px = 1/96 in
+
+
+def file_filter() -> str:
+    """Filter des Dateidialogs „Bild einfügen“ in der eingestellten Sprache."""
+    return _("Images and PDF ({patterns});;All files (*)").format(patterns=_PATTERNS)
+
+
+def source_title(source: str) -> str:
+    """Quelle eines Bilds zum Anzeigen: feste Quellen (Zwischenablage, Ablegen, Bildschirmfoto,
+    Symbol) übersetzt, Dateinamen wie sie sind."""
+    if source in _SOURCE_TITLES:
+        return _(_SOURCE_TITLES[source])
+    if is_symbol_source(source):
+        return _("Symbol: {name}").format(name=source[len(SYMBOL_SOURCE.split("{")[0]):])
+    return source
 
 
 def page_count(path: Path) -> int:
@@ -46,8 +66,8 @@ def load(path: Path, page: int = 1) -> tuple[Image.Image, float]:
     Andere Dateitypen: ``ValueError`` mit allen möglichen Typen (samt SVG)."""
     path = Path(path)
     if path.suffix.lower() not in SUFFIXES:
-        raise ValueError(f"Dateityp nicht unterstützt: {path.suffix or path.name} – "
-                         f"möglich: {ALLOWED}")
+        raise ValueError(_("File type not supported: {type} – possible: {allowed}").format(
+            type=path.suffix or path.name, allowed=ALLOWED))
     if path.suffix.lower() == ".svg":
         return load_svg(path)
     return files.load_image(path, page)
@@ -65,14 +85,14 @@ def load_svg(path: Path) -> tuple[Image.Image, float]:
     Größe/viewBox; 1 px = 1/96 in); sehr große Zeichnungen gröber, höchstens
     ``MAX_PIXELS`` auf der längsten Seite."""
     if not path.exists():
-        raise FileNotFoundError(f"Datei nicht gefunden: {path}")
+        raise FileNotFoundError(_("File not found: {path}").format(path=path))
     # mit Verweisen auf andere Dateien über den Pfad (sie liegen neben der SVG), sonst aus den
     # Bytes – derselbe Weg wie beim Rastern eines Vektorbilds (Vorschau = Raster)
     vector = load_vector(path)
     renderer = QSvgRenderer(str(path)) if vector is None else _svg_renderer(vector)
     size = renderer.defaultSize()
     if not renderer.isValid() or size.isEmpty():
-        raise ValueError(f"Datei kann nicht gelesen werden: {path.name} (kein gültiges SVG)")
+        raise ValueError(_("Cannot read file: {name} (not a valid SVG)").format(name=path.name))
     # Qt rechnet mm/in/pt mit 90 dpi – Maße mit Einheit deshalb selbst lesen (CSS: 96 px/in)
     width, height = svg_size(path) or (size.width(), size.height())
     dpi = min(DPI, MAX_PIXELS * SVG_DPI / max(width, height))
@@ -128,10 +148,10 @@ def rasterize_svg(svg: bytes, size: tuple[int, int],
     ``ValueError``; ebenso ein SVG mit Verweisen auf andere Dateien (die gelten nur neben der
     SVG, nicht in einem gespeicherten Dokument)."""
     if _EXTERNAL.search(svg):
-        raise ValueError("Vektorbild verweist auf andere Dateien – die werden nicht mitgespeichert.")
+        raise ValueError(_("Vector image refers to other files – they are not saved with it."))
     renderer = _svg_renderer(svg)
     if not renderer.isValid():
-        raise ValueError("Vektorbild kann nicht gelesen werden (kein gültiges SVG).")
+        raise ValueError(_("Cannot read vector image (not a valid SVG)."))
     return _render(renderer, size, region)
 
 
@@ -151,7 +171,7 @@ def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tup
         renderer = QSvgRenderer(symbol.file) if linked else _svg_renderer(data)
         size = renderer.defaultSize()
         if not renderer.isValid() or size.isEmpty():
-            raise ValueError(f"Symbol {symbol.name} kann nicht gelesen werden (kein gültiges SVG).")
+            raise ValueError(_("Cannot read symbol {name} (not a valid SVG).").format(name=symbol.name))
         k = SYMBOL_PROBE_PX / max(size.width(), size.height())
         probe = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
         if box := files.ink_box(_render(renderer, probe, (0, 0, *probe))):
@@ -177,7 +197,7 @@ def svg_size(path: Path) -> tuple[float, float] | None:
     Wurzelelements, mit Einheiten px/mm/cm/in/pt/pc; None, wenn eine Angabe fehlt, relativ
     ist (%, em) oder die Datei sich nicht lesen lässt – dann zählt Qts Größe (viewBox)."""
     try:
-        _, root = next(ElementTree.iterparse(path, events=("start",)))
+        __, root = next(ElementTree.iterparse(path, events=("start",)))
     except (ElementTree.ParseError, OSError, StopIteration):
         return None
     sizes = []

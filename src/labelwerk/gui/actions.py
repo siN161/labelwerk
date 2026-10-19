@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QAction, QKeySequence
 
 from .. import shortcuts
+from ..i18n import _
 
 _CONTEXT = {
     "global": Qt.ShortcutContext.WindowShortcut,
@@ -22,7 +23,7 @@ def build_actions(parent: QObject, mapping: dict[str, str]) -> dict[str, QAction
     """Je Aktion des Verzeichnisses eine QAction mit Name, Bereich und Kürzel aus ``mapping``."""
     actions = {}
     for entry in shortcuts.ACTIONS:
-        action = QAction(entry.name, parent)
+        action = QAction(_(entry.name), parent)
         action.setObjectName(entry.id)
         action.setShortcutContext(_CONTEXT[entry.scope])
         actions[entry.id] = action
@@ -38,6 +39,6 @@ def apply_shortcuts(actions: dict[str, QAction], mapping: dict[str, str]) -> Non
             action.setShortcuts([sequence, QKeySequence("Enter")])
         else:
             action.setShortcut(sequence)
-        name = shortcuts.action(action_id).name
+        name = _(shortcuts.action(action_id).name)
         keys = sequence.toString(QKeySequence.SequenceFormat.NativeText)
         action.setToolTip(f"{name} ({keys})" if keys else name)

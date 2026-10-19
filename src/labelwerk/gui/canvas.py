@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QApplication, QGraphicsPixmapItem, QGraphicsRectI
 
 from .. import layout
 from . import image_import
+from ..i18n import _
 from ..labels import DPI, Label, format_mm, length_limits, mm_text
 from ..layout import Rect
 from ..printer import DEFAULT_MODEL
@@ -256,7 +257,7 @@ class Canvas(QGraphicsView):
                                         QPen(Qt.PenStyle.NoPen), QBrush(Qt.GlobalColor.black))
             self.handle.setCursor(Qt.CursorShape.SizeHorCursor if self.orientation == "horizontal"
                                   else Qt.CursorShape.SizeVerCursor)
-            self.handle.setToolTip("Ziehen: Länge festlegen · Doppelklick: automatisch")
+            self.handle.setToolTip(_("Drag: set the length · Double-click: automatic"))
         self._caption = self._caption_for(th)
         margin = _MARGIN_MM * self.mm
         scene.setSceneRect(-margin, -margin, tw + 2 * margin, th + 2 * margin)

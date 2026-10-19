@@ -11,9 +11,11 @@ from PySide6.QtWidgets import QApplication
 
 from labelwerk import clipart, shortcuts
 from labelwerk.document import Document, ImageObject, TextObject
+from labelwerk.i18n import _
 from labelwerk.gui.image_import import MIME_SYMBOL
 from labelwerk.gui.main_window import SYMBOL_MM, MainWindow
 from labelwerk.gui.symbol_dialog import EMPTY_OWN, NO_RESULTS, SymbolDialog
+from labelwerk.i18n import _
 from labelwerk.settings import Settings, load_settings
 
 NO_MOD = Qt.KeyboardModifier.NoModifier
@@ -53,7 +55,7 @@ def _ids(dialog):
 # --- Aktion und Fenster ---------------------------------------------------------------
 def test_symbol_action_and_button(qtbot):
     entry = shortcuts.action("image.symbol")
-    assert (entry.name, entry.default, entry.scope) == ("Symbol einfügen …", "", "canvas")
+    assert (_(entry.name), entry.default, entry.scope) == ("Symbol einfügen …", "", "canvas")
     win = _window(qtbot)
     assert win.panel("image").symbol.text() == "SYMBOL"
     dialog = _open(win, qtbot)
@@ -83,7 +85,7 @@ def test_search_spans_the_whole_library(qtbot):
     dialog.search.setText("Haus")
     assert "tabler/outline/home" in _ids(dialog)
     dialog.search.setText("gibtesnichtxyz")
-    assert _ids(dialog) == [] and dialog.empty.text() == NO_RESULTS
+    assert _ids(dialog) == [] and dialog.empty.text() == _(NO_RESULTS)
     assert not dialog.insert.isEnabled()
 
 
@@ -200,7 +202,7 @@ def test_own_folder_empty_hint_and_open_button(qtbot, monkeypatch):
     opened = []
     monkeypatch.setattr(dialog, "open_url", lambda url: opened.append(url.toLocalFile()))
     _show_group(dialog, "Eigene")
-    assert dialog.empty.text() == EMPTY_OWN.format(path=clipart.own_dir())
+    assert dialog.empty.text() == _(EMPTY_OWN).format(path=clipart.own_dir())
     assert dialog.open_folder.isVisible()
     dialog.open_folder.click()
     assert clipart.own_dir().is_dir() and opened == [str(clipart.own_dir())]
@@ -440,7 +442,7 @@ def test_own_svg_with_linked_file_becomes_pixel_image(qtbot):
 
 # --- Bibliotheksarchiv defekt oder fehlend ------------------------------------------
 def _clear_library_caches():
-    for function in (clipart._files, clipart.catalog, clipart._index):
+    for function in (clipart._files, clipart._catalog, clipart._index_for):
         function.cache_clear()
 
 

@@ -12,6 +12,8 @@ from pathlib import Path
 
 from PIL import ImageFont
 
+from .i18n import _
+
 DEFAULT_FAMILY = "DejaVu Sans"
 _DEJAVU_DIRS = ("/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/TTF",
                 "/usr/share/fonts/dejavu-sans-fonts")
@@ -87,5 +89,5 @@ def load(path: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         try:
             return ImageFont.truetype(path, size)
         except OSError as e:
-            raise FontLoadError(f"Schrift „{path}“ kann nicht geladen werden ({e}).") from e
+            raise FontLoadError(_("Cannot load font “{path}” ({error}).").format(path=path, error=e)) from e
     return ImageFont.load_default(size=size)

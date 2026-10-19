@@ -29,6 +29,7 @@ class Panel(QWidget):
     def section(self, text: str) -> QLabel:
         label = QLabel(text.upper())
         label.setProperty("role", "section")
+        label.setWordWrap(True)                  # lange Titel (andere Sprachen) brechen um
         self.layout_.addWidget(label)
         return label
 

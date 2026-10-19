@@ -43,7 +43,13 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   im Druckermenü (nie automatisch), Etiketten/Auflösung aus dem Treiber, Druck als PDF in einem Auftrag, Schnitt-Optionen
   des Treibers im Reiter SERIE; Zebra direkt (ZPL, USB/Netzwerk, Modus Abreißen/Schneiden/Ablösen); CLI -p cups:NAME,
   zpl+file://, zpl+tcp:// mit -m zpl:203.
-- 2479 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- Übersetzungen (Etappe 7): Deutsch und Englisch – Quellsprache im Code Englisch (`_()`), Deutsch in
+  `src/labelwerk/po/de.po`; Sprache des Systems, Einstellung „Sprache“ (nach Neustart; farbiger Hinweis
+  „Änderungen erst nach Neustart aktiv“ im Einstellungsfenster neben SPEICHERN, für Sprache und Start-Zoom),
+  CLI `--lang` (auch argparse-Texte); Zahlen mit dem Dezimaltrenner der Sprache (Eingabe Komma und Punkt),
+  Excel-Zahlen im Etikett nach der Region des Systems; `{Nummer}`/`{Number}` und „Spalte n“/„Column n“ in
+  jeder Sprache; Symbole mit deutschen und englischen Namen (Suche in beiden); Layout-Test je Sprache.
+- 2529 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -80,6 +86,14 @@ src/labelwerk/
               check(obj), modules(obj), size(obj) (Druckpunkte, ungedreht), draw(obj) (L, ganze Punkte je Modul, Klartext
               DejaVu Sans ~9 Module, EAN mit verlängerten Randzeichen), quiet_mm, TITLES/SAMPLES/INSERT_MODULE;
               BarcodeError (ValueError, deutsch); Tests lesen jede Art mit zxing-cpp (nur [dev], Python ≥ 3.12)
+  i18n.py     Übersetzungen ohne Qt: _/N_/NP_/ngettext/pgettext, set_language ("" = System wie GNU: Gebiets-
+              schema LC_ALL › LC_MESSAGES › LANG, „C“ = Englisch, sonst LANGUAGE-Liste), available/NAMES/DECIMAL,
+              eigener .po-Leser (parse_po, unquote mit C-Escapes; Kontext, Mehrzahl über gettext.c2py,
+              fuzzy/veraltet zählen nicht, BOM egal), decimal/number/thousands/parse_number, content_decimal
+              (Region für Etikett-Inhalt), all_translations (Namen in jeder Sprache, z. B. Platzhalter);
+              po/<code>.po im Paket, po/labelwerk.pot erzeugt von tools/i18n.py (extract mit „# Translators:“-
+              Hinweisen und python-brace-format, update behält Kommentare/fuzzy/veraltete, check prüft auch
+              Mehrzahlformen, german_leftovers); Anleitung po/README.md
   fonts.py    Schriften über fontconfig (families, resolve, load), Ersatzkursive bei fehlender Kursiv-Datei
   files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi)
               crop(img) -> auf Inhalt, ohne Schnittmarken/Leerraum; fit_to_label(img, label_id, fit, rotate) -> 1:1, auto/feste Drehung
@@ -131,7 +145,9 @@ src/labelwerk/
               (Ersatz), `last_model` (zuletzt erkannt), `network_printers` ({name, host, model}; valid_host: IPv4/Name ohne
               Port/Schema/Steuerzeichen; Modell auch zpl:…), network_entries(settings); `printer_options` (Modell →
               Druck-Optionen: CUPS-Schnitt-Optionen, Zebra-Modus; je Eintrag geprüft, leerer Wert erlaubt), `zebra_dpi`
-              (0 = erkannt); load_settings(path, model=None): Etikett muss nur ein bekanntes Etikett sein (auch
+              (0 = erkannt), `language` ("" = System); RESTART_KEYS (language, start_zoom), started_values/
+              restart_pending (wirksamer Vergleich mit dem Start), configured_language (vor allem anderen gelesen);
+              load_settings(path, model=None): Etikett muss nur ein bekanntes Etikett sein (auch
               „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI)
   storage.py  Etiketten als Datei (*.labelwerk, JSON versioniert, Bilder Base64): to_dict/from_dict, save (atomar), load;
               Schemata SPAN/PARAGRAPH/TEXT/IMAGE/BARCODE/DOCUMENT (jedes Dataclass-Feld, Test hält gleich); Dateien sind fremde Eingabe:
@@ -152,6 +168,8 @@ src/labelwerk/
               placeholders, missing, fill(doc, columns, row, keep) – nur zum Lesen: unveränderte Objekte bleiben dieselben
   favorites.py Favoriten = *.labelwerk in $XDG_DATA_HOME/labelwerk/favoriten: favorites, find, add (overwrite), rename, remove
   clipart.py  Symbol-Bibliothek ohne Qt: catalog() aus clipart_data/clipart.zip (catalog.json + SVGs, einmal ganz gelesen;
+              Einträge mit names/subgroups {de, en} – Anzeige in der Sprache, je Sprache gecacht, Suche über beide;
+              englische Namen in tools/clipart/en.json, Pflicht für jedes Zeichen;
               erzeugt von tools/fetch_clipart.py: Tabler Icons MIT ohne Marken (Kategorien Brand und Laundry/Pflegesymbole + Sperrliste tabler_skip, u. a. Michelin),
               ISO 7000/7010 von Wikimedia Commons nur gemeinfrei/CC0 ohne Einschränkungen (Stand fest: tools/clipart/commons.lock.json,
               --update), eigene Zeichnungen tools/clipart/eigene (CC0); deutsche Namen/Synonyme tools/clipart/de.json;
@@ -249,7 +267,8 @@ src/labelwerk/
                     inzwischen gewechselten Druckers zählt nicht)
     settings_dialog.py Einstellungen: Reiter Allgemein (rollt; inkl. Design, sofort wirksam über app.apply_theme; Drucker:
                     Druckermodell als Ersatz, Zebra-Auflösung, Netzwerkdrucker-Tabelle mit Prüfung der Adresse und Modell
-                    Brother/Zebra; Etikett eines anderen Druckers bleibt) und Tastenkürzel (Konflikte sperren Speichern)
+                    Brother/Zebra; Etikett eines anderen Druckers bleibt; Ansicht: Start-Zoom, Design, Sprache) und
+                    Tastenkürzel (Konflikte sperren Speichern); restart_hint neben SPEICHERN (Stand beim Start: started)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)
   cli.py      labelwerk labels | labelwerk media | labelwerk printers | labelwerk fonts | -m auto (Modell des Zieldruckers:
@@ -264,7 +283,9 @@ nur Entwicklung: `zxing-cpp` (Apache-2.0, liest Barcodes in Tests; ab Python 3.1
 
 ## Konventionen
 - **TDD**: erst fehlschlagenden Test schreiben, dann implementieren. Tests laufen **ohne Drucker** (Rasterdaten prüfen, sysfs per `tmp_path` faken, Druckfunktionen per `monkeypatch` ersetzen). Kein Test darf echte Hardware ansprechen.
-- Benutzer-Meldungen und Kommentare auf Deutsch (vor Veröffentlichung ggf. auf Englisch umstellen).
+- Benutzer-Meldungen **englisch mit `_()`** (benannte Platzhalter, Tabellen mit `N_` und `_()` beim Anzeigen),
+  Deutsch in `po/de.po` (`python tools/i18n.py update`, dann übersetzen); Tests laufen auf Deutsch (conftest).
+  Kommentare und Docstrings vorerst deutsch (vor Veröffentlichung ggf. auf Englisch umstellen).
 - Fehler für Nutzer verständlich abfangen, keine Tracebacks (Exit-Code 2 bei Hardware-/Rechteproblemen).
 
 ## Hardware-Wissen (hart erarbeitet)
@@ -293,7 +314,7 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
 
-Nächste Schritte: Übersetzungen (7), Paketierung (8).
+Nächste Schritte: Paketierung (8).
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld
@@ -327,7 +348,7 @@ Umsetzung:
    - README: Kompatibilitätstabelle *geprüft* (QL-600 + DK-22205) / *sollte funktionieren* (62-mm-QL ohne Rot: QL-570/580N/700/710W/720NW …) / *nicht unterstützt*; nach Veröffentlichung Vorlage „Druckerbericht“ für Rückmeldungen.
    - Netzwerkdrucker (`tcp://IP`) in der GUI wählbar.
    - Später, nur mit Testgerät: breite QL-1050/1100 (102 mm), Zweifarbdruck QL-8xx (Objektfarbe), P-touch-Bandgeräte PT-… (TZe-Bänder).
-7. Übersetzungen (vor Veröffentlichung, mindestens **Englisch**):
+7. Übersetzungen – umgesetzt (Spec 2026-10-19-uebersetzungen; gettext überall statt Qt-.ts). Ursprüngliche Notiz:
    - GUI: Qt-Übersetzungen (`self.tr(...)`/`QCoreApplication.translate`, `pyside6-lupdate` → `.ts`, `pyside6-lrelease` → `.qm`, `QTranslator` beim Start; Sprache aus dem System, wählbar in den Einstellungen).
    - Kern und CLI: `gettext` (Meldungen wie `TextTooLarge`, Druckerfehler, CLI-Hilfe), gemeinsame Sprachwahl mit der GUI.
    - Quellsprache festlegen (Deutsch beibehalten oder auf Englisch umstellen) – zusammen mit Punkt 9 (README/Kommentare auf Englisch) entscheiden.

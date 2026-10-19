@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from brother_ql.labels import Color, FormFactor, LabelsManager
 
+from . import i18n
+from .i18n import _
 from .printers import capabilities
 
 DPI = 300  # Druckauflösung der QL-Drucker
@@ -21,7 +23,6 @@ class Label:
     width: int              # druckbare Punkte quer zum Band (bei ``dpi``)
     height: int | None      # None = Endlosband
     tape_mm: int
-    description: str
     shape: str              # "endless", "die_cut" oder "round"
     size_mm: tuple[int, int]  # Nenngröße laut Etikett, z. B. (62, 29); Endlos: (62, 0)
     total_width: int        # physische Breite in Punkten (bedruckbarer Bereich liegt mittig)
@@ -29,18 +30,31 @@ class Label:
     two_color: bool = False   # Rot/Schwarz (DK-22251, „62red“)
     dpi: int = DPI            # Druckauflösung (Brother 300; andere aus der ID)
 
+    @property
+    def description(self) -> str:
+        """Anzeigename, beim Abruf in der eingestellten Sprache: „62 mm endlos“, „Ø 24 mm rund“,
+        „62 x 29 mm gestanzt“; andere Drucker „54 × 25 mm · 300 dpi“."""
+        if _SIZED.fullmatch(self.id):
+            w, h = self.size_mm
+            return f"{mm_text(w)} × {mm_text(h)} mm · {self.dpi} dpi"
+        if self.shape == "endless":
+            return _("{width} mm continuous").format(width=self.size_mm[0])
+        if self.shape == "round":
+            return _("Ø {width} mm round").format(width=self.size_mm[0])
+        return _("{width} × {height} mm die-cut").format(width=self.size_mm[0], height=self.size_mm[1])
+
 
 def _convert(raw) -> Label:
     w, h = raw.dots_printable
     endless = raw.form_factor in (FormFactor.ENDLESS, FormFactor.PTOUCH_ENDLESS)
     if endless:
-        desc, shape = f"{raw.tape_size[0]} mm endlos", "endless"
+        shape = "endless"
     elif raw.form_factor == FormFactor.ROUND_DIE_CUT:
-        desc, shape = f"Ø {raw.tape_size[0]} mm rund", "round"
+        shape = "round"
     else:
-        desc, shape = f"{raw.tape_size[0]} x {raw.tape_size[1]} mm gestanzt", "die_cut"
+        shape = "die_cut"
     total_w, total_h = raw.dots_total
-    return Label(raw.identifier, w, None if endless else h, raw.tape_size[0], desc,
+    return Label(raw.identifier, w, None if endless else h, raw.tape_size[0],
                  shape, tuple(raw.tape_size), total_w, None if endless else total_h,
                  raw.color == Color.BLACK_RED_WHITE)
 
@@ -60,7 +74,7 @@ def _mm(value: float) -> str:
 
 def mm_text(value: float) -> str:
     """Maß in mm zum Anzeigen: „62“, „101,6“."""
-    return _mm(value).replace(".", ",")
+    return _mm(value).replace(".", i18n.decimal())
 
 
 def sized_label(label_id: str) -> Label | None:
@@ -73,8 +87,7 @@ def sized_label(label_id: str) -> Label | None:
             and DPI_RANGE[0] <= dpi <= DPI_RANGE[1]) or label_id != sized_id(w, h, dpi):
         return None                          # auch „057x32mm@203“: nur eine Schreibweise je Etikett
     width, height = round(w * dpi / 25.4), round(h * dpi / 25.4)
-    text = f"{mm_text(w)} × {mm_text(h)} mm · {dpi} dpi"
-    return Label(label_id, width, height, round(w), text, "die_cut", (w, h), width, height,
+    return Label(label_id, width, height, round(w), "die_cut", (w, h), width, height,
                  False, dpi)
 
 
@@ -84,7 +97,7 @@ def get_label(label_id: str) -> Label:
     for raw in _all_raw():
         if raw.identifier == label_id:
             return _convert(raw)
-    raise ValueError(f"Unbekanntes Etikett: {label_id!r}")
+    raise ValueError(_("Unknown label: {label_id!r}").format(label_id=label_id))
 
 
 def labels_for_model(model: str) -> list[Label]:
@@ -113,7 +126,7 @@ def labels_for_model(model: str) -> list[Label]:
 
 def format_mm(dots: int, dpi: int = DPI) -> str:
     """Druckpunkte als mm-Angabe mit Dezimalkomma, z. B. "58,9"."""
-    return f"{dots * 25.4 / dpi:.1f}".replace(".", ",")
+    return i18n.number(dots * 25.4 / dpi, 1)
 
 
 def length_limits(model: str) -> tuple[int, int]:

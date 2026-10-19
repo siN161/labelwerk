@@ -1,0 +1,3185 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid " in object {number}"
+msgstr ""
+
+#. Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+#: src/labelwerk/storage.py
+msgid " in the border"
+msgstr ""
+
+#. Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+#: src/labelwerk/storage.py
+msgid " in the numbering"
+msgstr ""
+
+#. Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
+#: src/labelwerk/storage.py
+msgid " in the series"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "'auto' or 4–100 pt (default from the settings)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "+ CURRENT"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "--font (font file) and --font-family exclude each other."
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "-l auto (query the roll) only works with printers via USB."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "< 1%"
+msgstr ""
+
+#: src/labelwerk/series.py
+#: src/labelwerk/storage.py
+msgid "A series needs exactly one: table or numbering"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "ADD"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "ALL"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Action"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Actual size (100%)"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Add network printer …"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Add text tool"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Add to favorites"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Address"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "After each label"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+msgid "After printing"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align bottom edges"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align bottom on paper"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align horizontal centers"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Align left"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align left edges"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align left on paper"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Align right"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align right edges"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align right on paper"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "Align selected objects"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "Align to paper"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align top edges"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align top on paper"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Align vertical centers"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "All"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "An object extends beyond the label and will be cut off. Print anyway?"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+msgid "As set on the printer"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#: src/labelwerk/gui/panels/paper.py
+msgid "Ask the printer which roll is loaded (prints nothing)"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "At startup"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Automatic"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Automatic (detected)"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Automatic (first found)"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "Automatic (system language: {language})"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "BLACK"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+#: src/labelwerk/gui/tools.py
+msgid "Barcode"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+msgid "Barcode too short for the human-readable text – make it taller or turn the text off"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+msgid "Barcode without content"
+msgstr ""
+
+#: src/labelwerk/gui/tools.py
+msgid "Barcodes and QR codes"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+#: src/labelwerk/shortcuts.py
+msgid "Bold"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Border"
+msgstr ""
+
+#: src/labelwerk/render.py
+msgid "Border does not fit on the label – reduce inset, line width or padding"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Border “rounded” must be yes or no, not {rounded!r}"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Bring forward"
+msgstr ""
+
+#: src/labelwerk/printers.py
+msgid "Brother printer"
+msgstr ""
+
+#: src/labelwerk/detect.py
+msgid ""
+"Brother printer is connected via USB but in use by another program\n"
+"(e.g. a VM with USB passthrough). Release it there and switch the printer\n"
+"off and on again."
+msgstr ""
+
+#: src/labelwerk/detect.py
+msgid ""
+"Brother printer not found under /dev/usb/lp*.\n"
+"Check: switched on, Editor Lite LED off, 'lsusb', 'lsmod | grep usblp'."
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid ""
+"Brother printer not found via USB (pyusb).\n"
+"Check: switched on, Editor Lite LED off, 'lsusb', access to the USB bus (udev rule).\n"
+"Specify manually with -p usb://0x04f9:0xPID"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "CANCEL"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "CHECK MEDIA"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "CHECKING …"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "CSV or Excel file (.xlsx) – first row = column names"
+msgstr ""
+
+#: src/labelwerk/cups.py
+msgid "CUPS commands missing (install the package cups-client)"
+msgstr ""
+
+#: src/labelwerk/cups.py
+#, python-brace-format
+msgid "CUPS does not answer ({command})"
+msgstr ""
+
+#: src/labelwerk/cups.py
+#, python-brace-format
+msgid "CUPS: {command} failed"
+msgstr ""
+
+#: src/labelwerk/cups.py
+#, python-brace-format
+msgid "CUPS: {reason}"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Cancel the series – a part already sent (up to 10 labels, with “Only at the end” the whole job) is still printed"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#: src/labelwerk/printer.py
+msgid "Cancelled – nothing printed"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Cancelled – {printed} of {total} label printed"
+msgid_plural "Cancelled – {printed} of {total} labels printed"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Cancelling …"
+msgstr ""
+
+#: src/labelwerk/fonts.py
+#, python-brace-format
+msgid "Cannot load font “{path}” ({error})."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Cannot print the label ({error})"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+#, python-brace-format
+msgid "Cannot read file: {name} (not a valid SVG)"
+msgstr ""
+
+#: src/labelwerk/files.py
+#, python-brace-format
+msgid "Cannot read file: {name} ({reason})"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+#, python-brace-format
+msgid "Cannot read symbol {name} (not a valid SVG)."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Cannot read the series ({error})"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+msgid "Cannot read vector image (not a valid SVG)."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Canvas"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Center horizontally on paper"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Center vertically on paper"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Centered"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Changes take effect after a restart"
+msgstr ""
+
+#: src/labelwerk/media.py
+msgid "Check media only works via /dev/usb/lpN (backend linux_kernel)."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Check media only works with Brother printers via USB"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Check the roll at startup and when the printer is switched on"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Checking the roll – please print again in a moment."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Choose PDF page"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Choose printer"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Chosen printer {printer} not found – switch it on or specify it with -p."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Classic"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Click a row and press the new key combination. Esc cancels, ✕ in the field removes the shortcut. Esc, Enter and Tab cannot be assigned here (they operate the table)."
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Click on the label to create a text frame"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+msgid "Clipboard"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Code 128 cannot encode “{char}” (ASCII only, no umlauts)"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Code 39 cannot encode “{char}” (allowed: 0–9, A–Z, space and - . $ / + %)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "Color"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Columns"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Connection to {host} aborted after {sent} bytes ({reason})"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Content"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Content must be text, not {type}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Content of the code; {{column}} is filled by the series"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Content too long (at most {count} characters)"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Content too long ({count} characters, at most {limit})"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Content too long for a QR code (error correction {error})"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Continuous"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Conversion"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Copy"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Corners only"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Count"
+msgstr ""
+
+#: src/labelwerk/printer.py
+msgid "Cover opened while printing."
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Crop automatically"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Crop automatically (without crop marks and blank space)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Crop to the content (without crop marks and blank space); off = whole image"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Crop {crop} is not inside the image ({width} × {height} pixels)."
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Cut"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+msgid "Cut (cutter only)"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Cut every n labels: n must be a whole number from 1, not {value!r}"
+msgstr ""
+
+#: src/labelwerk/printer.py
+msgid "Cutter jammed."
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Cutting"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Cutting is set by the printer driver (system printer settings)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Dashed"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Default"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "Default: {keys}"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Delete"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Delete favorite"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Delete favorite “{name}”?"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "Delete …"
+msgstr ""
+
+#: src/labelwerk/desktop.py
+msgid "Design and print labels (Brother QL)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Die-cut"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Different roll"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Digits"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Digits of the numbering: 0 to {limit}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Distance between the border and automatically placed text"
+msgstr ""
+
+#: src/labelwerk/gui/panels/position.py
+msgid "Distance from the left edge of the label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Distance from the paper edge all around (across the tape the printer leaves about 1.5 mm free anyway)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/position.py
+msgid "Distance from the top edge of the label"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Distance of the border from the edge must be between {low} and {high} mm"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Distance of the border from the printable edge"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Dotted"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Double"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Double-click: as {{column}} into the selected text object or as new text"
+msgstr ""
+
+#: src/labelwerk/gui/canvas.py
+msgid "Drag: set the length · Double-click: automatic"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+msgid "Dropped image"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Duplicate"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Edit"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Effective model: {model}"
+msgstr ""
+
+#: src/labelwerk/clipart.py
+msgid "Electrical"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Empty label"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "End text editing"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Entry{where} is not an object"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Error at label {first}–{last} of {total} (check the ones before too): {error}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Error correction"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Error correction: higher = readable despite dirt/scratches, but larger"
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "Error during the status request: {error}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "FIXED FRAME SIZE"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "FROM CLIPBOARD"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "FROM FILE …"
+msgstr ""
+
+#: src/labelwerk/layout.py
+#, python-brace-format
+msgid "Factor must be greater than 0, not {factor!r}."
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Favorite"
+msgstr ""
+
+#: src/labelwerk/favorites.py
+#, python-brace-format
+msgid "Favorite “{name}” already exists"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Favorite “{name}” already exists. Replace it?"
+msgstr ""
+
+#: src/labelwerk/favorites.py
+#, python-brace-format
+msgid "Favorite “{name}” not found"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Favorite “{name}” saved"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Favorites"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Favorites folder not created ({reason})"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+#: src/labelwerk/gui/tools.py
+msgid "File"
+msgstr ""
+
+#: src/labelwerk/gui/tools.py
+msgid "File and favorites"
+msgstr ""
+
+#: src/labelwerk/files.py
+#: src/labelwerk/gui/image_import.py
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "File not found: {path}"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "File not found: {path} – removed from the list"
+msgstr ""
+
+#: src/labelwerk/files.py
+#, python-brace-format
+msgid "File type not supported: {suffix} – possible: {allowed}"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+#, python-brace-format
+msgid "File type not supported: {type} – possible: {allowed}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "First number"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Fixed shortcut – cannot be changed"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Font"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Font size"
+msgstr ""
+
+#: src/labelwerk/settings.py
+#, python-brace-format
+msgid "Font size converted from {old} dots to {new} pt."
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Font size in pt"
+msgstr ""
+
+#: src/labelwerk/layout.py
+#, python-brace-format
+msgid "Font size must be greater than 0, not {size!r}."
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "Font size: 'auto' or 4–100 (pt)"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Font “{family}” not found – replaced by “{replacement}”."
+msgstr ""
+
+#: src/labelwerk/clipart.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "General"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Global"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Grayscale as halftone dots – for photos and gradients"
+msgstr ""
+
+#: src/labelwerk/gui/panels/position.py
+msgid "H"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "H – 30%"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Handed over to CUPS (job {job})"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Handed to the print queue ✓ (job {job})"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Handles and fields scale the image without distortion"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Hard threshold – for codes, text and logos"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Height"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Height including the human-readable text"
+msgstr ""
+
+#: src/labelwerk/gui/panels/position.py
+msgid "Height of the frame"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Height {height!r} mm invalid – allowed: {low}–{high} mm"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Higher = darker"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Horizontal"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "How many labels"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Human-readable text"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Human-readable text must be on or off, not {text!r}"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "INSERT"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "INSERT BARCODE"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/tools.py
+msgid "Image"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Image data “{key}”{where} not readable"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Image data{where} not readable (PNG only)"
+msgstr ""
+
+#: src/labelwerk/files.py
+#, python-brace-format
+msgid "Image is {width} × {height} mm, label {label!r} is at most {max_w} mm wide – shrink with --fit (codes may become unreadable)"
+msgstr ""
+
+#: src/labelwerk/files.py
+#, python-brace-format
+msgid "Image is {width} × {height} mm, label {label!r} is at most {max_w} × {max_h} mm – shrink with --fit (codes may become unreadable)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Image not cropped – only white area found"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Image reduced to {percent}"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Image reduced to {percent} – codes may no longer be readable"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Image rotated by 90° so that it fits 1:1"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Image size must be greater than 0, not {width} × {height} mm."
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+#, python-brace-format
+msgid "Images and PDF ({patterns});;All files (*)"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Image{where} too large ({width} × {height} pixels, at most {limit})"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Insert"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Insert a barcode of the chosen type"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Insert a barcode or QR code – choose the type, type the content"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Insert a screenshot"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Insert an image from a file, the clipboard, as a screenshot or symbol – or drag it onto the label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Insert an image from the clipboard"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Insert an image or PDF page"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Insert barcode"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Insert image"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Insert image …"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Insert screenshot"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Insert symbol"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/shortcuts.py
+msgid "Insert symbol …"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Inserting images"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Inset"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Installed: {path}"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Invalid address: {uri}"
+msgstr ""
+
+#: src/labelwerk/favorites.py
+#, python-brace-format
+msgid "Invalid name for the favorite: “{name}” (not empty, not too long, without / and \\ and control characters, not starting with a dot)"
+msgstr ""
+
+#: src/labelwerk/cups.py
+#, python-brace-format
+msgid "Invalid queue name: {name!r}"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Invalid series sheet: {sheet!r}"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Invalid series table: {source!r}"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+#, python-brace-format
+msgid "Invalid shortcut {seq!r}"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Invalid value for “{key}”{where}: {value}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Invert"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+#: src/labelwerk/shortcuts.py
+msgid "Italic"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Justified"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Keep aspect ratio"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "L – 7%"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Label in landscape – text runs along the tape"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Label in portrait – text runs across the tape"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Label labelwerk starts with (favorite as a template)"
+msgstr ""
+
+#: src/labelwerk/desktop.py
+msgid "Label printing"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Label too large (barcode contents together {total} characters, at most {limit})"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Label too large (objects together {dots:.0f} million dots, at most {limit})"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Label too large ({count} objects, at most {limit})"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Label {label!r} does not fit the printer ({model})."
+msgstr ""
+
+#: src/labelwerk/cli.py
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Label {label!r} does not fit the {model} – see 'labelwerk -m {model} labels'"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Label {label} does not fit the printer ({model}) – choose another one in the Paper tab"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Label {label} does not fit the {model} – using {new}"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Label “{label}” does not fit the printer ({model})."
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Label “{label}” does not fit the {model} – using {new}"
+msgstr ""
+
+#: src/labelwerk/desktop.py
+msgid "Label;Brother;QL;Printer;P-touch;"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Language"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Larger font"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+#: src/labelwerk/gui/tools.py
+msgid "Layout"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Length"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Line"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Line art"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Line break in “{key}”{where} – lines are separate paragraphs"
+msgstr ""
+
+#: src/labelwerk/render.py
+msgid "Line layout exists only for text objects."
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Line width"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Line width of the border must be between {low} and {high} mm"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Loaded: {media}"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Loaded: {media} (label {label})"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Loaded: {media} (no matching label)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "M – 15%"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Many scanners read red poorly"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Margin: number from 0 to {max} mm"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Margins"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Maximize on paper"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Model"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Model not recognized – choose a fallback model in the settings"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Model {model} does not fit the printer {printer} – give cups:NAME for CUPS, zpl:203/300/600 for Zebra, otherwise a Brother QL."
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Module"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Module width {module!r} invalid – allowed: 1–{limit} dots"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move down (0.1 mm)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move down (1 mm)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move left (0.1 mm)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move left (1 mm)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move right (0.1 mm)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move right (1 mm)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move up (0.1 mm)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Move up (1 mm)"
+msgstr ""
+
+#: src/labelwerk/clipart.py
+msgid "My symbols"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "NEW"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "NONE"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "NUMBERING"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Name"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Name of the favorite:"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "Network printer {name}: address “{host}” invalid – only an IP address or name, without “tcp://” and port"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Network printer {printer} not reachable ({reason}) – switched on, in the same network, address correct?"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Network printers"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#: src/labelwerk/shortcuts.py
+msgid "New label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Next row on the canvas"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid ""
+"No CUPS queue found (set up the printer in the printer settings).\n"
+"Specify with -p cups:NAME"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid ""
+"No Zebra printer found.\n"
+"Specify with -p zpl+file:///dev/usb/lpN or -p zpl+tcp://IP and -m zpl:203"
+msgstr ""
+
+#: src/labelwerk/media.py
+msgid "No answer from the printer to the status request."
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "No border"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "No favorites yet – choose a symbol and press ★."
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "No favorites yet – design a label and press “+ CURRENT”."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "No image in the clipboard."
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "No label for the loaded roll ({media}) on the {model}."
+msgstr ""
+
+#: src/labelwerk/printer.py
+msgid "No labels to print"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid ""
+"No network printer configured (GUI settings).\n"
+"Specify the address with -p tcp://IP"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+#, python-brace-format
+msgid ""
+"No own symbols yet. Put SVG or PNG files into this folder (subfolders are not read):\n"
+"{path}"
+msgstr ""
+
+#: src/labelwerk/media.py
+#: src/labelwerk/printer.py
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "No permission for {device} – is the user in group 'lp'?"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "No printer for this label – choose a printer in the status bar."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "No printer found"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "No printer found."
+msgstr ""
+
+#: src/labelwerk/cli.py
+#: src/labelwerk/printer.py
+msgid "No roll loaded."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "No row selected – nothing printed."
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "No series"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Not a Zebra address: {uri}"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Note: {tools} did not work – the file association may only apply after logging in again."
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Nothing found."
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Nothing inserted yet."
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "Nothing to remove."
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Numbering"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Numbering count: 1 to {limit}"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Numbering start: whole number up to {limit}"
+msgstr ""
+
+#: src/labelwerk/series.py
+msgid "Numbering step must not be 0"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Numbering step: whole number up to {limit}"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Numbering values too large (at most {limit})"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+#, python-brace-format
+msgid "Numbers without a file: column “{column}”"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "OPEN FOLDER"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "OPEN …"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "ORIGINAL SIZE 1:1"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Object extends beyond the label"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Object sticks out"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Off: images that are too large are reduced – saves tape"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "On round labels every border becomes a circle."
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Only at the end"
+msgstr ""
+
+#: src/labelwerk/gui/panels/position.py
+msgid "Only changeable with a fixed frame size"
+msgstr ""
+
+#: src/labelwerk/layout.py
+#, python-brace-format
+msgid "Only for text objects, not for {type}."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Only needed if labelwerk does not recognize the model (then applies, and without a connected printer)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "Open as new label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "Open at startup"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "Open folder"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Open label"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Open the folder for your own symbols (created if needed)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Open …"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Opened: {name}"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Opened: {name} – {error}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "Order"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Orientation"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "PDF is encrypted"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "PDF page (default 1)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "PDF, PNG or JPG"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "PRINT"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Pad with zeros to this many digits (0 = no padding)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Padding"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Padding of the border must be between {low} and {high} mm"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "Page must be at least 1."
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/tools.py
+msgid "Paper"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Paste"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+msgid "Peel off (dispenser only)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Photo"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+#: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/panels/text.py
+msgid "Position (mm)"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Preparing {current}/{total} …"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Preview"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Preview cannot be saved: {path} ({error})"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Preview: {path} ({width} × {height} mm)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Previous row on the canvas"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+#: src/labelwerk/shortcuts.py
+msgid "Print"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Print series"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Print size from the resolution of the image (e.g. stamp, code)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Print the content readable below the barcode"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Print {count} label?"
+msgid_plural "Print {count} labels?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/labelwerk/gui/panels/file.py
+#, python-brace-format
+msgid "Print “{name}”"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Printed ✓"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Printer"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Printer error: {err}"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Printer model"
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "Printer not found: {printer}"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid ""
+"Printer not found: {printer}\n"
+"Check: switched on, Editor Lite LED off, 'lsusb', 'lsmod | grep usblp'."
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid ""
+"Printer not found: {printer}\n"
+"Check: switched on, Editor Lite LED off, 'lsusb'."
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "Printer not reachable: {error}"
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "Printer reports: {errors}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Printer without cutter – separate the labels by hand"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Printer {printer} not ready ({reason}) – in use or busy? Wait a moment or switch it off and on."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Printing – please wait."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Printing …"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Printing … {done} of {total}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Q – 25%"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+msgid "QR code"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "Querying the roll only works with printers via USB."
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+#, python-brace-format
+msgid "Quiet zone: leave {mm} mm free all around"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+#, python-brace-format
+msgid "Quiet zone: leave {mm} mm free on the left and right each"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "RED"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "REMOVE"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "Recently opened"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Recently used"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "Red only on the 62 mm red/black label (DK-22251) with a QL-8xx"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Redo"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Remove from favorites"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Remove the series from the label (placeholders stay)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Removed: {path}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "Rename …"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Replace favorite"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Replace file"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Reset all"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "Resize"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Resolution of Zebra printers on USB, in case labelwerk does not detect it correctly (otherwise 203 dpi)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Roll: none loaded"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Roll: {media} – no matching label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Roll: {media} – selection does not match"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Roll: {media} ✓"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Roll: {media} ✓ – label adjusted"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+#: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/panels/layout.py
+msgid "Rotate"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Rotate 90° left"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Rotate 90° right"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Rotate if the image only fits 1:1 when rotated"
+msgstr ""
+
+#: src/labelwerk/files.py
+#, python-brace-format
+msgid "Rotation {rotate!r} not possible – allowed: auto, 0, 90, 180, 270"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Round"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Rounded"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Row {rows} extends beyond the label and will be cut off. Print anyway?"
+msgid_plural "Rows {rows} extend beyond the label and will be cut off. Print anyway?"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/labelwerk/gui/panels/series.py
+#, python-brace-format
+msgid "Row {row}/{total}"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Row {row}: {message}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Rows"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "SAVE"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "SAVE AS …"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "SCREENSHOT"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "SETTINGS"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "SYMBOL"
+msgstr ""
+
+#: src/labelwerk/clipart.py
+msgid "Safety"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Same height"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Same size"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Same width"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Save"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Save as …"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Save label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "Save the current label as a favorite"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "Saved: {name}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Scale the text automatically so that it fits"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Scope"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+msgid "Screenshot"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – cannot subscribe to the answer of the portal"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – error of the portal"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – no connection to the session bus"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – no image file received"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – no screenshot portal found"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – not allowed by the system"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – rejected or cancelled by the system"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – the portal does not answer"
+msgstr ""
+
+#: src/labelwerk/gui/screenshot.py
+msgid "Screenshot failed – unexpected answer from the portal"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Screenshot not available (no XDG portal) – copy it to the clipboard with the system tool and paste it with Ctrl+V"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Screenshot: {error}"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "Search … (e.g. earth, fragile, house)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Select all"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Select tool"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Selected printer not found – switch it on or choose another one in the status bar."
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Send backward"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Sending to {path} aborted after {sent} bytes ({reason})"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Sent ✓ (the printer reports no status)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+#: src/labelwerk/gui/tools.py
+msgid "Series"
+msgstr ""
+
+#: src/labelwerk/gui/tools.py
+msgid "Series from a table or numbering"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Series: {error}"
+msgstr ""
+
+#: src/labelwerk/settings.py
+#, python-brace-format
+msgid "Setting 'font_size' invalid ({value!r}) – automatic."
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+#, python-brace-format
+msgid "Setting 'shortcuts' invalid ({value!r}) – default shortcuts active."
+msgstr ""
+
+#: src/labelwerk/settings.py
+#, python-brace-format
+msgid "Setting {key!r} invalid ({value!r}) – using default {default!r}."
+msgstr ""
+
+#: src/labelwerk/settings.py
+#, python-brace-format
+msgid "Setting {key!r}: invalid entries discarded."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#: src/labelwerk/shortcuts.py
+msgid "Settings"
+msgstr ""
+
+#: src/labelwerk/settings.py
+#, python-brace-format
+msgid "Settings could not be saved ({path}): {reason}"
+msgstr ""
+
+#: src/labelwerk/settings.py
+#, python-brace-format
+msgid "Settings not readable ({path}): {error} – using defaults."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Settings saved – they apply to new labels."
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Sheet of the Excel file"
+msgstr ""
+
+#: src/labelwerk/clipart.py
+msgid "Shipping"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Shortcut"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+#, python-brace-format
+msgid "Shortcut assigned twice: {keys} ({first}, {second}) – “{second}” has no shortcut now."
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+#, python-brace-format
+msgid "Shortcut for unknown action {action!r} ignored."
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+#, python-brace-format
+msgid "Shortcut for {action!r} invalid ({keys!r}) – default {default!r} active."
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+#, python-brace-format
+msgid "Shortcut for {action!r} invalid ({keys}) – Esc, Enter and Tab cannot be assigned; default {default!r} active."
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+#, python-brace-format
+msgid "Shortcut for {action!r} is fixed ({default}) – setting ignored."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Shortcuts"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Shortcuts assigned twice – change one to save:"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Single"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+#: src/labelwerk/gui/panels/image.py
+msgid "Size"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Smaller font"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+#: src/labelwerk/gui/panels/series.py
+msgid "Source"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Start"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Start favorite “{name}” not found – empty label"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Start text editing (Enter)"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Start text editing (selected text)"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Start zoom"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Status: {outcome}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Step"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "Step to the next number (not 0)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Style"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Supported: {models}, Zebra zpl:203/300/600 (untested), CUPS queues cups:NAME (untested)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Swap black and white"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Symbol library unreadable: {error}"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Symbol: {error}"
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+#, python-brace-format
+msgid "Symbol: {name}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "TABLE …"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Table for the series"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Table not found: {path}"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Tables (*.csv *.xlsx *.xlsm *.tsv *.txt);;All files (*)"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+msgid "Tear off"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+#: src/labelwerk/gui/tools.py
+msgid "Text"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgid "Text alignment"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Text does not fit on label {label_id!r} at font size {size} pt (at most {max_size} pt)."
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Text does not fit on label {label_id!r} – not even at the smallest font size."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Text editing"
+msgstr ""
+
+#: src/labelwerk/layout.py
+msgid "Text with automatic font size needs the effective base size (base_pt) for scaling."
+msgstr ""
+
+#: src/labelwerk/files.py
+#, python-brace-format
+msgid "The PDF has only {count} page."
+msgid_plural "The PDF has only {count} pages."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/labelwerk/files.py
+msgid "The file has no printable content."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "The label is empty. Print anyway?"
+msgstr ""
+
+#: src/labelwerk/printer.py
+msgid "The label roll is empty."
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "The loaded roll does not match the label {label!r} – check the roll or choose another label."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "The table has changed and was read again – check the selection and print again."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "The table has no rows – nothing printed."
+msgstr ""
+
+#: src/labelwerk/printer.py
+msgid "The tape cannot be fed – roll empty or loaded incorrectly?"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Theme"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "There is no printable content between the crop marks."
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+msgid "Thick-thin"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+msgid "Threshold"
+msgstr ""
+
+#: src/labelwerk/imaging.py
+#, python-brace-format
+msgid "Threshold must be a whole number from 0 to 255, not {threshold!r}."
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Tools"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Type"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Type of barcode – for the selected one or the next one"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+#: src/labelwerk/shortcuts.py
+msgid "Underline"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Undo"
+msgstr ""
+
+#: src/labelwerk/gui/media_worker.py
+#, python-brace-format
+msgid "Unexpected error while checking the roll: {error}"
+msgstr ""
+
+#: src/labelwerk/gui/print_worker.py
+#, python-brace-format
+msgid "Unexpected error while printing: {error}"
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "Unintelligible answer from the printer: {error}"
+msgstr ""
+
+#: src/labelwerk/layout.py
+#, python-brace-format
+msgid "Unknown alignment {mode!r} – allowed: {allowed}"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Unknown barcode type {kind!r}"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Unknown border style {style!r} – allowed: {allowed}"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Unknown color {color!r} – allowed: black, red"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+#, python-brace-format
+msgid "Unknown column: {columns}"
+msgid_plural "Unknown columns: {columns}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/labelwerk/imaging.py
+#, python-brace-format
+msgid "Unknown conversion {mode!r} – allowed: line art, photo (line, photo)"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "Unknown cut {cut!r} – allowed: {allowed}"
+msgstr ""
+
+#: src/labelwerk/printer.py
+#, python-brace-format
+msgid "Unknown cut {mode!r} – allowed: {allowed}"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "Unknown error correction {error!r} – allowed: L, M, Q, H"
+msgstr ""
+
+#: src/labelwerk/labels.py
+#, python-brace-format
+msgid "Unknown label: {label_id!r}"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Unknown label{where}: {value}"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Unknown mode {mode!r} – allowed: {allowed}"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Unknown object type{where}: {kind}"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Unknown orientation {orientation!r} – allowed: horizontal, vertical"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Unknown printer model {model!r} – allowed: {models}, zpl:203/300/600 or cups:NAME"
+msgstr ""
+
+#: src/labelwerk/printers.py
+#, python-brace-format
+msgid "Unknown printer model: {model!r}"
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "Unknown roll (code 0x{code:02X})"
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "Unknown roll: {media}"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#: src/labelwerk/layout.py
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Unknown rotation {rotation!r} – allowed: 0, 90, 180, 270 degrees"
+msgstr ""
+
+#: src/labelwerk/layout.py
+#, python-brace-format
+msgid "Unknown size matching {mode!r} – allowed: {allowed}"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Unknown text alignment {align!r} – allowed: left, center, right, justify"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Unsaved changes"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+msgid "Untitled"
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "Value for “crop”{where} is not inside the image: {crop}"
+msgstr ""
+
+#: src/labelwerk/render.py
+#, python-brace-format
+msgid "Vector image could not be rasterized ({got_w} × {got_h} instead of {width} × {height} pixels)."
+msgstr ""
+
+#: src/labelwerk/gui/image_import.py
+msgid "Vector image refers to other files – they are not saved with it."
+msgstr ""
+
+#: src/labelwerk/render.py
+msgid "Vector image: crop enlarged too much – please scale it down or turn cropping off."
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Vertical"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "View"
+msgstr ""
+
+#: src/labelwerk/gui/panels/position.py
+msgid "W"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+msgid "When printing the series: cut after each label or only at the end (continuous tape: a few mm of feed remain between the labels, without a separator mark)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/position.py
+msgid "Width of the frame"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+msgid "Width of the narrowest bar or of one QR square – in whole dots (0.085 mm), so the code stays readable"
+msgstr ""
+
+#: src/labelwerk/gui/panels/layout.py
+msgid "With automatic length the label grows along – the object keeps the same margin at both ends"
+msgstr ""
+
+#: src/labelwerk/gui/panels/barcode.py
+#, python-brace-format
+msgid "With check digit: {code}"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "Zebra (ZPL) {dpi} dpi – untested"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Zebra printer does not accept data ({sent} bytes sent) – paper, ribbon, paused?"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Zebra printer not found: {path} – switched on, cable?"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Zebra printer not reachable: {path} ({reason})"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "Zebra printer {host} not reachable ({reason}) – switched on, in the same network, address correct?"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Zebra resolution"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Zoom in"
+msgstr ""
+
+#: src/labelwerk/shortcuts.py
+msgid "Zoom out"
+msgstr ""
+
+#: src/labelwerk/storage.py
+msgid "access error"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "add labelwerk-gui to the launcher (Super key)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "auto (default), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (queue, see 'labelwerk printers'), zpl+file:///dev/usb/lpN or zpl+tcp://IP (Zebra, with -m zpl:203/300/600)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "auto (default: detected, otherwise from the settings) or e.g. QL-700, zpl:300 (Zebra), cups:NAME; see 'labelwerk printers'"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "auto (default: rotate only if needed) or degrees clockwise"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "bold (default) or --no-bold"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "default: from the printer (tcp:// → network)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "do not cut (Brother; for CUPS/Zebra the driver or the mode in the GUI settings decides)"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "file is damaged or incomplete"
+msgstr ""
+
+#: src/labelwerk/storage.py
+msgid "folder missing"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "font family, e.g. 'Liberation Sans' (see 'labelwerk fonts')"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "image has too many pixels"
+msgstr ""
+
+#: src/labelwerk/files.py
+#: src/labelwerk/storage.py
+msgid "is a folder"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "italic"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "label, e.g. 62, or auto (roll loaded in the printer); default from the settings"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "labelwerk labels (*{suffix})"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "labelwerk now appears in the launcher (wait a moment or log in again if needed); double-clicking a .labelwerk file opens it."
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "labelwerk was not added ({reason})."
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "labelwerk was not removed ({reason})."
+msgstr ""
+
+#: src/labelwerk/desktop.py
+#, python-brace-format
+msgid "labelwerk-gui not found ({path}) – GUI installed? pip install -e \".[gui]\""
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "language of the output (default: setting, otherwise the system)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "list found printers and supported models"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "list installed font families"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "list the labels for the model"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "margin all around from the paper edge in mm (default from the settings)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "model not detected"
+msgstr ""
+
+#: src/labelwerk/storage.py
+msgid "name too long"
+msgstr ""
+
+#: src/labelwerk/printer.py
+msgid "no answer"
+msgstr ""
+
+#: src/labelwerk/storage.py
+msgid "no permission"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "no read permission"
+msgstr ""
+
+#: src/labelwerk/media.py
+msgid "no roll loaded"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "no shortcut"
+msgstr ""
+
+#: src/labelwerk/storage.py
+msgid "no space left on the disk"
+msgstr ""
+
+#: src/labelwerk/settings.py
+msgid "not a JSON object"
+msgstr ""
+
+#: src/labelwerk/storage.py
+msgid "not a labelwerk file"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "not a labelwerk file (format version {version})"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "not a readable image"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "not a valid PDF file"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "only save a preview, do not print"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "path to a .ttf file"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "print a PDF/image 1:1"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "print text"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "query the roll loaded in the printer (prints nothing)"
+msgstr ""
+
+#: src/labelwerk/files.py
+msgid "read error"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "remove the entry and icon again"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "saved with a newer labelwerk (format version {version}) – please update labelwerk"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "shrink if too large (codes may no longer be readable)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "tested"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "text position: left, center (default), right, justify"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "text, line break with \\n"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "underlined"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+msgid "unreadable"
+msgstr ""
+
+#: src/labelwerk/printers.py
+msgid "untested – feedback welcome"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "vertical: portrait (reading direction across the tape), horizontal: landscape (along the tape); default from the settings"
+msgstr ""
+
+#: src/labelwerk/clipart.py
+msgid "your own file"
+msgstr ""
+
+#: src/labelwerk/desktop.py
+#, python-brace-format
+msgid "{app} label"
+msgstr ""
+
+#: src/labelwerk/gui/panels/series.py
+#, python-brace-format
+msgid "{checked} of {total} selected"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "{label} – does not fit the {model}"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "{loaded} is loaded, the favorite is for {label}. Print anyway?"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "{message} – with placeholders in text editing (choose a smaller font)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "{model} (untested)"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "{model} – untested"
+msgstr ""
+
+#: src/labelwerk/gui/panels/file.py
+#, python-brace-format
+msgid "{name}  ▸ Start"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "{name} (missing)"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name} cannot be read"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name} cannot be read ({reason})"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "{name} has {count} pages. Which one to insert?"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name} was not saved ({reason})"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name} was not saved: invalid characters in the text"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name} was not saved: invalid numbers in the label"
+msgstr ""
+
+#: src/labelwerk/printers.py
+#, python-brace-format
+msgid "{name} · Network"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "{name} – untested"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: Excel file not readable"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: cell too long (at most {limit} characters)"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name}: file damaged"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name}: file damaged (nested too deeply)"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name}: file too large"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: file too large (at most {size} MB)"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: file too large when unpacked"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "{name}: label “{label}” does not fit the {model}"
+msgstr ""
+
+#: src/labelwerk/series.py
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name}: not a file"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name}: not a labelwerk file (not UTF-8 text)"
+msgstr ""
+
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "{name}: not a labelwerk file or damaged"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: not a table format – CSV or Excel (.xlsx)"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: reading Excel files is disabled without protection (defusedxml missing)"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: sheet “{sheet}” missing"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: table is empty"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: table not readable"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: table not readable (UTF-16 damaged)"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: table not readable (not a text file)"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: too many columns (at most {limit})"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: too many empty rows (data up to row {limit}) – delete empty rows at the end of the sheet"
+msgstr ""
+
+#: src/labelwerk/series.py
+#, python-brace-format
+msgid "{name}: too many rows (at most {limit})"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid ""
+"{not_found}\n"
+"Specify manually with -p file:///dev/usb/lpN"
+msgstr ""
+
+#: src/labelwerk/zpl.py
+#, python-brace-format
+msgid "{path} is not a printer device"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "{percent}%"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "{printer} not found – switch it on or choose another one"
+msgstr ""
+
+#: src/labelwerk/gui/panels/image.py
+#, python-brace-format
+msgid "{source} · page {page}"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "{title} can only encode digits, not “{char}”"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "{title} needs {short} or {length} digits ({count} entered)"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "{title}: content too long ({count} characters, at most {limit})"
+msgstr ""
+
+#: src/labelwerk/barcodes.py
+#, python-brace-format
+msgid "{title}: wrong check digit – it should be {right}"
+msgstr ""
+
+#: src/labelwerk/labels.py
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "{width} mm continuous"
+msgstr ""
+
+#: src/labelwerk/labels.py
+#, python-brace-format
+msgid "{width} × {height} mm die-cut"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "{width} × {height} mm · die-cut"
+msgstr ""
+
+#: src/labelwerk/media.py
+#, python-brace-format
+msgid "{width} × {length} mm die-cut"
+msgstr ""
+
+#: src/labelwerk/labels.py
+#, python-brace-format
+msgid "Ø {width} mm round"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Ø {width} mm · round"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "“New label” applies to new labels, start zoom and language from the next start, everything else immediately."
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+#, python-brace-format
+msgid "“{keys}” is not a valid shortcut – “{action}” stays unchanged."
+msgstr ""
+
+#. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
+#: src/labelwerk/storage.py
+#, python-brace-format
+msgid "“{key}”{where} missing"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "“{name}” already exists. Replace it?"
+msgstr ""
+
+#: src/labelwerk/gui/file_session.py
+#, python-brace-format
+msgid "“{name}” has been changed. Save the changes?"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "○ Printer status unknown"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "○ no printer"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "○ selected printer missing"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "● Printer busy (another application)"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "● {name} (as {model})"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "● {name} · untested"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "★ FAVORITE"
+msgstr ""
+
+#: src/labelwerk/gui/symbol_dialog.py
+msgid "☆ FAVORITE"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid ""
+"%(prog)s: error: %(message)s\n"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "argument %(argument_name)s: %(message)s"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "expected one argument"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "invalid %(type)s value: %(value)r"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "invalid choice: %(value)r (choose from %(choices)s)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "options"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "positional arguments"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "show this help message and exit"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "the following arguments are required: %s"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "unrecognized arguments: %s"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgctxt "argparse"
+msgid "usage: "
+msgstr ""
+
+#. Translators: column without a name in the table header: "Column 3"
+#: src/labelwerk/series.py
+msgctxt "series"
+msgid "Column"
+msgstr ""
+
+#. Translators: name of the numbering column, used as placeholder {Number} on labels
+#: src/labelwerk/series.py
+msgctxt "series"
+msgid "Number"
+msgstr ""
+
+#: src/labelwerk/gui/panels/text.py
+msgctxt "text panel"
+msgid "Font"
+msgstr ""

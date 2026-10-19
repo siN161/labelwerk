@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 from PIL import Image
 
 from .cups import CutOption
+from .i18n import N_, _
 from .labels import sized_id
 
 PREFIX = "zpl:"                    # Modell-ID: zpl:203, zpl:300, zpl:600 (Name wie beim Hersteller)
@@ -37,10 +38,17 @@ MAX_GRAPHIC = 99_999               # Bytes je ^GFA (ältere Firmware) – größ
 # gängige Etiketten (Breite × Höhe in mm): 2×1", 57×32, 3×2", 4×2", 4×3", 4×4", 4×6" …
 MEDIA = ((51, 25), (57, 32), (38, 25), (60, 40), (76, 51), (102, 51), (102, 76), (102, 102),
          (102, 152))
-# Nach dem Druck: "" = wie am Drucker eingestellt (kein ^MM), sonst ^MMT/C/P
-MODES = {"": "Wie am Drucker eingestellt", "T": "Abreißen", "C": "Schneiden (nur mit Abschneider)",
-         "P": "Ablösen (nur mit Spender)"}
-CUT_OPTION = CutOption("mode", "Nach dem Druck", tuple(MODES), "", tuple(MODES.values()))
+# Nach dem Druck: "" = wie am Drucker eingestellt (kein ^MM), sonst ^MMT/C/P; Titel und Namen nur
+# markiert – angezeigt übersetzt über ``cut_option()``
+MODES = {"": N_("As set on the printer"), "T": N_("Tear off"), "C": N_("Cut (cutter only)"),
+         "P": N_("Peel off (dispenser only)")}
+CUT_OPTION = CutOption("mode", N_("After printing"), tuple(MODES), "", tuple(MODES.values()))
+
+
+def cut_option() -> CutOption:
+    """``CUT_OPTION`` zum Anzeigen: Titel und Namen der Modi in der eingestellten Sprache."""
+    return CutOption(CUT_OPTION.key, _(CUT_OPTION.title), CUT_OPTION.choices, CUT_OPTION.default,
+                     tuple(_(text) for text in CUT_OPTION.labels))
 
 
 class ZplError(Exception):
@@ -76,7 +84,7 @@ def speaks_zpl(ieee1284: str) -> bool:
     """Versteht der Drucker ZPL? Nennt seine Kennung Befehlssätze (``CMD:``/``COMMAND SET:``)
     ohne ZPL (EPL-Geräte wie LP 2844, Kartendrucker), nicht; ohne Angabe: ja."""
     for part in ieee1284.split(";"):
-        key, _, value = part.partition(":")
+        key, __, value = part.partition(":")
         if key.strip().upper() in ("CMD", "COMMAND SET"):
             return "ZPL" in value.upper()
     return True
@@ -146,7 +154,8 @@ def fields(image: Image.Image) -> str:
 def label(image: Image.Image, mode: str = "") -> bytes:
     """ZPL eines Etiketts: ``^XA [^MM<Modus>] ^PW ^LL ^LH0,0 ^FO…^GFA…^FS ^PQ1 ^XZ``."""
     if mode not in MODES:
-        raise ValueError(f"Unbekannter Modus {mode!r} – erlaubt: {', '.join(m for m in MODES if m)}")
+        raise ValueError(_("Unknown mode {mode!r} – allowed: {allowed}").format(
+            mode=mode, allowed=", ".join(m for m in MODES if m)))
     head = f"^MM{mode}" if mode else ""
     return (f"^XA{head}^PW{image.width}^LL{image.height}^LH0,0{fields(image)}^PQ1^XZ\n"
             .encode("ascii"))
@@ -177,7 +186,7 @@ def send(data: bytes | Iterable[bytes], uri: str) -> None:
         return _send_device(chunks, uri[len("zpl+file://"):])
     if uri.startswith("zpl+tcp://"):
         return _send_network(chunks, uri)
-    raise ZplError(f"Keine Zebra-Adresse: {uri}")
+    raise ZplError(_("Not a Zebra address: {uri}").format(uri=uri))
 
 
 def _send_device(chunks: Iterable[bytes], path: str) -> None:
@@ -186,30 +195,34 @@ def _send_device(chunks: Iterable[bytes], path: str) -> None:
     try:
         fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
     except FileNotFoundError:
-        raise ZplError(f"Zebra-Drucker nicht gefunden: {path} – eingeschaltet, Kabel?") from None
+        raise ZplError(_("Zebra printer not found: {path} – switched on, cable?").format(
+            path=path)) from None
     except PermissionError:
-        raise ZplError(f"Keine Berechtigung für {path} – Benutzer in Gruppe 'lp'?") from None
+        raise ZplError(_("No permission for {device} – is the user in group 'lp'?").format(
+            device=path)) from None
     except OSError as e:
-        raise ZplError(f"Zebra-Drucker nicht erreichbar: {path} ({e.strerror or e})") from None
+        raise ZplError(_("Zebra printer not reachable: {path} ({reason})").format(
+            path=path, reason=e.strerror or e)) from None
     sent = 0
     try:
         if not _is_device(os.fstat(fd)):
-            raise ZplError(f"{path} ist kein Druckergerät")
+            raise ZplError(_("{path} is not a printer device").format(path=path))
         poller = select.poll()
         poller.register(fd, select.POLLOUT)
         for chunk in chunks:
             view = memoryview(chunk)
             while view:
                 if not poller.poll(WRITE_TIMEOUT_S * 1000):
-                    raise ZplError(f"Zebra-Drucker nimmt keine Daten an ({sent} Bytes gesendet) – "
-                                   "Papier, Farbband, Pause?")
+                    raise ZplError(_("Zebra printer does not accept data ({sent} bytes sent) – "
+                                     "paper, ribbon, paused?").format(sent=sent))
                 try:
                     n = os.write(fd, view[:CHUNK])
                 except BlockingIOError:
                     continue
                 view, sent = view[n:], sent + n
     except OSError as e:
-        raise ZplError(f"Senden an {path} abgebrochen nach {sent} Bytes ({e.strerror or e})") from None
+        raise ZplError(_("Sending to {path} aborted after {sent} bytes ({reason})").format(
+            path=path, sent=sent, reason=e.strerror or e)) from None
     finally:
         os.close(fd)
 
@@ -221,14 +234,15 @@ def _send_network(chunks: Iterable[bytes], uri: str) -> None:
     try:
         port = parts.port or PORT
     except ValueError:
-        raise ZplError(f"Ungültige Adresse: {uri}") from None
+        raise ZplError(_("Invalid address: {uri}").format(uri=uri)) from None
     if not parts.hostname:
-        raise ZplError(f"Ungültige Adresse: {uri}")
+        raise ZplError(_("Invalid address: {uri}").format(uri=uri))
     try:
         conn = socket.create_connection((parts.hostname, port), timeout=TIMEOUT_S)
     except OSError as e:
-        raise ZplError(f"Zebra-Drucker {parts.hostname} nicht erreichbar ({e.strerror or e}) – "
-                       "eingeschaltet, im selben Netz, Adresse richtig?") from None
+        raise ZplError(_("Zebra printer {host} not reachable ({reason}) – switched on, in the "
+                         "same network, address correct?").format(
+            host=parts.hostname, reason=e.strerror or e)) from None
     sent = 0
     with conn:
         conn.settimeout(WRITE_TIMEOUT_S)
@@ -239,5 +253,5 @@ def _send_network(chunks: Iterable[bytes], uri: str) -> None:
                     n = conn.send(view[:CHUNK])
                     view, sent = view[n:], sent + n
         except OSError as e:
-            raise ZplError(f"Verbindung zu {parts.hostname} abgebrochen nach {sent} Bytes "
-                           f"({e.strerror or e})") from None
+            raise ZplError(_("Connection to {host} aborted after {sent} bytes ({reason})").format(
+                host=parts.hostname, sent=sent, reason=e.strerror or e)) from None

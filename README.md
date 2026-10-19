@@ -48,6 +48,13 @@ sudo usermod -aG lp "$USER"
 
 Beim QL-600 muss die **Editor-Lite-LED aus** sein, sonst meldet er sich als USB-Speicher.
 
+## Sprachen
+
+labelwerk spricht Deutsch und Englisch (Oberfläche, Kommandozeile, Meldungen) und nimmt die Sprache des
+Systems; umstellen in Einstellungen → Ansicht → Sprache (wirkt nach einem Neustart) bzw. mit
+`labelwerk --lang en …`. Weitere Sprachen sind willkommen – Anleitung in
+`src/labelwerk/po/README.md`.
+
 ## Benutzung
 
 ```bash

@@ -20,17 +20,18 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QLabel
 
 from .. import clipart
 from ..clipart import Symbol
+from ..i18n import N_, _
 from .image_import import MIME_SYMBOL
 ICON_PX = 48
 ICON_CACHE = 800               # höchstens so viele Vorschauen gemerkt (je 96 × 96 × 4 Byte, ca. 30 MB)
-SPECIAL = (("zuletzt", "Zuletzt verwendet"), ("favoriten", "Favoriten"))
-ALL_SUBGROUPS = "Alle"
-EMPTY_OWN = ("Noch keine eigenen Symbole. SVG- oder PNG-Dateien in diesen Ordner legen "
-             "(Unterordner werden nicht gelesen):\n{path}")
-EMPTY_FAVORITES = "Noch keine Favoriten – Symbol wählen und ★ drücken."
-EMPTY_RECENT = "Noch nichts eingefügt."
-NO_RESULTS = "Nichts gefunden."
-FAVORITE = ("☆ FAVORIT", "★ FAVORIT")          # nicht / schon Favorit
+SPECIAL = (("zuletzt", N_("Recently used")), ("favoriten", N_("Favorites")))
+ALL_SUBGROUPS = N_("All")
+EMPTY_OWN = N_("No own symbols yet. Put SVG or PNG files into this folder "
+               "(subfolders are not read):\n{path}")
+EMPTY_FAVORITES = N_("No favorites yet – choose a symbol and press ★.")
+EMPTY_RECENT = N_("Nothing inserted yet.")
+NO_RESULTS = N_("Nothing found.")
+FAVORITE = (N_("☆ FAVORITE"), N_("★ FAVORITE"))          # nicht / schon Favorit
 WINDOW_SIZE = (720, 520)
 
 
@@ -121,14 +122,14 @@ class SymbolDialog(QWidget):
 
     def __init__(self, recent: list[str], favorites: list[str], parent=None):
         super().__init__(parent, Qt.WindowType.Tool)
-        self.setWindowTitle("Symbol einfügen")
+        self.setWindowTitle(_("Insert symbol"))
         self.resize(*WINDOW_SIZE)
         self.recent = list(recent)
         self.favorites = list(favorites)
         outer = QVBoxLayout(self)
         self.search = QLineEdit()
         self.search.setObjectName("symbolSearch")
-        self.search.setPlaceholderText("Suchen … (z. B. Erde, zerbrechlich, Haus)")
+        self.search.setPlaceholderText(_("Search … (e.g. earth, fragile, house)"))
         self.search.setClearButtonEnabled(True)
         outer.addWidget(self.search)
         row = QHBoxLayout()
@@ -136,9 +137,9 @@ class SymbolDialog(QWidget):
         self.groups = QListWidget()
         self.groups.setObjectName("symbolGroups")
         self.groups.setMaximumWidth(180)
-        self._group_keys = [key for key, _ in SPECIAL] + [key for key, _ in clipart.GROUPS]
-        for _, name in (*SPECIAL, *clipart.GROUPS):
-            self.groups.addItem(name)
+        self._group_keys = [key for key, __ in SPECIAL] + [key for key, __ in clipart.GROUPS]
+        for __, name in (*SPECIAL, *clipart.GROUPS):
+            self.groups.addItem(_(name))
         row.addWidget(self.groups)
         right = QVBoxLayout()
         row.addLayout(right, 1)
@@ -167,12 +168,12 @@ class SymbolDialog(QWidget):
         self.empty.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         right.addWidget(self.empty)
         buttons = QHBoxLayout()
-        self.open_folder = QPushButton("ORDNER ÖFFNEN")
-        self.open_folder.setToolTip("Ordner für eigene Symbole öffnen (wird angelegt)")
-        self.favorite = QPushButton(FAVORITE[0])
+        self.open_folder = QPushButton(_("OPEN FOLDER"))
+        self.open_folder.setToolTip(_("Open the folder for your own symbols (created if needed)"))
+        self.favorite = QPushButton(_(FAVORITE[0]))
         self.favorite.setObjectName("formatButton")     # RawBlock: gedrückt schwarz
         self.favorite.setCheckable(True)
-        self.insert = QPushButton("EINFÜGEN")
+        self.insert = QPushButton(_("INSERT"))
         for button in (self.open_folder, self.favorite):
             buttons.addWidget(button)
         buttons.addStretch()
@@ -182,17 +183,17 @@ class SymbolDialog(QWidget):
         self.info.setWordWrap(True)
         right.addWidget(self.info)
 
-        self.search.textChanged.connect(lambda _: self.refresh())
+        self.search.textChanged.connect(lambda _text: self.refresh())
         self.search.returnPressed.connect(self.choose)            # erster Treffer ist gewählt
         self.search.installEventFilter(self)
-        self.groups.currentRowChanged.connect(lambda _: self._group_changed())
-        self.subgroup.currentIndexChanged.connect(lambda _: self.refresh())
+        self.groups.currentRowChanged.connect(lambda _row: self._group_changed())
+        self.subgroup.currentIndexChanged.connect(lambda _index: self.refresh())
         # nur doppelklicken – „activated“ käme nach dem Doppelklick noch einmal (bzw. bei
         # Einfachklick-Einstellung schon beim Auswählen); Enter: eventFilter
-        self.grid.doubleClicked.connect(lambda _: self.choose())
+        self.grid.doubleClicked.connect(lambda _index: self.choose())
         self.grid.installEventFilter(self)
         self.grid.customContextMenuRequested.connect(self._context_menu)
-        self.grid.selectionModel().currentChanged.connect(lambda *_: self._current_changed())
+        self.grid.selectionModel().currentChanged.connect(lambda *_args: self._current_changed())
         self.insert.clicked.connect(self.choose)
         self.favorite.clicked.connect(self._toggle_favorite)
         self.open_folder.clicked.connect(self.show_own_folder)
@@ -229,7 +230,7 @@ class SymbolDialog(QWidget):
             {s.subgroup for s in clipart.symbols(group)})
         self.subgroup.blockSignals(True)
         self.subgroup.clear()
-        self.subgroup.addItems([ALL_SUBGROUPS, *names] if len(names) > 1 else [])
+        self.subgroup.addItems([_(ALL_SUBGROUPS), *names] if len(names) > 1 else [])
         self.subgroup.setVisible(len(names) > 1)
         self.subgroup.blockSignals(False)
         self.open_folder.setVisible(group == "eigene")
@@ -252,7 +253,7 @@ class SymbolDialog(QWidget):
         else:
             pool = self._pool()
             sub = self.subgroup.currentText()
-            if sub and sub != ALL_SUBGROUPS:
+            if self.subgroup.currentIndex() > 0:             # 0 = alle
                 pool = [s for s in pool if s.subgroup == sub]
         self.subgroup.setEnabled(not text)
         self.model.set_symbols(pool)
@@ -264,9 +265,11 @@ class SymbolDialog(QWidget):
 
     def _empty_text(self, searching: bool) -> str:
         if searching:
-            return NO_RESULTS
-        return {"eigene": EMPTY_OWN.format(path=clipart.own_dir()),
-                "favoriten": EMPTY_FAVORITES, "zuletzt": EMPTY_RECENT}.get(self.group(), "")
+            return _(NO_RESULTS)
+        if self.group() == "eigene":
+            return _(EMPTY_OWN).format(path=clipart.own_dir())
+        text = {"favoriten": EMPTY_FAVORITES, "zuletzt": EMPTY_RECENT}.get(self.group())
+        return _(text) if text else ""
 
     def current(self) -> Symbol | None:
         index = self.grid.currentIndex()
@@ -278,7 +281,7 @@ class SymbolDialog(QWidget):
         self.favorite.setEnabled(symbol is not None)
         favorite = symbol is not None and symbol.id in self.favorites
         self.favorite.setChecked(favorite)
-        self.favorite.setText(FAVORITE[favorite])
+        self.favorite.setText(_(FAVORITE[favorite]))
         self.info.setText("" if symbol is None else
                           f"{symbol.name} · {symbol.source}"
                           + (f" · {symbol.license}" if symbol.license else ""))
@@ -298,9 +301,9 @@ class SymbolDialog(QWidget):
         """Kontextmenü eines Symbols: Einfügen, Zu Favoriten / Aus Favoriten entfernen."""
         self.grid.setCurrentIndex(index)
         menu = QMenu(self)
-        menu.addAction("Einfügen", self.choose)
+        menu.addAction(_("Insert"), self.choose)
         favorite = self.current() is not None and self.current().id in self.favorites
-        menu.addAction("Aus Favoriten entfernen" if favorite else "Zu Favoriten",
+        menu.addAction(_("Remove from favorites") if favorite else _("Add to favorites"),
                        self._toggle_favorite)
         return menu
 

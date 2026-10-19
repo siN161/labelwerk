@@ -13,6 +13,14 @@ else:
     import pytest
 
     @pytest.fixture(autouse=True)
+    def german_numbers(qapp):
+        """Zahlenfelder wie in einer deutschen Sitzung (Komma) – passend zur Sprache der Tests."""
+        from PySide6.QtCore import QLocale
+        QLocale.setDefault(QLocale("de"))
+        yield
+        QLocale.setDefault(QLocale("de"))
+
+    @pytest.fixture(autouse=True)
     def no_leftover_theme(qapp):
         """Speichern der Einstellungen setzt das Design der ganzen Anwendung – danach zurück,
         damit jeder Test im Qt-Grundstil startet."""

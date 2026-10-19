@@ -10,40 +10,41 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QToolButton
 
 from ...document import Document
+from ...i18n import N_, _
 from ..symbols import SIZE, line_icon
 from . import Panel
 
 # Bereiche mit Knöpfen: (Aktion, Symbol)
 LAYOUT_SECTIONS = (
-    ("Gewählte Objekte ausrichten", tuple((f"align.{mode}", f"align-objects-{mode}") for mode in
+    (N_("Align selected objects"), tuple((f"align.{mode}", f"align-objects-{mode}") for mode in
                                           ("left", "hcenter", "right", "top", "vcenter", "bottom"))),
-    ("Am Papier ausrichten", tuple((f"align.paper_{mode}", f"align-paper-{mode}") for mode in
+    (N_("Align to paper"), tuple((f"align.paper_{mode}", f"align-paper-{mode}") for mode in
                                    ("left", "hcenter", "right", "top", "vcenter", "bottom"))),
-    ("Vergrößern/Verkleinern", (("size.maximize", "size-maximize"), ("size.same", "size-same"),
+    (N_("Resize"), (("size.maximize", "size-maximize"), ("size.same", "size-same"),
                                 ("size.width", "size-width"), ("size.height", "size-height"))),
-    ("Drehen", (("object.rotate_left", "rotate-left"), ("object.rotate_right", "rotate-right"))),
-    ("Reihenfolge", (("object.bring_forward", "order-forward"),
+    (N_("Rotate"), (("object.rotate_left", "rotate-left"), ("object.rotate_right", "rotate-right"))),
+    (N_("Order"), (("object.bring_forward", "order-forward"),
                      ("object.send_backward", "order-backward"))),
 )
-_ICONS = {key: icon for _, row in LAYOUT_SECTIONS for key, icon in row}
+_ICONS = {key: icon for __, row in LAYOUT_SECTIONS for key, icon in row}
 # Aneinander ausrichten und angleichen braucht mindestens zwei Objekte, alles andere eins
-_FROM_TWO = {key for key, _ in LAYOUT_SECTIONS[0][1]} | {"size.same", "size.width", "size.height"}
+_FROM_TWO = {key for key, __ in LAYOUT_SECTIONS[0][1]} | {"size.same", "size.width", "size.height"}
 MIN_SELECTED = {key: 2 if key in _FROM_TWO else 1 for key in _ICONS}
 # Am Papier in Bandrichtung ausrichten: je Achse der Leserichtung, in der das Etikett wächst
 _PAPER_AXIS = {f"align.paper_{mode}": axis for axis, modes in
                (("x", ("left", "hcenter", "right")), ("y", ("top", "vcenter", "bottom")))
                for mode in modes}
-GROWING_HINT = ("Bei automatischer Länge wächst das Etikett mit – "
-                "das Objekt sitzt mit gleichem Rand an beiden Enden")
-COLOR_TITLES = (("black", "SCHWARZ"), ("red", "ROT"))
-NO_RED = "Rot nur auf dem Etikett 62 mm Rot/Schwarz (DK-22251) mit einem QL-8xx"
+GROWING_HINT = N_("With automatic length the label grows along – "
+                  "the object keeps the same margin at both ends")
+COLOR_TITLES = (("black", N_("BLACK")), ("red", N_("RED")))
+NO_RED = N_("Red only on the 62 mm red/black label (DK-22251) with a QL-8xx")
 
 
 class LayoutPanel(Panel):
     color_chosen = Signal(str)          # Farbe für die Auswahl ("black" | "red")
 
     def __init__(self, doc: Document):
-        super().__init__(doc, "Layout")
+        super().__init__(doc, _("Layout"))
         self._dark = True
         self._count = 0
         self._red = False               # Etikett kann Rot
@@ -52,10 +53,11 @@ class LayoutPanel(Panel):
         for title, row in LAYOUT_SECTIONS:
             # lange Überschriften brechen an Leerzeichen um; ohne Leerzeichen nicht, sonst
             # reserviert Qt bei „/“ eine zweite Zeile
+            title = _(title)
             self.section(title).setWordWrap(" " in title)
             line = QHBoxLayout()
             line.setSpacing(4)
-            for key, _ in row:
+            for key, __ in row:
                 button = QToolButton()
                 button.setObjectName("layoutButton")
                 button.setAutoRaise(True)              # Symbol beim Darüberfahren: Modus „Active“
@@ -65,12 +67,12 @@ class LayoutPanel(Panel):
                 line.addWidget(button)
             line.addStretch()
             self.layout_.addLayout(line)
-        self.section("Farbe")
+        self.section(_("Color"))
         line = QHBoxLayout()
         self.colors: dict[str, QPushButton] = {}
         for color, title in COLOR_TITLES:
-            button = QPushButton(title)
-            button.clicked.connect(lambda _=False, c=color: self.color_chosen.emit(c))
+            button = QPushButton(_(title))
+            button.clicked.connect(lambda _checked=False, c=color: self.color_chosen.emit(c))
             self.colors[color] = button
             line.addWidget(button)
         self.layout_.addLayout(line)
@@ -103,14 +105,14 @@ class LayoutPanel(Panel):
     def _enable(self) -> None:
         for color, button in self.colors.items():          # Schwarz geht immer (zurück)
             button.setEnabled(self._count > 0 and (self._red or color == "black"))
-            button.setToolTip("" if self._red or color == "black" else NO_RED)
+            button.setToolTip("" if self._red or color == "black" else _(NO_RED))
         for key, button in self.buttons.items():
             target = button.defaultAction() or button
             growing = _PAPER_AXIS.get(key) == self._grow and self._grow is not None
             target.setEnabled(self._count >= MIN_SELECTED[key])
             if key in _PAPER_AXIS and button.defaultAction() is not None:
                 name = target.toolTip().split("\n")[0]
-                target.setToolTip(f"{name}\n{GROWING_HINT}" if growing else name)
+                target.setToolTip(f"{name}\n{_(GROWING_HINT)}" if growing else name)
 
     def set_icon_style(self, dark_checked: bool) -> None:
         self._dark = dark_checked

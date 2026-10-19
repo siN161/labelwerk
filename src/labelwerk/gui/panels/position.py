@@ -9,16 +9,17 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QGridLayout, QLabel, QWidget
 
 from ...document import MAX_POSITION_MM
+from ...i18n import N_, _
 from ...layout import Rect
 from ..widgets import DoubleSpinBox
 
 POSITION_MM = (-MAX_POSITION_MM, MAX_POSITION_MM)   # Lage darf auch neben dem Etikett liegen (ragt hinaus)
 SIZE_MM = (1.0, 999.9)
-FRAME_ONLY = "Nur mit fester Rahmengröße änderbar"
-_FIELDS = (("x", "X", "Abstand vom linken Etikettrand"),
-           ("y", "Y", "Abstand vom oberen Etikettrand"),
-           ("w", "B", "Breite des Rahmens"),
-           ("h", "H", "Höhe des Rahmens"))
+FRAME_ONLY = N_("Only changeable with a fixed frame size")
+_FIELDS = (("x", "X", N_("Distance from the left edge of the label")),
+           ("y", "Y", N_("Distance from the top edge of the label")),
+           ("w", N_("W"), N_("Width of the frame")),         # B(reite)
+           ("h", N_("H"), N_("Height of the frame")))
 
 
 class PositionSection(QWidget):
@@ -33,7 +34,7 @@ class PositionSection(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._size_editable = True
-        self.spins = {key: DoubleSpinBox() for key, _, _ in _FIELDS}   # x, y, w, h
+        self.spins = {key: DoubleSpinBox() for key, __, ___ in _FIELDS}   # x, y, w, h
         grid = QGridLayout(self)
         grid.setContentsMargins(0, 0, 0, 0)
         for i, (key, text, tip) in enumerate(_FIELDS):
@@ -42,9 +43,9 @@ class PositionSection(QWidget):
             spin.setSingleStep(0.1)
             spin.setRange(*(POSITION_MM if key in "xy" else SIZE_MM))
             spin.setKeyboardTracking(False)        # erst nach Enter/Fokuswechsel/Pfeil übernehmen
-            spin.setToolTip(tip)
-            label = QLabel(text)
-            label.setToolTip(tip)
+            spin.setToolTip(_(tip))
+            label = QLabel(text if key in "xy" else _(text))
+            label.setToolTip(_(tip))
             grid.addWidget(label, i // 2, (i % 2) * 2)
             grid.addWidget(spin, i // 2, (i % 2) * 2 + 1)
             spin.valueChanged.connect(lambda value, k=key: self._changed(k, value))
@@ -63,12 +64,13 @@ class PositionSection(QWidget):
     def set_size_editable(self, editable: bool) -> None:
         """Breite/Höhe änderbar bzw. nur Anzeige der Größe."""
         self._size_editable = editable
-        for spin, name in ((self.spins["w"], "Breite"), (self.spins["h"], "Höhe")):
+        for spin, tip in ((self.spins["w"], _("Width of the frame")),
+                          (self.spins["h"], _("Height of the frame"))):
             if spin.isReadOnly() == editable:
                 spin.setReadOnly(not editable)       # Pfeile bleiben sichtbar, wirken aber nicht
                 spin.style().unpolish(spin)          # Stylesheet: [readOnly="true"] neu anwenden
                 spin.style().polish(spin)
-            spin.setToolTip(f"{name} des Rahmens" + ("" if editable else f" – {FRAME_ONLY}"))
+            spin.setToolTip(tip if editable else f"{tip} – {_(FRAME_ONLY)}")
 
     def _changed(self, key: str, value: float) -> None:
         if key in "wh" and not self._size_editable:

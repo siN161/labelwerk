@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from .i18n import _, ngettext
 from .imaging import MAX_PIXELS, limit_size, on_white, to_8bit
 from .labels import DPI, format_mm, get_label, length_limits
 from .render import MARGIN
@@ -87,11 +88,12 @@ def _checked(path: str | Path, suffixes: tuple[str, ...], allowed: str, page: in
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix != ".pdf" and suffix not in suffixes:
-        raise ValueError(f"Dateityp nicht unterstützt: {suffix or path.name} – möglich: {allowed}")
+        raise ValueError(_("File type not supported: {suffix} – possible: {allowed}").format(
+            suffix=suffix or path.name, allowed=allowed))
     if not path.exists():
-        raise FileNotFoundError(f"Datei nicht gefunden: {path}")
+        raise FileNotFoundError(_("File not found: {path}").format(path=path))
     if suffix == ".pdf" and page < 1:
-        raise ValueError("Seite muss mindestens 1 sein.")
+        raise ValueError(_("Page must be at least 1."))
     return path
 
 
@@ -102,30 +104,31 @@ def _readable(path: Path):
     try:
         yield
     except FileNotFoundError:
-        raise FileNotFoundError(f"Datei nicht gefunden: {path}") from None
+        raise FileNotFoundError(_("File not found: {path}").format(path=path)) from None
     except (OSError, RuntimeError, SyntaxError, struct.error, zlib.error,
             Image.DecompressionBombError) as e:
-        raise ValueError(f"Datei kann nicht gelesen werden: {path.name} ({_reason(e)})") from e
+        raise ValueError(_("Cannot read file: {name} ({reason})").format(
+            name=path.name, reason=_reason(e))) from e
 
 
 def _reason(error: Exception) -> str:
     """Grund eines Lesefehlers auf Deutsch."""
     if isinstance(error, IsADirectoryError):
-        return "ist ein Ordner"
+        return _("is a folder")
     if isinstance(error, PermissionError):
-        return "keine Leserechte"
+        return _("no read permission")
     if isinstance(error, Image.DecompressionBombError):
-        return "Bild hat zu viele Pixel"
+        return _("image has too many pixels")
     if isinstance(error, Image.UnidentifiedImageError):
-        return "kein lesbares Bild"
+        return _("not a readable image")
     if isinstance(error, RuntimeError):            # PDFium (pypdfium2.PdfiumError)
         if getattr(error, "err_code", None) == _PDFIUM_PASSWORD:
-            return "PDF ist verschlüsselt"
-        return "keine gültige PDF-Datei"
+            return _("PDF is encrypted")
+        return _("not a valid PDF file")
     if (isinstance(error, (SyntaxError, struct.error, zlib.error))
             or any(word in str(error) for word in ("truncated", "broken", "corrupt"))):
-        return "Datei ist beschädigt oder unvollständig"
-    return "Lesefehler"
+        return _("file is damaged or incomplete")
+    return _("read error")
 
 
 def _load_pdf(path: Path, page: int, dpi: int = DPI) -> Image.Image:
@@ -147,7 +150,8 @@ def _pdf_page(path: Path, page: int):
     pdf = pdfium.PdfDocument(path)
     try:
         if not 1 <= page <= len(pdf):
-            raise ValueError(f"PDF hat nur {len(pdf)} Seite(n).")
+            raise ValueError(ngettext("The PDF has only {count} page.", "The PDF has only {count} pages.",
+                                      len(pdf)).format(count=len(pdf)))
         yield pdf[page - 1]
     finally:
         pdf.close()
@@ -200,7 +204,7 @@ def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, in
     ink = gray.point(lambda v: 255 if v < level else 0)
     box = ink.getbbox()
     if box is None:
-        raise ValueError("Datei enthält keinen druckbaren Inhalt.")
+        raise ValueError(_("The file has no printable content."))
     # Schnittmarken sind schwarz: immer auf der Maske mit ``INK`` suchen, damit helle
     # Elemente anderswo auf der Seite (graue Textzeile) sie nicht vom Rand verdrängen
     marks = ink if level == INK else gray.point(lambda v: 255 if v < INK else 0)
@@ -222,7 +226,7 @@ def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, in
     inner = (x0 + left, y0 + top, x0 + right, y0 + bottom)
     trimmed = ink.crop(inner).getbbox()  # Leerraum innerhalb der Marken entfernen
     if trimmed is None:
-        raise ValueError("Zwischen den Schnittmarken ist kein druckbarer Inhalt.")
+        raise ValueError(_("There is no printable content between the crop marks."))
     return (inner[0] + trimmed[0], inner[1] + trimmed[1],
             inner[0] + trimmed[2], inner[1] + trimmed[3])
 
@@ -260,7 +264,8 @@ def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
     Drehung in Grad im Uhrzeigersinn (0, 90, 180, 270).
     """
     if rotate not in ROTATIONS:
-        raise ValueError(f"Drehung {rotate!r} nicht möglich – erlaubt: auto, 0, 90, 180, 270")
+        raise ValueError(_("Rotation {rotate!r} not possible – allowed: auto, 0, 90, 180, 270").format(
+            rotate=rotate))
     label = get_label(label_id)
     if label.dpi != dpi:                         # gleiche Größe in den Punkten des Druckers
         f = label.dpi / dpi
@@ -282,12 +287,12 @@ def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
             img = _shrink(img, max_w, max_h, may_rotate=rotate == "auto")
         else:
             mm = lambda dots: format_mm(dots, label.dpi)   # noqa: E731
-            limit = (f"{mm(max_w)} mm breit" if not label.height
-                     else f"{mm(max_w)} × {mm(max_h)} mm groß")
-            raise ValueError(
-                f"Motiv ist {mm(img.width)} × {mm(img.height)} mm, "
-                f"Etikett {label_id!r} ist höchstens {limit} – "
-                "mit --fit verkleinern (Codes evtl. nicht mehr lesbar)")
+            text = (_("Image is {width} × {height} mm, label {label!r} is at most {max_w} mm wide – "
+                      "shrink with --fit (codes may become unreadable)") if not label.height
+                    else _("Image is {width} × {height} mm, label {label!r} is at most {max_w} × "
+                           "{max_h} mm – shrink with --fit (codes may become unreadable)"))
+            raise ValueError(text.format(width=mm(img.width), height=mm(img.height), label=label_id,
+                                         max_w=mm(max_w), max_h=mm(max_h)))
 
     height = label.height or min(max(img.height + 2 * MARGIN, min_len), max_len)
     out = Image.new("L", (max_w, height), 255)

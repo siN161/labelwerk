@@ -6,6 +6,7 @@ import threading
 from PIL import Image
 from PySide6.QtCore import QObject, QRunnable, Signal
 
+from ..i18n import _
 from ..detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp
 from ..printer import PrintCancelled, PrintError, print_image
 
@@ -40,7 +41,7 @@ class PrintWorker(QRunnable):
         try:
             printer = self.printer or find_brother_lp()
             if printer is None:
-                self.signals.failed.emit(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
+                self.signals.failed.emit(_(BUSY_MESSAGE) if brother_busy() else _(PRINTER_NOT_FOUND))
                 return
             status = print_image(self.image, self.label_id, model=self.model, printer=printer,
                                  cut_every=self.cut_every, cancelled=self._cancel.is_set,
@@ -52,6 +53,6 @@ class PrintWorker(QRunnable):
             self.signals.failed.emit(str(e))
             return
         except Exception as e:  # kein Absturz des Threads; Meldung statt Traceback
-            self.signals.failed.emit(f"Unerwarteter Fehler beim Drucken: {e}")
+            self.signals.failed.emit(_("Unexpected error while printing: {error}").format(error=e))
             return
         self.signals.done.emit(status)

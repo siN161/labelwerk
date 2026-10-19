@@ -8,17 +8,18 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import desktop
+from . import desktop, i18n
 from . import printer as prn
 from . import printers
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
 from .files import crop, fit_to_label, load_file
 from .fonts import DEFAULT_FAMILY, families
+from .i18n import NP_, N_, _, pgettext
 from .document import ALIGNMENTS, MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .labels import format_mm, get_label, labels_for_model
 from .media import MediaError, label_for_media, read_media
 from .render import font_warnings, render_document
-from .settings import load_settings, network_entries
+from .settings import configured_language, load_settings, network_entries
 from .storage import os_reason
 
 
@@ -27,100 +28,139 @@ def _font_size(value: str) -> float | None:
     if value.lower() == "auto":
         return None
     try:
-        size = float(value.replace(",", "."))
+        size = i18n.parse_number(value)
     except ValueError:
         size = 0.0
     if not MIN_PT <= size <= MAX_PT:
-        raise argparse.ArgumentTypeError("Schriftgröße: 'auto' oder 4–100 (pt)")
+        raise argparse.ArgumentTypeError(_("Font size: 'auto' or 4–100 (pt)"))
     return size
 
 
 def _margin(value: str) -> float:
     try:
-        mm = float(value)
+        mm = i18n.parse_number(value)                  # Komma und Punkt
     except ValueError:
         mm = float("nan")
     if not 0 <= mm <= MAX_MARGIN_MM:      # nan fällt hier ebenfalls durch
-        raise argparse.ArgumentTypeError(f"Rand: Zahl von 0 bis {MAX_MARGIN_MM:g} mm")
+        raise argparse.ArgumentTypeError(_("Margin: number from 0 to {max} mm").format(
+            max=i18n.number(MAX_MARGIN_MM)))
     return mm
 
 
 def _add_output_options(p: argparse.ArgumentParser) -> None:
-    p.add_argument("-l", "--label", help="Etikett, z. B. 62, oder auto (eingelegte Rolle vom "
-                                         "Drucker); Standard aus den Einstellungen")
+    p.add_argument("-l", "--label", help=_("label, e.g. 62, or auto (roll loaded in the "
+                                           "printer); default from the settings"))
     p.add_argument("-p", "--printer", default="auto",
-                   help="auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, "
-                        "cups:NAME (Warteschlange, siehe 'labelwerk printers'), "
-                        "zpl+file:///dev/usb/lpN bzw. zpl+tcp://IP (Zebra, mit -m zpl:203/300/600)")
+                   help=_("auto (default), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, "
+                          "cups:NAME (queue, see 'labelwerk printers'), "
+                          "zpl+file:///dev/usb/lpN or zpl+tcp://IP "
+                          "(Zebra, with -m zpl:203/300/600)"))
     p.add_argument("-b", "--backend", choices=["linux_kernel", "pyusb", "network", "cups", "zebra"],
-                   help="Standard: aus dem Drucker (tcp:// → network)")
+                   help=_("default: from the printer (tcp:// → network)"))
     p.add_argument("--no-cut", action="store_true",
-                   help="nicht schneiden (Brother; bei CUPS/Zebra stellt das der Treiber bzw. der "
-                        "Modus in den Einstellungen der GUI ein)")
-    p.add_argument("--preview", metavar="PNG", help="nur Vorschau speichern, nicht drucken")
+                   help=_("do not cut (Brother; for CUPS/Zebra the driver or the mode in the "
+                          "GUI settings decides)"))
+    p.add_argument("--preview", metavar="PNG", help=_("only save a preview, do not print"))
 
 
 _UNSET = object()   # -s nicht angegeben (None bedeutet „auto“)
 
 
+# Texte von argparse selbst (Python übersetzt sie nicht): markiert für die Übersetzung, eingesetzt
+# über ``argparse._`` – fehlt eine (andere Python-Version), bleibt sie englisch
+ARGPARSE_TEXTS = (NP_("argparse", "usage: "), NP_("argparse", "positional arguments"),
+                  NP_("argparse", "options"), NP_("argparse", "show this help message and exit"),
+                  NP_("argparse", "%(prog)s: error: %(message)s\n"),
+                  NP_("argparse", "the following arguments are required: %s"),
+                  NP_("argparse", "unrecognized arguments: %s"),
+                  NP_("argparse", "invalid choice: %(value)r (choose from %(choices)s)"),
+                  NP_("argparse", "argument %(argument_name)s: %(message)s"),
+                  NP_("argparse", "expected one argument"),
+                  NP_("argparse", "invalid %(type)s value: %(value)r"))
+
+
+def _translate_argparse() -> None:
+    argparse._ = lambda text: pgettext("argparse", text)
+
+
+def _language(argv: list[str]) -> str:
+    """``--lang de|en`` (vor dem Bau des Parsers: seine Hilfe ist schon übersetzt), sonst die
+    Einstellung, sonst die Sprache des Systems."""
+    for i, arg in enumerate(argv):
+        if arg == "--" or not arg.startswith("-") and argv[i - 1:i] != ["-m"] \
+                and argv[i - 1:i] != ["--model"] and argv[i - 1:i] != ["--lang"]:
+            break                                       # Unterbefehl bzw. Ende der Optionen
+        if arg == "--lang" and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith("--lang="):
+            return arg.split("=", 1)[1]
+    return configured_language()
+
+
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog=desktop.APP_NAME)
+    p.add_argument("--lang", choices=i18n.available(),
+                   help=_("language of the output (default: setting, otherwise the system)"))
     p.add_argument("-m", "--model", default="auto",
-                   help="auto (Standard: erkannt, sonst aus den Einstellungen) oder z. B. QL-700, "
-                        "zpl:300 (Zebra), cups:NAME; siehe 'labelwerk printers'")
+                   help=_("auto (default: detected, otherwise from the settings) or e.g. QL-700, "
+                          "zpl:300 (Zebra), cups:NAME; see 'labelwerk printers'"))
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("labels", help="Etiketten für das Modell auflisten")
+    sub.add_parser("labels", help=_("list the labels for the model"))
 
-    pr = sub.add_parser("print", help="Text drucken")
-    pr.add_argument("text", help="Text, Zeilenumbruch mit \\n")
+    pr = sub.add_parser("print", help=_("print text"))
+    pr.add_argument("text", help=_("text, line break with \\n"))
     pr.add_argument("-s", "--font-size", type=_font_size, default=_UNSET, metavar="PT",
-                    help="'auto' oder 4–100 pt (Standard aus den Einstellungen)")
-    pr.add_argument("--font", help="Pfad zu einer .ttf-Datei")
+                    help=_("'auto' or 4–100 pt (default from the settings)"))
+    pr.add_argument("--font", help=_("path to a .ttf file"))
     pr.add_argument("--font-family", metavar="NAME",
-                    help="Schriftfamilie, z. B. 'Liberation Sans' (siehe 'labelwerk fonts')")
+                    help=_("font family, e.g. 'Liberation Sans' (see 'labelwerk fonts')"))
     pr.add_argument("--align", choices=ALIGNMENTS, default="center",
-                    help="Textposition: left, center (Standard), right, justify")
+                    help=_("text position: left, center (default), right, justify"))
     pr.add_argument("--bold", action=argparse.BooleanOptionalAction, default=True,
-                    help="fett (Standard) bzw. --no-bold")
-    pr.add_argument("--italic", action="store_true", help="kursiv")
-    pr.add_argument("--underline", action="store_true", help="unterstrichen")
+                    help=_("bold (default) or --no-bold"))
+    pr.add_argument("--italic", action="store_true", help=_("italic"))
+    pr.add_argument("--underline", action="store_true", help=_("underlined"))
     pr.add_argument("--orientation", choices=ORIENTATIONS,
-                    help="vertical: Hochformat (Leserichtung quer zum Band), horizontal: Querformat (längs zum Band); Standard aus den Einstellungen")
+                    help=_("vertical: portrait (reading direction across the tape), horizontal: "
+                           "landscape (along the tape); default from the settings"))
     pr.add_argument("--margin", type=_margin, metavar="MM",
-                    help="Rand ringsum ab Papierkante in mm (Standard aus den Einstellungen)")
+                    help=_("margin all around from the paper edge in mm (default from the "
+                           "settings)"))
     _add_output_options(pr)
 
-    pf = sub.add_parser("print-file", help="PDF/Bild 1:1 drucken")
-    pf.add_argument("file", help="PDF, PNG oder JPG")
-    pf.add_argument("--page", type=int, default=1, help="PDF-Seite (Standard 1)")
+    pf = sub.add_parser("print-file", help=_("print a PDF/image 1:1"))
+    pf.add_argument("file", help=_("PDF, PNG or JPG"))
+    pf.add_argument("--page", type=int, default=1, help=_("PDF page (default 1)"))
     pf.add_argument("--fit", action="store_true",
-                    help="verkleinern, falls zu groß (Codes evtl. nicht mehr lesbar)")
+                    help=_("shrink if too large (codes may no longer be readable)"))
     pf.add_argument("--rotate", default="auto", choices=["auto", "0", "90", "180", "270"],
-                    help="auto (Standard: nur drehen wenn nötig) oder Grad im Uhrzeigersinn")
+                    help=_("auto (default: rotate only if needed) or degrees clockwise"))
     _add_output_options(pf)
 
-    sub.add_parser("media", help="eingelegte Rolle vom Drucker abfragen (druckt nichts)")
-    sub.add_parser("printers", help="gefundene Drucker und unterstützte Modelle auflisten")
-    sub.add_parser("fonts", help="installierte Schriftfamilien auflisten")
+    sub.add_parser("media", help=_("query the roll loaded in the printer (prints nothing)"))
+    sub.add_parser("printers", help=_("list found printers and supported models"))
+    sub.add_parser("fonts", help=_("list installed font families"))
 
-    di = sub.add_parser("install-desktop", help="labelwerk-gui im Starter (Super-Taste) eintragen")
-    di.add_argument("--remove", action="store_true", help="Eintrag und Icon wieder entfernen")
+    di = sub.add_parser("install-desktop",
+                        help=_("add labelwerk-gui to the launcher (Super key)"))
+    di.add_argument("--remove", action="store_true", help=_("remove the entry and icon again"))
     return p
 
 
-_HARDWARE_HINT = "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb'"
+# kein Drucker gefunden, je Backend – übersetzt beim Melden (``{not_found}``: PRINTER_NOT_FOUND)
 _NOT_DETECTED = {
-    "linux_kernel": f"{PRINTER_NOT_FOUND}\nManuell angeben mit -p file:///dev/usb/lpN",
-    "pyusb": "Brother-Drucker per USB (pyusb) nicht gefunden.\n"
-             f"{_HARDWARE_HINT}, Zugriff auf den USB-Bus (udev-Regel).\n"
-             "Manuell angeben mit -p usb://0x04f9:0xPID",
-    "network": "Kein Netzwerkdrucker eingetragen (Einstellungen der GUI).\n"
-               "Adresse angeben mit -p tcp://IP",
-    "cups": "Keine CUPS-Warteschlange gefunden (Drucker in der Druckerverwaltung einrichten).\n"
-            "Angeben mit -p cups:NAME",
-    "zebra": "Kein Zebra-Drucker gefunden.\n"
-             "Angeben mit -p zpl+file:///dev/usb/lpN bzw. -p zpl+tcp://IP und -m zpl:203",
+    "linux_kernel": N_("{not_found}\nSpecify manually with -p file:///dev/usb/lpN"),
+    "pyusb": N_("Brother printer not found via USB (pyusb).\n"
+                "Check: switched on, Editor Lite LED off, 'lsusb', access to the USB bus "
+                "(udev rule).\n"
+                "Specify manually with -p usb://0x04f9:0xPID"),
+    "network": N_("No network printer configured (GUI settings).\n"
+                  "Specify the address with -p tcp://IP"),
+    "cups": N_("No CUPS queue found (set up the printer in the printer settings).\n"
+               "Specify with -p cups:NAME"),
+    "zebra": N_("No Zebra printer found.\n"
+                "Specify with -p zpl+file:///dev/usb/lpN or -p zpl+tcp://IP and -m zpl:203"),
 }
 
 
@@ -160,9 +200,9 @@ def _resolve_model(model: str, target: printers.Printer | None, settings) -> str
     Einstellungen; ein angegebenes muss bekannt sein."""
     if model != "auto":
         if not printers.is_model(model):
-            raise ValueError(f"Unbekanntes Druckermodell {model!r} – erlaubt: "
-                             f"{', '.join(printers.SUPPORTED_MODELS)}, zpl:203/300/600 oder "
-                             "cups:NAME")
+            raise ValueError(_("Unknown printer model {model!r} – allowed: {models}, "
+                               "zpl:203/300/600 or cups:NAME").format(
+                model=model, models=", ".join(printers.SUPPORTED_MODELS)))
         return model
     return printers.effective_model(target, settings.printer_model, settings.last_model)
 
@@ -171,17 +211,18 @@ def _auto_label(model: str, target: printers.Printer | None) -> str:
     """``-l auto``: Etikett zur eingelegten Rolle (Statusabfrage per USB beim Zieldrucker) – sonst
     ValueError."""
     if target is not None and target.source != "usb":
-        raise ValueError("-l auto (Rolle abfragen) geht nur bei Druckern per USB.")
+        raise ValueError(_("-l auto (query the roll) only works with printers via USB."))
     printer = target.uri if target is not None and target.uri.startswith("file://") \
         else find_brother_lp()
     if printer is None:
-        raise ValueError(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
+        raise ValueError(_(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND))
     media = read_media(printer)
     if media.kind == "none":
-        raise ValueError("Keine Rolle eingelegt.")
+        raise ValueError(_("No roll loaded."))
     label = label_for_media(media, model)
     if label is None:
-        raise ValueError(f"Kein Etikett für die eingelegte Rolle ({media.describe()}) beim {model}.")
+        raise ValueError(_("No label for the loaded roll ({media}) on the {model}.").format(
+            media=media.describe(), model=model))
     return label
 
 
@@ -206,13 +247,13 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
     if args.printer == "auto":
         args.printer = args.target.uri if args.target is not None else None
         if args.printer is None and args.settings.printer:
-            print(f"Gewählter Drucker {args.settings.printer} nicht gefunden – einschalten oder "
-                  f"mit -p angeben.", file=sys.stderr)
+            print(_("Chosen printer {printer} not found – switch it on or specify it with -p.")
+                  .format(printer=args.settings.printer), file=sys.stderr)
             return 2
         if args.printer is None:
             busy = args.backend in (None, "linux_kernel") and brother_busy()
-            print(BUSY_MESSAGE if busy else _NOT_DETECTED[args.backend or "linux_kernel"],
-                  file=sys.stderr)
+            print(_(BUSY_MESSAGE) if busy else _(_NOT_DETECTED[args.backend or "linux_kernel"])
+                  .format(not_found=_(PRINTER_NOT_FOUND)), file=sys.stderr)
             return 2
 
     try:
@@ -225,9 +266,9 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
         return 2
     ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
     if status.get("job"):
-        print(f"An CUPS übergeben (Auftrag {status['job']})")
+        print(_("Handed over to CUPS (job {job})").format(job=status["job"]))
     else:
-        print(f"Status: {status.get('outcome')}")
+        print(_("Status: {outcome}").format(outcome=status.get("outcome")))
     return 0 if ok else 1
 
 
@@ -237,27 +278,28 @@ def _show_printers(model: str) -> int:
     found = _all_printers(load_settings())
     for p in found:
         caps = printers.capabilities(p.model) if p.model else None
-        state = ("Modell nicht erkannt" if caps is None else
-                 "geprüft" if caps.tested else printers.UNTESTED_HINT)
+        state = (_("model not detected") if caps is None else
+                 _("tested") if caps.tested else _(printers.UNTESTED_HINT))
         print(f"{p.name:<28} {p.uri:<30} {state}")
     if not found:
-        print("Kein Drucker gefunden.")
-    print(f"Wirksames Modell: {model}")
-    print("Unterstützt: " + ", ".join(
-        f"{m}{'' if printers.capabilities(m).tested else ' (ungeprüft)'}"
-        for m in printers.SUPPORTED_MODELS)
-          + ", Zebra zpl:203/300/600 (ungeprüft), CUPS-Warteschlangen cups:NAME (ungeprüft)")
+        print(_("No printer found."))
+    print(_("Effective model: {model}").format(model=model))
+    models = ", ".join(m if printers.capabilities(m).tested
+                       else _("{model} (untested)").format(model=m)
+                       for m in printers.SUPPORTED_MODELS)
+    print(_("Supported: {models}, Zebra zpl:203/300/600 (untested), CUPS queues cups:NAME "
+            "(untested)").format(models=models))
     return 0
 
 
 def _show_media(model: str, target: printers.Printer | None) -> int:
     if target is not None and target.source != "usb":
-        print("Rolle abfragen geht nur bei Druckern per USB.", file=sys.stderr)
+        print(_("Querying the roll only works with printers via USB."), file=sys.stderr)
         return 2
     printer = target.uri if target is not None and target.uri.startswith("file://") \
         else find_brother_lp()
     if printer is None:
-        print(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND, file=sys.stderr)
+        print(_(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND), file=sys.stderr)
         return 2
     try:
         media = read_media(printer)
@@ -265,8 +307,13 @@ def _show_media(model: str, target: printers.Printer | None) -> int:
         print(e, file=sys.stderr)
         return 2
     label = label_for_media(media, model)
-    hint = f" (Etikett {label})" if label else " (kein passendes Etikett)" if media.kind != "none" else ""
-    print(f"Eingelegt: {media.describe()}{hint}")
+    if label:
+        text = _("Loaded: {media} (label {label})")
+    elif media.kind != "none":
+        text = _("Loaded: {media} (no matching label)")
+    else:
+        text = _("Loaded: {media}")
+    print(text.format(media=media.describe(), label=label))
     return 0
 
 
@@ -281,8 +328,9 @@ def _apply_settings(args: argparse.Namespace) -> None:
         args.label = _auto_label(args.model, args.target)
     if hasattr(args, "label") and get_label(args.label).id not in {   # unbekannt: ValueError
             label.id for label in labels_for_model(args.model)}:
-        raise ValueError(f"Etikett {args.label!r} passt nicht zum {args.model} – siehe "
-                         f"'labelwerk -m {args.model} labels'")
+        raise ValueError(_("Label {label!r} does not fit the {model} – see "
+                           "'labelwerk -m {model} labels'").format(label=args.label,
+                                                                   model=args.model))
     if args.cmd == "print":
         args.orientation = args.orientation or settings.orientation
         args.margin = settings.margin_mm if args.margin is None else args.margin
@@ -298,9 +346,11 @@ def _install_desktop(remove: bool) -> int:
         try:
             removed = desktop.uninstall(data, update=False)
         except OSError as e:
-            print(f"labelwerk wurde nicht entfernt ({os_reason(e)}).", file=sys.stderr)
+            print(_("labelwerk was not removed ({reason}).").format(reason=os_reason(e)),
+                  file=sys.stderr)
             return 2
-        print("\n".join(f"Entfernt: {p}" for p in removed) or "Nichts zu entfernen.")
+        print("\n".join(_("Removed: {path}").format(path=p) for p in removed)
+              or _("Nothing to remove."))
         if removed:
             _report_update(desktop.update_databases(data))
         return 0
@@ -311,23 +361,27 @@ def _install_desktop(remove: bool) -> int:
         print(e, file=sys.stderr)
         return 2
     except OSError as e:
-        print(f"labelwerk wurde nicht eingetragen ({os_reason(e)}).", file=sys.stderr)
+        print(_("labelwerk was not added ({reason}).").format(reason=os_reason(e)),
+              file=sys.stderr)
         return 2
     for path in paths:
-        print(f"Installiert: {path}")
+        print(_("Installed: {path}").format(path=path))
     _report_update(desktop.update_databases(data))
-    print("labelwerk erscheint jetzt im Starter (ggf. kurz warten oder neu anmelden); "
-          "Doppelklick auf eine .labelwerk-Datei öffnet sie.")
+    print(_("labelwerk now appears in the launcher (wait a moment or log in again if needed); "
+            "double-clicking a .labelwerk file opens it."))
     return 0
 
 
 def _report_update(failed: list[str]) -> None:
     if failed:
-        print(f"Hinweis: {', '.join(failed)} hat nicht geklappt – Dateizuordnung gilt ggf. erst "
-              f"nach neuer Anmeldung.", file=sys.stderr)
+        print(_("Note: {tools} did not work – the file association may only apply after logging "
+                "in again.").format(tools=", ".join(failed)), file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    i18n.set_language(_language(argv))
+    _translate_argparse()
     args = _parser().parse_args(argv)
     settings = load_settings()
     args.settings = settings
@@ -355,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "print" and args.font and args.font_family:
-        print("--font (Schriftdatei) und --font-family schließen sich aus.", file=sys.stderr)
+        print(_("--font (font file) and --font-family exclude each other."), file=sys.stderr)
         return 2
     try:
         _apply_settings(args)
@@ -373,11 +427,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             img.save(args.preview)
         except (OSError, ValueError) as e:
-            print(f"Vorschau kann nicht gespeichert werden: {args.preview} ({e})", file=sys.stderr)
+            print(_("Preview cannot be saved: {path} ({error})").format(path=args.preview, error=e),
+                  file=sys.stderr)
             return 2
         dpi = get_label(args.label).dpi
-        print(f"Vorschau: {args.preview} ({format_mm(img.width, dpi)} × "
-              f"{format_mm(img.height, dpi)} mm)")
+        print(_("Preview: {path} ({width} × {height} mm)").format(
+            path=args.preview, width=format_mm(img.width, dpi), height=format_mm(img.height, dpi)))
         return 0
 
     return _send(img, args)

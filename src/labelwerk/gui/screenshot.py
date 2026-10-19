@@ -15,13 +15,15 @@ from urllib.parse import unquote, urlparse
 from PySide6.QtCore import SLOT, QObject, Signal, Slot
 from PySide6.QtDBus import QDBus, QDBusConnection, QDBusMessage
 
+from ..i18n import N_, _
+
 SERVICE = "org.freedesktop.portal.Desktop"
 OBJECT = "/org/freedesktop/portal/desktop"
 INTERFACE = "org.freedesktop.portal.Screenshot"
 REQUEST = "org.freedesktop.portal.Request"
 AVAILABLE_TIMEOUT_MS = 5_000      # Portal da? (startet es erst, dauert das meist < 1 s)
 CALL_TIMEOUT_MS = 10_000          # Antwort auf den Aufruf selbst (die Auswahl dauert beliebig)
-FAILED = "Bildschirmfoto fehlgeschlagen"
+FAILED = N_("Screenshot failed")
 _RESPONSE_SLOT = SLOT("response(uint,QVariantMap)")
 _NO_PORTAL = ("ServiceUnknown", "NameHasNoOwner", "UnknownObject", "UnknownInterface",
               "UnknownMethod", "ServiceNotFound")
@@ -44,10 +46,10 @@ def parse_response(code: int, results: dict) -> tuple[Path | None, str | None]:
     if code == 1:
         return None, None
     if code != 0:
-        return None, f"{FAILED} – vom System abgelehnt oder abgebrochen"
+        return None, _("Screenshot failed – rejected or cancelled by the system")
     uri = urlparse(str(results.get("uri") or ""))
     if uri.scheme != "file" or not uri.path:
-        return None, f"{FAILED} – keine Bilddatei erhalten"
+        return None, _("Screenshot failed – no image file received")
     return Path(unquote(uri.path)), None
 
 
@@ -56,12 +58,12 @@ def error_text(error_name: str) -> str:
     (die Fehlertexte von D-Bus sind englisch)."""
     short = error_name.rsplit(".", 1)[-1]
     if short in _NO_PORTAL:
-        return f"{FAILED} – kein Bildschirmfoto-Portal gefunden"
+        return _("Screenshot failed – no screenshot portal found")
     if short in _NO_ANSWER:
-        return f"{FAILED} – das Portal antwortet nicht"
+        return _("Screenshot failed – the portal does not answer")
     if short == "NotAllowed":
-        return f"{FAILED} – vom System nicht erlaubt"
-    return f"{FAILED} – Fehler des Portals"
+        return _("Screenshot failed – not allowed by the system")
+    return _("Screenshot failed – error of the portal")
 
 
 class _Request(QObject):
@@ -120,7 +122,7 @@ class ScreenshotPortal(QObject):
         self._spent.clear()
         bus = self.bus()
         if not bus.isConnected():
-            self.finished.emit(None, f"{FAILED} – keine Verbindung zum Sitzungsbus")
+            self.finished.emit(None, _("Screenshot failed – no connection to the session bus"))
             return
         token = f"labelwerk_{uuid.uuid4().hex}"
         self._request = _Request(self)
@@ -134,7 +136,7 @@ class ScreenshotPortal(QObject):
         try:
             handle = reply.arguments()[0].path()
         except (IndexError, AttributeError):
-            self._finish(None, f"{FAILED} – unerwartete Antwort des Portals")
+            self._finish(None, _("Screenshot failed – unexpected answer from the portal"))
             return
         if handle != self._path and not self._subscribe(handle):   # ältere Portale: eigener Pfad
             self._close(handle)                  # ohne Abo kommt keine Antwort: Auswahl schließen
@@ -149,7 +151,7 @@ class ScreenshotPortal(QObject):
         self._unsubscribe()
         if not self.bus().connect(SERVICE, path, REQUEST, "Response", self._request,
                                   _RESPONSE_SLOT):
-            self._finish(None, f"{FAILED} – Antwort des Portals nicht abonnierbar")
+            self._finish(None, _("Screenshot failed – cannot subscribe to the answer of the portal"))
             return False
         self._path = path
         return True

@@ -16,13 +16,18 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from . import i18n
+from .i18n import N_, _
+
 ARCHIVE = Path(__file__).with_name("clipart_data") / "clipart.zip"
 LICENSES = ARCHIVE.with_name("LICENSES.md")
-GROUPS = (("elektro", "Elektro"), ("versand", "Versand"), ("sicherheit", "Sicherheit"),
-          ("allgemein", "Allgemein"), ("eigene", "Eigene"))
+# Anzeigenamen mit N_ markiert: beim Anzeigen ``_(name)``
+GROUPS = (("elektro", N_("Electrical")), ("versand", N_("Shipping")), ("sicherheit", N_("Safety")),
+          ("allgemein", N_("General")), ("eigene", N_("My symbols")))
 ALLOWED_LICENSES = frozenset({"MIT", "Public domain", "CC0"})
 OWN_SUFFIXES = (".svg", ".png")
-OWN_LICENSE = "eigene Datei"
+OWN_LICENSE = N_("your own file")       # übersetzt in ``own_symbols``
+OWN_SUBGROUP = N_("My symbols")
 RECENT_LIMIT = 24
 _UMLAUTS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 _WORD = re.compile(r"\w+")
@@ -32,14 +37,16 @@ _WORD = re.compile(r"\w+")
 class Symbol:
     id: str              # „labelwerk/erde“, „iso7010/W012“, „tabler/outline/home“, „ordner/Datei.svg“
     group: str           # Schlüssel aus GROUPS
-    subgroup: str        # z. B. „Warnzeichen“, „Gebäude“
-    name: str            # deutscher Anzeigename
+    subgroup: str        # z. B. „Warnzeichen“, „Gebäude“ (in der Sprache von labelwerk)
+    name: str            # Anzeigename in der Sprache von labelwerk
     keywords: tuple[str, ...]
     file: str            # Pfad im Archiv bzw. im eigenen Ordner
     source: str
     url: str
     author: str
     license: str
+    names: tuple[str, ...] = ()   # Name in jeder Sprache (Suche findet alle)
+    subgroups: tuple[str, ...] = ()   # Untergruppe in jeder Sprache (ebenso)
 
 
 def _fold(text: str) -> str:
@@ -54,13 +61,24 @@ def _files() -> dict[str, bytes]:
         return {name: archive.read(name) for name in archive.namelist()}
 
 
-@lru_cache(maxsize=1)
 def catalog() -> tuple[Symbol, ...]:
-    """Alle mitgelieferten Symbole (einmal gelesen)."""
+    """Alle mitgelieferten Symbole, Namen und Untergruppen in der Sprache von labelwerk (je Sprache
+    einmal gelesen)."""
+    return _catalog(i18n.language())
+
+
+@lru_cache(maxsize=4)
+def _catalog(language: str) -> tuple[Symbol, ...]:
     entries = json.loads(_files()["catalog.json"])["symbols"]
-    return tuple(Symbol(id=e["id"], group=e["group"], subgroup=e["subgroup"], name=e["name"],
-                        keywords=tuple(e["keywords"]), file=e["file"], source=e["source"],
-                        url=e["url"], author=e["author"], license=e["license"])
+
+    def pick(entry: dict, key: str) -> str:   # ältere Kataloge: nur der deutsche Name
+        return entry.get(key + "s", {}).get(language) or entry[key]
+    return tuple(Symbol(id=e["id"], group=e["group"], subgroup=pick(e, "subgroup"),
+                        name=pick(e, "name"), keywords=tuple(e["keywords"]), file=e["file"],
+                        source=e["source"], url=e["url"], author=e["author"], license=e["license"],
+                        names=tuple(dict.fromkeys([*e.get("names", {}).values(), e["name"]])),
+                        subgroups=tuple(dict.fromkeys([*e.get("subgroups", {}).values(),
+                                                       e["subgroup"]])))
                  for e in entries)
 
 
@@ -74,15 +92,21 @@ class _Entry:
 
 
 def _entry(s: Symbol) -> _Entry:
-    name = _fold(s.name)
+    """Suchtexte: Name in jeder Sprache (Anzeigename zuerst), Untergruppe, Suchbegriffe."""
+    names = [_fold(n) for n in dict.fromkeys([s.name, *s.names])]
     keywords = tuple(_fold(k) for k in s.keywords)
-    return _Entry(name, tuple(_WORD.findall(name)), keywords,
-                  " ".join((name, _fold(s.subgroup), *keywords)))
+    return _Entry(" / ".join(names), tuple(w for n in names for w in _WORD.findall(n)), keywords,
+                  " ".join((*names, *(_fold(g) for g in dict.fromkeys([s.subgroup, *s.subgroups])),
+                            *keywords)))
 
 
-@lru_cache(maxsize=1)
 def _index() -> dict[str, tuple[Symbol, _Entry]]:
-    return {s.id: (s, _entry(s)) for s in catalog()}
+    return _index_for(i18n.language())
+
+
+@lru_cache(maxsize=4)
+def _index_for(language: str) -> dict[str, tuple[Symbol, _Entry]]:
+    return {s.id: (s, _entry(s)) for s in _catalog(language)}
 
 
 def own_dir() -> Path:
@@ -100,9 +124,9 @@ def own_symbols(directory: Path | None = None) -> list[Symbol]:
                         and p.suffix.lower() in OWN_SUFFIXES), key=lambda p: p.name.casefold())
     except OSError:
         return []
-    return [Symbol(id=f"ordner/{p.name}", group="eigene", subgroup="Eigene", name=p.stem,
+    return [Symbol(id=f"ordner/{p.name}", group="eigene", subgroup=_(OWN_SUBGROUP), name=p.stem,
                    keywords=(), file=str(p), source=p.name, url="", author="",
-                   license=OWN_LICENSE) for p in paths]
+                   license=_(OWN_LICENSE)) for p in paths]
 
 
 def symbols(group: str | None = None) -> list[Symbol]:
@@ -150,7 +174,7 @@ def search(text: str, group: str | None = None) -> list[Symbol]:
         entry = index[symbol.id][1] if symbol.id in index else _entry(symbol)
         if all(word in entry.text for word in words):
             ranked.append((_rank(entry, words[0]), position, symbol))
-    return [symbol for _, _, symbol in sorted(ranked, key=lambda r: r[:2])]
+    return [symbol for __, __, symbol in sorted(ranked, key=lambda r: r[:2])]
 
 
 def data(symbol: Symbol) -> bytes:
