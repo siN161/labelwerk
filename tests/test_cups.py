@@ -92,11 +92,12 @@ def test_without_device_list_the_queues_stay(fake):
     assert [q.device for q in cups.queues()] == ["", "", ""]
 
 
-def test_cups_failure_is_not_remembered(fake):
+def test_cups_failure_is_not_remembered_for_long(fake):
     _, outputs, _ = fake
     outputs["lpoptions"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
     assert cups.queue_info("Dymo_LabelWriter_450").source == "list"
     outputs["lpoptions"] = LPOPTIONS
+    cups.forget()                                      # z. B. nach FAILED_MAX_AGE_S
     assert cups.queue_info("Dymo_LabelWriter_450").source == "options"
 
 
@@ -252,3 +253,23 @@ def test_bad_queue_names_are_not_used(fake):
     assert [q.name for q in cups.queues()] == ["Gut"]
     with pytest.raises(cups.CupsError, match="Ungültiger Name"):
         cups.print_images("../x", [Image.new("1", (8, 8), 1)], 57, 32, 300)
+
+
+def test_silent_cups_is_asked_again_only_after_a_while(fake, monkeypatch):
+    calls, outputs, _ = fake
+    outputs["lpoptions"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
+    for _ in range(5):
+        assert cups.queue_info("Dymo_LabelWriter_450").source == "list"
+    assert sum(1 for c in calls if c[0] == "lpoptions") == 1   # nicht bei jeder Abfrage warten
+    monkeypatch.setattr(cups.time, "monotonic", lambda: 10 ** 9)
+    outputs["lpoptions"] = LPOPTIONS
+    assert cups.queue_info("Dymo_LabelWriter_450").source == "options"
+
+
+@pytest.mark.parametrize("model, printer", [("zpl:203", "tcp://10.0.0.5"), ("QL-600", "zpl+tcp://x"),
+                                            ("zpl:203", "cups:Buero"), ("cups:Buero", "file:///x")])
+def test_route_must_fit_the_model(fake, model, printer):
+    label = labels_for_model(model)[0]
+    with pytest.raises(PrintError, match="passt nicht zum Drucker"):
+        print_image(Image.new("1", (label.width, label.height or 200), 1), label.id,
+                    model=model, printer=printer)

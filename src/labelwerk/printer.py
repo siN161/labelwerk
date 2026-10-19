@@ -11,7 +11,7 @@ from PIL import Image
 
 from .document import CUTS
 from .labels import get_label, labels_for_model
-from .printers import DEFAULT_MODEL, backend_for, capabilities
+from .printers import DEFAULT_MODEL, backend_for, capabilities, route_fits
 
 DEFAULT_BACKEND = "linux_kernel"
 DEFAULT_PRINTER = "file:///dev/usb/lp0"
@@ -167,6 +167,9 @@ def print_image(
     images = [image] if isinstance(image, Image.Image) else list(image)
     if label_id not in {label.id for label in labels_for_model(model)}:
         raise PrintError(f"Etikett {label_id!r} passt nicht zum Drucker ({model}).")
+    if not route_fits(backend, model):
+        raise PrintError(f"Modell {model} passt nicht zum Drucker {printer} – für CUPS cups:NAME, "
+                         "für Zebra zpl:203/300/600, sonst ein Brother-QL angeben.")
     if backend == "cups":
         return _print_cups(printer[len("cups:"):], images, label_id, options, cancelled)
     if backend == "zpl":

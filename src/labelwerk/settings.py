@@ -74,14 +74,12 @@ def _rules(model: str | None = None) -> dict:
         "recent_files": lambda v: isinstance(v, list),
         "start_favorite": lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
         "printer": lambda v: isinstance(v, str) and (
-            v == "" or v.startswith(("file://", "tcp://", "usb://", "cups:"))),
+            v == "" or v.startswith(("file://", "tcp://", "usb://", "cups:", "zpl+file://",
+                                     "zpl+tcp://"))),
         "printer_model": lambda v: v == "" or v in SUPPORTED_MODELS,
         "last_model": lambda v: v == "" or is_model(v),
         "zebra_dpi": lambda v: v in (0, *zpl.RESOLUTIONS) and not isinstance(v, bool),
-        "printer_options": lambda v: isinstance(v, dict) and all(
-            isinstance(k, str) and isinstance(o, dict)
-            and all(_option_word(a) and _option_word(b) for a, b in o.items())
-            for k, o in v.items()),
+        "printer_options": lambda v: isinstance(v, dict),
         "network_printers": lambda v: isinstance(v, list),
     }
 
@@ -89,10 +87,20 @@ def _rules(model: str | None = None) -> dict:
 _KEYS = (*_rules(), "shortcuts")
 
 
-def _option_word(value) -> bool:
-    """Schlüssel bzw. Wert einer Druck-Option: ein Wort (``lp -o`` trennt an Leerzeichen)."""
-    return isinstance(value, str) and value.isprintable() and bool(value) \
+def _option_word(value, empty: bool = False) -> bool:
+    """Schlüssel bzw. Wert einer Druck-Option: ein Wort (``lp -o`` trennt an Leerzeichen);
+    ``empty``: leer erlaubt (Zebra-Modus „wie am Drucker eingestellt“)."""
+    return isinstance(value, str) and value.isprintable() and (bool(value) or empty) \
         and not any(c.isspace() or c in "='\"" for c in value)
+
+
+def _printer_options(value: dict, warnings: list[str]) -> dict[str, dict[str, str]]:
+    """Druck-Optionen je Modell: ungültige Einträge einzeln verworfen (mit Hinweis)."""
+    valid = {k: {a: b for a, b in o.items() if _option_word(a) and _option_word(b, empty=True)}
+             for k, o in value.items() if isinstance(k, str) and isinstance(o, dict)}
+    if len(valid) != len(value) or any(len(valid[k]) != len(value[k]) for k in valid):
+        warnings.append("Einstellung 'printer_options': ungültige Einträge verworfen.")
+    return {k: o for k, o in valid.items() if o}
 
 
 def settings_path() -> Path:
@@ -133,6 +141,8 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
                 value = _text_list(key, value, settings.warnings)[:RECENT_FILES]
             elif key == "network_printers":
                 value = _network(value, settings.warnings)
+            elif key == "printer_options":
+                value = _printer_options(value, settings.warnings)
             setattr(settings, key, value)
         else:
             settings.warnings.append(f"Einstellung {key!r} ungültig ({value!r}) – "

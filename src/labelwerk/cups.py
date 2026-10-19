@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from PIL import Image
@@ -29,6 +29,7 @@ TIMEOUT_S = 5
 PRINT_TIMEOUT_S = 120                      # lp lädt eine ganze Serie hoch
 QUEUE_MAX_AGE_S = 30                       # Liste der Warteschlangen so lange wiederverwenden
 INFO_MAX_AGE_S = 300                       # Treiber-Angaben einer Warteschlange ebenso
+FAILED_MAX_AGE_S = 30                      # … ohne Antwort von CUPS nur kurz (nicht jedes Mal warten)
 BACKGROUND = True                          # Liste im Hintergrund lesen (Tests: sofort)
 # Name einer Warteschlange (CUPS: druckbar, ohne Leerzeichen, /, \, #, Anführungszeichen)
 _QUEUE_NAME = re.compile(r"[^\s/\\#'\"-][^\s/\\#'\"]{0,126}")
@@ -182,21 +183,21 @@ def forget() -> None:
 
 def queue_info(name: str) -> QueueInfo:
     """Etiketten, Auflösung und Schnitt-Optionen einer Warteschlange; gemerkt (``INFO_MAX_AGE_S``),
-    außer CUPS hat nicht geantwortet (dann die Liste je Hersteller, beim nächsten Mal neu
-    gefragt). Wartet auf CUPS – nur beim Wählen des Druckers."""
+    hat CUPS nicht geantwortet, gilt die Liste je Hersteller ``FAILED_MAX_AGE_S`` lang, dann wird
+    neu gefragt. Wartet auf CUPS – nur beim Wählen des Druckers."""
     with _lock:
         stamp, info = _info_cache.get(name, (None, None))
-    if info is not None and time.monotonic() - stamp < INFO_MAX_AGE_S:
-        return info
+    if info is not None and time.monotonic() - stamp < (
+            INFO_MAX_AGE_S if info.source != "failed" else FAILED_MAX_AGE_S):
+        return info if info.source != "failed" else replace(info, source="list")
     try:
         options = _options(name) if valid_name(name) else {}
         answered = valid_name(name)
     except CupsError:
         options, answered = {}, False
     info = _queue_info(name, options)
-    if answered:
-        with _lock:
-            _info_cache[name] = (time.monotonic(), info)
+    with _lock:                             # ohne Antwort: kurz merken, dann neu fragen
+        _info_cache[name] = (time.monotonic(), info if answered else replace(info, source="failed"))
     return info
 
 

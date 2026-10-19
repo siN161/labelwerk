@@ -63,6 +63,22 @@ def is_model(model) -> bool:
                                        and cups.valid_name(model[len(CUPS):]))
 
 
+def brother_model(model) -> bool:
+    """Brother-QL (nicht CUPS, nicht Zebra)."""
+    return model in SUPPORTED_MODELS
+
+
+def route_fits(backend: str, model: str) -> bool:
+    """Passt der Weg zum Drucker (``backend_for``) zum Modell? CUPS nur mit „cups:NAME“, Zebra nur
+    mit „zpl:…“, die Brother-Wege nur mit einem QL."""
+    from . import zpl
+    if backend == "cups":
+        return isinstance(model, str) and model.startswith(CUPS)
+    if backend == "zpl":
+        return zpl.is_model(model)
+    return brother_model(model)
+
+
 def capabilities(model: str) -> Capabilities:
     if isinstance(model, str) and model.startswith(CUPS) and is_model(model):
         # Schneiden bestimmt der Treiber (Reiter SERIE) – ohne CUPS zu fragen

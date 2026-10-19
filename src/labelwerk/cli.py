@@ -54,7 +54,9 @@ def _add_output_options(p: argparse.ArgumentParser) -> None:
                         "zpl+file:///dev/usb/lpN bzw. zpl+tcp://IP (Zebra, mit -m zpl:203/300/600)")
     p.add_argument("-b", "--backend", choices=["linux_kernel", "pyusb", "network", "cups", "zebra"],
                    help="Standard: aus dem Drucker (tcp:// → network)")
-    p.add_argument("--no-cut", action="store_true")
+    p.add_argument("--no-cut", action="store_true",
+                   help="nicht schneiden (Brother; bei CUPS/Zebra stellt das der Treiber bzw. der "
+                        "Modus in den Einstellungen der GUI ein)")
     p.add_argument("--preview", metavar="PNG", help="nur Vorschau speichern, nicht drucken")
 
 
@@ -131,21 +133,26 @@ def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
     if backend == "pyusb" and wanted == "auto":
         uri = find_brother_usb()
         return printers.printer_for(uri, []) if uri else None
-    found = _all_printers(settings)
+    # CUPS nur fragen, wenn es darum geht (lpstat kann dauern)
+    with_cups = (wanted.startswith("cups:") or backend == "cups"
+                 or wanted == "auto" and settings.printer.startswith("cups:"))
+    found = _all_printers(settings, cups=with_cups)
     if wanted != "auto":
         return printers.printer_for(wanted, found)
     if backend in ("network", "cups", "zebra"):
         found = [p for p in found if p.source == backend]
+        if backend == "cups" and not settings.printer.startswith("cups:"):
+            return found[0] if found else None      # ausdrücklich CUPS: die erste Warteschlange
     elif backend == "linux_kernel":
         found = [p for p in found if p.source == "usb"]
     return printers.choose(found, settings.printer)
 
 
-def _all_printers(settings) -> list[printers.Printer]:
-    """Direkt per USB, eingetragene Netzwerkdrucker und Warteschlangen von CUPS."""
+def _all_printers(settings, cups: bool = True) -> list[printers.Printer]:
+    """Direkt per USB, eingetragene Netzwerkdrucker und (``cups``) Warteschlangen von CUPS."""
     direct = (printers.usb_printers() + printers.zebra_printers(dpi=settings.zebra_dpi)
               + printers.network_printers(network_entries(settings)))
-    return direct + printers.cups_printers(direct, wait=True)
+    return direct + (printers.cups_printers(direct, wait=True) if cups else [])
 
 
 def _resolve_model(model: str, target: printers.Printer | None, settings) -> str:

@@ -558,3 +558,18 @@ def test_zebra_on_usb_is_listed(tmp_path, monkeypatch, capsys):
     assert main(["printers"]) == 0
     out = capsys.readouterr().out
     assert "ZTC GK420d · lp2" in out and "zpl+file:///dev/usb/lp2" in out and "Zebra zpl:203" in out
+
+
+def test_model_and_route_mismatch_is_a_message(capsys):
+    assert main(["-m", "zpl:203", "print", "X", "-p", "tcp://10.0.0.5", "-l", "51x25mm@203"]) == 2
+    assert "passt nicht zum Drucker" in capsys.readouterr().err
+
+
+def test_backend_cups_takes_the_first_queue(cups_queue, capsys):
+    assert main(["print", "Hallo", "-b", "cups", "-l", "57x32mm@300"]) == 0
+    assert "Auftrag Buero-7" in capsys.readouterr().out
+
+
+def test_cups_is_not_asked_without_need(cups_queue):
+    main(["print", "Hallo", "-l", "62", "--preview", "/dev/null"])
+    assert not any(c[0] == "lpstat" for c in cups_queue)

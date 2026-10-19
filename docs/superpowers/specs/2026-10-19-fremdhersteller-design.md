@@ -37,7 +37,7 @@ eines schon an CUPS übergebenen Auftrags (geht über die Druckerverwaltung des 
   (Grenzen in Druckpunkten), GUI-Arbeitsfläche (echte Größe bei jeder Auflösung).
 - **Etiketten anderer Hersteller** als eigene Etikett-IDs, die Größe und Auflösung tragen: `"54x25mm@300"` (fest,
   Breite × Höhe in mm, auf 0,1 mm) – `labels.get_label` versteht sie ohne angeschlossenen Drucker (Datei bleibt
-  öffnbar); bedruckbar = ganzes Etikett (der Rand des Dokuments hält Abstand). Beschreibung „54 × 25 mm · 300 dpi“.
+  lesbar; Öffnen in der GUI folgt der bisherigen Regel – das Etikett muss zum gewählten Drucker passen); bedruckbar = ganzes Etikett (der Rand des Dokuments hält Abstand). Beschreibung „54 × 25 mm · 300 dpi“.
 - **Vorschau = Druck** bleibt: das Druckbild hat die Auflösung des Druckers.
 
 ## 2 – CUPS
@@ -72,7 +72,8 @@ eines schon an CUPS übergebenen Auftrags (geht über die Druckerverwaltung des 
   Auflösung des Druckers.
 - **ZPL:** `^XA ^PW<Breite> ^LL<Länge> ^MM<Modus> ^FO0,0 ^GFA,…(Bild als Hex, Zeilen komprimiert nach Zebra-ASCII)
   ^FS ^PQ1 ^XZ` je Etikett; Serie = ein Datenstrom. Schnitt-Modus (Reiter SERIE): Abreißen (T), Schneiden (C),
-  Ablösen (P), gespeichert je Drucker (URI). Senden roh an `/dev/usb/lpN` bzw. TCP 9100 (Zeitlimit wie
+  Ablösen (P), dazu „wie am Drucker eingestellt“ (Standard, kein `^MM`); gespeichert je Modell (`zpl:203` – die
+  Nummer lpN eines USB-Geräts wechselt beim Einstecken). Senden roh an `/dev/usb/lpN` bzw. TCP 9100 (Zeitlimit wie
   Brother-Netzwerk).
 - **Modell-ID** `zpl:203` / `zpl:300`; URIs `zpl+file:///dev/usb/lpN`, `zpl+tcp://host:9100`.
 - **Referenztests:** ZPL eines festen Testetiketts je Auflösung als SHA-256 (wie die Brother-Referenzen).
@@ -80,10 +81,11 @@ eines schon an CUPS übergebenen Auftrags (geht über die Druckerverwaltung des 
 ## 4 – GUI
 
 - **Druckermenü:** Brother (direkt), Zebra (direkt) und CUPS-Warteschlangen („Dymo LabelWriter 450 · CUPS“),
-  ungeprüfte gekennzeichnet; Automatisch: Brother direkt › Zebra direkt › CUPS.
-- **Reiter Papier:** Etiketten des gewählten Druckers (bei CUPS aus dem Treiber, gruppiert „Etiketten des Druckers“).
+  ungeprüfte gekennzeichnet; Automatisch: Brother direkt › Zebra direkt › Netzwerk – CUPS-Warteschlangen nur, wenn
+  gewählt (siehe 2).
+- **Reiter Papier:** Etiketten des gewählten Druckers (bei CUPS aus dem Treiber; in der Liste unter „gestanzt“).
 - **Reiter SERIE:** bei CUPS die Schnitt-Optionen des Treibers (je Option eine Auswahl), bei Zebra der Modus, bei
-  Brother wie bisher; gespeichert je Drucker in den Einstellungen (`printer_options`), nicht in der Datei.
+  Brother wie bisher; gespeichert je Modell in den Einstellungen (`printer_options`), nicht in der Datei.
 - **Einstellungen:** Netzwerkdrucker mit Art (Brother/Zebra) und bei Zebra Auflösung.
 - **Medium prüfen** nur Brother per USB (sonst gesperrt mit Hinweis).
 

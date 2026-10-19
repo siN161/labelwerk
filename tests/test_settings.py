@@ -310,7 +310,8 @@ def test_cups_printer_and_its_options_are_kept(tmp_path):
 
 
 @pytest.mark.parametrize("bad", [[], {"cups:Dymo": "x"}, {"cups:Dymo": {"CutMedia": 3}},
-                                 {"cups:Dymo": {"CutMedia": "Off -o x=y"}}])
+                                 {"cups:Dymo": {"CutMedia": "Off -o x=y"}},
+                                 {"cups:Dymo": {"": "x"}}])
 def test_bad_printer_options_fall_back(tmp_path, bad):
     path = tmp_path / "settings.json"
     path.write_text(json.dumps({"printer_options": bad}))
@@ -326,3 +327,20 @@ def test_network_zebra_is_kept(tmp_path):
     s = load_settings(path)
     assert s.network_printers == [{"name": "Lager", "host": "10.0.0.8", "model": "zpl:203"}]
     assert s.warnings
+
+
+def test_zebra_printer_and_empty_mode_are_kept(tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings(Settings(printer="zpl+file:///dev/usb/lp2", printer_options={
+        "zpl:203": {"mode": ""}, "cups:Dymo": {"CutMedia": "EndOfJob"}}), path)
+    s = load_settings(path)
+    assert s.printer == "zpl+file:///dev/usb/lp2" and s.warnings == []
+    assert s.printer_options == {"zpl:203": {"mode": ""}, "cups:Dymo": {"CutMedia": "EndOfJob"}}
+
+
+def test_one_bad_printer_option_keeps_the_others(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"printer_options": {
+        "cups:Dymo": {"CutMedia": "EndOfJob", "X": "a b"}, "zpl:203": "kaputt"}}))
+    s = load_settings(path)
+    assert s.printer_options == {"cups:Dymo": {"CutMedia": "EndOfJob"}} and s.warnings

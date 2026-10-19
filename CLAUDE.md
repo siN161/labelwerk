@@ -43,7 +43,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   im Druckermenü (nie automatisch), Etiketten/Auflösung aus dem Treiber, Druck als PDF in einem Auftrag, Schnitt-Optionen
   des Treibers im Reiter SERIE; Zebra direkt (ZPL, USB/Netzwerk, Modus Abreißen/Schneiden/Ablösen); CLI -p cups:NAME,
   zpl+file://, zpl+tcp:// mit -m zpl:203.
-- 2454 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2479 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -129,8 +129,10 @@ src/labelwerk/
               `symbols_recent` (höchstens 24)/`symbols_favorites` (Symbol-ids), `recent_files` (höchstens 10)/`start_favorite`
               (der Einstellungsdialog reicht sie durch); Drucker: `printer` (gewählte URI, "" = automatisch), `printer_model`
               (Ersatz), `last_model` (zuletzt erkannt), `network_printers` ({name, host, model}; valid_host: IPv4/Name ohne
-              Port/Schema/Steuerzeichen), network_entries(settings); load_settings(path, model=None): Etikett muss nur ein
-              bekanntes QL-Etikett sein (ob es zum Drucker passt, prüfen GUI und CLI)
+              Port/Schema/Steuerzeichen; Modell auch zpl:…), network_entries(settings); `printer_options` (Modell →
+              Druck-Optionen: CUPS-Schnitt-Optionen, Zebra-Modus; je Eintrag geprüft, leerer Wert erlaubt), `zebra_dpi`
+              (0 = erkannt); load_settings(path, model=None): Etikett muss nur ein bekanntes Etikett sein (auch
+              „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI)
   storage.py  Etiketten als Datei (*.labelwerk, JSON versioniert, Bilder Base64): to_dict/from_dict, save (atomar), load;
               Schemata SPAN/PARAGRAPH/TEXT/IMAGE/BARCODE/DOCUMENT (jedes Dataclass-Feld, Test hält gleich); Dateien sind fremde Eingabe:
               Prüfung je Feld nach Art, Wertebereich (endlich, Grenzen) und Struktur → StorageError (deutsch, mit Dateiname),
@@ -202,7 +204,8 @@ src/labelwerk/
                     Punkte, angezeigt in mm), Höhe/Klartext bzw. Fehlerkorrektur, Ruhezone, Drehen, Position; focus_data
     panels/series.py Reiter Serie: Quelle (TABELLE …/NUMMERIERUNG/ENTFERNEN, Blatt, Start/Schritt/Anzahl/Stellen – ungültig: nicht
                     übernommen), Spalten (itemActivated → insert_column), Zeilen mit Häkchen (checked_rows), Vorschau-Zeile (preview,
-                    current_row), Schnitt; liest nur bei geänderter Quelle/Blatt/Nummerierung, check_file (Datei geändert, vor dem
+                    current_row), Schnitt (Brother: set_cutter; CUPS/Zebra: set_driver_cuts mit den Optionen des Treibers bzw.
+                    dem Modus, Signal driver_cut_chosen → Einstellungen je Modell); liest nur bei geänderter Quelle/Blatt/Nummerierung, check_file (Datei geändert, vor dem
                     Drucken), reload (Öffnen); Fehler und unbekannte Platzhalter als Hinweis
     tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Barcode, Layout, Serie; neue Werkzeuge als Eintrag; START_TOOL = Papier)
     file_session.py FileSession: Neu/Öffnen/Speichern, modified/update_title („•“), maybe_save (Rückfrage), Dokument an Ort und
@@ -245,8 +248,8 @@ src/labelwerk/
     media_worker.py  Medium prüfen im Hintergrund (MediaWorker(model, printer): URI des gewählten USB-Druckers; Ergebnis eines
                     inzwischen gewechselten Druckers zählt nicht)
     settings_dialog.py Einstellungen: Reiter Allgemein (rollt; inkl. Design, sofort wirksam über app.apply_theme; Drucker:
-                    Druckermodell als Ersatz, Netzwerkdrucker-Tabelle mit Prüfung der Adresse; Etikett eines anderen Druckers
-                    bleibt) und Tastenkürzel (Konflikte sperren Speichern)
+                    Druckermodell als Ersatz, Zebra-Auflösung, Netzwerkdrucker-Tabelle mit Prüfung der Adresse und Modell
+                    Brother/Zebra; Etikett eines anderen Druckers bleibt) und Tastenkürzel (Konflikte sperren Speichern)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)
   cli.py      labelwerk labels | labelwerk media | labelwerk printers | labelwerk fonts | -m auto (Modell des Zieldruckers:
@@ -290,7 +293,7 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
 
-Nächste Schritte: Fremdhersteller (6b), Übersetzungen (7), Paketierung (8).
+Nächste Schritte: Übersetzungen (7), Paketierung (8).
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld
@@ -329,7 +332,8 @@ Umsetzung:
    - Kern und CLI: `gettext` (Meldungen wie `TextTooLarge`, Druckerfehler, CLI-Hilfe), gemeinsame Sprachwahl mit der GUI.
    - Quellsprache festlegen (Deutsch beibehalten oder auf Englisch umstellen) – zusammen mit Punkt 9 (README/Kommentare auf Englisch) entscheiden.
    - Tests: jede Meldung übersetzt (keine fehlenden Einträge), Layout hält längere Texte aus (Panels, Knöpfe).
-6b. Drucker anderer Hersteller (nach 6, Grundlage: Drucker-Schnittstelle aus 6 – Brother ist eine Umsetzung):
+6b. Drucker anderer Hersteller – umgesetzt (Spec 2026-10-19-fremdhersteller, alles ungeprüft): CUPS und Zebra direkt.
+   Ursprüngliche Notiz (Grundlage: Drucker-Schnittstelle aus 6 – Brother ist eine Umsetzung):
    allgemein über CUPS (fertiges Bild an eingerichteten Etikettendrucker: Dymo LabelWriter, Zebra mit Linux-Treiber),
    Zebra direkt (ZPL), später Bluetooth-Geräte (Niimbot, Phomemo – Protokolle nur von der Community, erst mit Testgerät);
    ohne Testgerät „ungetestet“; Dymo LabelWriter 550 nimmt nur Original-Etiketten mit Chip.

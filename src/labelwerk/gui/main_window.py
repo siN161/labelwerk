@@ -21,6 +21,7 @@ from .. import barcodes, clipart, favorites, series
 from ..desktop import APP_NAME
 from ..detect import brother_busy
 from .. import cups, zpl
+from .. import printers as printers_mod
 from ..printers import (UNTESTED_HINT, Printer, capabilities, choose, cups_printers,
                         effective_model, network_printers, usb_printers, zebra_printers)
 from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, Series, TextObject
@@ -1630,7 +1631,7 @@ class MainWindow(QMainWindow):
             # während der Dialog offen war, kann sich Drucker/letztes Modell geändert haben
             saved.printer, saved.last_model = self.settings.printer, self.settings.last_model
             saved.printer_options = self.settings.printer_options
-            if saved.printer.startswith("tcp://") and saved.printer not in {
+            if saved.printer.startswith(("tcp://", "zpl+tcp://")) and saved.printer not in {
                     p.uri for p in network_printers(network_entries(saved))}:
                 saved.printer = ""                  # Netzwerkdrucker entfernt/geändert: automatisch
             self.settings = saved
@@ -1856,6 +1857,10 @@ class MainWindow(QMainWindow):
         if self.printer is None and self.settings.printer:
             self._set_result("Gewählter Drucker nicht gefunden – einschalten oder in der "
                              "Statusleiste einen anderen wählen.", "error")
+            return False
+        if self.printer is None and not printers_mod.brother_model(self.model):
+            self._set_result("Kein Drucker für dieses Etikett – in der Statusleiste einen Drucker "
+                             "wählen.", "error")
             return False
         if doc.label_id not in {label.id for label in labels_for_model(self.model)}:
             self._set_result(f"Etikett „{doc.label_id}“ passt nicht zum Drucker ({self.model}).",

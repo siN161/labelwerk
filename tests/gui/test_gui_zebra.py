@@ -92,3 +92,21 @@ def test_zebra_resolution_setting_is_used(qtbot, monkeypatch):
     monkeypatch.setattr(main_window, "zebra_printers", lambda **kw: seen.update(kw) or [])
     _window(qtbot, monkeypatch, [], zebra_dpi=600)
     assert seen == {"dpi": 600}
+
+
+def test_chosen_zebra_survives_a_restart(qtbot, monkeypatch):
+    win = _zebra_window(qtbot, monkeypatch)
+    win.choose_printer(ZEBRA.uri)
+    s = load_settings()
+    assert s.printer == ZEBRA.uri and s.warnings == []
+    win.panel("series").driver_cuts["mode"].setCurrentIndex(1)
+    win.panel("series").driver_cuts["mode"].setCurrentIndex(0)   # zurück: wie am Drucker
+    assert load_settings().printer_options == {"zpl:300": {"mode": ""}}
+
+
+def test_without_printer_a_zebra_label_is_not_sent_to_brother(qtbot, monkeypatch, workers):
+    win = _window(qtbot, monkeypatch, [], last_model="zpl:203")
+    assert win.model == "zpl:203" and win.printer is None
+    win.panel("text").edit.setPlainText("Hallo")
+    win.print_label()
+    assert workers == [] and "Kein Drucker für dieses Etikett" in win.result.text()
