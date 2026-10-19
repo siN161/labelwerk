@@ -1519,6 +1519,15 @@ msgstr "Objekt ragt hinaus"
 msgid "Off: images that are too large are reduced – saves tape"
 msgstr "Aus: zu große Bilder werden verkleinert – spart Band"
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Off: queues with office paper (A4, Letter …) do not appear in the printer menu"
+msgstr "Aus: Warteschlangen mit Büropapier (A4, Letter …) erscheinen nicht im Druckermenü"
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Office printers hidden: {names} – print with -p cups:NAME"
+msgstr "Bürodrucker ausgeblendet: {names} – drucken mit -p cups:NAME"
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "On round labels every border becomes a circle."
 msgstr "Auf runden Etiketten wird jeder Rahmen ein Kreis."
@@ -2171,6 +2180,10 @@ msgid "Shortcuts assigned twice – change one to save:"
 msgstr "Tastenkürzel doppelt belegt – zum Speichern eines ändern:"
 
 #: src/labelwerk/gui/settings_dialog.py
+msgid "Show all CUPS printers (office printers too)"
+msgstr "Alle CUPS-Drucker zeigen (auch Bürodrucker)"
+
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Show all fonts"
 msgstr "Alle Schriften zeigen"
 
@@ -2627,6 +2640,10 @@ msgid "all font families, also copies, symbol fonts and other scripts"
 msgstr "alle Schriftfamilien, auch Kopien, Symbolschriften und andere Schriftsysteme"
 
 #: src/labelwerk/cli.py
+msgid "also list office printers (CUPS queues with A4/Letter paper)"
+msgstr "auch Bürodrucker zeigen (CUPS-Warteschlangen mit A4/Letter-Papier)"
+
+#: src/labelwerk/cli.py
 msgid "auto (default), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (queue, see 'labelwerk printers'), zpl+file:///dev/usb/lpN or zpl+tcp://IP (Zebra, with -m zpl:203/300/600)"
 msgstr "auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (Warteschlange, siehe 'labelwerk printers'), zpl+file:///dev/usb/lpN bzw. zpl+tcp://IP (Zebra, mit -m zpl:203/300/600)"
 
@@ -2858,6 +2875,13 @@ msgstr "{app}-Etikett"
 #, python-brace-format
 msgid "{checked} of {total} selected"
 msgstr "{checked} von {total} gewählt"
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "{count} office printer hidden – “labelwerk printers --all” shows it, print with -p cups:NAME"
+msgid_plural "{count} office printers hidden – “labelwerk printers --all” shows them, print with -p cups:NAME"
+msgstr[0] "{count} Bürodrucker ausgeblendet – „labelwerk printers --all“ zeigt ihn, drucken mit -p cups:NAME"
+msgstr[1] "{count} Bürodrucker ausgeblendet – „labelwerk printers --all“ zeigt sie, drucken mit -p cups:NAME"
 
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/settings_dialog.py

@@ -92,3 +92,50 @@ def test_queues_are_never_chosen_automatically(qtbot, monkeypatch, queue):
     assert win.printer is None and win.model == "QL-600"     # Bürodrucker im Netz bleiben aus
     assert "cups:Dymo" in [p.uri for p in win.printers]
     assert load_settings().last_model in ("", "QL-600")
+
+
+@pytest.fixture
+def office(monkeypatch):
+    """„Dymo“ (Etiketten) und „Buero“ (A4/Letter, ein Bürodrucker)."""
+    def run(*args, **kw):
+        if args[0] == "lpstat":
+            return ("Dymo\nBuero\n" if args[1] == "-e" else
+                    "device for Dymo: usb://DYMO/LabelWriter%20450\n"
+                    "device for Buero: ipp://10.0.0.7/ipp/print\n")
+        if args[0] == "lpoptions":
+            return OPTIONS if args[2] == "Dymo" else "PageSize/Media Size: Letter *A4\n"
+        return ""
+    monkeypatch.setattr(cups, "_run", run)
+
+
+def _menu(win):
+    win._fill_printer_menu()
+    return [a.text() for a in win.printer_menu.actions() if a.text()]
+
+
+def test_office_printers_are_hidden_in_the_menu(qtbot, monkeypatch, office):
+    win = _window(qtbot, monkeypatch, [QL600])
+    assert "Dymo · CUPS – ungeprüft" in _menu(win)
+    assert not any("Buero" in t for t in _menu(win))
+
+
+def test_office_printers_with_the_setting(qtbot, monkeypatch, office):
+    win = _window(qtbot, monkeypatch, [QL600], cups_all=True)
+    assert "Buero · CUPS – ungeprüft" in _menu(win)
+
+
+def test_chosen_office_printer_stays_in_the_menu(qtbot, monkeypatch, office):
+    win = _window(qtbot, monkeypatch, [QL600], printer="cups:Buero")
+    assert "Buero · CUPS – ungeprüft" in _menu(win) and win.printer.uri == "cups:Buero"
+
+
+def test_show_all_cups_printers_in_the_settings(qtbot, tmp_path):
+    from labelwerk.gui.settings_dialog import SettingsDialog
+    from labelwerk.settings import Settings
+    path = tmp_path / "s.json"
+    dialog = SettingsDialog(Settings(), path)
+    qtbot.addWidget(dialog)
+    assert not dialog.cups_all.isChecked()
+    dialog.cups_all.setChecked(True)
+    dialog.accept()
+    assert load_settings(path).cups_all is True

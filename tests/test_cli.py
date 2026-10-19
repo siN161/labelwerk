@@ -574,6 +574,77 @@ def test_model_and_route_mismatch_is_a_message(capsys):
     assert "passt nicht zum Drucker" in capsys.readouterr().err
 
 
+@pytest.fixture
+def office_queue(monkeypatch):
+    """„Etiketten“ (Dymo-Größen) und „Buero“ (A4/Letter) in CUPS."""
+    from labelwerk import cups
+    calls = []
+
+    def run(*args, **kw):
+        calls.append(args)
+        if args[0] == "lpstat":
+            return ("Buero\nEtiketten\n" if args[1] == "-e" else
+                    "device for Buero: ipp://10.0.0.9/ipp/print\n"
+                    "device for Etiketten: usb://DYMO/LabelWriter%20450\n")
+        if args[0] == "lpoptions":
+            return ("PageSize/Media Size: Letter *A4\n" if args[2] == "Buero"
+                    else "PageSize/Media Size: *57x32mm\n")
+        return "request id is Etiketten-3 (1 file(s))\n" if args[0] == "lp" else ""
+    monkeypatch.setattr(cups, "_run", run)
+    return calls
+
+
+def test_office_printers_are_not_listed(office_queue, capsys):
+    assert main(["printers"]) == 0
+    out = capsys.readouterr().out
+    assert "Etiketten · CUPS" in out and "Buero ·" not in out
+    assert ("1 Bürodrucker ausgeblendet – „labelwerk printers --all“ zeigt ihn, drucken mit "
+            "-p cups:NAME") in out
+
+
+def test_all_printers_option_lists_office_printers_without_asking(office_queue, capsys):
+    assert main(["printers", "--all"]) == 0
+    out = capsys.readouterr().out
+    assert "Buero · CUPS" in out and "ausgeblendet" not in out
+    assert not any(c[0] == "lpoptions" for c in office_queue)    # nichts einzuordnen
+
+
+def test_office_printers_are_listed_with_the_setting(office_queue, capsys):
+    _write_settings(cups_all=True)
+    assert main(["printers"]) == 0
+    assert "Buero · CUPS" in capsys.readouterr().out
+    assert not any(c[0] == "lpoptions" for c in office_queue)
+
+
+def test_chosen_office_printer_is_listed(office_queue, capsys):
+    _write_settings(printer="cups:Buero")
+    assert main(["printers"]) == 0
+    assert "Buero · CUPS" in capsys.readouterr().out
+
+
+def test_backend_cups_skips_office_printers(office_queue, capsys):
+    assert main(["print", "Hallo", "-b", "cups", "-l", "57x32mm@300"]) == 0
+    assert "Auftrag Etiketten-3" in capsys.readouterr().out
+
+
+def test_explicit_queue_is_not_classified(office_queue, capsys):
+    assert main(["print", "Hallo", "-p", "cups:Buero", "-l", "57x32mm@300"]) == 0
+    assert ("lpoptions", "-p", "Etiketten", "-l") not in office_queue   # nur Buero (Etiketten)
+
+
+def test_backend_cups_names_hidden_office_printers(monkeypatch, capsys):
+    from labelwerk import cups
+
+    def run(*args, **kw):
+        if args[0] == "lpstat":
+            return "Buero\n" if args[1] == "-e" else ""
+        return "PageSize/Media Size: Letter *A4\n" if args[0] == "lpoptions" else ""
+    monkeypatch.setattr(cups, "_run", run)
+    assert main(["print", "Hallo", "-b", "cups", "-l", "62"]) == 2
+    err = capsys.readouterr().err
+    assert "Keine CUPS-Warteschlange" in err and "Bürodrucker ausgeblendet: Buero" in err
+
+
 def test_backend_cups_takes_the_first_queue(cups_queue, capsys):
     assert main(["print", "Hallo", "-b", "cups", "-l", "57x32mm@300"]) == 0
     assert "Auftrag Buero-7" in capsys.readouterr().out

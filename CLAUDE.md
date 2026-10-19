@@ -127,9 +127,14 @@ src/labelwerk/
               SUPPORTED_MODELS (QL ohne PT), TESTED_MODELS, backend_for(uri) (… | cups | zpl), is_model (QL, cups:NAME,
               zpl:203/300/600), zebra_printers() (sysfs Vendor 0a5f, dpi aus der Kennung, sonst 203; source zebra),
               Netzwerkeintrag mit Modell zpl:… → zpl+tcp://, cups_printers(direct, keep, wait) (Brother-QL-Warteschlange
-              nicht doppelt, außer gewählt); choose automatisch nie CUPS
+              nicht doppelt, Bürodrucker nur mit office=True – Einstellung cups_all; eingeordnet nur ohne
+              office –, gewählte bleibt immer, hidden sammelt Ausgeblendete);
+              choose automatisch nie CUPS
   cups.py     CUPS ohne Qt: _run (lpstat/lpoptions/lp, Zeitlimit, LC_MESSAGES=C; Tests ersetzen _run, BACKGROUND aus),
-              queues() (Hintergrund-Thread, 30 s; wait=True für die CLI), queue_info(name) -> QueueInfo(media, dpi,
+              queues() (Hintergrund-Thread, 30 s; wait=True für die CLI; classify: Bürodrucker einordnen –
+              Queue.office nach der STANDARD-Papiergröße, is_office: A3–A5/B5/Letter/Legal … bzw. IPP-Namen;
+              Standard aus PPD *DefaultPageSize, sonst lpoptions „*“; je Warteschlange ein Thread, zusammen
+              höchstens TIMEOUT_S, 5 min gemerkt; ohne Antwort None = angezeigt, kurz gemerkt), queue_info(name) -> QueueInfo(media, dpi,
               cut_options, source ppd|options|list; 5 min gemerkt, Fehler nicht), PPD aus PPD_DIR, valid_name,
               print_images(name, images, w, h, dpi, options) -> Job (ein PDF, media=/PageSize=, print-scaling=none)
   zpl.py      Zebra ohne Qt: graphic(img) (^GFA, Zebra-ASCII-Kompression, „:“ = gleiche Zeile), build(images, mode T|C|P),
@@ -156,7 +161,8 @@ src/labelwerk/
               (Ersatz), `last_model` (zuletzt erkannt), `network_printers` ({name, host, model}; valid_host: IPv4/Name ohne
               Port/Schema/Steuerzeichen; Modell auch zpl:…), network_entries(settings); `printer_options` (Modell →
               Druck-Optionen: CUPS-Schnitt-Optionen, Zebra-Modus; je Eintrag geprüft, leerer Wert erlaubt), `zebra_dpi`
-              (0 = erkannt), `language` ("" = System); RESTART_KEYS (language, start_zoom, start_tool), started_values/
+              (0 = erkannt), `cups_all` (auch CUPS-Bürodrucker im Druckermenü/`labelwerk printers`; Dialog → Drucker),
+              `language` ("" = System); RESTART_KEYS (language, start_zoom, start_tool), started_values/
               restart_pending (wirksamer Vergleich mit dem Start), configured_language (vor allem anderen gelesen);
               load_settings(path, model=None): Etikett muss nur ein bekanntes Etikett sein (auch
               „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI)
@@ -289,7 +295,7 @@ src/labelwerk/
                     Tastenkürzel (Konflikte sperren Speichern); restart_hint neben SPEICHERN (Stand beim Start: started)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)
-  cli.py      labelwerk labels | labelwerk media | labelwerk printers | labelwerk fonts | -m auto (Modell des Zieldruckers:
+  cli.py      labelwerk labels | labelwerk media | labelwerk printers [--all] (Bürodrucker; sonst Zeile „n ausgeblendet“) | labelwerk fonts | -m auto (Modell des Zieldruckers:
               -p bzw. gewählter/erster) | -l auto (Rolle des Zieldruckers per USB) | Etikett muss zum Modell passen | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] [--orientation horizontal|vertical] [--margin MM] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]
 ```
 Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `printers`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.

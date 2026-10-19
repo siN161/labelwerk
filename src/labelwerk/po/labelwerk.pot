@@ -1502,6 +1502,15 @@ msgstr ""
 msgid "Off: images that are too large are reduced – saves tape"
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Off: queues with office paper (A4, Letter …) do not appear in the printer menu"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Office printers hidden: {names} – print with -p cups:NAME"
+msgstr ""
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "On round labels every border becomes a circle."
 msgstr ""
@@ -2150,6 +2159,10 @@ msgid "Shortcuts assigned twice – change one to save:"
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
+msgid "Show all CUPS printers (office printers too)"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
 msgid "Show all fonts"
 msgstr ""
 
@@ -2606,6 +2619,10 @@ msgid "all font families, also copies, symbol fonts and other scripts"
 msgstr ""
 
 #: src/labelwerk/cli.py
+msgid "also list office printers (CUPS queues with A4/Letter paper)"
+msgstr ""
+
+#: src/labelwerk/cli.py
 msgid "auto (default), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (queue, see 'labelwerk printers'), zpl+file:///dev/usb/lpN or zpl+tcp://IP (Zebra, with -m zpl:203/300/600)"
 msgstr ""
 
@@ -2837,6 +2854,13 @@ msgstr ""
 #, python-brace-format
 msgid "{checked} of {total} selected"
 msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "{count} office printer hidden – “labelwerk printers --all” shows it, print with -p cups:NAME"
+msgid_plural "{count} office printers hidden – “labelwerk printers --all” shows them, print with -p cups:NAME"
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/settings_dialog.py

@@ -57,6 +57,7 @@ class Settings:
     network_printers: list[dict] = field(default_factory=list)   # {name, host, model}
     printer_options: dict[str, dict[str, str]] = field(default_factory=dict)  # Modell → Druck-Optionen
     zebra_dpi: int = 0                  # Auflösung der Zebras am USB, 0 = erkannt
+    cups_all: bool = False              # Druckermenü: auch CUPS-Bürodrucker (A4/Letter) zeigen
     language: str = ""                  # "" = Sprache des Systems, sonst "de", "en" …
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
@@ -99,6 +100,7 @@ def _rules(model: str | None = None) -> dict:
         "language": lambda v: v == "" or v in i18n.available(),
         "zebra_dpi": lambda v: v in (0, *zpl.RESOLUTIONS) and not isinstance(v, bool),
         "printer_options": lambda v: isinstance(v, dict),
+        "cups_all": lambda v: isinstance(v, bool),
         "network_printers": lambda v: isinstance(v, list),
     }
 

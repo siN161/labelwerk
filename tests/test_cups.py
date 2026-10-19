@@ -41,6 +41,8 @@ def fake(monkeypatch, tmp_path):
     def run(*args, **kw):
         calls.append(args)
         key = " ".join(args[:2]) if args[0] == "lpstat" else args[0]
+        if args[0] == "lpoptions" and f"lpoptions {args[2]}" in outputs:
+            key = f"lpoptions {args[2]}"                   # je Warteschlange eigene Ausgabe
         out = outputs[key]
         if isinstance(out, Exception):
             raise out
@@ -69,7 +71,7 @@ def test_queues_are_read_in_the_background(fake, monkeypatch):
     assert cups.queues() == []                         # die Oberfläche wartet nicht
     cups._queues_thread.join(5)
     assert [q.name for q in cups.queues()][0] == "Dymo_LabelWriter_450"
-    assert len(calls) == 2                             # gemerkt, nicht jedes Mal gefragt
+    assert len(calls) == 2 + 3        # lpstat -e/-v, je Warteschlange lpoptions; gemerkt, nicht jedes Mal
 
 
 def test_localized_output_is_understood(fake):
@@ -202,6 +204,118 @@ def test_missing_commands_and_failures(monkeypatch):
         args, 1, "", "lp: Error - The printer or class does not exist.\n"))
     with pytest.raises(cups.CupsError, match="does not exist"):
         REAL_RUN("lp", "-d", "x")
+
+
+# --- Bürodrucker ------------------------------------------------------------------------------
+# Papiergrößen wie von lpoptions -l (Standard mit „*“), Namen aus echten Treibern
+CANON = ("PageSize/Media Size: 3.5x5 4x6 4x6.Borderless 55x91mm 89x89mm 5x7 8x10 *A4 A4.Borderless "
+         "A5 B5 Env10 EnvDL Letter Legal\n")                   # driverless: Standard A4
+ZEBRA = ("PageSize/Media Size: A4 A5 A5Rotated w90h18 w162h90 w216h360 *w288h360 w288h432 "
+         "w576h468\n")                                          # sample.drv zebra.ppd
+PTOUCH_QL = "PageSize/Media Size: 12mm 29mm 62mm 17x54mm 29x90mm 62x29mm 62x100mm *Custom\n"
+GENERIC = "PageSize/Media Size: *Letter Legal Executive Tabloid A3 A4 A5 B5 EnvDL\n"
+
+
+@pytest.mark.parametrize("default, office", [
+    ("A4", True), ("A4.Borderless", True), ("Letter", True), ("A5", True), ("B5", True),
+    ("iso_a4_210x297mm", True), ("na_letter_8.5x11in", True), ("Legal", True), ("Executive", True),
+    ("w288h360", False), ("Custom", False), ("62mm", False), ("tz-24", False), ("w167h288", False),
+    ("A6", False), ("4x6", False), ("A40", False), ("", None)])
+def test_office_printers_are_recognized_by_their_default_paper(default, office):
+    assert cups.is_office(default) is office
+
+
+@pytest.mark.parametrize("options, office", [(CANON, True), (ZEBRA, False), (PTOUCH_QL, False),
+                                             (GENERIC, True), ("Resolution/Output: *300dpi\n", None)])
+def test_queues_know_office_printers_by_their_default(fake, options, office):
+    _, outputs, _ = fake
+    outputs["lpoptions Buero"] = options
+    assert cups.queues()[1].office is office
+
+
+@pytest.mark.parametrize("default, office", [("A4", True), ("w288h360", False), ("Custom", False)])
+def test_the_ppd_is_read_first(fake, default, office):
+    calls, _, ppd_dir = fake
+    (ppd_dir / "Buero.ppd").write_text(f'*PPD-Adobe: "4.3"\n*DefaultPageSize: {default}\n'
+                                       '*PageSize A4/A4: "<</PageSize[595 842]>>setpagedevice"\n')
+    assert cups.queues()[1].office is office
+    assert ("lpoptions", "-p", "Buero", "-l") not in calls
+
+
+def test_silent_queue_is_unknown(fake):
+    _, outputs, _ = fake
+    outputs["lpoptions QL600"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
+    assert [q.office for q in cups.queues()] == [False, False, None]   # keine Antwort: angezeigt
+
+
+def test_office_check_is_remembered(fake, monkeypatch):
+    calls, outputs, _ = fake
+    outputs["lpoptions Buero"] = GENERIC
+    cups.queues()
+    cups.queues(max_age=0)                             # Liste neu, Einordnung gemerkt
+    assert sum(c[0] == "lpoptions" for c in calls) == 3
+    monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 0)
+    cups.queues(max_age=0)                             # zu alt: neu gefragt
+    assert sum(c[0] == "lpoptions" for c in calls) == 6
+
+
+def test_silent_queue_is_asked_again_only_after_a_while(fake, monkeypatch):
+    calls, outputs, _ = fake
+    outputs["lpoptions QL600"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
+    cups.queues()
+    cups.queues(max_age=0)
+    assert sum(c[:3] == ("lpoptions", "-p", "QL600") for c in calls) == 1
+    monkeypatch.setattr(cups, "FAILED_MAX_AGE_S", 0)
+    cups.queues(max_age=0)
+    assert sum(c[:3] == ("lpoptions", "-p", "QL600") for c in calls) == 2
+
+
+def test_slow_queues_do_not_hold_up_the_list(fake, monkeypatch):
+    """lpoptions je Warteschlange parallel, zusammen höchstens TIMEOUT_S; wer nicht rechtzeitig
+    antwortet, ist unbekannt (angezeigt) – die Antwort zählt, sobald sie da ist."""
+    import threading
+    import time
+    _, outputs, _ = fake
+    release = threading.Event()
+    real = cups._run
+
+    def run(*args, **kw):
+        if args[0] == "lpoptions":
+            release.wait(5)                            # alle hängen
+        return real(*args, **kw)
+    monkeypatch.setattr(cups, "_run", run)
+    monkeypatch.setattr(cups, "TIMEOUT_S", 0.3)
+    outputs["lpoptions Buero"] = GENERIC
+    start = time.monotonic()
+    assert [q.office for q in cups.queues()] == [None, None, None]
+    assert time.monotonic() - start < 1.5              # nicht 3 × nacheinander gewartet
+    release.set()
+    for _ in range(50):                                # späte Antworten werden gemerkt
+        if all(cups._office_cache.get(n, (0, None, False))[2]
+               for n in ("Dymo_LabelWriter_450", "Buero", "QL600")):
+            break
+        time.sleep(0.05)
+    assert [q.office for q in cups.queues(max_age=0)] == [False, True, False]
+
+
+def test_without_classify_nothing_is_asked(fake):
+    calls, _, _ = fake
+    assert [q.office for q in cups.queues(wait=True, classify=False)] == [None, None, None]
+    assert not any(c[0] == "lpoptions" for c in calls)
+
+
+def test_office_printers_are_hidden_unless_wanted_or_chosen(fake):
+    calls, outputs, _ = fake
+    outputs["lpoptions Buero"] = CANON
+    hidden = []
+    assert [p.uri for p in printers.cups_printers([], hidden=hidden)] == [
+        "cups:Dymo_LabelWriter_450", "cups:QL600"]
+    assert hidden == ["Buero"]
+    assert "cups:Buero" in [p.uri for p in printers.cups_printers([], keep="cups:Buero")]
+    cups.forget()
+    calls.clear()
+    assert "cups:Buero" in [p.uri for p in printers.cups_printers([], wait=True, office=True)]
+    assert not any(c[0] == "lpoptions" for c in calls)  # alle zeigen: keine Einordnung nötig
 
 
 # --- Drucker und Modelle -----------------------------------------------------------------------

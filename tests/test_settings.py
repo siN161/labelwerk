@@ -309,6 +309,16 @@ def test_cups_printer_and_its_options_are_kept(tmp_path):
     assert s.printer_options == {"cups:Dymo": {"CutMedia": "EndOfJob"}} and s.warnings == []
 
 
+def test_show_all_cups_printers(tmp_path):
+    path = tmp_path / "settings.json"
+    assert Settings().cups_all is False                # Bürodrucker standardmäßig ausgeblendet
+    save_settings(Settings(cups_all=True), path)
+    assert load_settings(path).cups_all is True
+    path.write_text(json.dumps({"cups_all": "ja"}))
+    s = load_settings(path)
+    assert s.cups_all is False and any("cups_all" in w for w in s.warnings)
+
+
 @pytest.mark.parametrize("bad", [[], {"cups:Dymo": "x"}, {"cups:Dymo": {"CutMedia": 3}},
                                  {"cups:Dymo": {"CutMedia": "Off -o x=y"}},
                                  {"cups:Dymo": {"": "x"}}])

@@ -254,15 +254,26 @@ def effective_model(printer: Printer | None, fallback: str = "", last: str = "")
     return DEFAULT_MODEL
 
 
-def cups_printers(direct: list[Printer], keep: str = "", wait: bool = False) -> list[Printer]:
+def cups_printers(direct: list[Printer], keep: str = "", wait: bool = False,
+                  office: bool = False, hidden: list[str] | None = None) -> list[Printer]:
     """Warteschlangen von CUPS als Drucker; ein Brother-QL bzw. Zebra, den labelwerk direkt per USB
-    findet, erscheint nicht noch einmal über seine Warteschlange – außer sie ist gewählt (``keep``).
-    ``wait``: auf CUPS warten (CLI), sonst die zuletzt gelesene Liste (``cups.queues``)."""
+    findet, erscheint nicht noch einmal über seine Warteschlange, Bürodrucker (A4/Letter) nur mit
+    ``office`` – außer die Warteschlange ist gewählt (``keep``). ``wait``: auf CUPS warten (CLI;
+    eingeordnet wird nur ohne ``office``), sonst die zuletzt gelesene Liste (``cups.queues``).
+    ``hidden``: sammelt die Namen ausgeblendeter Bürodrucker."""
     from . import cups
     doubles = tuple(prefix for prefix, here in (
         ("usb://brother/ql", any(p.source == "usb" and p.model in SUPPORTED_MODELS for p in direct)),
         ("usb://zebra", any(p.source == "zebra" and p.uri.startswith("zpl+file://")
                             for p in direct))) if here)
-    return [Printer(CUPS + q.name, CUPS + q.name, f"{q.name} · CUPS", "cups")
-            for q in cups.queues(wait=wait)
-            if CUPS + q.name == keep or not (doubles and q.device.lower().startswith(doubles))]
+    found = []
+    for q in cups.queues(wait=wait, classify=not office):
+        if CUPS + q.name != keep:
+            if doubles and q.device.lower().startswith(doubles):
+                continue
+            if q.office and not office:
+                if hidden is not None:
+                    hidden.append(q.name)
+                continue
+        found.append(Printer(CUPS + q.name, CUPS + q.name, f"{q.name} · CUPS", "cups"))
+    return found

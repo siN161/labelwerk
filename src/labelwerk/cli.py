@@ -14,7 +14,7 @@ from . import printers
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
 from .files import crop, fit_to_label, load_file
 from .fonts import DEFAULT_FAMILY, families
-from .i18n import NP_, N_, _, pgettext
+from .i18n import NP_, N_, _, ngettext, pgettext
 from .document import ALIGNMENTS, MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .labels import format_mm, get_label, labels_for_model
 from .media import MediaError, label_for_media, read_media
@@ -140,7 +140,9 @@ def _parser() -> argparse.ArgumentParser:
     _add_output_options(pf)
 
     sub.add_parser("media", help=_("query the roll loaded in the printer (prints nothing)"))
-    sub.add_parser("printers", help=_("list found printers and supported models"))
+    pp = sub.add_parser("printers", help=_("list found printers and supported models"))
+    pp.add_argument("--all", dest="show_all", action="store_true",
+                    help=_("also list office printers (CUPS queues with A4/Letter paper)"))
     fo = sub.add_parser("fonts", help=_("list installed font families with German characters"))
     fo.add_argument("--all", action="store_true",
                     help=_("all font families, also copies, symbol fonts and other scripts"))
@@ -179,9 +181,10 @@ def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
     # CUPS nur fragen, wenn es darum geht (lpstat kann dauern)
     with_cups = (wanted.startswith("cups:") or backend == "cups"
                  or wanted == "auto" and settings.printer.startswith("cups:"))
-    found = _all_printers(settings, cups=with_cups)
-    if wanted != "auto":
-        return printers.printer_for(wanted, found)
+    if wanted != "auto":                            # angegeben: nichts einzuordnen
+        return printers.printer_for(wanted, _all_printers(settings, cups=with_cups, office=True))
+    args.hidden_office = []                         # ausgeblendete Bürodrucker (Meldung)
+    found = _all_printers(settings, cups=with_cups, hidden=args.hidden_office)
     if backend in ("network", "cups", "zebra"):
         found = [p for p in found if p.source == backend]
         if backend == "cups" and not settings.printer.startswith("cups:"):
@@ -191,11 +194,16 @@ def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
     return printers.choose(found, settings.printer)
 
 
-def _all_printers(settings, cups: bool = True) -> list[printers.Printer]:
-    """Direkt per USB, eingetragene Netzwerkdrucker und (``cups``) Warteschlangen von CUPS."""
+def _all_printers(settings, cups: bool = True, office: bool | None = None,
+                  hidden: list[str] | None = None) -> list[printers.Printer]:
+    """Direkt per USB, eingetragene Netzwerkdrucker und (``cups``) Warteschlangen von CUPS;
+    Bürodrucker nur mit ``office`` (None = Einstellung ``cups_all``), ausgeblendete sammelt
+    ``hidden``."""
     direct = (printers.usb_printers() + printers.zebra_printers(dpi=settings.zebra_dpi)
               + printers.network_printers(network_entries(settings)))
-    return direct + (printers.cups_printers(direct, wait=True) if cups else [])
+    office = settings.cups_all if office is None else office
+    return direct + (printers.cups_printers(direct, keep=settings.printer, wait=True,
+                                            office=office, hidden=hidden) if cups else [])
 
 
 def _resolve_model(model: str, target: printers.Printer | None, settings) -> str:
@@ -257,6 +265,9 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
             busy = args.backend in (None, "linux_kernel") and brother_busy()
             print(_(BUSY_MESSAGE) if busy else _(_NOT_DETECTED[args.backend or "linux_kernel"])
                   .format(not_found=_(PRINTER_NOT_FOUND)), file=sys.stderr)
+            if args.backend == "cups" and getattr(args, "hidden_office", None):
+                print(_("Office printers hidden: {names} – print with -p cups:NAME").format(
+                    names=", ".join(args.hidden_office)), file=sys.stderr)
             return 2
 
     try:
@@ -275,10 +286,11 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def _show_printers(model: str) -> int:
-    """Gefundene Drucker (USB, eingetragene Netzwerkdrucker, CUPS-Warteschlangen) und unterstützte
-    Modelle."""
-    found = _all_printers(load_settings())
+def _show_printers(model: str, show_all: bool = False) -> int:
+    """Gefundene Drucker (USB, eingetragene Netzwerkdrucker, CUPS-Warteschlangen – Bürodrucker nur
+    mit ``show_all`` bzw. Einstellung ``cups_all``) und unterstützte Modelle."""
+    hidden = []
+    found = _all_printers(load_settings(), office=True if show_all else None, hidden=hidden)
     for p in found:
         caps = printers.capabilities(p.model) if p.model else None
         state = (_("model not detected") if caps is None else
@@ -286,6 +298,11 @@ def _show_printers(model: str) -> int:
         print(f"{p.name:<28} {p.uri:<30} {state}")
     if not found:
         print(_("No printer found."))
+    if hidden:
+        print(ngettext("{count} office printer hidden – “labelwerk printers --all” shows it, "
+                       "print with -p cups:NAME",
+                       "{count} office printers hidden – “labelwerk printers --all” shows them, "
+                       "print with -p cups:NAME", len(hidden)).format(count=len(hidden)))
     print(_("Effective model: {model}").format(model=model))
     models = ", ".join(m if printers.capabilities(m).tested
                        else _("{model} (untested)").format(model=m)
@@ -406,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "media":
         return _show_media(args.model, args.target)
     if args.cmd == "printers":
-        return _show_printers(args.model)
+        return _show_printers(args.model, args.show_all)
     if args.cmd == "fonts":
         print("\n".join(families(all=args.all)))
         return 0

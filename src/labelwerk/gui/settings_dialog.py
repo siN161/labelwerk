@@ -160,6 +160,11 @@ class SettingsDialog(QDialog):
         self.zebra_dpi.setToolTip(_("Resolution of Zebra printers on USB, in case labelwerk does "
                                     "not detect it correctly (otherwise 203 dpi)"))
         form.addRow(_("Zebra resolution"), self.zebra_dpi)
+        self.cups_all = QCheckBox(_("Show all CUPS printers (office printers too)"))
+        self.cups_all.setToolTip(_("Off: queues with office paper (A4, Letter …) do not appear in "
+                                   "the printer menu"))
+        self.cups_all.setChecked(settings.cups_all)
+        form.addRow(self.cups_all)
         self.network = QTableWidget(0, 3)
         self.network.setHorizontalHeaderLabels([_("Name"), _("Address"), _("Model")])
         self.network.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -455,6 +460,7 @@ class SettingsDialog(QDialog):
             last_model=self._last_model,
             printer_options=dict(self._printer_options),
             zebra_dpi=self.zebra_dpi.currentData(),
+            cups_all=self.cups_all.isChecked(),
             language=self.language.currentData(),
             network_printers=self._network_values() or [],
             shortcuts={action_id: seq for action_id, seq in self._keys.items()

@@ -4,7 +4,8 @@ Befehle ``lpstat``, ``lpoptions`` und ``lp``.
 Etikettengrößen und Auflösung kommen aus dem Treiber (PPD: ``*PaperDimension``,
 ``*DefaultResolution``), sonst aus den Namen der Größen (``lpoptions -l``: „62x29mm“, „w288h432“
 in Punkt), sonst aus einer Liste je Hersteller (Dymo, Zebra). Schnitt-Optionen sind die
-Treiber-Optionen mit „Cut“ im Namen. Jeder Aufruf hat ein Zeitlimit, Meldungen kommen englisch
+Treiber-Optionen mit „Cut“ im Namen. Bürodrucker (Papiergrößen A4, Letter …) erkennt die Liste der
+Warteschlangen, damit das Druckermenü sie ausblenden kann. Jeder Aufruf hat ein Zeitlimit, Meldungen kommen englisch
 (``LC_MESSAGES=C``, Namen bleiben UTF-8); Fehler werden zur übersetzten ``CupsError``. Die Liste
 der Warteschlangen fragt ein Hintergrund-Thread ab – die Oberfläche wartet nie auf CUPS.
 """
@@ -37,6 +38,11 @@ _QUEUE_NAME = re.compile(r"[^\s/\\#'\"-][^\s/\\#'\"]{0,126}")
 # Schnitt-Option: „Cut…“ als Wort oder in CamelCase („DymoCutOptions“), „Schneiden“/„Schnitt…“ –
 # nicht „Execute“, nicht „Schnittstelle“
 _CUT = re.compile(r"(?:\b[Cc]ut|(?<=[a-z])Cut|\b[Ss]chn(?:itt|eid))(?!stelle)")
+# Papiergröße eines Bürodruckers (``PageSize``): A3–A5, B5, Letter, Legal, Executive, Tabloid/Ledger,
+# auch als IPP-Name („iso_a4_210x297mm“, „na_letter_8.5x11in“) und mit Zusatz („A4.Borderless“,
+# „A4Small“) – nicht A6 (Versandetikett) und nicht „A40“
+_OFFICE = re.compile(r"(?:iso_|na_|jis_)?(?:a[345]|b5|letter|legal|executive|tabloid|ledger)(?!\d)",
+                     re.I)
 PT_MM = 25.4 / 72
 # Rückfall: gängige Etiketten je Hersteller (Breite, Höhe in mm)
 MEDIA_LISTS = {
@@ -54,9 +60,11 @@ class CupsError(Exception):
 
 @dataclass(frozen=True)
 class Queue:
-    """Eine Warteschlange: Name und Geräte-URI (z. B. usb://DYMO/LabelWriter%20450)."""
+    """Eine Warteschlange: Name und Geräte-URI (z. B. usb://DYMO/LabelWriter%20450);
+    ``office``: Bürodrucker (Papiergrößen wie A4/Letter), None = unbekannt (CUPS ohne Antwort)."""
     name: str
     device: str = ""
+    office: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -129,11 +137,13 @@ _lock = threading.Lock()
 _queues_cache: tuple[float | None, list[Queue]] = (None, [])
 _queues_thread: threading.Thread | None = None
 _info_cache: dict[str, tuple[float, QueueInfo]] = {}
+_office_cache: dict[str, tuple[float, bool | None, bool]] = {}   # Zeit, Bürodrucker, Antwort
 
 
-def read_queues() -> list[Queue]:
-    """Eingerichtete Warteschlangen (``lpstat -e``, Geräte aus ``lpstat -v``) – wartet auf CUPS;
-    ohne CUPS keine, ohne Geräteliste ohne Geräte."""
+def read_queues(classify: bool = True) -> list[Queue]:
+    """Eingerichtete Warteschlangen (``lpstat -e``, Geräte aus ``lpstat -v``; ``classify``:
+    Bürodrucker einordnen, ``office``) – wartet auf CUPS; ohne CUPS keine, ohne Geräteliste ohne
+    Geräte."""
     try:
         names = [n.strip() for n in _run("lpstat", "-e").splitlines() if valid_name(n.strip())]
     except CupsError:
@@ -146,16 +156,81 @@ def read_queues() -> list[Queue]:
                 devices[m[1]] = m[2]
     except CupsError:
         pass
-    return [Queue(n, devices.get(n, "")) for n in names]
+    office = _classify(names) if classify else {}
+    return [Queue(n, devices.get(n, ""), office.get(n)) for n in names]
 
 
-def queues(max_age: float = QUEUE_MAX_AGE_S, wait: bool = False) -> list[Queue]:
+def is_office(default: str) -> bool | None:
+    """Bürodrucker nach der Standard-Papiergröße des Treibers: A4, Letter … (auch wenn ein
+    Etikettendrucker A4 in der Liste hat, z. B. der Zebra-Treiber von CUPS, ist sein Standard ein
+    Etikett); ohne Standard unbekannt (None)."""
+    return bool(_OFFICE.match(default)) if default else None
+
+
+def _default_size(name: str) -> str:
+    """Standard-Papiergröße einer Warteschlange: aus der PPD (``*DefaultPageSize``), sonst
+    ``lpoptions`` (Wert mit „*“); ohne Antwort ``CupsError``."""
+    try:
+        if not valid_name(name):
+            raise OSError("invalid queue name")      # intern, nie angezeigt
+        m = re.search(r"^\*DefaultPageSize:\s*(\S+)", (PPD_DIR / f"{name}.ppd").read_text(
+            errors="replace"), re.M)
+        if m:
+            return m[1]
+    except OSError:                                  # nicht lesbar (Rechte) oder ohne PPD
+        pass
+    options = _options(name)
+    return options["PageSize"][2] if _choices(options, "PageSize") else ""
+
+
+def _classify(names: list[str]) -> dict[str, bool | None]:
+    """``is_office`` je Warteschlange; gemerkt (``INFO_MAX_AGE_S``, ohne Antwort
+    ``FAILED_MAX_AGE_S``). Ungemerkte fragt je ein Thread, alle zusammen höchstens ``TIMEOUT_S``
+    lang – wer bis dahin nicht antwortet, ist unbekannt (None); seine Antwort zählt beim
+    nächsten Lesen."""
+    now, result, ask = time.monotonic(), {}, []
+    with _lock:
+        for name in names:
+            stamp, office, answered = _office_cache.get(name, (None, None, False))
+            if stamp is not None and now - stamp < (INFO_MAX_AGE_S if answered
+                                                    else FAILED_MAX_AGE_S):
+                result[name] = office
+            else:
+                ask.append(name)
+    threads = [threading.Thread(target=_classify_one, args=(name,), daemon=True) for name in ask]
+    for thread in threads:
+        thread.start()
+    deadline = now + TIMEOUT_S
+    for thread in threads:
+        thread.join(max(0.0, deadline - time.monotonic()))
+    with _lock:
+        for name in ask:
+            stamp, office, answered = _office_cache.get(name, (None, None, False))
+            if stamp is None or stamp < now:          # nicht rechtzeitig: kurz als unbekannt
+                _office_cache[name] = (now, None, False)
+                office = None
+            result[name] = office
+    return result
+
+
+def _classify_one(name: str) -> None:
+    try:
+        office, answered = is_office(_default_size(name)), True
+    except CupsError:
+        office, answered = None, False
+    with _lock:
+        _office_cache[name] = (time.monotonic(), office, answered)
+
+
+def queues(max_age: float = QUEUE_MAX_AGE_S, wait: bool = False,
+           classify: bool = True) -> list[Queue]:
     """Warteschlangen, wie zuletzt gelesen (höchstens ``max_age`` Sekunden alt); ist die Liste
     älter, liest ein Hintergrund-Thread sie neu – ``queues()`` wartet nicht (die GUI fragt alle
-    2 s; der erste Aufruf liefert noch keine). ``wait``: neu lesen und warten (CLI)."""
+    2 s; der erste Aufruf liefert noch keine). ``wait``: neu lesen und warten (CLI);
+    ``classify``: Bürodrucker einordnen (der Hintergrund-Thread tut es immer)."""
     global _queues_cache, _queues_thread
     if wait or not BACKGROUND:
-        found = read_queues()
+        found = read_queues(classify)
         with _lock:
             _queues_cache = (time.monotonic(), found)
         return list(found)
@@ -181,6 +256,7 @@ def forget() -> None:
     with _lock:
         _queues_cache = (None, [])
         _info_cache.clear()
+        _office_cache.clear()
 
 
 def queue_info(name: str) -> QueueInfo:

@@ -1495,7 +1495,8 @@ class MainWindow(QMainWindow):
         try:
             direct = (usb_printers() + zebra_printers(dpi=self.settings.zebra_dpi)
                       + network_printers(network_entries(self.settings)))
-            found = direct + cups_printers(direct, keep=self.settings.printer)
+            found = direct + cups_printers(direct, keep=self.settings.printer,
+                                           office=self.settings.cups_all)
             busy = not any(p.source == "usb" for p in found) and brother_busy()
         except OSError:
             found, busy = None, False
