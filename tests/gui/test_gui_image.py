@@ -132,7 +132,8 @@ def _status(win):
 
 # --- Werkzeug und Panel -------------------------------------------------------------
 def test_image_tool_comes_after_text(window):
-    assert [tool.key for tool in TOOLS] == ["file", "paper", "text", "image", "layout", "series"]
+    assert [tool.key for tool in TOOLS] == ["file", "paper", "text", "image", "barcode", "layout",
+                                           "series"]
     window.tool_actions["image"].trigger()
     assert window.panels.currentWidget() is window.panel("image")
     assert window.canvas.tool() == "select"

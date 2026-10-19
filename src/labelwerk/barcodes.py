@@ -370,6 +370,31 @@ def draw(obj: BarcodeObject) -> Image.Image:
     return img
 
 
+def placeholder_size(obj: BarcodeObject) -> tuple[int, int]:
+    """Größe (Druckpunkte, ungedreht) für einen Barcode, der sich nicht kodieren lässt – etwa so
+    groß, wie er mit diesem Inhalt würde (Arbeitsfläche: bleibt sichtbar und wählbar)."""
+    m = obj.module if isinstance(obj.module, int) and 1 <= obj.module <= MAX_MODULE else 3
+    n = len(obj.data) if isinstance(obj.data, str) else 1
+    if obj.kind == "qr":
+        side = (21 + 4 * min(39, n // 20)) * m
+        return side, side
+    n = min(n, MAX_LINEAR)
+    count = {"ean13": 102 if obj.text is True else 95, "ean8": 67,
+             "code39": 16 * (n + 2)}.get(obj.kind, 11 * (n + 3) + 13)
+    h = obj.h_mm if _number(obj.h_mm) and BARCODE_MM[0] <= obj.h_mm <= BARCODE_MM[1] else 10.0
+    return count * m, _dots(h)
+
+
+def placeholder(width: int, height: int) -> Image.Image:
+    """Schraffierter Kasten (L) statt eines Barcodes, der sich nicht kodieren lässt."""
+    img = Image.new("L", (width, height), 255)
+    pen = ImageDraw.Draw(img)
+    for x in range(-height, width, 12):
+        pen.line((x, height, x + height, 0), fill=170, width=2)
+    pen.rectangle((0, 0, width - 1, height - 1), outline=110, width=2)
+    return img
+
+
 def _runs(row: str) -> list[tuple[int, int]]:
     """Abschnitte dunkler Module (Anfang, Ende) einer Zeile."""
     runs, start = [], None

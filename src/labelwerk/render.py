@@ -218,6 +218,7 @@ class Rendered:
     objects: list[RenderedObject]
     image: Image.Image
     frame: Image.Image | None = None       # Zierrahmen als Maske (``frame_mask``), Arbeitsfläche
+    errors: list[tuple[int, str]] = field(default_factory=list)   # Platzhalter: (Index, Meldung)
 
 
 @dataclass
@@ -251,14 +252,21 @@ class Renderer:
         self._composed: tuple = (None, [], None, None)   # Druckbild und woraus es entstand
         self._frame: tuple = (None, None)                # Rahmen-Maske und wofür
 
-    def render(self, doc: Document, model: str = "QL-600") -> Rendered:
-        """Dokument rendern; ``ValueError`` (z. B. ``TextTooLarge``) lässt den Cache stehen."""
+    def render(self, doc: Document, model: str = "QL-600",
+               placeholders: bool = False) -> Rendered:
+        """Dokument rendern; ``ValueError`` (z. B. ``TextTooLarge``) lässt den Cache stehen.
+
+        ``placeholders`` (Arbeitsfläche): Ein Barcode, der sich nicht kodieren lässt (Inhalt halb
+        getippt, Platzhalter), wird zum schraffierten Platzhalter statt eines Fehlers – er bleibt
+        sichtbar und wählbar; ``Rendered.errors`` nennt ihn. Das Bild ist dann kein Druckbild."""
         _check_room(_sheet(doc, model))
-        entries = self._prepare_all(doc, model)
+        entries = self._prepare_all(doc, model, placeholders)
         size = label_size(doc, model, prepared=[e.prepared for e in entries])
         objects = self._draw(entries, doc, model, size)
         frame = self._frame_mask(doc, model, size)
-        return Rendered(size, objects, self._compose(objects, size, doc.orientation, frame), frame)
+        errors = [(i, e.prepared.error) for i, e in enumerate(entries) if e.prepared.error]
+        return Rendered(size, objects, self._compose(objects, size, doc.orientation, frame), frame,
+                        errors)
 
     def _frame_mask(self, doc: Document, model: str, size: tuple[int, int]) -> Image.Image | None:
         """Rahmen-Maske – neu nur, wenn sich Rahmen oder Etikett ändern."""
@@ -267,17 +275,23 @@ class Renderer:
             self._frame = (key, frame_mask(doc, model, size))
         return self._frame[1]
 
-    def _prepare_all(self, doc: Document, model: str) -> list[_Cached]:
+    def _prepare_all(self, doc: Document, model: str, placeholders: bool) -> list[_Cached]:
         """Objekte messen; unveränderte kommen aus dem Cache."""
         context = (model, doc.label_id, doc.orientation, doc.margin_mm, doc.length_mm,
-                   doc.frame, _svg_generation)
+                   doc.frame, _svg_generation, placeholders)
         cache: dict[int, _Cached] = {}
         for obj in doc.objects:
             entry = self._cache.get(id(obj))
             if (entry is None or entry.obj is not obj or entry.context != context
                     or entry.snapshot != obj):
-                entry = _Cached(obj, copy.deepcopy(obj), context,
-                                prepare_object(obj, doc, model))
+                try:
+                    prepared = prepare_object(obj, doc, model)
+                except barcodes.BarcodeError as e:
+                    if not placeholders:
+                        raise
+                    frame = barcodes.placeholder_size(obj)
+                    prepared = Prepared(obj, 0, [], (0, 0, *frame), frame, str(e))
+                entry = _Cached(obj, copy.deepcopy(obj), context, prepared)
             cache[id(obj)] = entry
         self._cache = cache
         return [cache[id(obj)] for obj in doc.objects]
@@ -404,6 +418,7 @@ class Prepared:
     lines: list
     box: tuple[int, int, int, int]
     frame: tuple[int, int] | None      # feste Rahmengröße positionierter Objekte (ungedreht)
+    error: str | None = None           # Barcode als Platzhalter (``Renderer``, Arbeitsfläche)
 
     def size(self) -> tuple[int, int]:
         """Rahmengröße nach dem Drehen."""
@@ -626,9 +641,10 @@ def _finish_image(prep: Prepared) -> RenderedObject:
 
 
 def _finish_barcode(prep: Prepared) -> RenderedObject:
-    """Barcode zeichnen (ganze Druckpunkte, ``barcodes.draw``) und drehen wie ein Bild."""
+    """Barcode zeichnen (ganze Druckpunkte, ``barcodes.draw``; mit Fehler den Platzhalter) und
+    drehen wie ein Bild."""
     obj = prep.obj
-    image = barcodes.draw(obj)
+    image = barcodes.draw(obj) if prep.error is None else barcodes.placeholder(*prep.frame)
     frame = (0, 0, *image.size)
     if obj.rotation:
         frame = _turn(frame, image.size, obj.rotation)

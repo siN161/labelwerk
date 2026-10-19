@@ -17,17 +17,17 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileD
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
-from .. import clipart, favorites, series
+from .. import barcodes, clipart, favorites, series
 from ..desktop import APP_NAME
 from ..detect import brother_busy, find_brother_lp
-from ..document import Document, ImageObject, Series, TextObject
+from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, Series, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
 from ..labels import DPI, get_label
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, fill_anchored,
                       frame_area, growing_axis, insert_placement, match_objects, maximize_object,
-                      move, object_rect, objects_outside, outside_indices, printable_area,
-                      proportional, reorder, resize, rotate, set_frame, to_grid)
+                      move, new_barcode, object_rect, objects_outside, outside_indices,
+                      printable_area, proportional, reorder, resize, rotate, set_frame, to_grid)
 from ..printer import DEFAULT_MODEL, cut_interval, to_print_mode
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
@@ -76,7 +76,7 @@ EDIT_BAR = (("tool.select", "tool-select"), ("tool.text", "tool-text"), None,
             ("edit.cut", "edit-cut"), ("edit.copy", "edit-copy"), ("edit.paste", "edit-paste"),
             None, ("edit.undo", "edit-undo"), ("edit.redo", "edit-redo"))
 _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
-OBJECT_PANELS = ("text", "image")       # Panel je Objektart (Text, Bild)
+OBJECT_PANELS = ("text", "image", "barcode")   # Panel je Objektart (Text, Bild, Barcode)
 
 
 def shrunk_hint(factor: float, mode: str) -> str:
@@ -103,6 +103,7 @@ class MainWindow(QMainWindow):
         self.renderer = Renderer()                  # rendert nur geänderte Objekte neu
         set_svg_rasterizer(image_import.rasterize_svg)   # Vektorbilder: Qt rastert SVG
         self._render_error: str | None = None
+        self._shown_objects: list = []              # Objekte der Anzeige (Serie: gefüllte Zeile)
         self._hint: str | None = None               # Hinweis (ragt hinaus, Schrift ersetzt)
         self._print_signals = None
         self._media_signals = None
@@ -269,6 +270,7 @@ class MainWindow(QMainWindow):
         self.panel("image").message.connect(self._set_result)
         self.panel("series").table_requested.connect(self.choose_series_table)
         self.panel("series").insert_column.connect(self.insert_column)
+        self.panel("barcode").fill_preview = self._filled_barcode
         self._clipboard_changed()
         self.refresh_printer()
         if self.settings.warnings or key_warnings:
@@ -309,7 +311,8 @@ class MainWindow(QMainWindow):
                     "tool.text": lambda: self._choose_tool("text"),
                     "image.insert": self.insert_image_file,
                     "image.screenshot": self.insert_screenshot,
-                    "image.symbol": self.open_symbols}
+                    "image.symbol": self.open_symbols,
+                    "barcode.insert": self.insert_barcode}
         handlers["text.start_edit"] = handlers["text.start_edit_enter"] = self.edit_selected
         for key, handler in handlers.items():
             self.shortcut_actions[key].triggered.connect(lambda _=False, h=handler: h())
@@ -487,7 +490,7 @@ class MainWindow(QMainWindow):
         self.shortcut_actions["text.end_edit"].setEnabled(False)
         selection = self.canvas.selection()
         single_text = (len(selection) == 1 and selection[0] < len(self.doc.objects)
-                       and isinstance(self.doc.objects[selection[0]], TextObject))
+                       and isinstance(self.doc.objects[selection[0]], (TextObject, BarcodeObject)))
         for key in ("text.start_edit", "text.start_edit_enter"):
             self.shortcut_actions[key].setEnabled(single_text)
         for key in _SELECTION_ACTIONS:
@@ -506,10 +509,12 @@ class MainWindow(QMainWindow):
         if self.canvas.is_dragging():   # Ziehen nicht unterbrechen – nach dem Loslassen rendern
             self._timer.start()
             return
+        view = self._view_doc()
         try:
             # jedes Objekt höchstens einmal messen und zeichnen; Fläche und „ragt hinaus“
-            # folgen aus den gerenderten Objekten
-            result = self.renderer.render(self._view_doc(), self.model)
+            # folgen aus den gerenderten Objekten; ein Barcode, der sich nicht kodieren lässt,
+            # bleibt als Platzhalter wählbar (Fehler wie ein Renderfehler: kein Druck)
+            result = self.renderer.render(view, self.model, placeholders=True)
         except ValueError as e:
             # letztes gültiges Bild bleibt in der Vorschau, wird aber nicht gedruckt
             self._render_error = self._series_error(str(e))
@@ -517,9 +522,12 @@ class MainWindow(QMainWindow):
             self.panel("text").show_error(self._render_error)
             self._set_result(self._render_error, "error")
             return
+        error = self._series_error(result.errors[0][1]) if result.errors else None
         if self._render_error is not None and self.result.text() == self._render_error:
             self._set_result("", "")   # nur den Renderfehler löschen, kein Druckergebnis
-        self._render_error = None
+        self._render_error = error
+        if error is not None:
+            self._set_result(error, "error")
         if self._hint is not None and self.result.text() == self._hint:
             self._set_result("", "")   # alten Hinweis nur löschen, wenn er noch dasteht
         self._hint = None
@@ -538,24 +546,24 @@ class MainWindow(QMainWindow):
         self.panel("text").show_error(None)
         self.image = result.image
         self.rendered = rendered
+        self._shown_objects = view.objects          # was die Arbeitsfläche zeigt (Serie: gefüllt)
         self._shown_size = size
         self._structure_dirty = False
         self._outside = outside
         self._area = area
         self._inner = frame_area(self.doc, self.model, size)
         self._shown_frame = result.frame
-        # Anfasser: Ecken halten das Seitenverhältnis bei Text ohne feste Rahmengröße und bei
-        # Bildern mit „Seitenverhältnis beibehalten“ – Bilder dann auch an den Kanten
-        images = [isinstance(obj, ImageObject) for obj in self.doc.objects]
+        # Anfasser: Ecken halten das Seitenverhältnis bei Text ohne feste Rahmengröße, bei
+        # Bildern mit „Seitenverhältnis beibehalten“ und QR-Codes – die beiden auch an den Kanten
+        aspect = [_keeps_aspect(obj) for obj in self.doc.objects]
         self.canvas.set_document(get_label(self.doc.label_id), size, rendered, self.doc.orientation,
-                                 area, keep_ratio=[obj.keep_ratio if image else not obj.fit
-                                                   for obj, image in zip(self.doc.objects, images)],
-                                 grow=growing_axis(self.doc),
-                                 keep_aspect=[image and obj.keep_ratio
-                                              for obj, image in zip(self.doc.objects, images)],
+                                 area, keep_ratio=[keep or isinstance(obj, TextObject) and not obj.fit
+                                                   for obj, keep in zip(self.doc.objects, aspect)],
+                                 grow=growing_axis(self.doc), keep_aspect=aspect,
                                  frame=result.frame, inner=self._inner)
         self.panel("layout").set_growing(growing_axis(self.doc))
         self._update_frame()
+        self.panel("barcode").update_check()        # Serie: Prüfhinweis zur Vorschau-Zeile
         self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
 
     def _drop_stale_view(self) -> None:
@@ -651,7 +659,8 @@ class MainWindow(QMainWindow):
         if not self._valid(index):
             return
         self._commit()
-        resized = resize(self.doc.objects[index], rect, self.rendered[index], handle)
+        resized = self._keep_content(index, resize(self._layout_object(index), rect,
+                                                   self.rendered[index], handle))
         # nur die gezogenen Kanten auf 0,1 mm (wie die Felder) – die anderen bleiben genau
         self.doc.objects[index] = to_grid(resized, x="l" in handle, y="t" in handle,
                                           w="l" in handle or "r" in handle,
@@ -724,10 +733,23 @@ class MainWindow(QMainWindow):
 
     def insert_column(self, name: str) -> None:
         """Spalte als ``{Name}`` einfügen: ans Ende des gewählten Textobjekts (seine letzte
-        Formatierung), sonst als neuer Text links oben – ein Schritt."""
+        Formatierung) bzw. in den Inhalt des gewählten Barcodes (ersetzt den Beispielinhalt,
+        sonst angehängt), sonst als neuer Text links oben – ein Schritt."""
         self.finish_editing()
         placeholder = "{" + name + "}"
         selection = [i for i in self.canvas.selection() if self._valid(i)]
+        if len(selection) == 1 and isinstance(self.doc.objects[selection[0]], BarcodeObject):
+            self._commit()
+            obj = self.doc.objects[selection[0]]
+            sample = obj.data == barcodes.SAMPLES.get(obj.kind)
+            data = placeholder if sample else obj.data + placeholder
+            if len(data) > MAX_BARCODE_DATA:
+                self._set_result(f"Inhalt zu lang (höchstens {MAX_BARCODE_DATA} Zeichen)", "error")
+                return
+            self.doc.objects[selection[0]] = replace(obj, data=data)
+            self._objects_changed(selection)
+            self._commit()
+            return
         if len(selection) == 1 and isinstance(self.doc.objects[selection[0]], TextObject):
             self._commit()                          # noch nicht Festgehaltenes zuerst
             obj = self.doc.objects[selection[0]]
@@ -760,7 +782,15 @@ class MainWindow(QMainWindow):
     def edit_text(self, index: int, point=None) -> None:
         """Schreibmodus für ein Objekt: auswählen, Text-Panel zeigen, Schreibmarke an
         ``point`` (QPointF, Druckpunkte in Leserichtung – z. B. Doppelklick) bzw. ans Ende.
-        Bilder haben keinen Schreibmodus."""
+        Bilder haben keinen Schreibmodus; bei Barcodes geht der Fokus ins Inhaltsfeld."""
+        if 0 <= index < len(self.doc.objects) and isinstance(self.doc.objects[index],
+                                                             BarcodeObject):
+            self.finish_editing()
+            if self.canvas.selection() != [index]:
+                self.canvas.set_selection([index])
+            self._show_tool("barcode")
+            self.panel("barcode").focus_data()
+            return
         if 0 <= index < len(self.doc.objects) and not isinstance(self.doc.objects[index],
                                                                  TextObject):
             return
@@ -825,13 +855,14 @@ class MainWindow(QMainWindow):
         if index is None or not self._valid(index):
             return
         self._commit()
-        obj = self.doc.objects[index]
+        obj = self._layout_object(index)
         exact = exact_rect(obj, self.rendered[index])
         if isinstance(obj, ImageObject) and obj.keep_ratio and key in "wh":
             rect = proportional(exact, key, round(value, 3))
         else:
             rect = replace(exact, **{key: round(value, 3)})
-        self.doc.objects[index] = set_frame(obj, rect, self.rendered[index])
+        self.doc.objects[index] = self._keep_content(index, set_frame(obj, rect,
+                                                                      self.rendered[index]))
         self._objects_changed([index])
         self._commit()
 
@@ -877,11 +908,27 @@ class MainWindow(QMainWindow):
         if not indices:
             return
         self._commit()
-        changed = change([self.doc.objects[i] for i in indices], [self.rendered[i] for i in indices])
+        changed = change([self._layout_object(i) for i in indices],
+                         [self.rendered[i] for i in indices])
         for index, obj in zip(indices, changed):
-            self.doc.objects[index] = obj
+            self.doc.objects[index] = self._keep_content(index, obj)
         self._objects_changed(indices)
         self._commit()
+
+    def _layout_object(self, index: int):
+        """Objekt für Größe und Lage: Barcodes, wie sie die Arbeitsfläche zeigt (Serie: mit dem
+        Wert der Vorschau-Zeile – ihre Breite folgt aus dem Inhalt), sonst das Objekt selbst."""
+        obj = self.doc.objects[index]
+        shown = self._shown_objects[index] if index < len(self._shown_objects) else obj
+        return shown if isinstance(obj, BarcodeObject) and isinstance(shown, BarcodeObject) else obj
+
+    def _keep_content(self, index: int, changed):
+        """Ergebnis von Größe und Lage zurück ins Etikett: Barcodes behalten ihren Inhalt (mit
+        Platzhaltern), nur Modul, Höhe, Lage und Drehung kommen aus ``changed``."""
+        obj = self.doc.objects[index]
+        if isinstance(obj, BarcodeObject) and isinstance(changed, BarcodeObject):
+            return replace(changed, data=obj.data)
+        return changed
 
     def reorder_selected(self, step: int) -> None:
         """Auswahl einen Platz nach vorne (1) bzw. hinten (−1); die Auswahl wandert mit."""
@@ -1194,6 +1241,28 @@ class MainWindow(QMainWindow):
         area = self._paper_area()                   # mit Zierrahmen: sein Innenraum
         cross = area.h if grow == "x" else area.w if grow == "y" else min(area.w, area.h)
         return max(1.0, math.floor(min(SYMBOL_MM, cross) * 1000) / 1000)   # nie knapp zu groß
+
+    # --- Barcodes ------------------------------------------------------------
+    def insert_barcode(self) -> None:
+        """Barcode der im Reiter gewählten Art mit Beispielinhalt einfügen (``layout.new_barcode``:
+        mittig im Innenraum bzw. bedruckbaren Bereich, lieber gedreht als kleiner; auf einem
+        Endlosband hinter den vorhandenen Objekten) – ausgewählt, der Inhalt markiert im Fokus:
+        Tippen ersetzt das Beispiel."""
+        self.finish_editing()
+        if self._timer.isActive():
+            self.render_now()                       # aktueller bedruckbarer Bereich
+        others = [object_rect(r) for o, r in zip(self.doc.objects, self.rendered)
+                  if not o.is_empty()]
+        obj = new_barcode(self.doc, self.model, self._paper_area(),
+                          self.panel("barcode").chosen_kind(), others)
+        self._insert([obj])
+        self._show_tool("barcode")
+        self.panel("barcode").focus_data()
+
+    def _filled_barcode(self, obj: BarcodeObject) -> BarcodeObject:
+        """Barcode mit dem Wert der Vorschau-Zeile (Prüfhinweis im Panel); ohne Serie er selbst."""
+        row = self.panel("series").preview()
+        return obj if row is None else series.fill(Document(objects=[obj]), *row).objects[0]
 
     def _symbol_dropped(self, symbol_id: str, x_mm: float, y_mm: float) -> None:
         try:
@@ -1651,9 +1720,17 @@ class MainWindow(QMainWindow):
         self.refresh_printer()
 
 
-def _panel_for(obj: TextObject | ImageObject) -> str:
+def _panel_for(obj: TextObject | ImageObject | BarcodeObject) -> str:
     """Panel, das ein Objekt bearbeitet."""
-    return "image" if isinstance(obj, ImageObject) else "text"
+    return ("image" if isinstance(obj, ImageObject) else "barcode"
+            if isinstance(obj, BarcodeObject) else "text")
+
+
+def _keeps_aspect(obj: TextObject | ImageObject | BarcodeObject) -> bool:
+    """Anfasser halten das Seitenverhältnis auch an den Kanten: Bild mit „Seitenverhältnis
+    beibehalten“, QR-Code (quadratisch)."""
+    return (isinstance(obj, ImageObject) and obj.keep_ratio
+            or isinstance(obj, BarcodeObject) and obj.kind == "qr")
 
 
 @dataclass(frozen=True)

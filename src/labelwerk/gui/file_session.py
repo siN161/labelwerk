@@ -22,7 +22,7 @@ from ..desktop import APP_NAME
 from ..document import Document, TextObject
 from ..favorites import Favorite
 from ..labels import labels_for_model
-from ..render import render_document
+from ..render import Renderer
 from ..settings import new_document
 from ..storage import SUFFIX, StorageError, exists, os_reason
 from .history import restore
@@ -385,14 +385,16 @@ class FileSession(QObject):
         self._previews = {k: v for k, v in self._previews.items() if k[0] in paths}
 
     def _preview(self, favorite: Favorite) -> QPixmap | None:
-        """Druckbild des Favoriten, eingepasst (gemerkt je Datei und Änderungszeit)."""
+        """Bild des Favoriten, eingepasst (gemerkt je Datei und Änderungszeit); ein Barcode mit
+        Platzhalter der Serie erscheint als Platzhalter."""
         try:
             key = (str(favorite.path), favorite.path.stat().st_mtime)
         except OSError:
             return None
         if key not in self._previews:
             try:
-                image = render_document(storage.load(favorite.path), self.window.model)
+                image = Renderer().render(storage.load(favorite.path), self.window.model,
+                                          placeholders=True).image
             except PREVIEW_ERRORS:  # eine kaputte Vorschau darf das Fenster nicht aufhalten
                 self._previews[key] = None
             else:

@@ -25,6 +25,12 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Serien (Etappe 3e): Reiter SERIE – Tabelle (CSV/Excel) oder Nummerierung, Platzhalter {Spalte} im Text (Spaltenliste fügt
   ein), Zeilen mit Häkchen, Vorschau ◀ Zeile n/N ▶ auf der Arbeitsfläche, DRUCKEN druckt die gewählten Zeilen in einem
   Auftrag (Schnitt nach jedem Etikett oder nur am Ende); die Datei merkt sich die Tabelle und liest sie neu.
+- Barcodes und QR-Codes: Reiter BARCODE – Art (QR, Code 128, Code 39, EAN-13, EAN-8), BARCODE EINFÜGEN (Beispielinhalt,
+  Inhalt markiert im Fokus), Inhalt live (ein Rückgängig-Schritt), Modulbreite in ganzen Druckpunkten (Anfasser/Felder
+  rasten ein; QR quadratisch), Höhe/Klartext bzw. Fehlerkorrektur, Prüfhinweise (EAN-Prüfziffer), Ruhezone; ungültiger
+  Inhalt = schraffierter Platzhalter auf der Arbeitsfläche (wählbar, Meldung, kein Druck); {Spalte} der Serie auch im
+  Inhalt (Prüfhinweis und Anfasser rechnen mit der Vorschau-Zeile); Doppelklick/F2/Enter → Inhaltsfeld (Strg+Z dort =
+  Rückgängig des Etiketts).
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
 - 1973 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
@@ -37,7 +43,9 @@ src/labelwerk/
               render_object(obj, doc, model) -> RenderedObject (Bild mit Anschnitt image_dx/dy, Rahmen x/y/w/h, base_pt);
               compose(rendered, size, orientation) -> Druckbild; label_size/label_margins; schrittweise:
               prepare_object, label_size(prepared=), finish_object; span_dots
-              Renderer (Qt-frei, für die GUI): render(doc, model) -> Rendered(size, objects, image, frame) – Objekt-Cache,
+              Renderer (Qt-frei, für die GUI): render(doc, model, placeholders) -> Rendered(size, objects, image, frame,
+              errors) – placeholders (Arbeitsfläche): Barcode, der sich nicht kodieren lässt → schraffierter Platzhalter
+              (barcodes.placeholder_size/placeholder), errors nennt ihn; Objekt-Cache,
               rendert nur Geändertes neu (Objekt + Kontext, ohne Position auch Etikettgröße), Druckbild = render_document
               Zeilensatz mit gemeinsamer Grundlinie (pixelgleich zu Pillow multiline_text für reinen Text), font_warnings(doc)
               exakte Druckbreite @300 dpi, Schrift schrumpft automatisch, mehrzeilig zentriert
@@ -53,6 +61,11 @@ src/labelwerk/
               in Druckpunkten); Außenkante = bedruckbarer Bereich − inset_mm, rund: Kreis; automatisch gesetzter Text und die
               automatische Länge rechnen mit dem Innenraum (_Sheet.inset/room), frei platzierte Objekte nicht; ohne Innenraum
               „Rahmen passt nicht aufs Etikett“ (nur beim Rendern geprüft: _check_room; Endlosband wird lang genug)
+  barcodes.py Barcodes ohne Qt: encode(kind, data, error) -> Code (gecacht; Code 128 B/C mit kürzester Folge, Code 39,
+              EAN-13/8 mit Prüfziffer ergänzt/geprüft – Tabellen aus den Normen; QR über segno, boost_error aus),
+              check(obj), modules(obj), size(obj) (Druckpunkte, ungedreht), draw(obj) (L, ganze Punkte je Modul, Klartext
+              DejaVu Sans ~9 Module, EAN mit verlängerten Randzeichen), quiet_mm, TITLES/SAMPLES/INSERT_MODULE;
+              BarcodeError (ValueError, deutsch); Tests lesen jede Art mit zxing-cpp (nur [dev], Python ≥ 3.12)
   fonts.py    Schriften über fontconfig (families, resolve, load), Ersatzkursive bei fehlender Kursiv-Datei
   files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi)
               crop(img) -> auf Inhalt, ohne Schnittmarken/Leerraum; fit_to_label(img, label_id, fit, rotate) -> 1:1, auto/feste Drehung
@@ -77,17 +90,19 @@ src/labelwerk/
               box() (Ausschnitt in Pixeln), natural_mm() (Größe 1:1)
               Series (frozen): source (CSV/XLSX-Pfad) | numbering (Numbering start/step/count/digits), sheet, cut each|end;
               Document.series (None = Einzeletikett)
+              BarcodeObject: kind (BARCODE_KINDS), data, x/y_mm, module (Druckpunkte 1–20), h_mm (2–100, nur
+              Strichcodes), rotation, text, error (QR_LEVELS); kein w_mm – Breite aus dem Inhalt; nie leer
               Frame (frozen): style FRAME_STYLES (single/double/thick_thin/dashed/dotted/corners), rounded, line_mm 0,1–3,
               inset_mm/padding_mm 0–10; Document.frame (None = kein Rahmen)
   settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings); Feld `theme` (rawblock/classic), `image_crop`/`image_rotate` (Bilder einfügen),
               `symbols_recent` (höchstens 24)/`symbols_favorites` (Symbol-ids), `recent_files` (höchstens 10)/`start_favorite`
               (der Einstellungsdialog reicht sie durch)
   storage.py  Etiketten als Datei (*.labelwerk, JSON versioniert, Bilder Base64): to_dict/from_dict, save (atomar), load;
-              Schemata SPAN/PARAGRAPH/TEXT/IMAGE/DOCUMENT (jedes Dataclass-Feld, Test hält gleich); Dateien sind fremde Eingabe:
+              Schemata SPAN/PARAGRAPH/TEXT/IMAGE/BARCODE/DOCUMENT (jedes Dataclass-Feld, Test hält gleich); Dateien sind fremde Eingabe:
               Prüfung je Feld nach Art, Wertebereich (endlich, Grenzen) und Struktur → StorageError (deutsch, mit Dateiname),
               Bilddaten nur PNG (ganz dekodiert, höchstens MAX_PIXELS), Rahmen als eigener Eintrag „frame“ (Schema FRAME, null = keiner), Serie „series“ (SERIES/NUMBERING,
               genau Tabelle oder Nummerierung; Tabelle im Ordner der Datei wird relativ gespeichert: to_dict/from_dict(base)), Etikett bekannt; Grenzen: Datei ≤ 32 MB und regulär (kein FIFO),
-              ≤ 500 Objekte, Rahmenflächen ≤ 100 Mio. Druckpunkte (sonst „Etikett zu groß“), Lage ±MAX_POSITION_MM (document.py, wie die
+              ≤ 500 Objekte, Rahmenflächen ≤ 100 Mio. Druckpunkte (Barcodes aus barcodes.size; sonst „Etikett zu groß“), Lage ±MAX_POSITION_MM (document.py, wie die
               GUI-Positionsfelder), font_path nur für vorhandene reguläre Datei; exists() (wirft nie); unbekannte Felder übergangen,
               fehlende = Standard; save atomar (Symlink verfolgt, Rechte bleiben/umask, fsync); add_recent_file
   series.py   Serien ohne Qt: load_table(path, sheet) -> Table(columns, rows) (CSV: Kodierung inkl. UTF-16, Trennzeichen aus den
@@ -96,7 +111,7 @@ src/labelwerk/
               leere Zeilen und leere Zellen am Zeilenende entfallen → SeriesError deutsch), sheet_names, numbering_table
               (Spalte „Nummer“), check, table_for(series, base); Endungen .csv/.tsv/.txt bzw. .xlsx/.xlsm; Excel höchstens
               MAX_RAW_ROWS Zeilen samt leeren; Table.sheet/sheets (gelesenes Blatt, alle Arbeitsblätter);
-              Platzhalter {Spalte} (Leerzeichen in den Klammern egal):
+              Platzhalter {Spalte} in Text und Barcode-Inhalt (Leerzeichen in den Klammern egal):
               placeholders, missing, fill(doc, columns, row, keep) – nur zum Lesen: unveränderte Objekte bleiben dieselben
   favorites.py Favoriten = *.labelwerk in $XDG_DATA_HOME/labelwerk/favoriten: favorites, find, add (overwrite), rename, remove
   clipart.py  Symbol-Bibliothek ohne Qt: catalog() aus clipart_data/clipart.zip (catalog.json + SVGs, einmal ganz gelesen;
@@ -115,6 +130,9 @@ src/labelwerk/
               Bild einfügen/einstellen: insert_frame (Mitte bzw. Ablagepunkt, zu groß → proportional eingepasst, Endlosband
               nur quer), set_crop (Maßstab und Lage des Inhalts bleiben), original_size, set_keep_ratio, proportional
               frame_area(doc, model, size) -> Rect | None (Innenraum des Zierrahmens in mm); snap(..., inner=) rastet auch daran ein
+              Barcodes: _barcode_frame (Breite → Modul gerundet, maximieren abgerundet; QR: stärker geändertes
+              Maß), barcode_rect, _resize_barcode (QR quadratisch, fest bleibt, was der Anfasser sagt), new_barcode
+              (Beispielinhalt, insert_placement, zu groß → kleineres Modul/Höhe)
               fill_anchored(doc, columns, row, model, keep): series.fill, frei platzierte Texte ohne feste Rahmengröße behalten
               den Punkt ihrer Textposition (mittig/rechts gelten für jede Zeile) – Vorschau und Druck der Serie
   shortcuts.py Tastenkürzel-Verzeichnis ohne Qt: ACTIONS (id, Name, Standard, Bereich global/canvas/edit, fest), effective, conflicts,
@@ -138,18 +156,21 @@ src/labelwerk/
                     Renderer, confirm_outside_rows, 1 Bit, ein Auftrag mit cut_interval), print_document druckt Serien-Favoriten
                     ganz; start(path) (Datei bzw. Start-Favorit),
                     print_document(doc) (anderes Etikett drucken, gleiche Rückfragen); closeEvent fragt bei Änderungen
+    panels/barcode.py Reiter Barcode: Art (für den gewählten bzw. nächsten), BARCODE EINFÜGEN (Aktion barcode.insert),
+                    Inhalt (textEdited live, erster Anschlag/editingFinished = ein Schritt), Prüfhinweis, Modul (ModuleSpin:
+                    Punkte, angezeigt in mm), Höhe/Klartext bzw. Fehlerkorrektur, Ruhezone, Drehen, Position; focus_data
     panels/series.py Reiter Serie: Quelle (TABELLE …/NUMMERIERUNG/ENTFERNEN, Blatt, Start/Schritt/Anzahl/Stellen – ungültig: nicht
                     übernommen), Spalten (itemActivated → insert_column), Zeilen mit Häkchen (checked_rows), Vorschau-Zeile (preview,
                     current_row), Schnitt; liest nur bei geänderter Quelle/Blatt/Nummerierung, check_file (Datei geändert, vor dem
                     Drucken), reload (Öffnen); Fehler und unbekannte Platzhalter als Hinweis
-    tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Layout, Serie; neue Werkzeuge als Eintrag; START_TOOL = Papier)
+    tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Barcode, Layout, Serie; neue Werkzeuge als Eintrag; START_TOOL = Papier)
     file_session.py FileSession: Neu/Öffnen/Speichern, modified/update_title („•“), maybe_save (Rückfrage), Dokument an Ort und
                     Stelle ersetzen (Verlauf neu), Etikett muss zum Drucker passen, origin new|file|favorite (nur „new“ folgt
                     der geprüften Rolle, may_follow_roll; Speichern macht daraus „file“; modified() ohne leere Textrahmen; Neu nimmt die eingelegte Rolle), Favoriten (Vorlage öffnen, drucken über
                     MainWindow.print_document, andere Rolle → Rückfrage, umbenennen/löschen/Start), Zuletzt geöffnet (Pfade
                     aufgelöst); Dialoge ask_* ersetzbar (Speichern-Dialog ergänzt die Endung selbst)
     panels/file.py  Reiter Datei: Knöpfe (Aktionen file.*), Favoriten mit Vorschau und ⎙ je Zeile, Kontextmenü, Zuletzt geöffnet
-    panels/         Eigenschaften-Panels je Werkzeug (paper, text und image mit Bereich Position)
+    panels/         Eigenschaften-Panels je Werkzeug (paper, text, image und barcode mit Bereich Position)
     panels/paper.py Reiter Papier: Etikett, Länge, Ausrichtung, Ränder, Rahmen (Arten mit Vorschau aus dem Kern: frame_icon;
                     Felder ohne Tastatur-Mitlauf = ein Schritt, Werte bleiben bei „Kein“ stehen; rund: ohne „Nur Ecken“/abgerundet)
     symbol_dialog.py Fenster „Symbol einfügen“ (SymbolDialog, Werkzeugfenster, nicht modal; Enter/Esc/Kontextmenü): Suche, Gruppen + Untergruppe, Raster über
@@ -188,7 +209,8 @@ src/labelwerk/
 Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.
 
 Abhängigkeiten: `brother_ql-inventree>=1.3` (GPLv3+, Import als `brother_ql`), `pillow>=10.1`, `pypdfium2>=4`,
-`openpyxl>=3.1` (MIT, Excel), `defusedxml>=0.7` (PSF, sicheres XML für openpyxl). Build: hatchling, src-Layout.
+`openpyxl>=3.1` (MIT, Excel), `defusedxml>=0.7` (PSF, sicheres XML für openpyxl), `segno>=1.5` (BSD-3-Clause, QR);
+nur Entwicklung: `zxing-cpp` (Apache-2.0, liest Barcodes in Tests; ab Python 3.12). Build: hatchling, src-Layout.
 
 ## Konventionen
 - **TDD**: erst fehlschlagenden Test schreiben, dann implementieren. Tests laufen **ohne Drucker** (Rasterdaten prüfen, sysfs per `tmp_path` faken, Druckfunktionen per `monkeypatch` ersetzen). Kein Test darf echte Hardware ansprechen.
@@ -221,8 +243,8 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
 
-Nächste Schritte: Barcodes/QR (Roadmap 3, in Arbeit), Drucker-Kompatibilität (6, Antworten stehen: 1a 2b 3a 4b
-ungetestet 5a 6a 7a 8a 9a), Fremdhersteller (6b), Übersetzungen (7), Paketierung (8).
+Nächste Schritte: Drucker-Kompatibilität (6, Antworten stehen: 1a 2b 3a 4b ungetestet 5a 6a 7a 8a 9a),
+Fremdhersteller (6b), Übersetzungen (7), Paketierung (8).
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld
@@ -239,10 +261,10 @@ Umsetzung:
 - GUI bleibt dünn: Logik, die testbar ist, gehört in den Kern
 
 ## Roadmap danach
-0. Etappen P-touch-Übernahme: 1 Papier komplett (erledigt) · 2 Verwendungsart – **zurückgestellt** (P-touch-Vorlagen wie Kabelfahne/Kabelwickel/Patchfeld; erst klären, welche Arten der P-touch Editor beim QL-600 anbietet – Screenshot der Liste) · 3a/3b Text-Formatierung (erledigt) · 3d-1 Freies Platzieren (erledigt, Spec 2026-10-17-freies-platzieren) · 3d-1b Direkt auf dem Etikett schreiben (erledigt, Spec 2026-10-17-direkt-schreiben) · 3d-2a Bild (erledigt, Spec 2026-10-17-bild-objekt) · 3d-2b Bildschirmfoto (erledigt, Spec 2026-10-18-bildschirmfoto) · 3d-2c Symbole/ClipArt (erledigt, Spec 2026-10-18-symbole) · 3c Neu/Öffnen/Speichern + Favoriten (erledigt, Spec 2026-10-18-dateien-favoriten) · Zierrahmen ums Etikett (erledigt, Spec 2026-10-18-zierrahmen) · 3e Serien aus CSV/Excel und Nummerierung (erledigt, Spec 2026-10-18-serien) · später Barcode/QR, Rahmen.
+0. Etappen P-touch-Übernahme: 1 Papier komplett (erledigt) · 2 Verwendungsart – **zurückgestellt** (P-touch-Vorlagen wie Kabelfahne/Kabelwickel/Patchfeld; erst klären, welche Arten der P-touch Editor beim QL-600 anbietet – Screenshot der Liste) · 3a/3b Text-Formatierung (erledigt) · 3d-1 Freies Platzieren (erledigt, Spec 2026-10-17-freies-platzieren) · 3d-1b Direkt auf dem Etikett schreiben (erledigt, Spec 2026-10-17-direkt-schreiben) · 3d-2a Bild (erledigt, Spec 2026-10-17-bild-objekt) · 3d-2b Bildschirmfoto (erledigt, Spec 2026-10-18-bildschirmfoto) · 3d-2c Symbole/ClipArt (erledigt, Spec 2026-10-18-symbole) · 3c Neu/Öffnen/Speichern + Favoriten (erledigt, Spec 2026-10-18-dateien-favoriten) · Zierrahmen ums Etikett (erledigt, Spec 2026-10-18-zierrahmen) · 3e Serien aus CSV/Excel und Nummerierung (erledigt, Spec 2026-10-18-serien) · Barcodes/QR (erledigt, Spec 2026-10-19-barcodes).
 1. ~~Text 90° drehen (Text längs zum Endlosband, wichtig für 12–29 mm)~~ erledigt in Etappe 1
 2. Eingelegte Rolle automatisch aus dem Druckerstatus auslesen → teilweise erledigt in Etappe 1 (GUI-Vorauswahl, `labelwerk media`); `-l auto` in der CLI fehlt noch
-3. Barcodes und QR-Codes
+3. ~~Barcodes und QR-Codes~~ erledigt (QR, Code 128, Code 39, EAN-13/8; später ggf. DataMatrix, ITF, GS1-128)
 4. Vorlagen (YAML/JSON) und Serien aus CSV/Excel (.xlsx) (z. B. Klemmen-/Betriebsmittelkennzeichnung)
 5. Importe:
    - Bilder (PNG/JPG/SVG) als Objekt aufs Etikett, Umwandlung in Schwarz/Weiß

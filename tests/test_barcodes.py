@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 from labelwerk import barcodes
 from labelwerk.barcodes import BarcodeError, check_digit, encode
-from labelwerk.document import BarcodeObject, Document
+from labelwerk.document import BarcodeObject, Document, TextObject
 from labelwerk.render import Renderer, render_document, render_object
 
 
@@ -379,3 +379,30 @@ def test_renderer_cache_keeps_an_unchanged_barcode():
     obj.data = "y"
     assert renderer.render(doc).objects[0] is not first
 
+
+
+def test_renderer_shows_a_placeholder_for_invalid_barcodes():
+    """Arbeitsfläche: ein ungültiger Barcode bleibt als Platzhalter sichtbar und wählbar; das
+    Druckbild (ohne ``placeholders``) bleibt ein Fehler – auch aus dem Cache."""
+    obj = _bar(kind="ean13", data="4006", x_mm=2, y_mm=2, module=2)
+    doc = Document("62x29", objects=[TextObject.plain("A", size_pt=10, align="left"), obj])
+    renderer = Renderer()
+    result = renderer.render(doc, placeholders=True)
+    assert result.errors == [(1, "EAN-13 braucht 12 oder 13 Ziffern (4 eingegeben)")]
+    shown = result.objects[1]
+    assert (shown.w, shown.h) == barcodes.placeholder_size(obj) == (2 * 102, 118)
+    assert shown.image.tobytes() == barcodes.placeholder(shown.w, shown.h).tobytes()
+    with pytest.raises(BarcodeError):
+        renderer.render(doc)
+    obj.data = "400638133393"
+    assert renderer.render(doc, placeholders=True).errors == []
+
+
+@pytest.mark.parametrize("kind, data", [("qr", "x" * 2000), ("code128", "ä"), ("code39", "*"),
+                                        ("ean8", "{Nummer}")])
+def test_placeholder_size_is_close_to_the_real_one(kind, data):
+    obj = _bar(kind=kind, data=data, module=3, error="H")
+    w, h = barcodes.placeholder_size(obj)
+    assert w > 0 and h > 0 and w * h <= barcodes.max_size(obj)[0] * max(barcodes.max_size(obj))
+    weird = _bar(kind="code128", data=5, module=0, h_mm=float("nan"), text="ja")
+    assert barcodes.placeholder_size(weird) == (3 * (11 * 4 + 13), 118)

@@ -525,8 +525,10 @@ def test_settings_dialog_start_favorite_shows_in_the_star_tab(qtbot, monkeypatch
 
 def test_broken_favorite_preview_does_not_stop_the_window(qtbot, monkeypatch):
     favorites.add(_doc(), "A")
-    monkeypatch.setattr("labelwerk.gui.file_session.render_document",
-                        lambda *a, **k: (_ for _ in ()).throw(KeyError("kaputt")))
+    class Broken:
+        def render(self, *a, **k):
+            raise KeyError("kaputt")
+    monkeypatch.setattr("labelwerk.gui.file_session.Renderer", Broken)
     win = _window(qtbot)
     assert win.panel("file").favorite_preview(0) is None
 

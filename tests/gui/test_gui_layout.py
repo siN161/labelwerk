@@ -64,7 +64,7 @@ def _frames(window):
 
 # --- Reiter -----------------------------------------------------------------------
 def test_layout_tool_follows_text_and_image(window):
-    assert [tool.key for tool in TOOLS][1:5] == ["paper", "text", "image", "layout"]
+    assert [tool.key for tool in TOOLS][1:6] == ["paper", "text", "image", "barcode", "layout"]
     window.tool_actions["layout"].trigger()
     assert window.panels.currentWidget() is _panel(window)
 

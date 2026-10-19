@@ -55,6 +55,8 @@ Freies Platzieren: Mehrere Textrahmen pro Etikett. Mit „A“ in der Bearbeitun
 
 Bild: Im Reiter „Bild“ fügt „Aus Datei …“ (Strg+Umschalt+I) PNG, JPG, GIF, BMP, WebP, SVG oder eine PDF-Seite ein (bei mehreren Seiten fragt ein Dialog nach der Seite), „Aus Zwischenablage“ ein kopiertes Bild. Bilddateien und Bilder lassen sich auch aufs Etikett ziehen (landen an der Ablagestelle). Strg+V auf der Arbeitsfläche fügt ein, was die Zwischenablage oben hat: in labelwerk kopierte Objekte, sonst kopierte Bilddateien (Dateimanager), sonst Text als neuen Textrahmen (auch wenn ein Bild dabei ist, etwa bei Tabellenzellen – das Bild fügt „Aus Zwischenablage“ ein), sonst ein Bild. Bilder kommen in Originalgröße 1:1 (aus der Auflösung der Datei, sonst 300 dpi) und automatisch zugeschnitten (Schnittmarken und weißer Rand fallen weg – z. B. bei der Internetmarke); zu große werden proportional eingepasst, die Statusleiste nennt den Faktor (Codes ggf. nicht mehr lesbar). Das Panel stellt die Umwandlung in Schwarz/Weiß ein: Strich (harte Schwelle – Codes, Schrift, Logos) oder Foto (Rasterpunkte), Schwelle (höher = mehr Schwarz), Umkehren; dazu Zuschnitt an/aus, Originalgröße 1:1 und Seitenverhältnis beibehalten (dann halten auch die Kanten-Anfasser das Verhältnis). Bilder lassen sich verschieben, skalieren, drehen, ausrichten, kopieren und rückgängig machen wie Text; ein Doppelklick auf ein Bild startet keinen Schreibmodus.
 
+Barcode: Im Reiter „Barcode“ wählst du die Art (QR-Code, Code 128, Code 39, EAN-13, EAN-8) und fügst mit „Barcode einfügen“ einen Code mit Beispielinhalt ein – den Inhalt tippst du gleich darüber (jede Eingabe sofort auf dem Etikett). Gezeichnet wird in ganzen Druckpunkten, damit der Code bei 300 dpi lesbar bleibt: „Modul“ ist die Breite des schmalsten Strichs bzw. eines QR-Quadrats, Anfasser und Felder rasten darauf ein; Strichcodes haben dazu Höhe und Klartext, QR-Codes die Fehlerkorrektur (L/M/Q/H). Falscher Inhalt (z. B. Buchstaben im EAN) steht als Hinweis im Panel, das Etikett zeigt den letzten gültigen Stand und wird nicht gedruckt; bei EAN mit 12 bzw. 7 Ziffern wird die Prüfziffer ergänzt. In einer Serie geht `{Spalte}` auch im Inhalt (Doppelklick auf die Spalte ersetzt den Beispielinhalt). Lass um den Code die angezeigte Ruhezone frei.
+
 Tastenkürzel (Standard):
 
 | Kürzel | Aktion |
@@ -86,6 +88,7 @@ settings.py Einstellungen (JSON)
 fonts.py    Schriften (fontconfig)
 media.py    Medium prüfen (Statusabfrage des Druckers)
 imaging.py  Bilder: Schwarz/Weiß-Umwandlung (Strich/Foto), Größe begrenzen
+barcodes.py Barcodes: Code 128/39, EAN-13/8 (eigene Kodierung), QR (segno), in ganzen Druckpunkten
 layout.py   Platzieren: Einrasten, Ausrichten, Größe angleichen, ragt hinaus
 shortcuts.py Tastenkürzel-Verzeichnis (Standard, Konflikte, Prüfung)
 gui/        PySide6-Oberfläche (nur Anzeige/Bearbeitung, kein Druckcode)
@@ -95,4 +98,5 @@ Die Kernlogik ist UI-unabhängig – eine GUI setzt nur auf `render`, `files`, `
 
 ## Lizenz
 
-GPL-3.0-or-later (abhängig von [brother_ql-inventree](https://github.com/matmair/brother_ql-inventree), GPLv3+).
+GPL-3.0-or-later (abhängig von [brother_ql-inventree](https://github.com/matmair/brother_ql-inventree), GPLv3+;
+QR-Codes mit [segno](https://github.com/heuer/segno), BSD-3-Clause).

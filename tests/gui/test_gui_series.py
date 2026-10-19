@@ -448,7 +448,8 @@ def test_count_is_asked_before_rendering_and_media_check_first(qtbot, tmp_path, 
     rendered = []
     real = main_window.Renderer.render
     monkeypatch.setattr(main_window.Renderer, "render",
-                        lambda self, doc, model="QL-600": rendered.append(1) or real(self, doc, model))
+                        lambda self, doc, model="QL-600", **k: rendered.append(1)
+                        or real(self, doc, model, **k))
     win.render_now()
     rendered.clear()
     win.ask_print_count = lambda n: False

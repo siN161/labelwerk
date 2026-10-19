@@ -1,6 +1,6 @@
 """Werkzeug-Registry: Werkzeugleiste und Panel-Stapel werden daraus erzeugt.
 
-Ein neues Werkzeug (Rahmen, Barcode …) ist ein neuer Eintrag in TOOLS.
+Ein neues Werkzeug ist ein neuer Eintrag in TOOLS.
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Callable
 
 from ..document import Document
 from .panels import Panel
+from .panels.barcode import BarcodePanel
 from .panels.file import FilePanel
 from .panels.image import ImagePanel
 from .panels.layout import LayoutPanel
@@ -33,6 +34,7 @@ TOOLS = [
     Tool("paper", "Papier", "document-page-setup", PaperPanel),
     Tool("text", "Text", "insert-text", TextPanel),
     Tool("image", "Bild", "insert-image", ImagePanel),
+    Tool("barcode", "Barcode", "view-barcode-qr", BarcodePanel, "Barcodes und QR-Codes"),
     Tool("layout", "Layout", "align-horizontal-left", LayoutPanel),
     Tool("series", "Serie", "view-list-text", SeriesPanel, "Serien aus Tabelle oder Nummerierung"),
 ]
