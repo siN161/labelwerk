@@ -137,7 +137,8 @@ _lock = threading.Lock()
 _queues_cache: tuple[float | None, list[Queue]] = (None, [])
 _queues_thread: threading.Thread | None = None
 _info_cache: dict[str, tuple[float, QueueInfo]] = {}
-_office_cache: dict[str, tuple[float, bool | None, bool]] = {}   # Zeit, Bürodrucker, Antwort
+# Zeit, Bürodrucker, je geantwortet, letzte Frage beantwortet
+_office_cache: dict[str, tuple[float, bool | None, bool, bool]] = {}
 
 
 def read_queues(classify: bool = True) -> list[Queue]:
@@ -191,8 +192,8 @@ def _classify(names: list[str]) -> dict[str, bool | None]:
     now, result, ask = time.monotonic(), {}, []
     with _lock:
         for name in names:
-            stamp, office, answered = _office_cache.get(name, (None, None, False))
-            if stamp is not None and now - stamp < (INFO_MAX_AGE_S if answered
+            stamp, office, __, fresh = _office_cache.get(name, (None, None, False, False))
+            if stamp is not None and now - stamp < (INFO_MAX_AGE_S if fresh
                                                     else FAILED_MAX_AGE_S):
                 result[name] = office
             else:
@@ -205,21 +206,31 @@ def _classify(names: list[str]) -> dict[str, bool | None]:
         thread.join(max(0.0, deadline - time.monotonic()))
     with _lock:
         for name in ask:
-            stamp, office, answered = _office_cache.get(name, (None, None, False))
-            if stamp is None or stamp < now:          # nicht rechtzeitig: kurz als unbekannt
-                _office_cache[name] = (now, None, False)
-                office = None
+            stamp, office, __, __ = _office_cache.get(name, (None, None, False, False))
+            if stamp is None or stamp < now:          # nicht rechtzeitig
+                office = _unanswered(name, now)
             result[name] = office
     return result
 
 
 def _classify_one(name: str) -> None:
     try:
-        office, answered = is_office(_default_size(name)), True
+        office = is_office(_default_size(name))
     except CupsError:
-        office, answered = None, False
+        with _lock:
+            _unanswered(name, time.monotonic())
+        return
     with _lock:
-        _office_cache[name] = (time.monotonic(), office, answered)
+        _office_cache[name] = (time.monotonic(), office, True, True)
+
+
+def _unanswered(name: str, now: float) -> bool | None:
+    """Keine Antwort (Zeitlimit, Fehler) – unter ``_lock``: ein früher bekannter Wert bleibt (ein
+    Bürodrucker taucht nicht kurz im Menü auf), gefragt wird wie ohne Antwort schon nach
+    ``FAILED_MAX_AGE_S`` wieder; ohne frühere Antwort unbekannt (None)."""
+    __, office, answered, __ = _office_cache.get(name, (None, None, False, False))
+    _office_cache[name] = (now, office if answered else None, answered, False)
+    return office if answered else None
 
 
 def queues(max_age: float = QUEUE_MAX_AGE_S, wait: bool = False,

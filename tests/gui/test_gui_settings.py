@@ -108,6 +108,17 @@ def test_all_fonts_option_fills_the_list_at_once(qtbot, monkeypatch):
     assert not dlg.restart_needed()                              # wirkt ohne Neustart
 
 
+def test_all_fonts_option_sits_under_the_font(qtbot):
+    """„Alle Schriften zeigen“ steht direkt unter der Schriftart (Bereich NEUES ETIKETT)."""
+    from PySide6.QtWidgets import QFormLayout
+    dlg = SettingsDialog(Settings())
+    qtbot.addWidget(dlg)
+    form = dlg.font_family.parentWidget().layout()
+    assert isinstance(form, QFormLayout) and form is dlg.fonts_all.parentWidget().layout()
+    row, __ = form.getWidgetPosition(dlg.font_family)
+    assert form.getWidgetPosition(dlg.fonts_all)[0] == row + 1
+
+
 def test_saved_all_fonts_option_applies_to_text_panel(qtbot, monkeypatch):
     from labelwerk import fonts
     monkeypatch.setattr(fonts, "families",
@@ -467,3 +478,18 @@ def test_saved_image_defaults_apply_at_once(qtbot, monkeypatch):
     win.open_settings()
     panel = win.panel("image")
     assert panel.photo.isChecked() and panel.threshold.value() == 70
+
+
+def test_font_list_is_read_once_at_startup(qtbot, monkeypatch):
+    """Mit „Alle Schriften“ liest der Start nur die volle Liste (nicht erst die kurze)."""
+    from labelwerk import fonts
+    calls = []
+
+    def families(all=False):
+        calls.append(all)
+        return ["DejaVu Sans", "Zapf X"] if all else ["DejaVu Sans"]
+    monkeypatch.setattr(fonts, "families", families)
+    win = MainWindow(settings=Settings(check_media_on_start=False, fonts_all=True))
+    qtbot.addWidget(win)
+    assert calls == [True]
+    assert win.panel("text").family.count() == 2

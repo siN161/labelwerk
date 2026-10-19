@@ -261,8 +261,31 @@ def _migrate_font_size(raw: dict, settings: Settings) -> None:
 
 
 def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
+    return _write({key: getattr(settings, key) for key in _KEYS}, path)
+
+
+def update_settings(path: str | Path | None = None, base: Settings | None = None, **fields) -> Path:
+    """Nur ``fields`` in die Datei schreiben (stilles Speichern: Zuletzt verwendet, Favoriten,
+    gewählter Drucker …): die Datei wird neu gelesen, alles andere bleibt, wie es dort steht –
+    auch was eine zweite Instanz inzwischen gespeichert hat oder eine neuere Version kennt.
+    Fehlt die Datei oder ist sie nicht lesbar, gilt ``base`` (Stand im Speicher) bzw. der Standard."""
+    unknown = [key for key in fields if key not in _KEYS]
+    if unknown:
+        raise KeyError(unknown[0])
+    target = Path(path) if path else settings_path()
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("not a JSON object")          # intern, nie angezeigt
+    except (OSError, ValueError):
+        source = base if base is not None else Settings()
+        data = {key: getattr(source, key) for key in _KEYS}
+    data.update(fields)
+    return _write(data, target)
+
+
+def _write(data: dict, path: str | Path | None) -> Path:
     path = Path(path) if path else settings_path()
-    data = {key: getattr(settings, key) for key in _KEYS}
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         # erst daneben schreiben, dann ersetzen: ein Absturz mitten im Schreiben lässt die alte

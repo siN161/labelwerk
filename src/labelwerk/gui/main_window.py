@@ -37,7 +37,7 @@ from ..printer import DEFAULT_MODEL, cut_interval, to_print_mode
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
 from ..settings import (Settings, load_settings, network_entries, new_document, save_settings,
-                        started_values)
+                        started_values, update_settings)
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
@@ -1313,7 +1313,7 @@ class MainWindow(QMainWindow):
         # Größe passt schon quer zum Band – Drehen nach Einstellung gilt für Symbole nicht
         self._insert_images([obj], at, [] if crop is not None else [_(CROP_FAILED)], rotate=False)
         self.settings.symbols_recent = clipart.add_recent(self.settings.symbols_recent, symbol.id)
-        self._save_settings()
+        self._save_settings("symbols_recent")
         if self.symbol_window is not None:
             self.symbol_window.set_recent(self.settings.symbols_recent)
 
@@ -1362,13 +1362,18 @@ class MainWindow(QMainWindow):
 
     def _favorites_changed(self, favorites: list[str]) -> None:
         self.settings.symbols_favorites = list(favorites)
-        self._save_settings()
+        self._save_settings("symbols_favorites")
 
-    def _save_settings(self) -> None:
-        """Einstellungen still speichern (Zuletzt verwendet, Favoriten); Fehler in die Statusleiste."""
+    def _save_settings(self, *keys: str) -> None:
+        """Einstellungen still speichern (Zuletzt verwendet, Favoriten, Drucker …): nur die Felder
+        ``keys`` (``update_settings`` – was eine zweite Instanz gespeichert hat, bleibt); ohne
+        ``keys`` alles. Fehler in die Statusleiste."""
         try:
-            save_settings(self.settings)
-            self._stored_tool = self.settings.last_tool
+            if keys:
+                update_settings(base=self.settings, **{key: getattr(self.settings, key) for key in keys})
+            else:
+                save_settings(self.settings)
+                self._stored_tool = self.settings.last_tool
         except OSError as e:
             self._set_result(str(e), "error")
 
@@ -1526,7 +1531,7 @@ class MainWindow(QMainWindow):
         self.printer_status.setToolTip(tip or _("Choose printer"))
         if chosen is not None and chosen.model and chosen.model != self.settings.last_model:
             self.settings.last_model = chosen.model     # gilt beim nächsten Start ohne Drucker
-            self._save_settings()
+            self._save_settings("last_model")
         if not self._fixed_model:
             model = effective_model(chosen, self.settings.printer_model, self.settings.last_model)
             if model != self.model:
@@ -1573,7 +1578,7 @@ class MainWindow(QMainWindow):
     def choose_printer(self, uri: str) -> None:
         """Drucker wählen (URI; "" = automatisch) – gespeichert."""
         self.settings.printer = uri
-        self._save_settings()
+        self._save_settings("printer")
         self.refresh_printer()
 
     def set_model(self, model: str) -> None:
@@ -1607,7 +1612,7 @@ class MainWindow(QMainWindow):
         """Schnitt-Option bzw. Modus gewählt – gilt für diesen Drucker (Einstellungen)."""
         if self.model.startswith("cups:") or zpl.is_model(self.model):
             self.settings.printer_options.setdefault(self._options_key(), {})[key] = value
-            self._save_settings()
+            self._save_settings("printer_options")
 
     def _fit_label(self) -> None:
         """Passt das Etikett nicht zum Modell: ein neues, unberührtes Etikett nimmt ein passendes
@@ -1662,7 +1667,7 @@ class MainWindow(QMainWindow):
             self._end_shooting()
         if self.settings.last_tool != self._stored_tool:   # zuletzt benutzter Reiter, still
             try:
-                save_settings(self.settings)
+                update_settings(base=self.settings, last_tool=self.settings.last_tool)
                 self._stored_tool = self.settings.last_tool
             except OSError:
                 pass                                # beim Beenden: nichts mehr zu melden

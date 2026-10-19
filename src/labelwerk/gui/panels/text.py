@@ -121,7 +121,7 @@ class TextPanel(Panel):
         self.edit.document().setDefaultTextOption(option)
 
         self.section(pgettext("text panel", "Font"))
-        self.family = FontCombo()        # kurze Liste; MainWindow.apply_font_list nach Einstellung
+        self.family = FontCombo([])      # gefüllt von MainWindow.apply_font_list (kurz oder alle)
         self.layout_.addWidget(self.family)
         row = QHBoxLayout()
         self.size = QComboBox()

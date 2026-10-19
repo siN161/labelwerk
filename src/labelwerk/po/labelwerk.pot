@@ -151,7 +151,7 @@ msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py
 #, python-brace-format
-msgid "Along the tape the printer leaves {mm} mm free."
+msgid "Along the tape the printer leaves {mm} mm free – a smaller margin has no effect there."
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py

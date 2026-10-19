@@ -270,6 +270,47 @@ def test_silent_queue_is_asked_again_only_after_a_while(fake, monkeypatch):
     assert sum(c[:3] == ("lpoptions", "-p", "QL600") for c in calls) == 2
 
 
+def test_known_office_printer_stays_hidden_when_cups_is_slow_later(fake, monkeypatch):
+    """Nach 5 Minuten neu gefragt, antwortet CUPS nicht (Zeitlimit oder Fehler): der bekannte
+    Wert bleibt (sonst tauchte der Bürodrucker kurz im Menü auf); erst kurz danach neu fragen."""
+    import threading
+    calls, outputs, _ = fake
+    outputs["lpoptions Buero"] = GENERIC
+    assert cups.queues()[1].office is True
+    monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 0)
+    outputs["lpoptions Buero"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
+    assert cups.queues(max_age=0)[1].office is True              # Fehler: bekannt bleibt
+    release = threading.Event()
+    real = cups._run
+
+    def run(*args, **kw):
+        if args[0] == "lpoptions":
+            release.wait(5)                                     # hängt
+        return real(*args, **kw)
+    monkeypatch.setattr(cups, "_run", run)
+    monkeypatch.setattr(cups, "TIMEOUT_S", 0.2)
+    monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 300)
+    monkeypatch.setattr(cups, "FAILED_MAX_AGE_S", 0)
+    assert cups.queues(max_age=0)[1].office is True              # Zeitlimit: bekannt bleibt
+    release.set()
+
+
+def test_known_value_is_asked_again_soon_after_a_failed_answer(fake, monkeypatch):
+    calls, outputs, _ = fake
+    outputs["lpoptions Buero"] = GENERIC
+    cups.queues()
+    monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 0)
+    outputs["lpoptions Buero"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
+    cups.queues(max_age=0)
+    asked = sum(c[:3] == ("lpoptions", "-p", "Buero") for c in calls)
+    monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 300)            # sonst fünf Minuten gemerkt …
+    cups.queues(max_age=0)
+    assert sum(c[:3] == ("lpoptions", "-p", "Buero") for c in calls) == asked   # … kurz: gemerkt
+    monkeypatch.setattr(cups, "FAILED_MAX_AGE_S", 0)
+    outputs["lpoptions Buero"] = PTOUCH_QL
+    assert cups.queues(max_age=0)[1].office is False             # danach wieder gefragt
+
+
 def test_slow_queues_do_not_hold_up_the_list(fake, monkeypatch):
     """lpoptions je Warteschlange parallel, zusammen höchstens TIMEOUT_S; wer nicht rechtzeitig
     antwortet, ist unbekannt (angezeigt) – die Antwort zählt, sobald sie da ist."""
@@ -291,7 +332,7 @@ def test_slow_queues_do_not_hold_up_the_list(fake, monkeypatch):
     assert time.monotonic() - start < 1.5              # nicht 3 × nacheinander gewartet
     release.set()
     for _ in range(50):                                # späte Antworten werden gemerkt
-        if all(cups._office_cache.get(n, (0, None, False))[2]
+        if all(cups._office_cache.get(n, (0, None, False, False))[2]
                for n in ("Dymo_LabelWriter_450", "Buero", "QL600")):
             break
         time.sleep(0.05)

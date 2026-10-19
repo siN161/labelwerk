@@ -305,8 +305,8 @@ class PaperPanel(Panel):
         self._set_length_range()                       # Vorschub hängt am Etikett
         strip = label.feed_margin
         self.margin_hint.setVisible(endless and round(self.doc.margin_mm * label.dpi / 25.4) < strip)
-        self.margin_hint.setText(_("Along the tape the printer leaves {mm} mm free.").format(
-            mm=format_mm(strip, label.dpi)))
+        self.margin_hint.setText(_("Along the tape the printer leaves {mm} mm free – a smaller "
+                                   "margin has no effect there.").format(mm=format_mm(strip, label.dpi)))
         across = (label.total_width - label.width) // 2
         along = strip if endless else (label.total_height - label.height) // 2
         self.margin.setToolTip(

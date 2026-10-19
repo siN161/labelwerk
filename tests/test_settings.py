@@ -426,3 +426,53 @@ def test_start_tool_needs_a_restart():
     language = started["language"]
     assert not restart_pending(language, 200, "paper", started)
     assert restart_pending(language, 200, "last", started)
+
+
+# --- stilles Speichern einzelner Felder ------------------------------------------------
+def test_update_settings_keeps_what_another_instance_saved(tmp_path):
+    """Instanz A merkt sich still den Reiter; Instanz B hat inzwischen das Design gespeichert –
+    A schreibt nur ihr Feld und lässt B's Änderung stehen."""
+    from labelwerk.settings import update_settings
+    path = tmp_path / "s.json"
+    save_settings(Settings(theme="rawblock"), path)
+    a = load_settings(path)                                    # Instanz A startet
+    save_settings(Settings(theme="classic"), path)              # Instanz B speichert
+    a.last_tool = "series"
+    update_settings(path, last_tool=a.last_tool)
+    s = load_settings(path)
+    assert (s.theme, s.last_tool) == ("classic", "series")
+
+
+def test_update_settings_keeps_unknown_and_invalid_entries(tmp_path):
+    """Felder einer neueren Version oder ungültige Werte bleiben in der Datei, wie sie sind."""
+    from labelwerk.settings import update_settings
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"theme": "classic", "neu": [1, 2], "start_zoom": 9999}))
+    update_settings(path, recent_files=["/a.labelwerk"])
+    raw = json.loads(path.read_text())
+    assert raw == {"theme": "classic", "neu": [1, 2], "start_zoom": 9999,
+                   "recent_files": ["/a.labelwerk"]}
+
+
+def test_update_settings_without_file_writes_base(tmp_path):
+    from labelwerk.settings import update_settings
+    path = tmp_path / "neu" / "s.json"
+    update_settings(path, base=Settings(theme="classic"), last_tool="text")
+    s = load_settings(path)
+    assert (s.theme, s.last_tool) == ("classic", "text")
+
+
+def test_update_settings_with_unreadable_file_writes_base(tmp_path):
+    """Kaputte Datei: nichts zum Zusammenführen – der Stand im Speicher (``base``) gilt."""
+    from labelwerk.settings import update_settings
+    path = tmp_path / "s.json"
+    path.write_text("{kaputt")
+    update_settings(path, base=Settings(theme="classic"), last_tool="text")
+    s = load_settings(path)
+    assert (s.theme, s.last_tool, s.warnings) == ("classic", "text", [])
+
+
+def test_update_settings_rejects_unknown_fields(tmp_path):
+    from labelwerk.settings import update_settings
+    with pytest.raises(KeyError):
+        update_settings(tmp_path / "s.json", gibtsnicht=1)

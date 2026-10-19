@@ -52,7 +52,16 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Excel-Zahlen im Etikett nach der Region des Systems; `{Nummer}`/`{Number}` und „Spalte n“/„Column n“ in
   jeder Sprache; Symbole mit deutschen und englischen Namen (Suche in beiden); Layout-Test je Sprache.
 - Einstellungen: Reiter beim Start (fest oder zuletzt benutzter), Standard für neue Bilder (Strich/Foto, Schwelle).
-- 2536 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- Schriftliste (Abnahme-Korrekturen): nur Schriften mit deutschen Zeichen, ohne Kopien (Powerline/Nerd Font),
+  Symbol-/Farbschriften und CJK-Regionsvarianten, jede in ihrer Schrift (FontCombo statt QFontComboBox, keine
+  Qt-Sammelnamen wie „Sans Serif“); Einstellung „Alle Schriften zeigen“ (`fonts_all`, sofort), CLI `fonts --all`;
+  alte Qt-Namen „Name [Hersteller]“ werden zur installierten Familie.
+- Bürodrucker: CUPS-Warteschlangen mit Büro-Standardpapier (A4, Letter …) sind im Druckermenü und in
+  `labelwerk printers` ausgeblendet (Einstellung „Alle CUPS-Drucker zeigen“ = `cups_all`, CLI `printers --all`,
+  gewählte bleibt sichtbar).
+- Stilles Speichern (Zuletzt geöffnet/verwendet, Favoriten, gewählter Drucker, letzter Reiter) schreibt nur sein
+  Feld (`settings.update_settings`) – was eine zweite Instanz gespeichert hat, bleibt.
+- 2676 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -126,7 +135,7 @@ src/labelwerk/
               zuletzt › QL-600), capabilities(model) (cutter, two_color, max_tape_mm 62/104, length_limits, tested),
               SUPPORTED_MODELS (QL ohne PT), TESTED_MODELS, backend_for(uri) (… | cups | zpl), is_model (QL, cups:NAME,
               zpl:203/300/600), zebra_printers() (sysfs Vendor 0a5f, dpi aus der Kennung, sonst 203; source zebra),
-              Netzwerkeintrag mit Modell zpl:… → zpl+tcp://, cups_printers(direct, keep, wait) (Brother-QL-Warteschlange
+              Netzwerkeintrag mit Modell zpl:… → zpl+tcp://, cups_printers(direct, keep, wait, office, hidden) (Brother-QL-Warteschlange
               nicht doppelt, Bürodrucker nur mit office=True – Einstellung cups_all; eingeordnet nur ohne
               office –, gewählte bleibt immer, hidden sammelt Ausgeblendete);
               choose automatisch nie CUPS
@@ -134,7 +143,7 @@ src/labelwerk/
               queues() (Hintergrund-Thread, 30 s; wait=True für die CLI; classify: Bürodrucker einordnen –
               Queue.office nach der STANDARD-Papiergröße, is_office: A3–A5/B5/Letter/Legal … bzw. IPP-Namen;
               Standard aus PPD *DefaultPageSize, sonst lpoptions „*“; je Warteschlange ein Thread, zusammen
-              höchstens TIMEOUT_S, 5 min gemerkt; ohne Antwort None = angezeigt, kurz gemerkt), queue_info(name) -> QueueInfo(media, dpi,
+              höchstens TIMEOUT_S, 5 min gemerkt; ohne Antwort: früherer Wert bleibt, sonst None = angezeigt, kurz gemerkt), queue_info(name) -> QueueInfo(media, dpi,
               cut_options, source ppd|options|list; 5 min gemerkt, Fehler nicht), PPD aus PPD_DIR, valid_name,
               print_images(name, images, w, h, dpi, options) -> Job (ein PDF, media=/PageSize=, print-scaling=none)
   zpl.py      Zebra ohne Qt: graphic(img) (^GFA, Zebra-ASCII-Kompression, „:“ = gleiche Zeile), build(images, mode T|C|P),
@@ -162,10 +171,12 @@ src/labelwerk/
               Port/Schema/Steuerzeichen; Modell auch zpl:…), network_entries(settings); `printer_options` (Modell →
               Druck-Optionen: CUPS-Schnitt-Optionen, Zebra-Modus; je Eintrag geprüft, leerer Wert erlaubt), `zebra_dpi`
               (0 = erkannt), `cups_all` (auch CUPS-Bürodrucker im Druckermenü/`labelwerk printers`; Dialog → Drucker),
-              `language` ("" = System); RESTART_KEYS (language, start_zoom, start_tool), started_values/
+              `fonts_all` (alle Schriften in den Auswahlen, sofort), `language` ("" = System); RESTART_KEYS (language, start_zoom, start_tool), started_values/
               restart_pending (wirksamer Vergleich mit dem Start), configured_language (vor allem anderen gelesen);
               load_settings(path, model=None): Etikett muss nur ein bekanntes Etikett sein (auch
-              „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI)
+              „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI); save_settings schreibt alles,
+              update_settings(path, base, **felder) nur diese Felder in die neu gelesene Datei (Rest bleibt wie dort,
+              auch Unbekanntes; fehlt/kaputt: base) – stilles Speichern der GUI (MainWindow._save_settings(*keys))
   storage.py  Etiketten als Datei (*.labelwerk, JSON versioniert, Bilder Base64): to_dict/from_dict, save (atomar), load;
               Schemata SPAN/PARAGRAPH/TEXT/IMAGE/BARCODE/DOCUMENT (jedes Dataclass-Feld, Test hält gleich); Dateien sind fremde Eingabe:
               Prüfung je Feld nach Art, Wertebereich (endlich, Grenzen) und Struktur → StorageError (übersetzt, mit Dateiname),
@@ -291,11 +302,13 @@ src/labelwerk/
                     inzwischen gewechselten Druckers zählt nicht)
     settings_dialog.py Einstellungen: Reiter Allgemein (rollt; inkl. Design, sofort wirksam über app.apply_theme; Drucker:
                     Druckermodell als Ersatz, Zebra-Auflösung, Netzwerkdrucker-Tabelle mit Prüfung der Adresse und Modell
-                    Brother/Zebra; Etikett eines anderen Druckers bleibt; Ansicht: Start-Zoom, Design, Sprache) und
+                    Brother/Zebra, „Alle CUPS-Drucker zeigen“; Etikett eines anderen Druckers bleibt; Neues Etikett: …,
+                    Schriftart (FontCombo) mit „Alle Schriften zeigen“ darunter (sofort); Bilder einfügen: Zuschnitt, Drehen,
+                    Umwandlung Strich/Foto, Schwelle; Ansicht: Start-Zoom, Reiter beim Start, Design, Sprache) und
                     Tastenkürzel (Konflikte sperren Speichern); restart_hint neben SPEICHERN (Stand beim Start: started)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)
-  cli.py      labelwerk labels | labelwerk media | labelwerk printers [--all] (Bürodrucker; sonst Zeile „n ausgeblendet“) | labelwerk fonts | -m auto (Modell des Zieldruckers:
+  cli.py      labelwerk labels | labelwerk media | labelwerk printers [--all] (Bürodrucker; sonst Zeile „n ausgeblendet“) | labelwerk fonts [--all] | -m auto (Modell des Zieldruckers:
               -p bzw. gewählter/erster) | -l auto (Rolle des Zieldruckers per USB) | Etikett muss zum Modell passen | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] [--orientation horizontal|vertical] [--margin MM] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]
 ```
 Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `printers`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.

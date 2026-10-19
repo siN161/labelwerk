@@ -111,6 +111,13 @@ class SettingsDialog(QDialog):
         self._family_touched = False
         self.font_family.family_chosen.connect(self._family_changed)
         form.addRow(_("Font"), self.font_family)
+        self.fonts_all = QCheckBox(_("Show all fonts"))
+        self.fonts_all.setToolTip(_("Also copies, symbol fonts and fonts without German characters "
+                                    "– otherwise only fonts that can write German"))
+        self.fonts_all.setChecked(settings.fonts_all)
+        self.fonts_all.toggled.connect(
+            lambda on: self.font_family.set_families(fonts.families(all=on)))
+        form.addRow(self.fonts_all)
         self.start_favorite = QComboBox()
         self.start_favorite.addItem(_("Empty label"), None)
         for favorite in favorites.favorites():
@@ -213,13 +220,6 @@ class SettingsDialog(QDialog):
             self.language.addItem(i18n.NAMES.get(code, code), code)
         self.language.setCurrentIndex(max(0, self.language.findData(settings.language)))
         form.addRow(_("Language"), self.language)
-        self.fonts_all = QCheckBox(_("Show all fonts"))
-        self.fonts_all.setToolTip(_("Also copies, symbol fonts and fonts without German characters "
-                                    "– otherwise only fonts that can write German"))
-        self.fonts_all.setChecked(settings.fonts_all)
-        self.fonts_all.toggled.connect(
-            lambda on: self.font_family.set_families(fonts.families(all=on)))
-        form.addRow(self.fonts_all)
         # Einstellungen, die erst nach einem Neustart wirken: farbiger Hinweis neben SPEICHERN
         # (unten im Fenster – sichtbar in jedem Reiter), sobald eine davon geändert ist
         self._started = started if started is not None else started_values(settings)

@@ -279,14 +279,14 @@ class FileSession(QObject):
     def _remember(self, path: Path) -> None:
         settings = self.window.settings
         settings.recent_files = storage.add_recent_file(settings.recent_files, str(path))
-        self.window._save_settings()
+        self.window._save_settings("recent_files")
         self.refresh_lists()
 
     def open_recent(self, path: str) -> None:
         if not exists(path):
             settings = self.window.settings
             settings.recent_files = [p for p in settings.recent_files if p != path]
-            self.window._save_settings()
+            self.window._save_settings("recent_files")
             self.refresh_lists()
             self.window._set_result(
                 _("File not found: {path} – removed from the list").format(path=path), "error")
@@ -364,7 +364,7 @@ class FileSession(QObject):
             return
         if self.window.settings.start_favorite == favorite.name:
             self.window.settings.start_favorite = renamed.name
-            self.window._save_settings()
+            self.window._save_settings("start_favorite")
         self.refresh_lists()
 
     def remove_favorite(self, favorite: Favorite) -> None:
@@ -377,13 +377,13 @@ class FileSession(QObject):
             return
         if self.window.settings.start_favorite == favorite.name:
             self.window.settings.start_favorite = None
-            self.window._save_settings()
+            self.window._save_settings("start_favorite")
         self.refresh_lists()
 
     def toggle_start_favorite(self, favorite: Favorite) -> None:
         settings = self.window.settings
         settings.start_favorite = None if settings.start_favorite == favorite.name else favorite.name
-        self.window._save_settings()
+        self.window._save_settings("start_favorite")
         self.refresh_lists()
 
     def open_favorites_folder(self) -> None:

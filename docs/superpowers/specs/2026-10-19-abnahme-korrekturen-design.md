@@ -1,7 +1,7 @@
 # Korrekturen aus der Abnahme – Design
 
 Stand: 2026-10-19 · Status: Antworten des Nutzers 1a, 2a, 3b, 4b, 5b, 6a; Spec danach ohne eigene Freigabe
-geschrieben – zur Prüfung mit der Abnahme.
+geschrieben – zur Prüfung mit der Abnahme. Nach Prototyp und Reviews an die Umsetzung angeglichen.
 
 ## Anlass (Abnahme 2026-10-19)
 
@@ -42,34 +42,46 @@ Schriftvorschau-Gruppen/„Zuletzt verwendet“ (2b), `print-file`-Ränder (1:1-
   + Rand.
 - **Arbeitsfläche:** Endlosband zeigt das ganze Stück: Druckbild mittig, davor und dahinter der Streifen des Druckers
   (wie quer `total_width`); Länge ziehen, Größenangabe beim Ziehen und Feld „Länge“ meinen das Stück. Grenzen des
-  Felds/Ziehens = Modellgrenzen + 2 × feed_margin.
+  Felds/Ziehens = Modellgrenzen + 2 × feed_margin. Die Streifen, die der Drucker nicht bedruckt (längs und quer), sind
+  hellgrau (nur Anzeige, keine Klicks). Lineale zählen ab Papierkante, Positionsfelder ab dem Druckbild.
+- **Ausrichten am Etikett:** klemmt die automatische Länge an der Mindestlänge (Inhalt + Rand kürzer), steht die
+  Auswahl mittig im Bereich der Mindestlänge (`layout.align_objects(…, min_length=)`).
 - **Reiter PAPIER:** unter „Rand“ ein Hinweis, sichtbar bei Endlosband mit Rand unter dem Streifen des Druckers:
-  „Längs zum Band lässt der Drucker {mm} mm frei – weniger geht nicht.“ (Wert aus `feed_margin`, mit Komma je Sprache.)
-  Tooltip des Felds nennt beide Streifen.
+  „Längs zum Band lässt der Drucker {mm} mm frei – ein kleinerer Rand wirkt dort nicht.“ (Wert aus `feed_margin`, mit
+  Komma je Sprache; dezente graue Zeile, kein Warnstil – beim Standardrand 1 mm steht sie immer da.) Tooltip des Felds
+  nennt die echten Streifen des Etiketts.
 - **Dateien:** `length_mm` alter Dateien bedeutet jetzt das Stück (Druck ~6 mm kürzer als vorher, dafür wie
   eingestellt) – kein Umrechnen, Hinweis in der Doku.
 - **Tests:** Rand längs/quer in Druckpunkten (1 mm → 0 + Drucker, 5 mm → 5 mm − Streifen), feste Länge → Druckbild
-  um 2 × 35 Punkte kürzer, Grenzen; Golden-Referenzen neu (`tools/golden.py`), Arbeitsfläche (Stückhöhe, Ziehen,
-  Größenangabe), Hinweis im Panel.
+  um 2 × 35 Punkte kürzer, Grenzen; Golden-Referenzen bleiben (sie hashen feste Testbilder, nicht `render`),
+  Arbeitsfläche (Stückhöhe, Ziehen, Größenangabe, Streifen), Hinweis im Panel, Feld „Länge“ nach Etikettwechsel
+  (Grenzen vor dem Wert).
 
 ## 2 – Schriftliste
 
 - **Kern (`fonts.py`):** `families(all=False)`: kurze Liste = fontconfig `:lang=de` (deutsche Zeichen), ohne
-  Farbschriften (`color`), ohne Kopien (Name enthält „Powerline“), ohne reine Symbolschriften (Liste: D050000L,
+  Farbschriften (`color`), ohne Kopien (Name enthält „Powerline“ oder „Nerd Font“), ohne reine Symbolschriften (Liste: D050000L,
   Standard Symbols PS, Dingbats, Symbol, OpenSymbol, Webdings, Wingdings …), ohne regionale CJK-Varianten (Namen auf
   CJK/UKai/UMing mit Regionskürzel). `all=True`: alle Familien wie bisher. Ohne fontconfig: `[DEFAULT_FAMILY]`.
-- **Einstellung** `fonts_all: bool = False` – Einstellungen → Ansicht „Alle Schriften zeigen“, sofort wirksam.
+  Je Liste einmal gelesen (Cache unabhängig von der Aufrufform). `canonical(name)`: alte Qt-Namen „Name [Hersteller]“
+  aus Dateien/Einstellungen werden zur installierten Familie (Rendern, Hinweise, Auswahl); „Sans Serif“ & Co. bleiben
+  fremd (Hinweis wie bisher).
+- **Einstellung** `fonts_all: bool = False` – Einstellungen → Neues Etikett, direkt unter der Schriftart „Alle Schriften
+  zeigen“, sofort wirksam.
 - **Oberfläche:** eigene Auswahl `FontCombo` (QComboBox) statt QFontComboBox im Reiter TEXT und in den Einstellungen
   (Standardschrift): Einträge aus `fonts.families`, jeder in seiner Schrift dargestellt; eine Schrift aus Datei oder
   Einstellung, die nicht in der Liste steht, erscheint trotzdem (oben, gewählt) – nichts geht verloren. Keine
-  Qt-Sammelnamen mehr.
+  Qt-Sammelnamen mehr. Gemischte Schriften in der Markierung lassen das Feld leer (wie die Größe); eine Wahl setzt
+  dann alle. Das Text-Panel füllt die Liste nicht selbst (`MainWindow.apply_font_list`: beim Start und nach den
+  Einstellungen) – ein fc-list-Aufruf je Liste.
 - **CLI:** `labelwerk fonts` zeigt die kurze Liste, `labelwerk fonts --all` alle.
 - **Tests:** Filter mit gefälschter fc-list-Ausgabe, FontCombo (Signal, fremde Schrift bleibt), Einstellung.
 
 ## 3 – Reiter beim Start
 
-- **Einstellungen:** `start_tool: str = "paper"` (Werkzeug-Schlüssel oder „last“; Standard wie bisher Papier), `last_tool: str = ""` (still
-  gespeichert beim Reiterwechsel, wie `symbols_recent`). Dialog → Ansicht „Reiter beim Start“: Zuletzt benutzter,
+- **Einstellungen:** `start_tool: str = "paper"` (Werkzeug-Schlüssel oder „last“; Standard wie bisher Papier),
+  `last_tool: str = ""` (jeder sichtbare Reiterwechsel im Speicher; in die Datei beim Schließen des Fensters, nur
+  dieses Feld über `update_settings`; ungültig → "" ohne Hinweis). Dialog → Ansicht „Reiter beim Start“: Zuletzt benutzter,
   Datei, Papier, Text, Bild, Barcode, Layout, Serie. Teil von `RESTART_KEYS` (Hinweis neben SPEICHERN).
 - **Start:** gewählter Reiter; „Zuletzt benutzter“ ohne gültigen Wert → `START_TOOL` (Papier). Unbekannte Schlüssel
   in der Datei → Standard (wie andere Felder).
@@ -84,14 +96,25 @@ Schriftvorschau-Gruppen/„Zuletzt verwendet“ (2b), `print-file`-Ränder (1:1-
 
 ## 5 – Bürodrucker ausblenden
 
-- **Kern (`cups.py`):** beim Lesen der Warteschlangen (Hintergrund-Thread) je Warteschlange `lpoptions -p NAME -l`
-  (gemerkt `INFO_MAX_AGE_S`): **Bürodrucker**, wenn die Papiergrößen A3/A4/A5/B5, Letter, Legal, Executive, Tabloid
-  bzw. ihre IPP-Namen (`iso_a4_…`, `na_letter_…`) enthalten. Keine Antwort → unbekannt → angezeigt. `Queue.office`.
+- **Kern (`cups.py`):** beim Lesen der Warteschlangen (Hintergrund-Thread) je Warteschlange die **Standard**-Papiergröße
+  (PPD `*DefaultPageSize`, sonst `lpoptions -p NAME -l` Wert mit „*“): **Bürodrucker**, wenn sie A3/A4/A5/B5, Letter,
+  Legal, Executive, Tabloid/Ledger bzw. ihr IPP-Name ist (ein Zebra-Treiber mit A4 in der Liste, Standard Etikett,
+  bleibt Etikettendrucker). Abfragen parallel, zusammen höchstens `TIMEOUT_S`; gemerkt `INFO_MAX_AGE_S`. Keine Antwort →
+  früherer Wert bleibt, sonst unbekannt → angezeigt (kurz gemerkt). `Queue.office`; eingeordnet wird nur, wo gefiltert
+  wird (`classify`).
 - **`printers.cups_printers(…, office=False)`:** Bürodrucker nur mit `office=True`; die gewählte Warteschlange bleibt
   immer sichtbar (`keep`).
 - **Einstellung** `cups_all: bool = False` – Einstellungen → Drucker „Alle CUPS-Drucker zeigen (auch Bürodrucker)“.
-  GUI-Menü und `labelwerk printers` folgen ihr; `-p cups:NAME` geht immer.
+  GUI-Menü und `labelwerk printers` folgen ihr; `labelwerk printers --all` zeigt alle, sonst eine Zeile „n Bürodrucker
+  ausgeblendet“; `-b cups` ohne Etikett-Warteschlange nennt die ausgeblendeten; `-p cups:NAME` geht immer.
 - **Tests:** Erkennung mit gefälschtem `_run`, Liste mit/ohne Einstellung, gewählter Bürodrucker bleibt.
+
+## Stilles Speichern (aus dem Gesamtreview)
+
+`settings.update_settings(path, base, **felder)`: liest die Datei neu, setzt nur diese Felder, schreibt (Unbekanntes
+und Ungültiges bleibt wie dort; fehlt/kaputt: `base`). Die GUI speichert still nur die geänderten Felder (Zuletzt
+geöffnet/verwendet, Favoriten, Start-Favorit, gewählter Drucker, letztes Modell, Druck-Optionen, letzter Reiter) – was
+eine zweite Instanz gespeichert hat, bleibt. SPEICHERN im Einstellungsdialog schreibt weiter alles.
 
 ## Abschluss
 

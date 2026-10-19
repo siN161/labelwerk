@@ -46,7 +46,7 @@ def test_last_used_without_a_value_starts_with_paper(qtbot):
 def test_switching_tabs_remembers_the_last_tool_and_saves_it_on_close(qtbot, monkeypatch):
     from labelwerk.gui import main_window as mw
     saved = []
-    monkeypatch.setattr(mw, "save_settings", lambda settings, *a: saved.append(settings.last_tool))
+    monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f["last_tool"]))
     win = _window(qtbot)
     win.tool_actions["series"].trigger()
     assert win.settings.last_tool == "series"
@@ -60,7 +60,7 @@ def test_switching_tabs_remembers_the_last_tool_and_saves_it_on_close(qtbot, mon
 def test_last_tool_is_not_saved_on_close_when_unchanged(qtbot, monkeypatch):
     from labelwerk.gui import main_window as mw
     saved = []
-    monkeypatch.setattr(mw, "save_settings", lambda settings, *a: saved.append(settings.last_tool))
+    monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f["last_tool"]))
     win = _window(qtbot, start_tool="last", last_tool="image")
     win.tool_actions["text"].trigger()
     win.tool_actions["image"].trigger()                               # wieder wie beim Start
@@ -79,9 +79,9 @@ def test_last_tool_reaches_the_file_on_close(qtbot):
 def test_save_error_on_close_is_ignored(qtbot, monkeypatch):
     from labelwerk.gui import main_window as mw
 
-    def fail(*args):
+    def fail(*args, **fields):
         raise OSError("Datenträger voll")
-    monkeypatch.setattr(mw, "save_settings", fail)
+    monkeypatch.setattr(mw, "update_settings", fail)
     win = _window(qtbot)
     win.tool_actions["layout"].trigger()
     win.close()                                                       # kein Absturz
@@ -91,7 +91,7 @@ def test_save_error_on_close_is_ignored(qtbot, monkeypatch):
 def test_close_cancelled_saves_nothing(qtbot, monkeypatch):
     from labelwerk.gui import main_window as mw
     saved = []
-    monkeypatch.setattr(mw, "save_settings", lambda settings, *a: saved.append(settings.last_tool))
+    monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f["last_tool"]))
     win = _window(qtbot)
     win.show()
     win.tool_actions["layout"].trigger()
@@ -132,3 +132,26 @@ def test_settings_dialog_keeps_the_last_tool(qtbot, monkeypatch):
     monkeypatch.setattr(mw, "SettingsDialog", Dialog)
     win.open_settings()
     assert win.settings.last_tool == "text"
+
+
+def test_last_tool_on_close_keeps_settings_saved_by_another_instance(qtbot):
+    """Zweite Instanz (Doppelklick auf eine Datei) ändert das Design und speichert; schließt
+    danach die erste, bleibt das Design – nur der Reiter kommt dazu."""
+    from labelwerk.settings import save_settings
+    save_settings(Settings(theme="rawblock"))
+    win = _window(qtbot, theme="rawblock")
+    win.tool_actions["layout"].trigger()
+    save_settings(Settings(theme="classic"))                       # zweite Instanz
+    win.close()
+    s = load_settings()
+    assert (s.theme, s.last_tool) == ("classic", "layout")
+
+
+def test_silent_saves_keep_settings_saved_by_another_instance(qtbot, tmp_path):
+    """Stilles Speichern (Zuletzt geöffnet, Drucker gewählt) schreibt nur sein Feld."""
+    from labelwerk.settings import save_settings
+    win = _window(qtbot, theme="rawblock")
+    save_settings(Settings(theme="classic"))                       # zweite Instanz
+    win.choose_printer("tcp://192.0.2.1")
+    s = load_settings()
+    assert (s.theme, s.printer) == ("classic", "tcp://192.0.2.1")

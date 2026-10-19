@@ -106,7 +106,8 @@ def test_margin_hint_when_margin_is_inside_the_printer_strip(window):
     paper = window.panel("paper")
     paper.margin.setValue(1.0)
     assert paper.margin_hint.isVisibleTo(paper)
-    assert paper.margin_hint.text() == "Längs zum Band lässt der Drucker 3,0 mm frei."
+    assert paper.margin_hint.text() == ("Längs zum Band lässt der Drucker 3,0 mm frei – ein kleinerer "
+                                        "Rand wirkt dort nicht.")
     # dezent wie eine Erläuterung (steht beim Standardrand immer da), nicht der Hinweis-Kasten
     assert paper.margin_hint.objectName() != "hint" and "color" in paper.margin_hint.styleSheet()
     paper.margin.setValue(3.0)                          # 35 Punkte: genau der Vorschub

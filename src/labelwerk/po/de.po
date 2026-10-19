@@ -152,8 +152,8 @@ msgstr "Alle"
 
 #: src/labelwerk/gui/panels/paper.py
 #, python-brace-format
-msgid "Along the tape the printer leaves {mm} mm free."
-msgstr "Längs zum Band lässt der Drucker {mm} mm frei."
+msgid "Along the tape the printer leaves {mm} mm free – a smaller margin has no effect there."
+msgstr "Längs zum Band lässt der Drucker {mm} mm frei – ein kleinerer Rand wirkt dort nicht."
 
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Also copies, symbol fonts and fonts without German characters – otherwise only fonts that can write German"
