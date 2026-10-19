@@ -41,6 +41,7 @@ _HANDLE_CURSORS = {
 }
 _GUIDE_COLOR = QColor("#E53935")
 _TAPE_COLOR = QColor("#BDBDBD")    # heller als die Arbeitsfläche, in jedem Design lesbar
+_UNPRINTABLE_COLOR = QColor("#EBEBEB")   # unbedruckbarer Streifen: zwischen Etikett und Restband
 TOOL_MODES = ("select", "text")   # Auswahl-Pfeil, „Text anlegen“
 _EDIT_REACH_PX = 3                # Schreibmodus: Klick so knapp neben dem Rahmen zählt noch hinein
 _SELECTION_ALPHA = 90             # Markierung: Systemfarbe zu ≈ 35 % deckend
@@ -198,7 +199,7 @@ class Canvas(QGraphicsView):
         horizontal = orientation == "horizontal"
         pw, ph = (height, width) if horizontal else (width, height)   # Druckbild
         tw = label.total_width
-        th = label.total_height or ph
+        th = label.total_height or ph + 2 * label.feed_margin   # Endlosband: Stück mit Vorschub
         path = QPainterPath()
         if label.shape == "round":
             path.addEllipse(0, 0, tw, th)
@@ -209,6 +210,13 @@ class Canvas(QGraphicsView):
         self.outline = scene.addPath(path, QPen(Qt.PenStyle.NoPen), QBrush(Qt.GlobalColor.white))
 
         ox, oy = (tw - pw) / 2, (th - ph) / 2
+        # Streifen, die der Drucker nicht bedruckt (quer, längs Vorschub bzw. Etikettrand):
+        # hellgrau, nur Anzeige – unter dem Etikettinhalt, ohne Klicks, nicht im Druckbild
+        printed = QPainterPath()
+        printed.addRect(QRectF(ox, oy, pw, ph))
+        self.unprintable = scene.addPath(path.subtracted(printed), QPen(Qt.PenStyle.NoPen),
+                                         QBrush(_UNPRINTABLE_COLOR))
+        self.unprintable.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.sheet = QGraphicsRectItem(0, 0, width, height)
         self.sheet.setPen(QPen(Qt.PenStyle.NoPen))
         # Leserichtung → Druck: bei „horizontal“ 90° im Uhrzeigersinn wie render_document
@@ -517,9 +525,11 @@ class Canvas(QGraphicsView):
         return self._drag in ("length", "move", "resize")
 
     def snap_length(self, scene_y: float) -> float:
-        """Szene-y der Unterkante → Länge in mm (Raster 0,5 mm, innerhalb der Modellgrenzen)."""
+        """Szene-y der Unterkante → Länge des Stücks in mm (Raster 0,5 mm, innerhalb der
+        Modellgrenzen – sie gelten für das Druckbild, das Stück hat den Vorschub dazu)."""
         mm = round(scene_y / self.mm * 2) / 2
-        return min(max(mm, self.min_mm), self.max_mm)
+        feed = 2 * self.label.feed_margin / self.mm if self.label is not None else 0.0
+        return min(max(mm, self.min_mm + feed), self.max_mm + feed)
 
     def mousePressEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:

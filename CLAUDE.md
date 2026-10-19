@@ -11,7 +11,9 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Druckererkennung automatisch über `/sys/class/usbmisc/lp*` (Vendor-ID `04f9`), Gerät liegt aktuell auf `/dev/usb/lp1`.
 - GUI-MVP: `labelwerk-gui` (Papier/Text, Live-Vorschau, Etikettform, Länge ziehen, Drucken im Hintergrund).
 - `labelwerk install-desktop` trägt die GUI mit Icon im Starter ein (XDG, `~/.local/share`); App-ID `labelwerk`.
-- Papier: Ausrichtung H/V, Ränder (ringsum ab Papierkante; quer lässt der Drucker ~1,5 mm frei), Medium prüfen (GUI + `labelwerk media`), Einstellungen (`settings.json`, GUI-Dialog), Live-Druckererkennung.
+- Papier: Ausrichtung H/V, Ränder (ringsum ab Papierkante; die Streifen, die der Drucker freilässt, zählen mit: quer
+  ~1,5 mm, längs zum Endlosband ~3 mm Vorschub – Hinweis unter Rand; feste Länge = abgeschnittenes Stück samt
+  Vorschub, ältere Dateien drucken dadurch ~6 mm kürzer; Arbeitsfläche zeigt die Streifen hellgrau), Medium prüfen (GUI + `labelwerk media`), Einstellungen (`settings.json`, GUI-Dialog), Live-Druckererkennung.
 - Text-Formatierung zeichenweise (GUI-Editor wie P-touch, CLI --align/--font-family/--bold/--italic/--underline, labelwerk fonts), Größen in pt.
 - Freies Platzieren (Etappe 3d-1): mehrere Objekte, Auswahl, Ziehen mit Einrasten, Anfasser, Bearbeitungsleiste, Reiter Layout, Drehen, Reihenfolge, Zwischenablage, Rückgängig, Tastenkürzel änderbar (Einstellungen → Tastenkürzel).
 - Direkt auf dem Etikett schreiben (Etappe 3d-1b): Schreibmodus (Text anlegen + Klick bzw. Doppelklick, Esc/Klick daneben beendet), Schreibmarke/Markierung aus dem Kern-Zeilensatz, Markieren mit Maus und Tastatur, eine Bearbeitung = ein Rückgängig-Schritt, Rahmen wächst an der Kante der Textposition; Feld INHALT entfällt.
@@ -56,12 +58,14 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 src/labelwerk/
   labels.py   Etikettentypen je Modell (Daten aus brother_ql.labels.LabelsManager): labels_for_model nach
               printers.capabilities (Breite, restricted_to_models, ohne PT-Bänder, 62red nur Zweifarb-Modelle);
-              Label.two_color, Label.dpi (Brother 300); Etiketten anderer Drucker als ID „BxHmm@dpi“ (sized_id/sized_label,
+              Label.two_color, Label.dpi (Brother 300), Label.feed_margin (Endlosband: Vorschub des Druckers an
+              Anfang und Ende, brother_ql, 35 Punkte; sonst 0); Etiketten anderer Drucker als ID „BxHmm@dpi“ (sized_id/sized_label,
               fest, ganz bedruckbar, eine Schreibweise; get_label versteht sie ohne Drucker), mm_text (Maß mit Komma);
               cups:NAME → Etiketten des Treibers, zpl:DPI → zpl.MEDIA
   render.py   render_text(text, label_id, size_pt, font_path) -> PIL.Image; render_document(doc, model) -> PIL.Image
               render_object(obj, doc, model) -> RenderedObject (Bild mit Anschnitt image_dx/dy, Rahmen x/y/w/h, base_pt);
-              compose(rendered, size, orientation) -> Druckbild; label_size/label_margins; schrittweise:
+              compose(rendered, size, orientation) -> Druckbild; label_size/label_margins (_sheet: Rand längs ohne
+              feed_margin, length_mm = Stück → Druckbild = Länge − 2·feed_margin); schrittweise:
               prepare_object, label_size(prepared=), finish_object; span_dots
               Renderer (Qt-frei, für die GUI): render(doc, model, placeholders) -> Rendered(size, objects, image, frame,
               errors) – placeholders (Arbeitsfläche): Barcode, der sich nicht kodieren lässt → schraffierter Platzhalter
@@ -179,7 +183,8 @@ src/labelwerk/
               SVG/PNG, ohne versteckte), add_recent; Archiv fehlt/defekt: OSError/BadZipFile/KeyError/ValueError (GUI: Meldung „Symbol-Bibliothek nicht lesbar“)
   media.py    Medium prüfen: Statusabfrage ESC i S (nicht blockierend, 2 s), Media, label_for_media
   layout.py   Platzier-Logik ohne Qt (mm-Rechtecke): snap, align, match_size, maximize, scale_text, outside_indices/objects_outside,
-              growing_axis (Endlosband wächst mit), to_grid (0,1 mm nach Ziehen), Objekte: move/resize/set_frame/rotate/*_objects
+              growing_axis (Endlosband wächst mit; align_objects am Papier: Anfang des Bereichs, auf Mindestlänge mittig –
+              min_length), to_grid (0,1 mm nach Ziehen), Objekte: move/resize/set_frame/rotate/*_objects
               Schreibmodus: to_object/from_object (Etikett ↔ ungedrehtes Objekt, Druckpunkte), anchor_after_edit/anchor_align
               Bilder wie Text mit fester Rahmengröße; keep_aspect (Anfasser mit keep_ratio); Schrift-Funktionen: TypeError bei Bildern
               Bild einfügen/einstellen: insert_frame (Mitte bzw. Ablagepunkt, zu groß → proportional eingepasst, Endlosband
@@ -250,7 +255,8 @@ src/labelwerk/
     panels/position.py PositionSection: Bereich Position (X/Y/B/H in mm), show_frame(rect, editable_size), Signal edited(key, wert)
     panels/layout.py Reiter Layout: Ausrichten, Größe angleichen, Drehen, Reihenfolge (Knöpfe = Aktionen), Farbe (SCHWARZ immer,
                     ROT nur 62red auf einem Zweifarb-Modell: set_red_available; Signal color_chosen)
-    canvas.py       Etikett in echter Größe, Objekte (Auswahl, Ziehen, Einrasten, Anfasser), Lineale, Zug-Anfasser, Zoom;
+    canvas.py       Etikett in echter Größe (Endlosband: Stück mit Vorschub, Länge ziehen = Stück), unbedruckbare Streifen
+                    hellgrau (unprintable, keine Klicks), Objekte (Auswahl, Ziehen, Einrasten, Anfasser), Lineale, Zug-Anfasser, Zoom;
                     Zierrahmen (frame_item unter den Objekten, keine Klicks; Einrasten am Innenraum);
                     Ablegen von Dateien/Bilddaten (Daten im dropEvent kopiert, Signal dropped danach, mm) und Symbolen (symbol_dropped); Anfasser-Vorschau mit
                     keep_aspect (Bild, dieselbe Regel wie layout.resize: fest ist, was der Anfasser sagt)

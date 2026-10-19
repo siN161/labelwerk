@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QGridLayout, 
 from ... import layout
 from ...document import FRAME_LINE_MM, MAX_FRAME_MM, MAX_MARGIN_MM, Document, Frame
 from ...i18n import N_, _
-from ...labels import DPI, get_label, labels_for_model, length_limits, mm_text
+from ...labels import DPI, format_mm, get_label, labels_for_model, length_limits, mm_text
 from ...media import Media
 from ...printer import DEFAULT_MODEL
 from ...render import frame_mask
@@ -24,6 +24,7 @@ FRAME_TITLES = ((N_("No border"), None), (N_("Single"), "single"), (N_("Double")
                 (N_("Corners only"), "corners"))
 FRAME_ICON = QSize(56, 22)
 ROUND_TIP = N_("On round labels every border becomes a circle.")
+NOTE_STYLE = "color: #666666; font-size: 11px; font-weight: 400; border: none; padding: 0;"
 
 
 def frame_icon(style: str | None) -> QIcon:
@@ -105,9 +106,12 @@ class PaperPanel(Panel):
         self.margin.setDecimals(1)
         self.margin.setSingleStep(0.5)
         self.margin.setRange(0.0, MAX_MARGIN_MM)
-        self.margin.setToolTip(_("Distance from the paper edge all around (across the tape the "
-                                 "printer leaves about 1.5 mm free anyway)"))
         self.layout_.addWidget(self.margin)
+        self.margin_hint = QLabel()                 # Rand längs kleiner als der Vorschub
+        self.margin_hint.setObjectName("note")
+        self.margin_hint.setStyleSheet(NOTE_STYLE)   # dezent, in jedem Design
+        self.margin_hint.setWordWrap(True)
+        self.layout_.addWidget(self.margin_hint)
 
         self.section(_("Border"))
         self.frame_style = QComboBox()
@@ -206,8 +210,14 @@ class PaperPanel(Panel):
             self.combo.model().item(self.combo.count() - 1).setEnabled(False)
 
     def _set_length_range(self) -> None:
+        """Länge des Stücks: Grenzen des Modells (für das Druckbild) plus Vorschub an beiden
+        Enden."""
         min_len, max_len = length_limits(self.model)
-        self.length.setRange(round(min_len * 25.4 / DPI, 1), round(max_len * 25.4 / DPI, 1))
+        feed = 2 * get_label(self.doc.label_id).feed_margin
+        blocked = self.length.blockSignals(True)
+        self.length.setRange(round((min_len + feed) * 25.4 / DPI, 1),
+                             round((max_len + feed) * 25.4 / DPI, 1))
+        self.length.blockSignals(blocked)
 
     def _apply(self) -> None:
         layout.change_label(self.doc, self.combo.currentData())
@@ -232,6 +242,7 @@ class PaperPanel(Panel):
                 self._unfit is not None and self._unfit != self.doc.label_id):
             self._fill_labels()          # andere Datei bzw. passendes Etikett: Liste neu
         self.combo.setCurrentIndex(self.combo.findData(self.doc.label_id))
+        self._set_length_range()                     # Grenzen des Etiketts vor seinem Wert
         self.length_auto.setChecked(self.doc.length_mm is None)
         if self.doc.length_mm is not None:
             self.length.setValue(self.doc.length_mm)
@@ -291,6 +302,18 @@ class PaperPanel(Panel):
         self.length_title.setVisible(endless)
         self.length_box.setVisible(endless)
         self.length.setEnabled(not self.length_auto.isChecked())
+        self._set_length_range()                       # Vorschub hängt am Etikett
+        strip = label.feed_margin
+        self.margin_hint.setVisible(endless and round(self.doc.margin_mm * label.dpi / 25.4) < strip)
+        self.margin_hint.setText(_("Along the tape the printer leaves {mm} mm free.").format(
+            mm=format_mm(strip, label.dpi)))
+        across = (label.total_width - label.width) // 2
+        along = strip if endless else (label.total_height - label.height) // 2
+        self.margin.setToolTip(
+            _("Distance from the paper edge all around (the printer leaves about {across} mm free "
+              "across the tape and about {along} mm along it anyway)").format(
+                across=format_mm(across, label.dpi), along=format_mm(along, label.dpi))
+            if across or along else _("Distance from the paper edge all around"))
         self.fixed_size.setVisible(not endless)
         w, h = label.size_mm
         w, h = mm_text(w), mm_text(h)

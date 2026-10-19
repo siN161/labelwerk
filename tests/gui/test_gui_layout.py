@@ -386,10 +386,11 @@ def test_paper_align_along_growing_axis_is_enabled_with_hint(qtbot, orientation,
     assert hint not in panel.buttons[f"align.paper_{growing[0]}"].defaultAction().toolTip()
 
 
+@pytest.mark.parametrize("margin", [3, 6])             # 3 mm: Etikett auf Mindestlänge geklemmt
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
-def test_paper_align_along_growing_axis_gives_equal_margins(qtbot, orientation):
+def test_paper_align_along_growing_axis_gives_equal_margins(qtbot, orientation, margin):
     vertical = orientation == "vertical"
-    doc = Document("62", length_mm=None, orientation=orientation, margin_mm=3, objects=[
+    doc = Document("62", length_mm=None, orientation=orientation, margin_mm=margin, objects=[
         TextObject("Zeile 1\nZeile 2", size_pt=14, x_mm=5, y_mm=6)])
     win = _window(qtbot, doc)
     win.canvas.set_selection([0])

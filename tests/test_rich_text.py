@@ -14,7 +14,8 @@ def _ink(img):
 
 
 def _old_render(text: str, size: int | None = None) -> Image.Image:
-    """Der Algorithmus vor Etappe 3a (Pillow multiline_text, zentriert), Etikett 62 vertikal."""
+    """Der Algorithmus vor Etappe 3a (Pillow multiline_text, zentriert), Etikett 62 vertikal;
+    Rand 1 mm: quer und längs ganz im Streifen, den der Drucker freilässt (kein eigener Rand)."""
     def box(font):
         probe = ImageDraw.Draw(Image.new("1", (1, 1)))
         return tuple(round(v) for v in probe.multiline_textbbox((0, 0), text, font=font,
@@ -22,13 +23,13 @@ def _old_render(text: str, size: int | None = None) -> Image.Image:
 
     def fits(s):
         l, t, r, b = box(fonts.load(DEJAVU_BOLD, s))
-        return r - l <= 696 and b - t <= 11811 - 24     # quer kein Rand: Drucker lässt 1,5 mm
+        return r - l <= 696 and b - t <= 11811     # kein Rand: Drucker lässt 1,5 mm bzw. 3 mm
 
     start = size or max(10, 696 // 5)
     best = start if fits(start) else max(s for s in range(8, start) if fits(s))
     font = fonts.load(DEJAVU_BOLD, best)
     l, t, r, b = box(font)
-    height = min(max(b - t + 24, 150), 11811)
+    height = min(max(b - t, 150), 11811)
     img = Image.new("RGB", (696, height), "white")
     ImageDraw.Draw(img).multiline_text(((696 - (r - l)) // 2 - l, (height - (b - t)) // 2 - t),
                                        text, fill="black", font=font, align="center")

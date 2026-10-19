@@ -390,7 +390,7 @@ def test_object_outside_label_shows_status_hint(qtbot):
 
 def test_no_snapping_to_moving_end_of_auto_length_label(qtbot):
     doc = _doc(length_mm=None)
-    doc.margin_mm = 5                                       # Bandende 5 mm hinter „Zwei“
+    doc.margin_mm = 8                                       # Bandende 5 mm hinter „Zwei“ (8 − 3 mm Vorschub)
     win = _window(qtbot, doc)
     canvas = win.canvas
     ppm = canvas.px_per_mm()

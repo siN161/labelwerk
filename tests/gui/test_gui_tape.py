@@ -1,6 +1,6 @@
 """Arbeitsfläche: Restband, geschlossener Anfang, Schnittlinie am Ende, Randlinien (Abnahme 3d-1)."""
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
 
 from labelwerk import layout
@@ -38,7 +38,8 @@ def test_tape_is_not_part_of_label_size_or_print_image(qtbot):
     win = _window(qtbot)
     before = render_document(win.doc).size
     assert win._shown_size == (before[0], before[1])
-    assert win.canvas.outline.sceneBoundingRect().height() == pytest.approx(before[1])
+    # das Stück: Druckbild plus Vorschub des Druckers an beiden Enden
+    assert win.canvas.outline.sceneBoundingRect().height() == pytest.approx(before[1] + 2 * 35)
     assert win.canvas.tape_rect().bottom() > before[1]
 
 
@@ -75,9 +76,10 @@ def test_canvas_draws_all_four_margins(qtbot, label, orientation):
     # Fläche in Leserichtung → Szene: gleiche Größe wie der Bereich, Rand in Bandrichtung sichtbar
     along = (area.y, win._shown_size[1] * 25.4 / 300 - area.bottom) if orientation == "vertical" \
         else (area.x, win._shown_size[0] * 25.4 / 300 - area.right)
-    # Rand 3 mm ab Papierkante: bei gestanzten Etiketten zählt der unbedruckbare Streifen mit
+    # Rand 3 mm ab Papierkante: der unbedruckbare Streifen (gestanzt) bzw. der Vorschub des
+    # Druckers (Endlosband) zählt mit
     label_ = get_label(label)
-    edge = 0 if label_.height is None else (label_.total_height - label_.height) // 2
+    edge = label_.feed_margin if label_.height is None else (label_.total_height - label_.height) // 2
     expected = max(0, round(3 * 300 / 25.4) - edge) * 25.4 / 300
     assert along[0] == pytest.approx(expected, abs=0.1)
     assert along[1] == pytest.approx(expected, abs=0.1)
@@ -100,3 +102,35 @@ def test_orientation_names_are_plain(qtbot):
     panel = win.panel("paper")
     assert "Querformat" in panel.horizontal.toolTip() and "Hochformat" in panel.vertical.toolTip()
     assert "Text" not in panel.horizontal.toolTip() + panel.vertical.toolTip()
+
+
+@pytest.mark.parametrize("label", ["62", "62x29"])
+@pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
+def test_canvas_shades_strips_the_printer_does_not_print(qtbot, label, orientation):
+    """Quer (total_width − width) / 2, längs der Vorschub bzw. der Rand des gestanzten Etiketts:
+    hellgrau, nur Anzeige – keine Klicks, unter dem Inhalt, nicht im Druckbild (Szene-y =
+    Bandrichtung, auch bei „horizontal“)."""
+    win = _window(qtbot, label=label, orientation=orientation, length=None)
+    canvas = win.canvas
+    strips = canvas.unprintable
+    assert strips.acceptedMouseButtons() == Qt.MouseButton.NoButton
+    lbl = get_label(label)
+    box = canvas.outline.sceneBoundingRect()
+    across = (lbl.total_width - lbl.width) / 2
+    along = lbl.feed_margin if lbl.height is None else (lbl.total_height - lbl.height) / 2
+    path, mid = strips.path(), box.center()
+    assert path.contains(QPointF(box.left() + across / 2, mid.y()))
+    assert path.contains(QPointF(box.right() - across / 2, mid.y()))
+    assert path.contains(QPointF(mid.x(), box.top() + along / 2))
+    assert path.contains(QPointF(mid.x(), box.bottom() - along / 2))
+    assert not path.contains(mid)
+    assert not path.contains(QPointF(box.left() + across + 1, box.top() + along + 1))
+    stack = canvas.scene().items()                      # oben zuerst
+    assert stack.index(canvas.sheet) < stack.index(strips) < stack.index(canvas.outline)
+    assert render_document(win.doc).size == (win._shown_size if orientation == "vertical"
+                                              else win._shown_size[::-1])
+
+
+def test_round_label_has_no_shaded_strip_inside_the_circle(qtbot):
+    win = _window(qtbot, label="d24")
+    assert not win.canvas.unprintable.path().contains(win.canvas.outline.sceneBoundingRect().center())

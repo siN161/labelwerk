@@ -149,6 +149,11 @@ msgstr ""
 msgid "All"
 msgstr ""
 
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Along the tape the printer leaves {mm} mm free."
+msgstr ""
+
 #: src/labelwerk/gui/main_window.py
 msgid "An object extends beyond the label and will be cut off. Print anyway?"
 msgstr ""
@@ -582,7 +587,12 @@ msgid "Distance from the left edge of the label"
 msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py
-msgid "Distance from the paper edge all around (across the tape the printer leaves about 1.5 mm free anyway)"
+msgid "Distance from the paper edge all around"
+msgstr ""
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Distance from the paper edge all around (the printer leaves about {across} mm free across the tape and about {along} mm along it anyway)"
 msgstr ""
 
 #: src/labelwerk/gui/panels/position.py
@@ -2661,7 +2671,7 @@ msgid "list the labels for the model"
 msgstr ""
 
 #: src/labelwerk/cli.py
-msgid "margin all around from the paper edge in mm (default from the settings)"
+msgid "margin all around from the paper edge in mm – the strips the printer leaves free count (about 1.5 mm across, 3 mm along a continuous tape; default from the settings)"
 msgstr ""
 
 #: src/labelwerk/cli.py

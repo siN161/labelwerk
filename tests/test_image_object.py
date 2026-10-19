@@ -216,8 +216,7 @@ def test_invalid_image_settings_raise_at_render(field, value, message):
 def test_image_grows_auto_length():
     obj = _image(x_mm=1, y_mm=10)
     doc = Document("62", objects=[obj])
-    margin = round(1.0 * DPI / 25.4)
-    assert label_size(doc) == (696, _dots(10) + 300 + margin)
+    assert label_size(doc) == (696, _dots(10) + 300)    # 1 mm Rand liegt im Vorschub des Druckers
 
 
 def test_preview_equals_print_with_text_and_images():

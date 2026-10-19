@@ -125,8 +125,9 @@ def _parser() -> argparse.ArgumentParser:
                     help=_("vertical: portrait (reading direction across the tape), horizontal: "
                            "landscape (along the tape); default from the settings"))
     pr.add_argument("--margin", type=_margin, metavar="MM",
-                    help=_("margin all around from the paper edge in mm (default from the "
-                           "settings)"))
+                    help=_("margin all around from the paper edge in mm – the strips the printer "
+                           "leaves free count (about 1.5 mm across, 3 mm along a continuous "
+                           "tape; default from the settings)"))
     _add_output_options(pr)
 
     pf = sub.add_parser("print-file", help=_("print a PDF/image 1:1"))

@@ -881,6 +881,30 @@ def test_align_to_paper_along_growing_axis_puts_group_at_start_margin(orientatio
         assert gap(rects) == pytest.approx(gap(old), abs=0.1)             # Abstand bleibt
 
 
+@pytest.mark.parametrize("orientation, modes", [
+    ("vertical", ("top", "vcenter", "bottom")), ("horizontal", ("left", "hcenter", "right"))])
+def test_align_to_paper_along_growing_axis_centers_short_content_on_minimum_length(orientation,
+                                                                                  modes):
+    """Inhalt + Rand kürzer als die Mindestlänge: das Etikett bleibt so lang – die Auswahl
+    steht mittig darin (gleiche Ränder an beiden Enden)."""
+    vertical = orientation == "vertical"
+    min_mm = _mm(layout.length_limits("QL-600")[0])
+    for mode in modes:
+        doc = Document("62", orientation=orientation, margin_mm=3,
+                       objects=[TextObject("A", size_pt=10, x_mm=7, y_mm=9)])
+        rendered = [render_object(o, doc) for o in doc.objects]
+        area = layout.printable_area(doc)
+        moved = layout.align_objects(doc.objects, rendered, mode, area,
+                                     grow=layout.growing_axis(doc), min_length=min_mm)
+        doc.objects = moved
+        box = layout.object_rect(render_object(moved[0], doc))
+        start, end = (box.y, box.bottom) if vertical else (box.x, box.right)
+        w, h = layout.label_size(doc)
+        length = _mm(h if vertical else w)
+        assert length == pytest.approx(min_mm)
+        assert length - end == pytest.approx(start, abs=2 * 25.4 / DPI)
+
+
 @pytest.mark.parametrize("grow, across", [
     ("y", ("left", "hcenter", "right")), ("x", ("top", "vcenter", "bottom"))])
 def test_align_to_paper_across_still_works_on_growing_label(grow, across):

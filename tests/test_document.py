@@ -16,7 +16,7 @@ def test_render_document_equals_render_text():
 
 def test_fixed_length_sets_height():
     doc = Document("62", length_mm=50, objects=[TextObject("Hallo")])
-    assert render_document(doc).height == 591
+    assert render_document(doc).height == 591 - 2 * 35   # Stück 50 mm: Vorschub an beiden Enden
 
 
 def test_length_is_clamped_to_model_limits():
@@ -79,7 +79,7 @@ def test_horizontal_auto_font_matches_vertical():
 
 def test_horizontal_fixed_length():
     doc = Document("62", length_mm=50, orientation="horizontal", objects=[TextObject("Hallo")])
-    assert render_document(doc).size == (696, 591)
+    assert render_document(doc).size == (696, 591 - 2 * 35)
 
 
 def test_horizontal_die_cut_keeps_print_size():
@@ -89,9 +89,10 @@ def test_horizontal_die_cut_keeps_print_size():
 
 def test_margin_extends_auto_length():
     def height(margin):
-        doc = Document("62", margin_mm=margin, objects=[TextObject("A", size_pt=48)])
+        doc = Document("62", margin_mm=margin, objects=[TextObject("A", size_pt=100)])
         return render_document(doc).height
-    assert height(5) - height(1) == 2 * (59 - 12)        # 5 mm = 59 Punkte, 1 mm = 12
+    # 5 mm = 59 Punkte, davon 35 Vorschub des Druckers; 1 mm liegt ganz im Vorschub
+    assert height(5) - height(1) == 2 * (59 - 35)
 
 
 def test_margin_is_clamped_to_20_mm():
@@ -140,10 +141,12 @@ def test_margin_larger_than_die_cut_label_is_limited():
 
 def test_margin_applies_on_every_side():
     from labelwerk.render import label_margins
-    # ab Papierkante: quer lässt der Drucker 18 Punkte (1,5 mm) frei, gestanzt 62x29 längs 35
-    assert label_margins(Document("62")) == (0, 12)                # 1 mm: quer schon im Streifen
-    assert label_margins(Document("62", margin_mm=3)) == (35 - 18, 35)
-    assert label_margins(Document("62", orientation="horizontal", margin_mm=2)) == (24, 6)
+    # ab Papierkante: quer lässt der Drucker 18 Punkte (1,5 mm) frei, längs (Endlosband) 35
+    # Punkte Vorschub, gestanzt 62x29 längs 35
+    assert label_margins(Document("62")) == (0, 0)                 # 1 mm: schon im Streifen
+    assert label_margins(Document("62", margin_mm=3)) == (35 - 18, 0)
+    assert label_margins(Document("62", margin_mm=4)) == (47 - 18, 47 - 35)
+    assert label_margins(Document("62", orientation="horizontal", margin_mm=2)) == (0, 6)
     assert label_margins(Document("62x29", margin_mm=4)) == (47 - 18, 47 - 35)
     assert label_margins(Document("62x29")) == (0, 0)
 

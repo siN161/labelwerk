@@ -404,9 +404,10 @@ def _sheet(doc: Document, model: str) -> _Sheet:
     side = max(0, margin - (label.total_width - label.width) // 2)
     if label.height is not None and label.total_height is not None:
         margin = max(0, margin - (label.total_height - label.height) // 2)
+    margin = max(0, margin - label.feed_margin)     # längs lässt der Drucker den Vorschub frei
     feed = label.height
-    if feed is None and doc.length_mm is not None:
-        feed = min(max(_dots(doc.length_mm, label.dpi), min_len), max_len)
+    if feed is None and doc.length_mm is not None:  # Länge = abgeschnittenes Stück mit Vorschub
+        feed = min(max(_dots(doc.length_mm, label.dpi) - 2 * label.feed_margin, min_len), max_len)
     keep = round(MARGIN * label.dpi / DPI)                          # Rand darf nicht alles
     side = min(side, max(0, (label.width - 2 * keep) // 2))        # aufbrauchen (quer, feste
     if feed is not None:                                            # Länge): 1 mm bleibt

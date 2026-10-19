@@ -150,6 +150,11 @@ msgstr "Aneinander senkrecht mittig ausrichten"
 msgid "All"
 msgstr "Alle"
 
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Along the tape the printer leaves {mm} mm free."
+msgstr "Längs zum Band lässt der Drucker {mm} mm frei."
+
 #: src/labelwerk/gui/main_window.py
 msgid "An object extends beyond the label and will be cut off. Print anyway?"
 msgstr "Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?"
@@ -591,8 +596,13 @@ msgid "Distance from the left edge of the label"
 msgstr "Abstand vom linken Etikettrand"
 
 #: src/labelwerk/gui/panels/paper.py
-msgid "Distance from the paper edge all around (across the tape the printer leaves about 1.5 mm free anyway)"
-msgstr "Abstand zur Papierkante ringsum (quer lässt der Drucker ohnehin rund 1,5 mm frei)"
+msgid "Distance from the paper edge all around"
+msgstr "Abstand zur Papierkante ringsum"
+
+#: src/labelwerk/gui/panels/paper.py
+#, python-brace-format
+msgid "Distance from the paper edge all around (the printer leaves about {across} mm free across the tape and about {along} mm along it anyway)"
+msgstr "Abstand zur Papierkante ringsum (der Drucker lässt ohnehin quer rund {across} mm und längs rund {along} mm frei)"
 
 #: src/labelwerk/gui/panels/position.py
 msgid "Distance from the top edge of the label"
@@ -2682,8 +2692,8 @@ msgid "list the labels for the model"
 msgstr "Etiketten für das Modell auflisten"
 
 #: src/labelwerk/cli.py
-msgid "margin all around from the paper edge in mm (default from the settings)"
-msgstr "Rand ringsum ab Papierkante in mm (Standard aus den Einstellungen)"
+msgid "margin all around from the paper edge in mm – the strips the printer leaves free count (about 1.5 mm across, 3 mm along a continuous tape; default from the settings)"
+msgstr "Rand ringsum ab Papierkante in mm – die Streifen, die der Drucker freilässt, zählen mit (quer rund 1,5 mm, längs zum Endlosband 3 mm; Standard aus den Einstellungen)"
 
 #: src/labelwerk/cli.py
 msgid "model not detected"

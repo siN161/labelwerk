@@ -678,7 +678,8 @@ def objects_outside(doc: Document, model: str = "QL-600") -> list[int]:
 
 # --- Reiter „Layout“ ----------------------------------------------------------------
 def align_objects(objs: list[Object], rendered: list[RenderedObject], mode: str,
-                  area: Rect | None = None, grow: str | None = None) -> list[Object]:
+                  area: Rect | None = None, grow: str | None = None,
+                  min_length: float = 0.0) -> list[Object]:
     """Kopien der Objekte, ausgerichtet wie ``align`` – mit ``area`` am Papier, sonst aneinander.
 
     Gerechnet wird mit den Rahmen, wie sie im Modell stehen (``exact_rect``); ein Objekt ohne
@@ -686,13 +687,17 @@ def align_objects(objs: list[Object], rendered: list[RenderedObject], mode: str,
     ``grow`` (``growing_axis``): Am Papier sitzt die Auswahl in dieser Achse bei jedem Modus
     (Anfang, Mitte, Ende) mit ihrem Umriss am Anfang des Bereichs (Rand in Bandrichtung) –
     das Etikett wächst bis Inhalt plus Rand, die Ränder an beiden Enden sind dann gleich.
+    Ist das kürzer als die Mindestlänge ``min_length`` (mm, Druckbild), bleibt das Etikett so
+    lang – die Auswahl steht dann mittig darin.
     """
     rects = [exact_rect(o, r) for o, r in zip(objs, rendered)]
     if area is not None and grow == ("x" if mode in ("left", "hcenter", "right") else "y"):
         if not rects:
             return []
         box = bounds(rects)
-        shift = (area.x - box.x, 0.0) if grow == "x" else (0.0, area.y - box.y)
+        start, extent = (area.x, box.w) if grow == "x" else (area.y, box.h)
+        start = max(start, (min_length - extent) / 2)    # Rand an beiden Enden gleich
+        shift = (start - box.x, 0.0) if grow == "x" else (0.0, start - box.y)
         moved = [r.at(r.x + shift[0], r.y + shift[1]) for r in rects]
     else:
         moved = align(rects, mode, area)

@@ -65,7 +65,8 @@ def test_fixed_length_sets_preview_height(window):
     paper.length_auto.setChecked(False)
     paper.length.setValue(50.0)
     window.render_now()
-    assert window.image.height == round(50 * MM)
+    assert window.image.height == round(50 * MM) - 2 * 35          # Druckbild ohne Vorschub
+    assert window.canvas.label_height() == round(50 * MM)           # Arbeitsfläche: das Stück
 
 
 def _mouse(view, kind, scene_point, buttons):
@@ -95,9 +96,9 @@ def test_dragging_handle_sets_fixed_length(window):
     assert paper.length.value() == 40.0
 
 
-def test_dragging_below_minimum_stops_at_12_7_mm(window):
-    _drag_handle(window, 2 * MM)
-    assert window.doc.length_mm == pytest.approx(12.7, abs=0.01)
+def test_dragging_below_minimum_stops_at_12_7_mm_plus_feed(window):
+    _drag_handle(window, 2 * MM)        # Druckbild 12,7 mm, das Stück hat 2 × 35 Punkte Vorschub
+    assert window.doc.length_mm == pytest.approx(12.7 + 2 * 35 / MM, abs=0.01)
 
 
 def test_double_click_on_handle_resets_to_automatic(window):
@@ -215,7 +216,7 @@ def test_drag_without_motion_does_not_drift_and_renders_only_on_release(window, 
     end = QPointF(start.x(), start.y() + 10 * MM)
     _mouse(canvas, QMouseEvent.Type.MouseButtonRelease, end, Qt.MouseButton.NoButton)
     assert not canvas.is_dragging()
-    assert window.image.height == round(first * MM)
+    assert window.image.height == round(first * MM) - 2 * 35
     assert canvas.label_height() == pytest.approx(round(first * MM))
 
 

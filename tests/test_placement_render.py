@@ -5,12 +5,17 @@ from PIL import Image
 import _render_before_3d as before
 from labelwerk.document import ROTATIONS, Document, Paragraph, Span, TextObject
 from labelwerk.labels import DPI, length_limits
-from labelwerk.render import (RenderedObject, finish_object, label_size, prepare_object,
-                             render_document, render_object)
+from labelwerk.render import (RenderedObject, finish_object, label_margins, label_size,
+                             prepare_object, render_document, render_object)
 
 
 def _dots(mm):
     return round(mm * DPI / 25.4)
+
+
+def _along(doc):
+    """Rand in Bandlaufrichtung (der Vorschub des Druckers zählt mit)."""
+    return label_margins(doc)[0 if doc.orientation == "horizontal" else 1]
 
 
 def _ink_box(img):
@@ -95,14 +100,14 @@ def test_render_object_reports_frame_on_label():
 def test_positioned_object_never_raises_text_too_large():
     obj = TextObject("W" * 60, size_pt=40, x_mm=0, y_mm=0)
     img = render_document(Document("29", length_mm=50, objects=[obj]))
-    assert img.size == (306, _dots(50))
+    assert img.size == (306, _dots(50) - 2 * 35)        # Stück 50 mm, Vorschub an beiden Enden
 
 
 def test_object_beyond_label_is_clipped():
     objs = [TextObject("Unten", size_pt=40, x_mm=-5, y_mm=25),
             TextObject("Rechts", size_pt=40, x_mm=55, y_mm=2)]
     img = render_document(Document("62", length_mm=30, objects=objs))
-    assert img.size == (696, _dots(30))
+    assert img.size == (696, _dots(30) - 2 * 35)
     assert _ink_box(img) is not None
 
 
@@ -151,14 +156,14 @@ def test_auto_length_grows_with_farthest_object():
     far = TextObject("B", size_pt=20, x_mm=5, y_mm=60)
     doc = Document("62", objects=[near, far])
     ro = render_object(far, doc)
-    assert render_document(doc).height == ro.y + ro.h + _dots(doc.margin_mm)
+    assert render_document(doc).height == ro.y + ro.h + _along(doc)
 
 
 def test_auto_length_horizontal_uses_x():
     obj = TextObject("B", size_pt=20, x_mm=70, y_mm=5)
     doc = Document("62", orientation="horizontal", objects=[obj])
     ro = render_object(obj, doc)
-    assert render_document(doc).height == ro.x + ro.w + _dots(doc.margin_mm)
+    assert render_document(doc).height == ro.x + ro.w + _along(doc)
 
 
 def test_auto_length_keeps_room_for_unpositioned_object():
@@ -266,7 +271,7 @@ def test_fit_without_feed_size_uses_text_extent_on_auto_length(orientation, fram
     ro = render_object(obj, doc)
     length = render_document(doc).height
     start, extent = (ro.y, ro.h) if orientation == "vertical" else (ro.x, ro.w)
-    assert length == max(start + extent + _dots(doc.margin_mm), length_limits("QL-600")[0])
+    assert length == max(start + extent + _along(doc), length_limits("QL-600")[0])
     assert length < _dots(60)                       # nicht die Höchstlänge
     ink = _ink_box(ro.image)
     assert ink[3] - ink[1] > 0.8 * ro.h or ink[2] - ink[0] > 0.8 * ro.w   # Text füllt den Rahmen

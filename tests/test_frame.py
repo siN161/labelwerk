@@ -128,7 +128,10 @@ def test_auto_length_grows_by_the_frame():
     framed = label_size(Document("62", objects=text, frame=Frame("single")))
     assert framed == (plain[0], plain[1] + 2 * (LW + 12))        # Linie + 1 mm Innenabstand
     img = _image(Frame("single"), label="62", objects=text, margin_mm=1)
-    assert _black(img, 300, framed[1] - 13) and not _black(img, 300, framed[1] - 12)
+    assert _black(img, 300, framed[1] - 1)             # längs liegt 1 mm im Vorschub des Druckers
+    img = _image(Frame("single"), label="62", objects=text, margin_mm=4)
+    framed = label_size(Document("62", objects=text, frame=Frame("single"), margin_mm=4))
+    assert _black(img, 300, framed[1] - 13) and not _black(img, 300, framed[1] - 12)   # 47 − 35
 
 
 def test_automatic_text_stays_inside_the_frame_and_shrinks():
@@ -257,9 +260,9 @@ def test_corner_radius_is_two_millimetres():
 
 def test_corner_radius_is_at_most_a_quarter_of_the_shorter_side():
     doc = Document("12", objects=[TextObject("A", size_pt=6)], frame=Frame("single", rounded=True),
-                   margin_mm=2.5)                      # 30 Punkte: quer 30 − 18 = 12, längs 30
+                   margin_mm=2.5)                      # 30 Punkte: quer 30 − 18 = 12, längs 30 − 35
     img = render_document(doc)                         # quer 82 Punkte → Radius 20
-    assert _first_black(img, 12, 30) == 30 + 16
+    assert _first_black(img, 12, 0) == 16
 
 
 def test_double_rounded_lines_stay_concentric():
@@ -277,7 +280,7 @@ def test_round_label_inner_room_is_the_square_in_the_circle():
 
 def test_corners_without_room_give_a_message():
     with pytest.raises(ValueError, match="Rahmen passt nicht aufs Etikett"):
-        render_document(Document("62", frame=Frame("corners", inset_mm=5.5, line_mm=0.1,
+        render_document(Document("62", frame=Frame("corners", inset_mm=6.2, line_mm=0.1,
                                                     padding_mm=0)))
 
 

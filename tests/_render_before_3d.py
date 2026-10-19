@@ -79,11 +79,13 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     side = max(0, margin - (label.total_width - label.width) // 2)
     if label.height is not None:
         margin = max(0, margin - (label.total_height - label.height) // 2)
+    # später: längs zählt der Vorschub des Druckers mit, feste Länge = abgeschnittenes Stück
+    margin = max(0, margin - label.feed_margin)
     across = label.width                      # quer zum Band (fest)
     side = min(side, max(0, (across - 2 * MARGIN) // 2))
     feed = label.height                       # in Bandlaufrichtung; None = automatisch
     if feed is None and doc.length_mm is not None:
-        feed = min(max(round(doc.length_mm * DPI / 25.4), min_len), max_len)
+        feed = min(max(round(doc.length_mm * DPI / 25.4) - 2 * label.feed_margin, min_len), max_len)
     if feed is not None:                      # feste Länge: Rand darf nicht alles aufbrauchen
         margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
     obj = doc.objects[0] if doc.objects else TextObject("")

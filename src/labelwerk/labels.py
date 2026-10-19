@@ -29,6 +29,8 @@ class Label:
     total_height: int | None  # physische Höhe in Punkten; None = Endlosband
     two_color: bool = False   # Rot/Schwarz (DK-22251, „62red“)
     dpi: int = DPI            # Druckauflösung (Brother 300; andere aus der ID)
+    feed_margin: int = 0      # Endlosband: Streifen, den der Drucker an Anfang und Ende längs
+                              # freilässt (brother_ql, ESC i d; 35 Punkte ≈ 3 mm)
 
     @property
     def description(self) -> str:
@@ -56,7 +58,7 @@ def _convert(raw) -> Label:
     total_w, total_h = raw.dots_total
     return Label(raw.identifier, w, None if endless else h, raw.tape_size[0],
                  shape, tuple(raw.tape_size), total_w, None if endless else total_h,
-                 raw.color == Color.BLACK_RED_WHITE)
+                 raw.color == Color.BLACK_RED_WHITE, feed_margin=raw.feed_margin if endless else 0)
 
 
 def _all_raw():

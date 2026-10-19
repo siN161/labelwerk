@@ -28,7 +28,7 @@ from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, S
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
 from ..i18n import N_, _, ngettext
-from ..labels import DPI, get_label, labels_for_model
+from ..labels import DPI, get_label, labels_for_model, length_limits
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, change_label, exact_rect,
                       fill_anchored, frame_area, growing_axis, insert_placement, match_objects,
                       maximize_object, move, new_barcode, object_rect, objects_outside, outside_indices,
@@ -919,8 +919,11 @@ class MainWindow(QMainWindow):
     def align_selected(self, mode: str, paper: bool = False) -> None:
         """Auswahl aneinander bzw. am bedruckbaren Bereich (mit Zierrahmen: an seinem
         Innenraum) ausrichten."""
+        label = get_label(self.doc.label_id)
+        min_length = length_limits(self.model)[0] * 25.4 / label.dpi
         self._change_selected(lambda objs, rendered: align_objects(
-            objs, rendered, mode, self._paper_area() if paper else None, growing_axis(self.doc)))
+            objs, rendered, mode, self._paper_area() if paper else None, growing_axis(self.doc),
+            min_length))
 
     def _paper_area(self) -> Rect:
         """Fläche für „am Etikett“ (Ausrichten, Maximieren): Innenraum des Zierrahmens, sonst
