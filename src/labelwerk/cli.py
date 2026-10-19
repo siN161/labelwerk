@@ -186,6 +186,10 @@ def _make_image(args: argparse.Namespace) -> Image.Image:
 def _send(img: Image.Image, args: argparse.Namespace) -> int:
     if args.printer == "auto":
         args.printer = args.target.uri if args.target is not None else None
+        if args.printer is None and args.settings.printer:
+            print(f"Gewählter Drucker {args.settings.printer} nicht gefunden – einschalten oder "
+                  f"mit -p angeben.", file=sys.stderr)
+            return 2
         if args.printer is None:
             busy = args.backend in (None, "linux_kernel") and brother_busy()
             print(BUSY_MESSAGE if busy else _NOT_DETECTED[args.backend or "linux_kernel"],
@@ -220,8 +224,12 @@ def _show_printers(model: str) -> int:
     return 0
 
 
-def _show_media(model: str) -> int:
-    printer = find_brother_lp()
+def _show_media(model: str, target: printers.Printer | None) -> int:
+    if target is not None and target.source != "usb":
+        print("Rolle abfragen geht nur bei Druckern per USB.", file=sys.stderr)
+        return 2
+    printer = target.uri if target is not None and target.uri.startswith("file://") \
+        else find_brother_lp()
     if printer is None:
         print(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND, file=sys.stderr)
         return 2
@@ -296,6 +304,7 @@ def _report_update(failed: list[str]) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     settings = load_settings()
+    args.settings = settings
     args.target = _target(args, settings)
     try:
         args.model = _resolve_model(args.model, args.target, settings)
@@ -312,7 +321,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "install-desktop":
         return _install_desktop(args.remove)
     if args.cmd == "media":
-        return _show_media(args.model)
+        return _show_media(args.model, args.target)
     if args.cmd == "printers":
         return _show_printers(args.model)
     if args.cmd == "fonts":

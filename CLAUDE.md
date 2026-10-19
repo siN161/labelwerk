@@ -38,7 +38,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Farbe; Netzwerkdrucker per IP in den Einstellungen (Medium prüfen nur USB); Rot/Schwarz je Objekt (Reiter Layout →
   Farbe, nur 62red auf QL-8xx, ungeprüft); CLI -m/-l auto, labelwerk printers; Referenztests je Modell (tests/golden).
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
-- 2337 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2348 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -109,7 +109,10 @@ src/labelwerk/
               inset_mm/padding_mm 0–10; Document.frame (None = kein Rahmen)
   settings.py Einstellungen (JSON, $XDG_CONFIG_HOME/labelwerk/settings.json), new_document(settings); Feld `theme` (rawblock/classic), `image_crop`/`image_rotate` (Bilder einfügen),
               `symbols_recent` (höchstens 24)/`symbols_favorites` (Symbol-ids), `recent_files` (höchstens 10)/`start_favorite`
-              (der Einstellungsdialog reicht sie durch)
+              (der Einstellungsdialog reicht sie durch); Drucker: `printer` (gewählte URI, "" = automatisch), `printer_model`
+              (Ersatz), `last_model` (zuletzt erkannt), `network_printers` ({name, host, model}; valid_host: IPv4/Name ohne
+              Port/Schema/Steuerzeichen), network_entries(settings); load_settings(path, model=None): Etikett muss nur ein
+              bekanntes QL-Etikett sein (ob es zum Drucker passt, prüfen GUI und CLI)
   storage.py  Etiketten als Datei (*.labelwerk, JSON versioniert, Bilder Base64): to_dict/from_dict, save (atomar), load;
               Schemata SPAN/PARAGRAPH/TEXT/IMAGE/BARCODE/DOCUMENT (jedes Dataclass-Feld, Test hält gleich); Dateien sind fremde Eingabe:
               Prüfung je Feld nach Art, Wertebereich (endlich, Grenzen) und Struktur → StorageError (deutsch, mit Dateiname),
@@ -156,6 +159,12 @@ src/labelwerk/
               (which/run ersetzbar – Tests starten keine Programme); APP_ID
   gui/        PySide6-Oberfläche, nur Anzeige/Bearbeitung:
     main_window.py  Hauptfenster, Werkzeug- und Bearbeitungsleiste, Statusleiste; Aktionen auf der Auswahl, Druck-Rückfragen;
+                    Drucker: printer_status (Knopf mit printer_menu: Automatisch, gefundene, Netzwerkdrucker eintragen),
+                    refresh_printer (alle 2 s: usb_printers + Netzwerk, choose, last_model speichern, Wechsel vergisst die
+                    Rolle), choose_printer(uri), set_model (Papier, Arbeitsfläche, Schnitt, _fit_label: neues unberührtes
+                    Etikett nimmt ein passendes – ohne Rückgängig-Schritt –, sonst Hinweis), _can_print (gewählter Drucker
+                    da, Etikett passt), Serie hält Modell und Drucker vom Start fest; Netzwerk: ein Auftrag, kein
+                    ABBRECHEN, „Gesendet ✓“; cancel_print (ABBRECHEN), set_color_selected (Reiter Layout);
                     shortcut_actions (Aktions-ID → QAction); rendert über render.Renderer; leere Textrahmen entfallen beim Abwählen;
                     Bilder einfügen (insert_image_files, paste_image, Ablegen; Dialoge ask_image_file/ask_pdf_page ersetzbar),
                     Bildschirmfoto (insert_screenshot: ausblenden, Portal, wieder zeigen; Haken screenshot_available/take_screenshot,
@@ -200,7 +209,8 @@ src/labelwerk/
                     parse_response, error_text; GUI-Tests: Sitzungsbus-Adresse ins Leere + session_bus ersetzt (conftest);
                     Tests gegen tests/gui/fake_portal.py auf privatem dbus-daemon mit eigener Config ohne servicedir
     panels/position.py PositionSection: Bereich Position (X/Y/B/H in mm), show_frame(rect, editable_size), Signal edited(key, wert)
-    panels/layout.py Reiter Layout: Ausrichten, Größe angleichen, Drehen, Reihenfolge (Knöpfe = Aktionen)
+    panels/layout.py Reiter Layout: Ausrichten, Größe angleichen, Drehen, Reihenfolge (Knöpfe = Aktionen), Farbe (SCHWARZ immer,
+                    ROT nur 62red auf einem Zweifarb-Modell: set_red_available; Signal color_chosen)
     canvas.py       Etikett in echter Größe, Objekte (Auswahl, Ziehen, Einrasten, Anfasser), Lineale, Zug-Anfasser, Zoom;
                     Zierrahmen (frame_item unter den Objekten, keine Klicks; Einrasten am Innenraum);
                     Ablegen von Dateien/Bilddaten (Daten im dropEvent kopiert, Signal dropped danach, mm) und Symbolen (symbol_dropped); Anfasser-Vorschau mit
@@ -214,13 +224,17 @@ src/labelwerk/
     history.py      Rückgängig/Wiederherstellen: Dokument-Schnappschüsse samt Auswahl, höchstens 100; amend (ohne eigenen Schritt)
     symbols.py      Liniensymbole (gui/icons) je Design, weiß beim Darüberfahren in RawBlock
     print_worker.py Drucken im Hintergrund-Thread (cancel(): threading.Event; Signale progress, cancelled)
-    media_worker.py  Medium prüfen im Hintergrund
-    settings_dialog.py Einstellungen: Reiter Allgemein (inkl. Design, sofort wirksam über app.apply_theme) und Tastenkürzel (Konflikte sperren Speichern)
+    media_worker.py  Medium prüfen im Hintergrund (MediaWorker(model, printer): URI des gewählten USB-Druckers; Ergebnis eines
+                    inzwischen gewechselten Druckers zählt nicht)
+    settings_dialog.py Einstellungen: Reiter Allgemein (rollt; inkl. Design, sofort wirksam über app.apply_theme; Drucker:
+                    Druckermodell als Ersatz, Netzwerkdrucker-Tabelle mit Prüfung der Adresse; Etikett eines anderen Druckers
+                    bleibt) und Tastenkürzel (Konflikte sperren Speichern)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)
-  cli.py      labelwerk labels | labelwerk media | labelwerk fonts | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] [--orientation horizontal|vertical] [--margin MM] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]
+  cli.py      labelwerk labels | labelwerk media | labelwerk printers | labelwerk fonts | -m auto (Modell des Zieldruckers:
+              -p bzw. gewählter/erster) | -l auto (Rolle des Zieldruckers per USB) | Etikett muss zum Modell passen | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] [--orientation horizontal|vertical] [--margin MM] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]
 ```
-Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.
+Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `printers`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.
 
 Abhängigkeiten: `brother_ql-inventree>=1.3,<1.4` (GPLv3+, Import als `brother_ql`; Referenztests hashen die
 Rasterdaten – neue Version erst nach `tools/golden.py`), `pillow>=10.1`, `pypdfium2>=4`,
@@ -286,7 +300,7 @@ Umsetzung:
    - P-touch-Etiketten (.lbx = ZIP mit XML): Text, Rahmen, Barcodes, Bilder übernehmen
 6. Drucker-Kompatibilität (vor Veröffentlichung, QL-Familie) – umgesetzt (Spec 2026-10-19-drucker-kompatibilitaet;
    ungeprüft bis auf QL-600, Rückmeldungen sammeln):
-   - Modell automatisch erkennen (USB-Produkt-ID, z. B. `20c0` → QL-600; sonst Statusabfrage) + Modell-Feld in den Einstellungen als Rückfallebene; alle festen „QL-600“-Annahmen (GUI, Einstellungen, Etikettenliste, Medium prüfen, `DEFAULT_MODEL`) lesen das Modell aus einer Quelle.
+   - Modell automatisch erkennen (IEEE-1284-Kennung, USB-Produktname, Produkt-ID, z. B. `20c0` → QL-600) + Modell-Feld in den Einstellungen als Rückfallebene; alle festen „QL-600“-Annahmen (GUI, Einstellungen, Etikettenliste, Medium prüfen, `DEFAULT_MODEL`) lesen das Modell aus einer Quelle.
    - Fähigkeiten statt Modellnamen: Etiketten, Breite, Abschneider, Zweifarbdruck, Mindestlänge aus `brother_ql` (`ModelsManager`, `LabelsManager`).
    - Golden-Tests je Modell: Testetikett → Rasterdaten mit Referenz vergleichen (beweist, was gesendet wird – nicht, was gedruckt wird).
    - README: Kompatibilitätstabelle *geprüft* (QL-600 + DK-22205) / *sollte funktionieren* (62-mm-QL ohne Rot: QL-570/580N/700/710W/720NW …) / *nicht unterstützt*; nach Veröffentlichung Vorlage „Druckerbericht“ für Rückmeldungen.

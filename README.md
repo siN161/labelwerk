@@ -63,7 +63,7 @@ labelwerk-gui
 labelwerk install-desktop    # im Starter (Super-Taste) eintragen; --remove entfernt den Eintrag wieder
 ```
 
-Aufbau wie im P-touch Editor: Werkzeugleiste (Papier, Text, Bild, Layout), Bearbeitungsleiste, Eigenschaften links, Etikett in echter Größe und Form mit mm-Linealen. Bei Endlosband lässt sich die Länge am Anfasser unter dem Etikett ziehen (Doppelklick = automatisch). Zoom mit Strg+Mausrad oder −/+ unten rechts.
+Aufbau wie im P-touch Editor: Werkzeugleiste (Datei, Papier, Text, Bild, Barcode, Layout, Serie), Bearbeitungsleiste, Eigenschaften links, Etikett in echter Größe und Form mit mm-Linealen. Unten links steht der Drucker: ein Klick wählt einen anderen (bei mehreren) oder trägt einen Netzwerkdrucker ein; während eine Serie vorbereitet oder gedruckt wird, bricht ABBRECHEN sie ab (beim Drucken nach dem laufenden Teil, bis zu 10 Etiketten). Bei Endlosband lässt sich die Länge am Anfasser unter dem Etikett ziehen (Doppelklick = automatisch). Zoom mit Strg+Mausrad oder −/+ unten rechts.
 
 Papier: Etikett, Länge, Ränder und Ausrichtung (Horizontal = Text längs zum Band, z. B. Versandetikett; Vertikal = quer). „Medium prüfen“ liest die eingelegte Rolle vom Drucker und wählt das passende Etikett. Der Drucker wird live erkannt (Einschalten genügt). Unter „Einstellungen“ legst du Standardwerte für neue Etiketten fest (gilt auch für die CLI) und wählst das Design (RawBlock oder Klassisch = Qt-Systemstil); gespeichert in `~/.config/labelwerk/settings.json`.
 
@@ -100,6 +100,7 @@ render.py   Inhalt → Bild in exakter Druckbreite (300 dpi)
 files.py    PDF/Bild → zugeschnitten, 1:1 aufs Etikett gesetzt
 labels.py   Etikettentypen je Modell
 printer.py  Bild → Brother-Rasterdaten → Drucker (via brother_ql)
+printers.py Drucker erkennen (Modell), Fähigkeiten je Modell, Netzwerkdrucker
 cli.py      Kommandozeile
 document.py Etikett-Dokument (Etikett, Länge, Objekte)
 settings.py Einstellungen (JSON)
@@ -112,7 +113,7 @@ shortcuts.py Tastenkürzel-Verzeichnis (Standard, Konflikte, Prüfung)
 gui/        PySide6-Oberfläche (nur Anzeige/Bearbeitung, kein Druckcode)
 ```
 
-Die Kernlogik ist UI-unabhängig – eine GUI setzt nur auf `render`, `files`, `labels`, `printer` und `detect` auf.
+Die Kernlogik ist UI-unabhängig – eine GUI setzt nur auf `render`, `files`, `labels`, `printer`, `printers`, `detect`, `settings` und `media` auf.
 
 ## Lizenz
 

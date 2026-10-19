@@ -117,6 +117,7 @@ class MainWindow(QMainWindow):
         self._worker = None                         # laufender Druck (Abbrechen)
         self._cancel_requested = False              # Serie: beim Vorbereiten abbrechen
         self._media_signals = None
+        self._media_uri: str | None = None          # Drucker der laufenden Prüfung
         self._printer_present = False
         self._printing = False
         self._media_check_pending = False
@@ -1541,6 +1542,7 @@ class MainWindow(QMainWindow):
         if self.files.may_follow_roll() and not self.files.modified():
             self.doc.label_id = self.files.fitting_label(label)
             self.panel("paper").refresh()
+            self.history.reset(self.doc)            # unberührt: kein Schritt zurück zum Unpassenden
             self.files.mark_unchanged()
             self._set_result(f"Etikett {get_label(label).description} passt nicht zum {self.model} "
                              f"– {get_label(self.doc.label_id).description} genommen", "warn")
@@ -1599,6 +1601,9 @@ class MainWindow(QMainWindow):
         if accepted and saved is not None:
             # während der Dialog offen war, kann sich Drucker/letztes Modell geändert haben
             saved.printer, saved.last_model = self.settings.printer, self.settings.last_model
+            if saved.printer.startswith("tcp://") and saved.printer not in {
+                    p.uri for p in network_printers(network_entries(saved))}:
+                saved.printer = ""                  # Netzwerkdrucker entfernt/geändert: automatisch
             self.settings = saved
             self._save_settings()
             from PySide6.QtWidgets import QApplication
@@ -1621,7 +1626,8 @@ class MainWindow(QMainWindow):
     def check_media(self) -> None:
         if self.is_printing() or self.is_checking_media():
             return
-        worker = MediaWorker(self.model, self._usb_uri())
+        self._media_uri = self._usb_uri()
+        worker = MediaWorker(self.model, self._media_uri)
         self._media_signals = worker.signals
         worker.signals.found.connect(self._media_found)
         worker.signals.failed.connect(self._media_failed)
@@ -1632,6 +1638,8 @@ class MainWindow(QMainWindow):
         """Rolle erkannt: ein neues Etikett folgt ihr (war es unberührt, bleibt es das); eine
         geöffnete Datei oder ein Favorit bleibt bei ihrem Etikett – das Panel zeigt „passt nicht“."""
         self._media_finished()
+        if self._media_uri != self._usb_uri():      # inzwischen anderer Drucker: Rolle gilt nicht
+            return
         adjusted = (label_id is not None and label_id != self.doc.label_id
                     and self.files.may_follow_roll())
         if adjusted:
@@ -1730,12 +1738,15 @@ class MainWindow(QMainWindow):
         if self.is_printing():
             self._set_result("Druck läuft – bitte warten.", "error")
             return
+        if not self._can_print(doc):
+            return
         if not self.ask_print_count(len(rows)):
             return
+        model, printer = self.model, self.printer   # gilt für die ganze Serie
         images, outside = [], []
         doc = copy.deepcopy(doc)                    # Eingaben während des Vorbereitens zählen nicht
         renderer = Renderer()                       # unveränderte Objekte aus dem Cache
-        red = get_label(doc.label_id).two_color and capabilities(self.model).two_color
+        red = get_label(doc.label_id).two_color and capabilities(model).two_color
         self._set_printing(True)                    # gesperrt, solange vorbereitet wird
         self._cancel_requested = False
         self.cancel_button.setVisible(len(rows) > 1)
@@ -1748,8 +1759,8 @@ class MainWindow(QMainWindow):
                         self._set_result("Abgebrochen – nichts gedruckt", "")
                         return
                 try:
-                    result = renderer.render(fill_anchored(doc, table.columns, values, self.model),
-                                             self.model)
+                    result = renderer.render(fill_anchored(doc, table.columns, values, model),
+                                             model)
                 except ValueError as e:
                     self._set_result(f"Zeile {number}: {e}", "error")
                     return
@@ -1762,7 +1773,8 @@ class MainWindow(QMainWindow):
         if outside and not self.confirm_outside_rows(outside):
             self._set_result("", "")
             return
-        self._print(images, doc, [], cut_interval(doc.series.cut, len(images)))
+        cut = doc.series.cut if capabilities(model).cutter else "each"   # ohne Abschneider: kleine Teile
+        self._print(images, doc, [], cut_interval(cut, len(images)), model, printer)
 
     def confirm_outside_rows(self, numbers: list[int]) -> bool:
         """Rückfrage: Zeilen, in denen etwas über das Etikett ragt (in Tests ersetzbar)."""
@@ -1810,15 +1822,29 @@ class MainWindow(QMainWindow):
             return
         self._print(image, doc, outside)
 
-    def _print(self, image, doc: Document, outside: list[int], cut_every: int = 1) -> None:
-        """``image``: ein Druckbild oder eine Liste (Serie, ein Auftrag)."""
-        if self.is_checking_media():
-            self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
-            return
+    def _can_print(self, doc: Document) -> bool:
+        """Vor dem Rendern prüfbar: gewählter Drucker da, Etikett passt zum Modell (Meldung)."""
         if self.printer is None and self.settings.printer:
             self._set_result("Gewählter Drucker nicht gefunden – einschalten oder in der "
                              "Statusleiste einen anderen wählen.", "error")
+            return False
+        if doc.label_id not in {label.id for label in labels_for_model(self.model)}:
+            self._set_result(f"Etikett „{doc.label_id}“ passt nicht zum Drucker ({self.model}).",
+                             "error")
+            return False
+        return True
+
+    def _print(self, image, doc: Document, outside: list[int], cut_every: int = 1,
+               model: str | None = None, printer: Printer | None = None) -> None:
+        """``image``: ein Druckbild oder eine Liste (Serie, ein Auftrag); ``model``/``printer``:
+        festgehalten beim Start einer Serie (sonst die jetzigen)."""
+        if self.is_checking_media():
+            self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
             return
+        if model is None:
+            if not self._can_print(doc):
+                return
+            model, printer = self.model, self.printer
         # Druck sperrt die Medium-Prüfung schon vor dem Dialog (Timer läuft währenddessen weiter)
         self._set_printing(True)
         if doc.is_empty() and not self.confirm_empty():
@@ -1830,8 +1856,8 @@ class MainWindow(QMainWindow):
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
         self.result.style().polish(self.result)
         self.result.setText("Drucke …")
-        worker = PrintWorker(image, doc.label_id, self.model, cut_every,
-                             printer=self.printer.uri if self.printer else None)
+        worker = PrintWorker(image, doc.label_id, model, cut_every,
+                             printer=printer.uri if printer else None)
         self._print_signals = worker.signals  # Referenz bis zum Ende des Drucks
         self._worker = worker
         worker.signals.done.connect(self._print_done)
@@ -1839,7 +1865,9 @@ class MainWindow(QMainWindow):
         worker.signals.progress.connect(
             lambda done, total: self._set_result(f"Drucke … {done} von {total}", ""))
         worker.signals.cancelled.connect(self._print_cancelled)
-        self.cancel_button.setVisible(isinstance(image, list) and len(image) > 1)
+        # übers Netz geht eine Serie als ein Auftrag hinaus (kein Status): nichts abzubrechen
+        self.cancel_button.setVisible(isinstance(image, list) and len(image) > 1
+                                      and (printer is None or printer.source == "usb"))
         QThreadPool.globalInstance().start(worker)
 
     def cancel_print(self) -> None:
@@ -1860,7 +1888,9 @@ class MainWindow(QMainWindow):
         """„Medium prüfen“ geht nur per USB und nicht während eines Drucks."""
         network = self.printer is not None and self.printer.source == "network"
         check = self.panel("paper").check
-        check.setEnabled(not self._printing and not network and not self.is_checking_media())
+        missing = self.printer is None and bool(self.settings.printer)     # gewählter fehlt
+        check.setEnabled(not self._printing and not network and not missing
+                         and not self.is_checking_media())
         check.setToolTip("Medium prüfen geht nur bei Druckern per USB" if network
                          else "Eingelegte Rolle vom Drucker abfragen (druckt nichts)")
 

@@ -157,7 +157,7 @@ def print_image(
     wird geprüft; ein Fehler bricht ab und nennt – waren schon Teile gedruckt – die betroffenen
     Etiketten. ``cancelled()`` wird vor jedem Teil gefragt (True → ``PrintCancelled``; ein
     gesendeter Teil läuft zu Ende), ``progress(gedruckt, alle)`` nach jedem. ``backend``: None =
-    aus der URI (``tcp://`` → Netzwerk)."""
+    aus der URI (``tcp://`` → Netzwerk: ein Auftrag – der Drucker meldet dort keinen Status)."""
     backend = backend or backend_for(printer)
     images = [image] if isinstance(image, Image.Image) else list(image)
     if label_id not in {label.id for label in labels_for_model(model)}:
@@ -165,6 +165,9 @@ def print_image(
     if backend == "network":
         _reachable(printer)
     part = MAX_JOB_EACH if cut_every == 1 else min(cut_every, MAX_CUT_EVERY)
+    if backend == "network" and cut_every == 1:
+        # übers Netz meldet der Drucker keinen Status: Teile ließen sich weder prüfen noch abbrechen
+        part = max(1, len(images))
     status: dict = {}
     for start in range(0, len(images), part):
         if cancelled is not None and cancelled():

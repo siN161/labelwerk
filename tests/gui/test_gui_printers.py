@@ -294,3 +294,111 @@ def test_remove_without_selection_removes_nothing(qtbot, tmp_path):
 def test_canvas_length_limits_follow_the_model(qtbot, monkeypatch):
     win = _window(qtbot, monkeypatch, [QL1100])
     assert win.canvas.max_mm == pytest.approx(35434 * 25.4 / 300, abs=0.5)
+
+
+# --- Nachbesserungen nach dem Gesamt-Review -------------------------------------------------------
+NET = Printer("tcp://10.0.0.5:9100", "QL-720NW", "Büro · Netzwerk", "network")
+
+
+def test_label_swap_is_not_undone(qtbot, monkeypatch):
+    monkeypatch.setattr(main_window, "usb_printers", lambda: [QL600])
+    win = MainWindow(settings=Settings(check_media_on_start=False, label_id="102"))
+    qtbot.addWidget(win)
+    assert win.doc.label_id == "62" and not win.history.can_undo(win.doc)
+    win.panel("paper").margin.setValue(3.0)
+    win.undo()
+    assert win.doc.label_id == "62" and not win.files.modified()
+
+
+def test_network_series_has_no_cancel_and_says_sent(qtbot, monkeypatch, workers):
+    win = _window(qtbot, monkeypatch, [], doc=Document(
+        "62", objects=[TextObject("X{Nummer}")], series=Series(numbering=Numbering(count=3))),
+        network_printers=[{"name": "Büro", "host": "10.0.0.5", "model": "QL-720NW"}])
+    win.panel("series").refresh()
+    win.ask_print_count = lambda n: True
+    win.print_label()
+    assert workers[0].printer == NET.uri and win.cancel_button.isHidden()
+
+
+def test_network_series_goes_out_as_one_job(monkeypatch):
+    from PIL import Image
+    from labelwerk.printer import print_image
+    sent = []
+    monkeypatch.setattr("labelwerk.printer.send", lambda **kw: sent.append(kw) or
+                        {"outcome": "sent", "did_print": False})
+    monkeypatch.setattr("labelwerk.printer.socket.create_connection",
+                        lambda address, timeout: type("S", (), {"close": lambda self: None})())
+    print_image([Image.new("RGB", (696, 100), "white")] * 25, "62", model="QL-720NW",
+                printer=NET.uri)
+    assert len(sent) == 1                    # kein Status übers Netz: Teile brächten nichts
+
+
+def test_removed_network_printer_is_no_longer_chosen(qtbot, monkeypatch, tmp_path):
+    win = _window(qtbot, monkeypatch, [], printer=NET.uri, network_printers=[
+        {"name": "Büro", "host": "10.0.0.5", "model": "QL-720NW"}])
+    assert win.printer is not None and win.printer.uri == NET.uri
+
+    class Dialog:
+        DialogCode = SettingsDialog.DialogCode
+
+        def __init__(self, settings, model=None, parent=None):
+            self.saved = Settings(check_media_on_start=False)       # Eintrag entfernt
+
+        def exec(self):
+            return SettingsDialog.DialogCode.Accepted
+
+        def deleteLater(self):
+            pass
+    monkeypatch.setattr(main_window, "SettingsDialog", Dialog)
+    win.open_settings()
+    assert win.settings.printer == "" and win.printer_status.text() == "○ kein Drucker"
+
+
+def test_media_check_needs_the_chosen_printer(qtbot, monkeypatch):
+    win = _window(qtbot, monkeypatch, [QL600], printer=QL1100.uri)
+    assert not win.panel("paper").check.isEnabled()
+
+
+def test_media_result_of_a_previous_printer_is_ignored(qtbot, monkeypatch):
+    from labelwerk.media import Media
+    win = _window(qtbot, monkeypatch, [QL600, QL1100])
+    win._media_uri = QL1100.uri                       # Prüfung lief noch für den anderen
+    win._media_signals = object()
+    win._media_found(Media(102, 0, "endless"), "102")
+    assert win.panel("paper").media_label is None and win.doc.label_id == "62"
+
+
+def test_series_keeps_model_and_printer_of_its_start(qtbot, monkeypatch, workers):
+    win = _window(qtbot, monkeypatch, [QL600], doc=Document(
+        "62", objects=[TextObject("X{Nummer}")], series=Series(numbering=Numbering(count=60))))
+    win.panel("series").refresh()
+    win.ask_print_count = lambda n: True
+    calls = []
+
+    def events(*a, **k):                              # während des Vorbereitens: anderer Drucker
+        if not calls:
+            calls.append(1)
+            monkeypatch.setattr(main_window, "usb_printers", lambda: [QL1100])
+            win.refresh_printer()
+    monkeypatch.setattr(main_window.QApplication, "processEvents", events)
+    win.print_label()
+    assert (workers[0].model, workers[0].printer) == ("QL-600", QL600.uri)
+
+
+def test_series_checks_printer_and_label_before_rendering(qtbot, monkeypatch, workers):
+    win = _window(qtbot, monkeypatch, [QL600], printer=QL1100.uri, doc=Document(
+        "62", objects=[TextObject("X{Nummer}")], series=Series(numbering=Numbering(count=3))))
+    win.panel("series").refresh()
+    win.ask_print_count = lambda n: pytest.fail("gefragt, obwohl nicht gedruckt werden kann")
+    win.print_label()
+    assert workers == [] and "Gewählter Drucker nicht gefunden" in win.result.text()
+
+
+def test_without_cutter_series_parts_stay_small(qtbot, monkeypatch, workers):
+    win = _window(qtbot, monkeypatch, [QL500], doc=Document(
+        "62", objects=[TextObject("X{Nummer}")],
+        series=Series(numbering=Numbering(count=30), cut="end")))
+    win.panel("series").refresh()
+    win.ask_print_count = lambda n: True
+    win.print_label()
+    assert workers[0].cut_every == 1

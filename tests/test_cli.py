@@ -468,3 +468,21 @@ def test_label_auto_needs_usb(capsys):
 def test_network_backend_without_entries_explains(capsys, monkeypatch):
     assert main(["print", "Hallo", "-l", "62", "-b", "network"]) == 2
     assert "Kein Netzwerkdrucker eingetragen" in capsys.readouterr().err
+
+
+def test_media_asks_the_chosen_printer(monkeypatch, capsys):
+    from labelwerk.media import Media
+    _detected(monkeypatch, ("file:///dev/usb/lp0", "QL-600"), ("file:///dev/usb/lp1", "QL-700"))
+    _write_settings(printer="file:///dev/usb/lp1")
+    asked = []
+    monkeypatch.setattr("labelwerk.cli.read_media",
+                        lambda printer: asked.append(printer) or Media(62, 0, "endless"))
+    assert main(["media"]) == 0
+    assert asked == ["file:///dev/usb/lp1"]
+
+
+def test_missing_chosen_printer_is_named(monkeypatch, capsys):
+    _detected(monkeypatch, ("file:///dev/usb/lp0", "QL-600"))
+    _write_settings(printer="file:///dev/usb/lp1")
+    assert main(["print", "Hallo", "-l", "62"]) == 2
+    assert "Gewählter Drucker file:///dev/usb/lp1 nicht gefunden" in capsys.readouterr().err
