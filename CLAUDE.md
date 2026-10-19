@@ -221,7 +221,8 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
 
-Nächste Schritte: offen – Barcodes/QR (Roadmap 3), Drucker-Kompatibilität (6), Übersetzungen (7), Paketierung (8).
+Nächste Schritte: Barcodes/QR (Roadmap 3, in Arbeit), Drucker-Kompatibilität (6, Antworten stehen: 1a 2b 3a 4b
+ungetestet 5a 6a 7a 8a 9a), Fremdhersteller (6b), Übersetzungen (7), Paketierung (8).
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld
@@ -259,6 +260,10 @@ Umsetzung:
    - Kern und CLI: `gettext` (Meldungen wie `TextTooLarge`, Druckerfehler, CLI-Hilfe), gemeinsame Sprachwahl mit der GUI.
    - Quellsprache festlegen (Deutsch beibehalten oder auf Englisch umstellen) – zusammen mit Punkt 9 (README/Kommentare auf Englisch) entscheiden.
    - Tests: jede Meldung übersetzt (keine fehlenden Einträge), Layout hält längere Texte aus (Panels, Knöpfe).
+6b. Drucker anderer Hersteller (nach 6, Grundlage: Drucker-Schnittstelle aus 6 – Brother ist eine Umsetzung):
+   allgemein über CUPS (fertiges Bild an eingerichteten Etikettendrucker: Dymo LabelWriter, Zebra mit Linux-Treiber),
+   Zebra direkt (ZPL), später Bluetooth-Geräte (Niimbot, Phomemo – Protokolle nur von der Community, erst mit Testgerät);
+   ohne Testgerät „ungetestet“; Dymo LabelWriter 550 nimmt nur Original-Etiketten mit Chip.
 8. Paketierung: AppImage und/oder Flatpak (USB-Zugriff bei Flatpak beachten)
 9. Vor Veröffentlichung: README/Kommentare auf Englisch, LICENSE (GPLv3) prüfen, Repo öffentlich schalten.
    **Namen vorher festlegen** (danach teuer: PyPI-Name, Flatpak-ID `io.github.siN161.<name>`, Repo-Links). Kein „Brother“/„P-touch“/„QL“ im Produktnamen.
