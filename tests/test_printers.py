@@ -103,7 +103,7 @@ NET = Printer("tcp://10.0.0.5:9100", "QL-720NW", "Büro · Netzwerk", "network")
 def test_choose_the_wanted_printer_else_the_first_usb():
     assert choose([NET, USB]) == USB
     assert choose([NET, USB], NET.uri) == NET
-    assert choose([NET, USB], "file:///dev/usb/lp9") == USB         # nicht mehr da
+    assert choose([NET, USB], "file:///dev/usb/lp9") is None        # gewählter fehlt: keiner
     assert choose([NET]) == NET and choose([]) is None
 
 
@@ -261,11 +261,14 @@ def test_invalid_printer_settings_fall_back(tmp_path):
     assert len(loaded.warnings) == 4
 
 
-def test_fallback_model_comes_before_the_last_one(tmp_path):
+def test_saved_label_survives_another_model(tmp_path):
+    """Wer zwei Drucker abwechselnd nutzt, behält sein Etikett – ob es passt, prüft GUI/CLI."""
     path = tmp_path / "s.json"
-    save_settings(Settings(printer_model="QL-700", last_model="QL-1100", label_id="102"), path)
-    loaded = load_settings(path)                    # 102 kann der QL-700 nicht
-    assert loaded.label_id == "62" and loaded.warnings
+    save_settings(Settings(printer_model="QL-700", last_model="QL-600", label_id="102"), path)
+    loaded = load_settings(path)
+    assert loaded.label_id == "102" and loaded.warnings == []
+    path.write_text('{"label_id": "pt12"}')
+    assert load_settings(path).label_id == "62"         # P-touch-Band: kein QL-Etikett
 
 
 # --- Nachbesserungen nach dem Review --------------------------------------------------------------

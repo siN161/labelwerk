@@ -257,7 +257,7 @@ def test_series_prints_the_filled_barcode(qtbot, monkeypatch):
     jobs = []
 
     class Fake:
-        def __init__(self, image, label_id, model, cut_every=1):
+        def __init__(self, image, label_id, model, cut_every=1, printer=None):
             jobs.append(image)
             from labelwerk.gui.print_worker import PrintSignals
             self.signals = PrintSignals()

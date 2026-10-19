@@ -50,8 +50,10 @@ def _is_int(v) -> bool:
     return isinstance(v, int) and not isinstance(v, bool)
 
 
-def _rules(model: str) -> dict:
-    known = {lab.id for lab in labels_for_model(model)}
+def _rules(model: str | None = None) -> dict:
+    """Prüfregeln; das Etikett muss ein bekanntes sein – ob es zum Drucker passt, prüfen GUI und
+    CLI erst mit dem erkannten Modell (wer zwei Drucker abwechselnd nutzt, behält sein Etikett)."""
+    known = {lab.id for m in SUPPORTED_MODELS for lab in labels_for_model(m)}
     return {
         "label_id": lambda v: isinstance(v, str) and v in known,
         "orientation": lambda v: v in ORIENTATIONS,
@@ -76,7 +78,7 @@ def _rules(model: str) -> dict:
     }
 
 
-_KEYS = (*_rules("QL-600"), "shortcuts")
+_KEYS = (*_rules(), "shortcuts")
 
 
 def settings_path() -> Path:

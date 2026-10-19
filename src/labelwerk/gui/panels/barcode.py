@@ -97,6 +97,7 @@ class BarcodePanel(Panel):
         self.index: int | None = None   # bearbeiteter Barcode; None = keiner ausgewählt
         # Serie: Barcode mit dem Wert der Vorschau-Zeile (Hauptfenster), für den Prüfhinweis
         self.fill_preview: Callable[[BarcodeObject], BarcodeObject] | None = None
+        self.red_available = False      # Etikett und Drucker können Rot (Hinweis nur dann)
         self._updating = False
         self._typing = False            # Inhalt wird gerade getippt (ein Rückgängig-Schritt)
 
@@ -294,7 +295,9 @@ class BarcodePanel(Panel):
             self._set_check(f"Mit Prüfziffer: {completed}" if completed and completed != given
                             else "")
         side = "ringsum" if obj.kind == "qr" else "links und rechts je"
-        self.quiet.setText(f"Ruhezone: {side} {_mm(barcodes.quiet_mm(obj))} mm frei lassen")
+        red = (" · Rot lesen viele Scanner schlecht" if obj.color == "red" and self.red_available
+               else "")
+        self.quiet.setText(f"Ruhezone: {side} {_mm(barcodes.quiet_mm(obj))} mm frei lassen{red}")
 
     def _set_check(self, text: str) -> None:
         self.check.setText(text)

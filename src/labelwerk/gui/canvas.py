@@ -20,7 +20,7 @@ from . import image_import
 from ..labels import DPI, Label, format_mm, length_limits
 from ..layout import Rect
 from ..printer import DEFAULT_MODEL
-from ..render import PT, RenderedObject
+from ..render import INK, PT, RenderedObject
 
 MM = DPI / 25.4          # Szene-Einheiten (Druckpunkte) pro mm
 RULER = 22               # Linealbreite in Pixeln
@@ -45,11 +45,13 @@ _EDIT_REACH_PX = 3                # Schreibmodus: Klick so knapp neben dem Rahme
 _SELECTION_ALPHA = 90             # Markierung: Systemfarbe zu ≈ 35 % deckend
 
 
-def to_qimage(img: Image.Image) -> QImage:
-    """Druckbild als QImage; Weiß wird transparent, damit die Etikettform sichtbar bleibt."""
+def to_qimage(img: Image.Image, ink: tuple[int, int, int] = (0, 0, 0)) -> QImage:
+    """Druckbild als QImage; Weiß wird transparent, damit die Etikettform sichtbar bleibt.
+    ``ink``: Druckfarbe (``render.INK``, rote Objekte auf Etiketten Rot/Schwarz)."""
     gray = img.convert("L")
-    # Immer schwarz, Alpha = 255 - L: über Weiß ergibt das exakt den Grauwert L (Vorschau = Druck)
-    rgba = Image.merge("RGBA", (*(Image.new("L", gray.size, 0),) * 3, ImageOps.invert(gray)))
+    # Farbe der Tinte, Alpha = 255 - L: über Weiß ergibt das exakt den Ton L (Vorschau = Druck)
+    rgba = Image.merge("RGBA", (*(Image.new("L", gray.size, c) for c in ink),
+                                ImageOps.invert(gray)))
     return QImage(rgba.tobytes(), rgba.width, rgba.height, 4 * rgba.width,
                   QImage.Format.Format_RGBA8888).copy()
 
@@ -123,8 +125,7 @@ class Canvas(QGraphicsView):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.viewport().setMouseTracking(True)             # Mauszeiger über den Anfassern
         self.setAcceptDrops(True)                          # Bilder und Bilddateien ablegen
-        min_len, max_len = length_limits(model)
-        self.min_mm, self.max_mm = min_len / MM, max_len / MM
+        self.set_model(model)
         self.zoom = START_ZOOM
         self.orientation = "vertical"
         self._scale = 1.0
@@ -278,6 +279,11 @@ class Canvas(QGraphicsView):
         leer bei gestanzten Etiketten."""
         return QRectF(self._tape)
 
+    def set_model(self, model: str) -> None:
+        """Druckermodell: Grenzen der Etikettlänge beim Ziehen."""
+        min_len, max_len = length_limits(model)
+        self.min_mm, self.max_mm = min_len / MM, max_len / MM
+
     def cut_edges(self) -> list[str]:
         """Kanten in Bandrichtung mit Schnittlinie: bei Endlosband nur das Ende („end“) –
         der Anfang ist geschlossen; gestanzte Etiketten behalten ihre Darstellung (leer)."""
@@ -290,7 +296,7 @@ class Canvas(QGraphicsView):
         cached = self._pixmaps.get(id(rendered))
         if cached is not None and cached[0] is rendered:
             return cached[1]
-        return QPixmap.fromImage(to_qimage(rendered.image))
+        return QPixmap.fromImage(to_qimage(rendered.image, INK[rendered.color]))
 
     # --- Auswahl ----------------------------------------------------------
     def selection(self) -> list[int]:

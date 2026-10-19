@@ -4,6 +4,22 @@ Etiketten gestalten und drucken auf **Brother-QL-Druckern unter Linux** – ohne
 
 Getestet mit: QL-600 (USB). Andere QL-Modelle sollten funktionieren, Rückmeldungen willkommen.
 
+## Welche Drucker funktionieren?
+
+| Stand | Drucker |
+|---|---|
+| **geprüft** | QL-600 mit DK-22205 (62 mm endlos), USB |
+| **sollte funktionieren** (ungeprüft) | QL-500, QL-550, QL-560, QL-570, QL-580N, QL-650TD, QL-700, QL-710W, QL-720NW, QL-800, QL-810W, QL-820NWB – Etiketten bis 62 mm, USB oder Netzwerk |
+| **sollte funktionieren** (ungeprüft) | breite Modelle QL-1050, QL-1060N, QL-1100, QL-1110NWB, QL-1115NWB – Etiketten bis 102/104 mm |
+| **ungeprüft** | Rot/Schwarz-Druck (QL-8xx mit DK-22251 „62red“): Farbe je Objekt im Reiter Layout |
+| **nicht unterstützt** | P-touch-Bandgeräte (PT-…), Drucker anderer Hersteller |
+
+labelwerk erkennt das Modell des angeschlossenen Druckers selbst (`labelwerk printers` zeigt, was es
+findet); Etiketten, Abschneider und Farben richten sich danach. Wird ein Modell nicht erkannt, lässt
+es sich in den Einstellungen festlegen. Netzwerkdrucker (WLAN/LAN-Modelle) trägst du in den
+Einstellungen mit IP-Adresse ein; „Medium prüfen“ geht nur per USB. Hast du ein ungeprüftes Modell
+ausprobiert, freue ich mich über eine Rückmeldung (Issue mit Modell, Rolle und Ergebnis).
+
 ## Installation
 
 ```bash
@@ -29,12 +45,14 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62x29 --preview vorschau.png
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29      # drucken (Drucker wird automatisch erkannt)
 labelwerk print-file internetmarke.pdf -l 62       # PDF/PNG/JPG 1:1 drucken
 labelwerk media                                            # eingelegte Rolle anzeigen (druckt nichts)
+labelwerk printers                                         # gefundene Drucker und unterstützte Modelle
+labelwerk print "Regal 4" -l auto                          # Etikett nach der eingelegten Rolle
 labelwerk fonts                                            # installierte Schriften
 labelwerk print "Max Mustermann\nMusterstr. 5" --align left --font-family "Liberation Sans" -s 14
 labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation horizontal -s 19
 ```
 
-Optionen: `-s` Schriftgröße (`auto` oder 8–400), `--font` eigene TTF, `-b pyusb` alternatives USB-Backend, `--no-cut`.
+Optionen: `-s` Schriftgröße (`auto` oder 8–400), `--font` eigene TTF, `-m QL-700` Modell (Standard: erkannt), `-p tcp://IP` Netzwerkdrucker, `-b pyusb` alternatives USB-Backend, `--no-cut`.
 `print-file` schneidet auf den Inhalt zu (Schnittmarken, z. B. der Internetmarke, und Leerraum fallen weg), dreht bei Bedarf und druckt 1:1; `--rotate 0|90|180|270` legt die Drehung fest (Grad im Uhrzeigersinn), `--fit` verkleinert zu große Motive, `--page N` wählt die PDF-Seite. Internetmarke quer wie im PDF: `--rotate 0 --fit`.
 
 ## Grafische Oberfläche

@@ -139,12 +139,12 @@ def network_printers(entries: list[NetworkEntry]) -> list[Printer]:
 
 
 def choose(printers: list[Printer], wanted: str = "") -> Printer | None:
-    """Der gewählte Drucker (URI aus den Einstellungen; "" = automatisch) bzw. der erste gefundene
-    USB-Drucker mit erkanntem Modell (ein Brother-Laser auf lp0 soll keine QL-Daten bekommen), dann
-    der erste USB-Drucker, sonst der erste überhaupt; None = keiner."""
-    for p in printers:
-        if wanted and p.uri == wanted:
-            return p
+    """Der gewählte Drucker (URI aus den Einstellungen) – fehlt er, None: gedruckt wird nicht auf
+    einem anderen als dem gewählten. Automatisch (""): der erste gefundene USB-Drucker mit erkanntem
+    Modell (ein Brother-Laser auf lp0 soll keine QL-Daten bekommen), dann der erste USB-Drucker,
+    sonst der erste überhaupt; None = keiner."""
+    if wanted:
+        return next((p for p in printers if p.uri == wanted), None)
     usb = [p for p in printers if p.source == "usb"]
     known = [p for p in usb if p.model is not None]
     return (known or usb or printers or [None])[0]

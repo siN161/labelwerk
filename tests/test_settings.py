@@ -64,13 +64,22 @@ def test_new_document_uses_settings():
 import pytest
 
 
-@pytest.mark.parametrize("label", ["102", "62red"])
-def test_label_not_in_model_list_falls_back(tmp_path, label):
+@pytest.mark.parametrize("label", ["pt12", "gibt-es-nicht", 62])
+def test_unknown_label_falls_back(tmp_path, label):
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"label_id": label}))
     s = load_settings(path)
     assert s.label_id == "62"
     assert len(s.warnings) == 1
+
+
+@pytest.mark.parametrize("label", ["102", "62red"])
+def test_label_of_another_printer_is_kept(tmp_path, label):
+    """Ob das Etikett zum angeschlossenen Drucker passt, prüfen GUI und CLI (zwei Drucker)."""
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"label_id": label}))
+    s = load_settings(path)
+    assert s.label_id == label and s.warnings == []
 
 
 def test_unreadable_config_dir_gives_warning_not_exception(tmp_path, monkeypatch):

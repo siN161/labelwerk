@@ -47,7 +47,7 @@ class FakeWorker:
     """Druck-Worker, der nur mitschreibt (kein Thread, kein Drucker)."""
     jobs = []
 
-    def __init__(self, image, label_id, model, cut_every=1):
+    def __init__(self, image, label_id, model, cut_every=1, printer=None):
         FakeWorker.jobs.append((image, label_id, cut_every))
         from labelwerk.gui.print_worker import PrintSignals
         self.signals = PrintSignals()

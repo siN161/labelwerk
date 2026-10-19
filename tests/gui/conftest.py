@@ -52,10 +52,11 @@ else:
     @pytest.fixture(autouse=True)
     def no_printer(monkeypatch):
         """Kein Test liest echte Druckerdaten aus /sys."""
-        for module in ("labelwerk.gui.main_window", "labelwerk.gui.print_worker",
-                       "labelwerk.gui.media_worker"):
+        for module in ("labelwerk.gui.print_worker", "labelwerk.gui.media_worker"):
             monkeypatch.setattr(f"{module}.find_brother_lp", lambda: None)
             monkeypatch.setattr(f"{module}.brother_busy", lambda: False)
+        monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [])
+        monkeypatch.setattr("labelwerk.gui.main_window.brother_busy", lambda: False)
 
         calls = []
 

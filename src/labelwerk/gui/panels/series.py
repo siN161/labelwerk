@@ -25,6 +25,7 @@ from . import Panel
 NO_SERIES = "Keine Serie"
 NUMBERING = "Nummerierung"
 CUT_TITLES = {"each": "Nach jedem Etikett", "end": "Nur am Ende"}
+NO_CUTTER = "Drucker ohne Abschneider – Etiketten von Hand abtrennen"
 SHOWN_COLUMNS = 3                   # Spalten in der Zeilentabelle (die Häkchen sitzen in der ersten)
 ROWS_HEIGHT = 180
 
@@ -118,7 +119,7 @@ class SeriesPanel(Panel):
         row.addWidget(self.next_button)
         self.layout_.addLayout(row)
 
-        self.section("Schnitt")
+        self.cut_title = self.section("Schnitt")
         self.cut = QComboBox()
         for mode in CUTS:
             self.cut.addItem(CUT_TITLES[mode], mode)
@@ -126,6 +127,11 @@ class SeriesPanel(Panel):
                             "(Endlosband: zwischen den Etiketten bleiben einige mm Vorschub, "
                             "ohne Trennmarke)")
         self.layout_.addWidget(self.cut)
+        self.no_cutter = QLabel(NO_CUTTER)
+        self.no_cutter.setObjectName("hint")
+        self.no_cutter.setWordWrap(True)
+        self.no_cutter.hide()
+        self.layout_.addWidget(self.no_cutter)
         self.layout_.addStretch()
 
         self.table_button.clicked.connect(self.table_requested)
@@ -323,6 +329,12 @@ class SeriesPanel(Panel):
             return
         self._field_error = None
         self.set_series(replace(value, numbering=numbering))
+
+    def set_cutter(self, cutter: bool) -> None:
+        """Drucker mit bzw. ohne Abschneider: ohne gibt es keine Schnitt-Auswahl, nur den Hinweis."""
+        self.cut_title.setVisible(cutter)
+        self.cut.setVisible(cutter)
+        self.no_cutter.setVisible(not cutter)
 
     def _apply_cut(self) -> None:
         if self.doc.series is not None:

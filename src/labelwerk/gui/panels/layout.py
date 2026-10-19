@@ -5,8 +5,9 @@ gerechnet wird im Kern (``layout``). Ohne passende Auswahl sind die Knöpfe gesp
 """
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QHBoxLayout, QToolButton
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QToolButton
 
 from ...document import Document
 from ..symbols import SIZE, line_icon
@@ -34,13 +35,18 @@ _PAPER_AXIS = {f"align.paper_{mode}": axis for axis, modes in
                for mode in modes}
 GROWING_HINT = ("Bei automatischer Länge wächst das Etikett mit – "
                 "das Objekt sitzt mit gleichem Rand an beiden Enden")
+COLOR_TITLES = (("black", "SCHWARZ"), ("red", "ROT"))
+NO_RED = "Rot nur auf dem Etikett 62 mm Rot/Schwarz (DK-22251) mit einem QL-8xx"
 
 
 class LayoutPanel(Panel):
+    color_chosen = Signal(str)          # Farbe für die Auswahl ("black" | "red")
+
     def __init__(self, doc: Document):
         super().__init__(doc, "Layout")
         self._dark = True
         self._count = 0
+        self._red = False               # Etikett kann Rot
         self._grow: str | None = None
         self.buttons: dict[str, QToolButton] = {}
         for title, row in LAYOUT_SECTIONS:
@@ -59,7 +65,17 @@ class LayoutPanel(Panel):
                 line.addWidget(button)
             line.addStretch()
             self.layout_.addLayout(line)
+        self.section("Farbe")
+        line = QHBoxLayout()
+        self.colors: dict[str, QPushButton] = {}
+        for color, title in COLOR_TITLES:
+            button = QPushButton(title)
+            button.clicked.connect(lambda _=False, c=color: self.color_chosen.emit(c))
+            self.colors[color] = button
+            line.addWidget(button)
+        self.layout_.addLayout(line)
         self.layout_.addStretch()
+        self._enable()
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
         for key, button in self.buttons.items():
@@ -71,6 +87,12 @@ class LayoutPanel(Panel):
         self._count = len(indices)
         self._enable()
 
+    def set_red_available(self, available: bool) -> None:
+        """Kann das Etikett Rot (62red auf einem Zweifarb-Modell)? Sonst sind die Farben gesperrt."""
+        if available != self._red:
+            self._red = available
+            self._enable()
+
     def set_growing(self, axis: str | None) -> None:
         """Achse, in der das Etikett mitwächst (``layout.growing_axis``): dort sitzt das
         Objekt beim Ausrichten am Papier am Randanfang (Hinweis im Tooltip)."""
@@ -79,6 +101,9 @@ class LayoutPanel(Panel):
             self._enable()
 
     def _enable(self) -> None:
+        for color, button in self.colors.items():          # Schwarz geht immer (zurück)
+            button.setEnabled(self._count > 0 and (self._red or color == "black"))
+            button.setToolTip("" if self._red or color == "black" else NO_RED)
         for key, button in self.buttons.items():
             target = button.defaultAction() or button
             growing = _PAPER_AXIS.get(key) == self._grow and self._grow is not None

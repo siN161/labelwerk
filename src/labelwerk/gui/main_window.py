@@ -13,17 +13,19 @@ from PySide6.QtCore import QMimeData, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileDialog, QFrame,
                                QHBoxLayout, QInputDialog, QLineEdit,
-                               QLabel, QMainWindow, QMessageBox, QPushButton,
+                               QLabel, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
 from .. import barcodes, clipart, favorites, series
 from ..desktop import APP_NAME
-from ..detect import brother_busy, find_brother_lp
+from ..detect import brother_busy
+from ..printers import (UNTESTED_HINT, Printer, capabilities, choose, effective_model,
+                        network_printers, usb_printers)
 from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, Series, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
-from ..labels import DPI, get_label
+from ..labels import DPI, get_label, labels_for_model
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, fill_anchored,
                       frame_area, growing_axis, insert_placement, match_objects, maximize_object,
                       move, new_barcode, object_rect, objects_outside, outside_indices,
@@ -31,7 +33,7 @@ from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, 
 from ..printer import DEFAULT_MODEL, cut_interval, to_print_mode
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
-from ..settings import Settings, load_settings, new_document, save_settings
+from ..settings import Settings, load_settings, network_entries, new_document, save_settings
 from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
@@ -89,13 +91,19 @@ def shrunk_hint(factor: float, mode: str) -> str:
 
 class MainWindow(QMainWindow):
     def __init__(self, doc: Document | None = None, tools: list[Tool] = TOOLS,
-                 model: str = DEFAULT_MODEL, settings: Settings | None = None):
+                 model: str | None = None, settings: Settings | None = None):
+        """``model``: Druckermodell fest vorgeben; None = erkannt (``refresh_printer``), bis dahin
+        Ersatzmodell bzw. zuletzt erkanntes aus den Einstellungen."""
         super().__init__()
         self.setWindowTitle(APP_NAME)
         self.resize(1100, 700)
         self.settings = settings if settings is not None else load_settings(model=model)
         self.doc = doc if doc is not None else new_document(self.settings)
-        self.model = model
+        self._fixed_model = model is not None
+        self.model = model or effective_model(None, self.settings.printer_model,
+                                              self.settings.last_model)
+        self.printers: list[Printer] = []           # gefundene Drucker (USB, Netzwerk)
+        self.printer: Printer | None = None         # gewählter bzw. erster gefundener
         self.image = None
         self._shown_size = (0, 0)                   # Etikettgröße der letzten gültigen Anzeige
         self._structure_dirty = False               # Objektliste seit der letzten Anzeige umgebaut
@@ -176,7 +184,7 @@ class MainWindow(QMainWindow):
         toolbar.widgetForAction(self.print_action).setObjectName("print")
 
         # Arbeitsfläche
-        self.canvas = Canvas(model)
+        self.canvas = Canvas(self.model)
         self.canvas.set_zoom(self.settings.start_zoom)
         self.canvas.length_changed.connect(self._on_length_dragged)
         self.canvas.drag_finished.connect(self._length_drag_finished)
@@ -220,8 +228,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.canvas, 1)
         self.setCentralWidget(central)
 
-        # Statusleiste: Drucker, Ergebnis, Zoom
-        self.printer_status = QLabel()
+        # Statusleiste: Drucker (Knopf mit Auswahl), Ergebnis, Zoom
+        self.printer_status = QToolButton()
+        self.printer_status.setObjectName("printerChoice")
+        self.printer_status.setAutoRaise(True)
+        self.printer_status.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.printer_menu = QMenu(self.printer_status)
+        self.printer_menu.aboutToShow.connect(self._fill_printer_menu)
+        self.printer_status.setMenu(self.printer_menu)
         self.result = QLabel()
         self.result.setTextFormat(Qt.TextFormat.PlainText)   # Namen mit „<b>“ bleiben Text
         self.statusBar().addWidget(self.printer_status)
@@ -253,6 +267,9 @@ class MainWindow(QMainWindow):
         self._timer.setInterval(RENDER_DELAY_MS)
         self._timer.timeout.connect(self.render_now)
         self.panel("paper").check_media_requested.connect(self.check_media)
+        self.panel("paper").set_model(self.model)      # Panels entstehen mit dem Standardmodell
+        self.panel("series").set_cutter(capabilities(self.model).cutter)
+        self.panel("layout").color_chosen.connect(self.set_color_selected)
         self.panel("paper").media_status_changed.connect(self._show_media_status)
         self._printer_timer = QTimer(self)
         self._printer_timer.setInterval(PRINTER_POLL_MS)
@@ -282,6 +299,7 @@ class MainWindow(QMainWindow):
         self.panel("barcode").fill_preview = self._filled_barcode
         self._clipboard_changed()
         self.refresh_printer()
+        self._fit_label()                           # Standard-Etikett eines anderen Druckers
         if self.settings.warnings or key_warnings:
             self._set_result(" · ".join(self.settings.warnings + key_warnings), "error")
 
@@ -571,6 +589,9 @@ class MainWindow(QMainWindow):
                                  grow=growing_axis(self.doc), keep_aspect=aspect,
                                  frame=result.frame, inner=self._inner)
         self.panel("layout").set_growing(growing_axis(self.doc))
+        red = get_label(self.doc.label_id).two_color and capabilities(self.model).two_color
+        self.panel("layout").set_red_available(red)
+        self.panel("barcode").red_available = red
         self._update_frame()
         self.panel("barcode").update_check()        # Serie: Prüfhinweis zur Vorschau-Zeile
         self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
@@ -942,6 +963,10 @@ class MainWindow(QMainWindow):
         if isinstance(obj, BarcodeObject) and isinstance(changed, BarcodeObject):
             return replace(changed, data=obj.data)
         return changed
+
+    def set_color_selected(self, color: str) -> None:
+        """Farbe der Auswahl (Reiter Layout; Rot nur auf Etiketten Rot/Schwarz)."""
+        self._change_selected(lambda objs, rendered: [replace(obj, color=color) for obj in objs])
 
     def reorder_selected(self, step: int) -> None:
         """Auswahl einen Platz nach vorne (1) bzw. hinten (−1); die Auswahl wandert mit."""
@@ -1414,19 +1439,50 @@ class MainWindow(QMainWindow):
 
     # --- Drucken ----------------------------------------------------------
     def refresh_printer(self) -> None:
-        """Statusleiste aktualisieren; beim Erscheinen des Druckers ggf. Medium prüfen."""
+        """Drucker suchen (USB in sysfs, eingetragene Netzwerkdrucker), den gewählten bzw. ersten
+        nehmen, sein Modell übernehmen (``set_model``), Statusleiste aktualisieren; beim
+        Erscheinen eines USB-Druckers ggf. Medium prüfen."""
+        tip = ""
         try:
-            printer = find_brother_lp()
-            if printer:
-                text = f"● {self.model} · {Path(printer).name}"
-            elif brother_busy():
-                text = "● Drucker belegt (andere Anwendung)"
-            else:
-                text = "○ kein Drucker"
+            found = usb_printers() + network_printers(network_entries(self.settings))
+            busy = not any(p.source == "usb" for p in found) and brother_busy()
         except OSError:
-            printer, text = None, "○ Druckerstatus unbekannt"
+            found, busy = None, False
+        chosen = choose(found or [], self.settings.printer)
+        switched = (self.printer is not None and chosen is not None
+                    and chosen.uri != self.printer.uri)
+        self.printers, self.printer = found or [], chosen
+        if found is None:
+            text = "○ Druckerstatus unbekannt"
+        elif chosen is None and self.settings.printer:
+            text = "○ gewählter Drucker fehlt"
+            tip = f"{self.settings.printer} nicht gefunden – einschalten oder einen anderen wählen"
+        elif chosen is not None:
+            text = f"● {chosen.name}"
+            if chosen.model is None:
+                text += f" (als {self.model})"
+                tip = "Modell nicht erkannt – in den Einstellungen ein Ersatzmodell wählen"
+            elif not capabilities(chosen.model).tested:
+                text += " · ungeprüft"
+                tip = f"{chosen.model}: {UNTESTED_HINT}"
+        elif busy:
+            text = "● Drucker belegt (andere Anwendung)"
+        else:
+            text = "○ kein Drucker"
         self.printer_status.setText(text)
-        present = printer is not None
+        self.printer_status.setToolTip(tip or "Drucker wählen")
+        if chosen is not None and chosen.model and chosen.model != self.settings.last_model:
+            self.settings.last_model = chosen.model     # gilt beim nächsten Start ohne Drucker
+            self._save_settings()
+        if not self._fixed_model:
+            model = effective_model(chosen, self.settings.printer_model, self.settings.last_model)
+            if model != self.model:
+                self.set_model(model)
+        self._update_media_button()
+        if switched:                                # andere Rolle möglich: neu prüfen
+            self.panel("paper").clear_media()
+            self._printer_present = False
+        present = chosen is not None and chosen.source == "usb"
         if present and not self._printer_present and self.settings.check_media_on_start:
             self._media_check_pending = True
         if not present:
@@ -1435,6 +1491,62 @@ class MainWindow(QMainWindow):
                 self.panel("paper").clear_media()
         self._printer_present = present
         self._run_pending_media_check()
+
+    def _usb_uri(self) -> str | None:
+        """Gewählter USB-Drucker (Medium prüfen); None = selbst suchen."""
+        return self.printer.uri if self.printer is not None and self.printer.source == "usb" else None
+
+    def _fill_printer_menu(self) -> None:
+        """Menü am Druckerknopf: Automatisch, gefundene Drucker, Netzwerkdrucker eintragen."""
+        menu = self.printer_menu
+        menu.clear()
+        auto = menu.addAction("Automatisch (erster gefundener)")
+        auto.setCheckable(True)
+        auto.setChecked(not self.settings.printer)
+        auto.triggered.connect(lambda _=False: self.choose_printer(""))
+        for printer in self.printers:
+            untested = printer.model is not None and not capabilities(printer.model).tested
+            action = menu.addAction(printer.name + (" – ungeprüft" if untested else ""))
+            action.setCheckable(True)
+            action.setChecked(printer.uri == self.settings.printer)
+            action.setToolTip(UNTESTED_HINT if untested else printer.uri)
+            action.triggered.connect(lambda _=False, uri=printer.uri: self.choose_printer(uri))
+        if not self.printers:
+            menu.addAction("Kein Drucker gefunden").setEnabled(False)
+        menu.addSeparator()
+        menu.addAction("Netzwerkdrucker eintragen …", self.open_settings)
+
+    def choose_printer(self, uri: str) -> None:
+        """Drucker wählen (URI; "" = automatisch) – gespeichert."""
+        self.settings.printer = uri
+        self._save_settings()
+        self.refresh_printer()
+
+    def set_model(self, model: str) -> None:
+        """Druckermodell gewechselt: Etiketten, Längen, Schnitt und Farben folgen; das offene
+        Etikett bleibt – passt es nicht, steht das in der Statusleiste."""
+        self.model = model
+        self.canvas.set_model(model)
+        self.panel("paper").set_model(model)
+        self.panel("series").set_cutter(capabilities(model).cutter)
+        self._fit_label()
+        self.schedule_render()
+
+    def _fit_label(self) -> None:
+        """Passt das Etikett nicht zum Modell: ein neues, unberührtes Etikett nimmt ein passendes
+        (``FileSession.fitting_label``), sonst bleibt es mit Hinweis (Datei, Favorit, Änderungen)."""
+        label = self.doc.label_id
+        if label in {lbl.id for lbl in labels_for_model(self.model)}:
+            return
+        if self.files.may_follow_roll() and not self.files.modified():
+            self.doc.label_id = self.files.fitting_label(label)
+            self.panel("paper").refresh()
+            self.files.mark_unchanged()
+            self._set_result(f"Etikett {get_label(label).description} passt nicht zum {self.model} "
+                             f"– {get_label(self.doc.label_id).description} genommen", "warn")
+            return
+        self._set_result(f"Etikett {get_label(label).description} passt nicht zum Drucker "
+                         f"({self.model}) – im Reiter Papier ein anderes wählen", "error")
 
     def _run_pending_media_check(self) -> None:
         """Automatische Prüfung nachholen, sobald weder Druck noch Prüfung laufen."""
@@ -1485,7 +1597,10 @@ class MainWindow(QMainWindow):
         saved = dialog.saved
         dialog.deleteLater()                    # nicht bis zum Schließen des Fensters behalten
         if accepted and saved is not None:
+            # während der Dialog offen war, kann sich Drucker/letztes Modell geändert haben
+            saved.printer, saved.last_model = self.settings.printer, self.settings.last_model
             self.settings = saved
+            self._save_settings()
             from PySide6.QtWidgets import QApplication
             from .app import apply_theme
             apply_theme(QApplication.instance(), self.settings.theme)
@@ -1493,6 +1608,7 @@ class MainWindow(QMainWindow):
             apply_shortcuts(self.shortcut_actions,
                             without_conflicts(effective(self.settings.shortcuts))[0])
             self.files.refresh_lists()                  # „Beim Start“ im Reiter Datei
+            self.refresh_printer()                      # Netzwerkdrucker, Ersatzmodell
             self._set_result("Einstellungen gespeichert – gelten für neue Etiketten.", "ok")
 
     # --- Medium prüfen ----------------------------------------------------
@@ -1505,7 +1621,7 @@ class MainWindow(QMainWindow):
     def check_media(self) -> None:
         if self.is_printing() or self.is_checking_media():
             return
-        worker = MediaWorker(self.model)
+        worker = MediaWorker(self.model, self._usb_uri())
         self._media_signals = worker.signals
         worker.signals.found.connect(self._media_found)
         worker.signals.failed.connect(self._media_failed)
@@ -1619,6 +1735,7 @@ class MainWindow(QMainWindow):
         images, outside = [], []
         doc = copy.deepcopy(doc)                    # Eingaben während des Vorbereitens zählen nicht
         renderer = Renderer()                       # unveränderte Objekte aus dem Cache
+        red = get_label(doc.label_id).two_color and capabilities(self.model).two_color
         self._set_printing(True)                    # gesperrt, solange vorbereitet wird
         self._cancel_requested = False
         self.cancel_button.setVisible(len(rows) > 1)
@@ -1638,7 +1755,7 @@ class MainWindow(QMainWindow):
                     return
                 if outside_indices(result.objects, result.size, doc.objects):
                     outside.append(number)
-                images.append(to_print_mode(result.image))   # 1 Bit: wenig Speicher
+                images.append(to_print_mode(result.image, red))   # 1 Bit: wenig Speicher
         finally:
             self._set_printing(False)
             self.cancel_button.hide()
@@ -1698,6 +1815,10 @@ class MainWindow(QMainWindow):
         if self.is_checking_media():
             self._set_result("Rolle wird gerade geprüft – bitte gleich noch einmal drucken.", "error")
             return
+        if self.printer is None and self.settings.printer:
+            self._set_result("Gewählter Drucker nicht gefunden – einschalten oder in der "
+                             "Statusleiste einen anderen wählen.", "error")
+            return
         # Druck sperrt die Medium-Prüfung schon vor dem Dialog (Timer läuft währenddessen weiter)
         self._set_printing(True)
         if doc.is_empty() and not self.confirm_empty():
@@ -1709,7 +1830,8 @@ class MainWindow(QMainWindow):
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
         self.result.style().polish(self.result)
         self.result.setText("Drucke …")
-        worker = PrintWorker(image, doc.label_id, self.model, cut_every)
+        worker = PrintWorker(image, doc.label_id, self.model, cut_every,
+                             printer=self.printer.uri if self.printer else None)
         self._print_signals = worker.signals  # Referenz bis zum Ende des Drucks
         self._worker = worker
         worker.signals.done.connect(self._print_done)
@@ -1732,12 +1854,22 @@ class MainWindow(QMainWindow):
         self._printing = printing
         self.print_action.setEnabled(not printing)
         self.panel("file").set_printing(printing)
-        self.panel("paper").check.setEnabled(not printing)
+        self._update_media_button()
+
+    def _update_media_button(self) -> None:
+        """„Medium prüfen“ geht nur per USB und nicht während eines Drucks."""
+        network = self.printer is not None and self.printer.source == "network"
+        check = self.panel("paper").check
+        check.setEnabled(not self._printing and not network and not self.is_checking_media())
+        check.setToolTip("Medium prüfen geht nur bei Druckern per USB" if network
+                         else "Eingelegte Rolle vom Drucker abfragen (druckt nichts)")
 
     def _print_done(self, status: dict) -> None:
         ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
         self.result.setProperty("state", "ok" if ok else "error")
-        self.result.setText("Gedruckt ✓" if ok else f"Status: {status.get('outcome')}")
+        sent_only = status.get("outcome") == "sent" and not status.get("did_print")
+        self.result.setText(("Gesendet ✓ (der Drucker meldet keinen Status zurück)" if sent_only
+                             else "Gedruckt ✓") if ok else f"Status: {status.get('outcome')}")
         self._print_finished()
 
     def _print_cancelled(self, message: str) -> None:

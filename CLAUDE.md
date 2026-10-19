@@ -32,14 +32,20 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Inhalt = schraffierter Platzhalter auf der Arbeitsfläche (wählbar, Meldung, kein Druck); {Spalte} der Serie auch im
   Inhalt (Prüfhinweis und Anfasser rechnen mit der Vorschau-Zeile); Doppelklick/F2/Enter → Inhaltsfeld (Strg+Z dort =
   Rückgängig des Etiketts).
+- Drucker-Kompatibilität (Roadmap 6): Modell automatisch erkannt (IEEE-1284-Kennung, USB-Produktname, Produkt-ID),
+  alle QL aus brother_ql inkl. 102 mm; Statusleiste: Druckerknopf mit Auswahl (Automatisch, gefundene, Netzwerkdrucker
+  eintragen), „ungeprüft“ für andere Modelle; Modellwechsel: Etiketten, Längen, Schnitt (ohne Abschneider ausgeblendet),
+  Farbe; Netzwerkdrucker per IP in den Einstellungen (Medium prüfen nur USB); Rot/Schwarz je Objekt (Reiter Layout →
+  Farbe, nur 62red auf QL-8xx, ungeprüft); CLI -m/-l auto, labelwerk printers; Referenztests je Modell (tests/golden).
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
-- 2238 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2337 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
 src/labelwerk/
-  labels.py   Etikettentypen je Modell (Daten aus brother_ql.labels.LabelsManager);
-              filtert für QL-600: >62 mm, PT-Bänder, Rot/Schwarz-Etiketten
+  labels.py   Etikettentypen je Modell (Daten aus brother_ql.labels.LabelsManager): labels_for_model nach
+              printers.capabilities (Breite, restricted_to_models, ohne PT-Bänder, 62red nur Zweifarb-Modelle);
+              Label.two_color
   render.py   render_text(text, label_id, size_pt, font_path) -> PIL.Image; render_document(doc, model) -> PIL.Image
               render_object(obj, doc, model) -> RenderedObject (Bild mit Anschnitt image_dx/dy, Rahmen x/y/w/h, base_pt);
               compose(rendered, size, orientation) -> Druckbild; label_size/label_margins; schrittweise:
@@ -84,6 +90,11 @@ src/labelwerk/
               Teil cancelled() → PrintCancelled(printed, total) (kein PrintError), nach jedem progress(k, N); to_print_mode (1 Bit, bitgleich
               zur Schwelle von brother_ql: 100 − THRESHOLD %)
   detect.py   find_brother_lp() -> "file:///dev/usb/lpN" | None
+  printers.py Drucker ohne Qt: Printer(uri, model, name, source usb|network), usb_printers() (sysfs: IEEE-1284 „MDL:“,
+              product, idProduct → PRODUCT_IDS; SYS_ROOT in Tests leer), network_printers(NetworkEntry), choose (gewählt –
+              fehlt er: None, kein Ersatz; automatisch: USB mit Modell › USB › erster), printer_for(uri) (usb://…:0xPID → Modell), effective_model (erkannt › Ersatz ›
+              zuletzt › QL-600), capabilities(model) (cutter, two_color, max_tape_mm 62/104, length_limits, tested),
+              SUPPORTED_MODELS (QL ohne PT), TESTED_MODELS, backend_for(uri)
   document.py Etikett-Dokument (Etikett, Länge, Objekte), UI-unabhängig; Span/Paragraph/TextObject (zeichenweise Formatierung, fit);
               TextObject: Position x_mm/y_mm (None = mittig wie bisher), Rahmen w_mm/h_mm (mit fit), Drehen rotation 0/90/180/270
               ImageObject: png (Farboriginal), source/page/crop, Rahmen x/y/w/h_mm immer gesetzt, rotation, mode/threshold/invert,
@@ -211,7 +222,8 @@ src/labelwerk/
 ```
 Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.
 
-Abhängigkeiten: `brother_ql-inventree>=1.3` (GPLv3+, Import als `brother_ql`), `pillow>=10.1`, `pypdfium2>=4`,
+Abhängigkeiten: `brother_ql-inventree>=1.3,<1.4` (GPLv3+, Import als `brother_ql`; Referenztests hashen die
+Rasterdaten – neue Version erst nach `tools/golden.py`), `pillow>=10.1`, `pypdfium2>=4`,
 `openpyxl>=3.1` (MIT, Excel), `defusedxml>=0.7` (PSF, sicheres XML für openpyxl), `segno>=1.5` (BSD-3-Clause, QR);
 nur Entwicklung: `zxing-cpp` (Apache-2.0, liest Barcodes in Tests; ab Python 3.12). Build: hatchling, src-Layout.
 
@@ -246,8 +258,7 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
 
-Nächste Schritte: Drucker-Kompatibilität (6, Antworten stehen: 1a 2b 3a 4b ungetestet 5a 6a 7a 8a 9a),
-Fremdhersteller (6b), Übersetzungen (7), Paketierung (8).
+Nächste Schritte: Fremdhersteller (6b), Übersetzungen (7), Paketierung (8).
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld
@@ -273,7 +284,8 @@ Umsetzung:
    - Bilder (PNG/JPG/SVG) als Objekt aufs Etikett, Umwandlung in Schwarz/Weiß
    - Fertiges Bild/PDF 1:1 drucken, ohne Editor (auch per CLI)
    - P-touch-Etiketten (.lbx = ZIP mit XML): Text, Rahmen, Barcodes, Bilder übernehmen
-6. Drucker-Kompatibilität (vor Veröffentlichung, QL-Familie):
+6. Drucker-Kompatibilität (vor Veröffentlichung, QL-Familie) – umgesetzt (Spec 2026-10-19-drucker-kompatibilitaet;
+   ungeprüft bis auf QL-600, Rückmeldungen sammeln):
    - Modell automatisch erkennen (USB-Produkt-ID, z. B. `20c0` → QL-600; sonst Statusabfrage) + Modell-Feld in den Einstellungen als Rückfallebene; alle festen „QL-600“-Annahmen (GUI, Einstellungen, Etikettenliste, Medium prüfen, `DEFAULT_MODEL`) lesen das Modell aus einer Quelle.
    - Fähigkeiten statt Modellnamen: Etiketten, Breite, Abschneider, Zweifarbdruck, Mindestlänge aus `brother_ql` (`ModelsManager`, `LabelsManager`).
    - Golden-Tests je Modell: Testetikett → Rasterdaten mit Referenz vergleichen (beweist, was gesendet wird – nicht, was gedruckt wird).

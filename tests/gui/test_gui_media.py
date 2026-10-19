@@ -4,6 +4,10 @@ from labelwerk.gui.main_window import MainWindow
 from labelwerk.media import Media, MediaError
 from labelwerk.settings import Settings
 
+from labelwerk.printers import Printer
+
+LP1 = Printer("file:///dev/usb/lp1", "QL-600", "QL-600 · lp1")
+
 
 def _printer_with(monkeypatch, media=None, error=None):
     monkeypatch.setattr("labelwerk.gui.media_worker.find_brother_lp", lambda: "file:///dev/usb/lp1")
@@ -74,7 +78,7 @@ def test_printer_appearing_triggers_status_and_media_check(qtbot, monkeypatch):
     win = MainWindow(settings=Settings(check_media_on_start=True))
     qtbot.addWidget(win)
     assert win.printer_status.text() == "○ kein Drucker"
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [LP1])
     _printer_with(monkeypatch, Media(62, 29, "die_cut"))
     win._printer_timer.timeout.emit()              # nächster Abfrage-Takt
     assert "lp1" in win.printer_status.text()
@@ -82,20 +86,20 @@ def test_printer_appearing_triggers_status_and_media_check(qtbot, monkeypatch):
 
 
 def test_printer_appearing_without_auto_check(window, monkeypatch):
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [LP1])
     window._printer_timer.timeout.emit()
     assert "lp1" in window.printer_status.text()
     assert not window.is_checking_media()
 
 
 def test_printer_disconnect_clears_media_status(window, qtbot, monkeypatch):
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [LP1])
     window.refresh_printer()
     _printer_with(monkeypatch, Media(62, 0, "endless"))
     window.check_media()
     qtbot.waitUntil(lambda: not window.is_checking_media(), timeout=3000)
     assert not window.media_status.isHidden()
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: None)
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [])
     window.refresh_printer()
     assert window.media_status.isHidden()
     assert window.printer_status.text() == "○ kein Drucker"
@@ -165,7 +169,7 @@ def test_media_check_is_caught_up_after_print(qtbot, monkeypatch):
     win = MainWindow(settings=Settings(check_media_on_start=True))
     qtbot.addWidget(win)
     win._printing = True                           # Druck läuft, Drucker erscheint
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [LP1])
     _printer_with(monkeypatch, Media(62, 29, "die_cut"))
     win.refresh_printer()
     assert not win.is_checking_media()
@@ -177,9 +181,9 @@ def test_pending_media_check_dropped_on_disconnect(qtbot, monkeypatch):
     win = MainWindow(settings=Settings(check_media_on_start=True))
     qtbot.addWidget(win)
     win._printing = True
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: "file:///dev/usb/lp1")
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [LP1])
     win.refresh_printer()
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", lambda: None)
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [])
     win.refresh_printer()
     win._printing = False
     win._print_finished()

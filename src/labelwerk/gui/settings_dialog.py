@@ -10,16 +10,18 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
-                               QDialogButtonBox, QFontComboBox, QFormLayout, QGroupBox,
+                               QDialogButtonBox, QFontComboBox, QFormLayout, QFrame, QGroupBox,
                                QHBoxLayout, QHeaderView, QKeySequenceEdit, QLabel, QPushButton,
-                               QStyledItemDelegate, QTableWidget, QTableWidgetItem, QTabWidget,
+                               QScrollArea, QStyledItemDelegate, QTableWidget, QTableWidgetItem,
+                               QTabWidget,
                                QVBoxLayout, QWidget)
 
 from .. import favorites, shortcuts
 from ..document import MAX_MARGIN_MM, MAX_PT, MIN_PT
-from ..labels import labels_for_model
+from ..labels import get_label, labels_for_model
 from ..printer import DEFAULT_MODEL
-from ..settings import Settings, save_settings
+from ..printers import SUPPORTED_MODELS, capabilities
+from ..settings import Settings, save_settings, valid_host
 from .widgets import DoubleSpinBox, SpinBox
 
 SCOPE_NAMES = {"global": "Global", "canvas": "Arbeitsfläche", "edit": "Schreibmodus"}
@@ -45,17 +47,25 @@ class SettingsDialog(QDialog):
         self.saved: Settings | None = None
         self._symbols = (settings.symbols_recent, settings.symbols_favorites)   # nur durchgereicht
         self._recent_files = settings.recent_files                             # nur durchgereicht
+        self._printer, self._last_model = settings.printer, settings.last_model   # nur durchgereicht
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
         general = QWidget()
-        self.tabs.addTab(general, "Allgemein")
+        scroll = QScrollArea()                   # Drucker-Liste macht den Reiter hoch: rollen statt quetschen
+        scroll.setWidget(general)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.tabs.addTab(scroll, "Allgemein")
         layout = QVBoxLayout(general)
 
         form = self._section(layout, "Neues Etikett")
         self.label = QComboBox()
         for lbl in labels_for_model(model):
             self.label.addItem(lbl.description, lbl.id)
+        if self.label.findData(settings.label_id) < 0:    # anderer Drucker: nicht still ersetzen
+            self.label.addItem(f"{get_label(settings.label_id).description} – passt nicht zum "
+                               f"{model}", settings.label_id)
         self.label.setCurrentIndex(max(0, self.label.findData(settings.label_id)))
         form.addRow("Etikett", self.label)
         self.orientation = QComboBox()
@@ -115,6 +125,32 @@ class SettingsDialog(QDialog):
         self.check_media = QCheckBox("Rolle beim Start und beim Einschalten prüfen")
         self.check_media.setChecked(settings.check_media_on_start)
         form.addRow(self.check_media)
+        self.printer_model = _model_combo("Automatisch (erkannt)")
+        self.printer_model.setCurrentIndex(max(0, self.printer_model.findData(settings.printer_model)))
+        self.printer_model.setToolTip("Nur nötig, wenn labelwerk das Modell nicht erkennt "
+                                      "(gilt dann und ohne angeschlossenen Drucker)")
+        form.addRow("Druckermodell", self.printer_model)
+        self.network = QTableWidget(0, 3)
+        self.network.setHorizontalHeaderLabels(["Name", "Adresse", "Modell"])
+        self.network.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.network.verticalHeader().hide()
+        self.network.setMinimumHeight(110)
+        for entry in settings.network_printers:
+            self._add_network(entry["name"], entry["host"], entry["model"])
+        buttons = QHBoxLayout()
+        self.add_network = QPushButton("HINZUFÜGEN")
+        self.add_network.clicked.connect(lambda: self._add_network("", "", "QL-720NW"))
+        self.remove_network = QPushButton("ENTFERNEN")
+        self.remove_network.clicked.connect(
+            lambda: self.network.removeRow(self.network.currentRow())
+            if self.network.currentRow() >= 0 else None)
+        buttons.addWidget(self.add_network)
+        buttons.addWidget(self.remove_network)
+        buttons.addStretch()
+        box = QVBoxLayout()
+        box.addWidget(self.network)
+        box.addLayout(buttons)
+        form.addRow("Netzwerkdrucker", box)
 
         form = self._section(layout, "Ansicht")
         self.zoom = SpinBox()
@@ -285,6 +321,33 @@ class SettingsDialog(QDialog):
         self.conflict_hint.setVisible(bool(found))
         self.save_button.setEnabled(not found)
 
+    def _add_network(self, name: str, host: str, model: str) -> None:
+        row = self.network.rowCount()
+        self.network.insertRow(row)
+        self.network.setItem(row, 0, QTableWidgetItem(name))
+        self.network.setItem(row, 1, QTableWidgetItem(host))
+        combo = _model_combo(None)
+        combo.setCurrentIndex(max(0, combo.findData(model)))
+        self.network.setCellWidget(row, 2, combo)
+
+    def _network_values(self) -> list[dict] | None:
+        """Netzwerkdrucker aus der Tabelle; leere Zeilen entfallen; None bei ungültiger Adresse
+        (Hinweis steht dann im Dialog)."""
+        entries = []
+        for row in range(self.network.rowCount()):
+            name = (self.network.item(row, 0) or QTableWidgetItem()).text().strip()
+            host = (self.network.item(row, 1) or QTableWidgetItem()).text().strip()
+            if not name and not host:
+                continue
+            if not valid_host(host):
+                self.error.setText(f"Netzwerkdrucker {name or row + 1}: Adresse „{host}“ ungültig – "
+                                   "nur IP-Adresse oder Name, ohne „tcp://“ und Port")
+                self.error.show()
+                return None
+            entries.append({"name": name, "host": host,
+                            "model": self.network.cellWidget(row, 2).currentData()})
+        return entries
+
     def _family_changed(self, _font) -> None:
         self._family_touched = True
 
@@ -305,6 +368,10 @@ class SettingsDialog(QDialog):
             symbols_favorites=list(self._symbols[1]),
             recent_files=list(self._recent_files),
             start_favorite=self.start_favorite.currentData(),
+            printer=self._printer,
+            printer_model=self.printer_model.currentData(),
+            last_model=self._last_model,
+            network_printers=self._network_values() or [],
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},
         )
@@ -312,6 +379,8 @@ class SettingsDialog(QDialog):
     def accept(self) -> None:
         if not self.save_button.isEnabled():
             return                                   # Kürzel doppelt belegt (Hinweis steht da)
+        if self._network_values() is None:
+            return                                   # Adresse ungültig (Hinweis steht da)
         settings = self.values()
         try:
             save_settings(settings, self.path)
@@ -321,6 +390,16 @@ class SettingsDialog(QDialog):
             return                                   # Dialog bleibt offen
         self.saved = settings
         super().accept()
+
+
+def _model_combo(automatic: str | None) -> QComboBox:
+    """Druckermodelle (ungeprüfte gekennzeichnet); ``automatic``: erster Eintrag mit Wert ""."""
+    combo = QComboBox()
+    if automatic is not None:
+        combo.addItem(automatic, "")
+    for model in SUPPORTED_MODELS:
+        combo.addItem(model if capabilities(model).tested else f"{model} – ungeprüft", model)
+    return combo
 
 
 class _KeyDelegate(QStyledItemDelegate):

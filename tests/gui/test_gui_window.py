@@ -252,7 +252,7 @@ def test_printer_detection_error_at_startup(qtbot, monkeypatch):
     def broken():
         raise OSError("kaputt")
 
-    monkeypatch.setattr("labelwerk.gui.main_window.find_brother_lp", broken)
+    monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", broken)
     win = MainWindow()
     qtbot.addWidget(win)
     assert "unbekannt" in win.printer_status.text()

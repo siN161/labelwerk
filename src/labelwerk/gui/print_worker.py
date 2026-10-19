@@ -19,13 +19,14 @@ class PrintSignals(QObject):
 
 class PrintWorker(QRunnable):
     """``image``: ein Etikett oder eine Liste (Serie, ein Auftrag); ``cut_every``: schneiden
-    alle n Etiketten (``printer.cut_interval``). ``cancel()`` (aus dem GUI-Thread) bricht vor dem
-    nächsten Teilauftrag ab."""
+    alle n Etiketten (``printer.cut_interval``); ``printer``: URI des gewählten Druckers (USB oder
+    Netzwerk). ``cancel()`` (aus dem GUI-Thread) bricht vor dem nächsten Teilauftrag ab."""
 
     def __init__(self, image: Image.Image | list[Image.Image], label_id: str, model: str,
-                 cut_every: int = 1):
+                 cut_every: int = 1, printer: str | None = None):
         super().__init__()
         self.image, self.label_id, self.model = image, label_id, model
+        self.printer = printer                     # URI; None = USB-Drucker selbst suchen
         self.cut_every = cut_every
         self.signals = PrintSignals()
         self._cancel = threading.Event()
@@ -35,7 +36,7 @@ class PrintWorker(QRunnable):
 
     def run(self) -> None:
         try:
-            printer = find_brother_lp()
+            printer = self.printer or find_brother_lp()
             if printer is None:
                 self.signals.failed.emit(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
                 return

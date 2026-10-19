@@ -13,14 +13,15 @@ class MediaSignals(QObject):
 
 
 class MediaWorker(QRunnable):
-    def __init__(self, model: str):
+    def __init__(self, model: str, printer: str | None = None):
         super().__init__()
         self.model = model
+        self.printer = printer                     # URI des gewählten USB-Druckers; None = suchen
         self.signals = MediaSignals()
 
     def run(self) -> None:
         try:
-            printer = find_brother_lp()
+            printer = self.printer or find_brother_lp()
             if printer is None:
                 self.signals.failed.emit(BUSY_MESSAGE if brother_busy() else PRINTER_NOT_FOUND)
                 return

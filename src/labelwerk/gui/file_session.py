@@ -190,7 +190,21 @@ class FileSession(QObject):
             loaded = self.window.panel("paper").media_label
             if loaded is not None:
                 doc.label_id = loaded
+            wanted = doc.label_id
+            doc.label_id = self.fitting_label(wanted)
             self._replace(doc, None)
+            if doc.label_id != wanted:
+                self.window._set_result(f"Etikett „{wanted}“ passt nicht zum {self.window.model} – "
+                                        f"{doc.label_id} genommen", "warn")
+
+    def fitting_label(self, label_id: str) -> str:
+        """``label_id``, wenn es zum Drucker passt, sonst die eingelegte Rolle, sonst 62 mm endlos
+        bzw. das erste Etikett des Modells."""
+        fitting = [label.id for label in labels_for_model(self.window.model)]
+        for candidate in (label_id, self.window.panel("paper").media_label, "62"):
+            if candidate in fitting:
+                return candidate
+        return fitting[0]
 
     def open(self, path: str | None = None, ask: bool = True) -> bool:
         """Datei öffnen (ohne ``path``: Dialog); Fehler → Statusleiste, Etikett bleibt."""

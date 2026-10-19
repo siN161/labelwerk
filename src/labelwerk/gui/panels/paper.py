@@ -61,15 +61,8 @@ class PaperPanel(Panel):
 
         self.section("Etikett")
         self.combo = QComboBox()
-        labels = labels_for_model(model)
-        for shape, title in _GROUPS:
-            group = [lbl for lbl in labels if lbl.shape == shape]
-            if not group:
-                continue
-            self.combo.addItem(f"— {title} —")
-            self.combo.model().item(self.combo.count() - 1).setEnabled(False)
-            for lbl in group:
-                self.combo.addItem(lbl.description, lbl.id)
+        self.model = model
+        self._fill_labels()
         self.layout_.addWidget(self.combo)
         self.check = QPushButton("MEDIUM PRÜFEN")
         self.check.setToolTip("Eingelegte Rolle vom Drucker abfragen (druckt nichts)")
@@ -85,8 +78,7 @@ class PaperPanel(Panel):
         self.length.setSuffix(" mm")
         self.length.setDecimals(1)
         self.length.setSingleStep(0.5)
-        min_len, max_len = length_limits(model)
-        self.length.setRange(round(min_len * 25.4 / DPI, 1), round(max_len * 25.4 / DPI, 1))
+        self._set_length_range()
         self.length.setValue(50.0)
         row.addWidget(self.length_auto)
         row.addWidget(self.length)
@@ -176,8 +168,51 @@ class PaperPanel(Panel):
         self.changed.emit()
         self.edited.emit()           # jede Rahmen-Änderung ist ein eigener Schritt
 
+    def set_model(self, model: str) -> None:
+        """Druckermodell gewechselt: Etiketten und Längengrenzen folgen; das Etikett des Dokuments
+        bleibt (passt es nicht, steht es mit Hinweis in der Liste)."""
+        if model == self.model:
+            return
+        self.model = model
+        for w in self._widgets():
+            w.blockSignals(True)
+        self._fill_labels()
+        self._set_length_range()
+        for w in self._widgets():
+            w.blockSignals(False)
+        self.refresh()
+
+    def _fill_labels(self) -> None:
+        """Etiketten des Modells nach Form gruppiert; ein Etikett des Dokuments, das das Modell
+        nicht kann, bleibt sichtbar („passt nicht zum …“), damit nichts still umgestellt wird."""
+        self.combo.clear()
+        labels = labels_for_model(self.model)
+        for shape, title in _GROUPS:
+            group = [lbl for lbl in labels if lbl.shape == shape]
+            if not group:
+                continue
+            self.combo.addItem(f"— {title} —")
+            self.combo.model().item(self.combo.count() - 1).setEnabled(False)
+            for lbl in group:
+                self.combo.addItem(lbl.description, lbl.id)
+        self._unfit = None
+        if self.combo.findData(self.doc.label_id) < 0:      # gewählt bleibt es, wählbar nicht
+            self._unfit = self.doc.label_id
+            self.combo.addItem(f"{get_label(self.doc.label_id).description} – passt nicht zum "
+                               f"{self.model}", self.doc.label_id)
+            self.combo.model().item(self.combo.count() - 1).setEnabled(False)
+
+    def _set_length_range(self) -> None:
+        min_len, max_len = length_limits(self.model)
+        self.length.setRange(round(min_len * 25.4 / DPI, 1), round(max_len * 25.4 / DPI, 1))
+
     def _apply(self) -> None:
         self.doc.label_id = self.combo.currentData()
+        if self._unfit is not None and self._unfit != self.doc.label_id:
+            self.combo.blockSignals(True)
+            self._fill_labels()                      # Eintrag „passt nicht“ verschwindet
+            self.combo.setCurrentIndex(self.combo.findData(self.doc.label_id))
+            self.combo.blockSignals(False)
         self.media_adjusted = False   # Auswahl ist jetzt vom Nutzer
         self.doc.length_mm = None if self.length_auto.isChecked() else self.length.value()
         self.doc.margin_mm = self.margin.value()
@@ -190,6 +225,9 @@ class PaperPanel(Panel):
     def refresh(self) -> None:
         for w in self._widgets():
             w.blockSignals(True)
+        if self.combo.findData(self.doc.label_id) < 0 or (
+                self._unfit is not None and self._unfit != self.doc.label_id):
+            self._fill_labels()          # andere Datei bzw. passendes Etikett: Liste neu
         self.combo.setCurrentIndex(self.combo.findData(self.doc.label_id))
         self.length_auto.setChecked(self.doc.length_mm is None)
         if self.doc.length_mm is not None:

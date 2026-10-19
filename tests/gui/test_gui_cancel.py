@@ -13,7 +13,7 @@ class FakeWorker:
     """Druck-Worker ohne Thread und Drucker; merkt sich „Abbrechen“."""
     instances = []
 
-    def __init__(self, image, label_id, model, cut_every=1):
+    def __init__(self, image, label_id, model, cut_every=1, printer=None):
         self.image, self.cancelled = image, False
         self.signals = PrintSignals()
         FakeWorker.instances.append(self)
