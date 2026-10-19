@@ -121,7 +121,7 @@ Ausrichten, Größe angleichen und Maximieren haben ab Werk kein Kürzel. Im Sch
 ## Paketmarken
 
 `labelwerk parcel MARKE.pdf` wandelt Paketmarken (DHL privat/Geschäftskunden/Warenpost/Retoure, Hermes, Amazon-Retouren –
-19 Typen für Deutschland) für den Etikettendrucker um: der Typ wird an Text und Seitengröße erkannt (`--type ID`
+20 Typen für Deutschland: die 19 Typen der paketikett.de-Liste und DHL 1a zusätzlich mit einer 100 × 150-Marke als Quelle) für den Etikettendrucker um: der Typ wird an Text und Seitengröße erkannt (`--type ID`
 legt ihn fest), die Marke wird in Stücke geschnitten und neu angeordnet – Barcodes in Originalgröße, Adressen kleiner.
 Auf 62 mm endlos ergibt das ein 15–28 cm langes Etikett, auf breiteren Bändern wird alles größer, Typ „1a“ ergibt
 100 × 150 mm (4×6-Drucker). Mehrere Etiketten (Retoure) gehen in einem Auftrag, `--preview a.png` schreibt `a-1.png`,

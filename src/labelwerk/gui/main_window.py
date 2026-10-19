@@ -518,6 +518,11 @@ class MainWindow(QMainWindow):
             ext.setProperty("active", hidden)
             ext.style().unpolish(ext)
             ext.style().polish(ext)
+            # auch ohne Stylesheet (Design „Klassisch“) sichtbar: fett und mit Punkt
+            ext.setText("» •" if hidden else "»")
+            font = ext.font()
+            font.setBold(hidden)
+            ext.setFont(font)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

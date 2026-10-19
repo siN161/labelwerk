@@ -68,7 +68,8 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Stilles Speichern (Zuletzt geöffnet/verwendet, Favoriten, gewählter Drucker, letzter Reiter) schreibt nur sein
   Feld (`settings.update_settings`) – was eine zweite Instanz gespeichert hat, bleibt.
 - Paketmarken (Etappe Paketmarken, Kern + CLI): `labelwerk parcel MARKE [--type ID|auto] [--country DE] [-l …]
-  [--preview]`, `parcel --list`; 19 Typen DE (DHL privat/Business/Warenpost/Retoure, Hermes, Amazon-Retoure) aus
+  [--preview]`, `parcel --list`; 20 Typen DE (die 19 Typen der paketikett-Liste – DHL privat/Business/Warenpost/Retoure, Hermes, Amazon-Retoure –
+  und 1a als zweite Quelle 100 × 150) aus
   Testblättern bei paketikett.de ermittelt (`parcel_data/catalog.json`, Werkzeuge `tools/parcel/`), DHL national 1/1a
   am echten Original geprüft (DataMatrix + 2 ITF lesbar); erkennt Typ an Text/Seitengröße (Gleichstand ungeprüfter
   Typen → `--type` verlangt), schneidet/dreht/skaliert die Stücke (Barcodes 1:1, verdeckte Teile weiß), quer
@@ -87,7 +88,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   über, „»“ hervorgehoben, solange der aktive Reiter dort liegt – _mark_overflow; Leisten nicht über das Kontextmenü
   ausblendbar); Fenster beim Start so breit, dass alles passt (fit_toolbars nach dem Design und nach jedem
   Designwechsel ohne Größenänderung, höchstens Bildschirmbreite).
-- 2952 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2979 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -247,7 +248,7 @@ src/labelwerk/
               load(path) → Source (PDF: Größen + Text; Bild über files.load_image, Pixel vor dem Dekodieren begrenzt,
               dpi < 50/> 1200 = keine Angabe; page(n, dpi, type) in der Seitenfläche des Typs, außen weiß, ≤
               MAX_PAGE_PIXELS); placement(source, type, n) → Placement(frame, content, rotation, offset): passende
-              Größe wie sie ist (Letter oben links auf A4), quer → gedreht (_turn: mehr Tinte in den Bereichen,
+              Größe wie sie ist (Fläche = passende Größe, Letter: Bereiche darüber hinaus weiß), quer → gedreht (_turn: mehr Tinte in den Bereichen,
               sonst Fehler), Bild: Regel bzw. Seitenverhältnis ±3 % gestreckt, sonst ParcelError; detect(source,
               country, label_id, own) (_fits, all muss vorkommen; Gleichstand: geprüft, passendes Layout,
               Katalogreihenfolge), ambiguous(found) (Gleichstand ohne geprüften Sieger → fragen); snap (Kante bis
@@ -255,9 +256,13 @@ src/labelwerk/
               model) → Conversion(documents, notes, layout "62"/"100x150"/"arranged"/"own", scale) (Seitenlage
               geprüft, je Ausgabe-Etikett ein Document mit ImageObjects, Rand 0, spätere Stücke maskieren frühere
               weiß – _mask_covered, Ausschnitte außerhalb weiß – _crop_white; endlos: Länge = Inhalt + Vorschub,
-              Breite füllt das Band; fest: passt hinein, bessere Lage; fehlt das Layout fürs Format: arrange;
-              Hinweis bei Barcodes < 97 %; rund → Fehler); arrange (Spalten längs des Bands, Barcodes 1:1);
-              own_dir/own_types/own_warnings (beschädigt …)/own_from_dict (geprüft, Kanten ≥ 1 mm in der Seite)/
+              ein Maßstab je Umwandlung – _common_fit: Referenz-Layouts quer nach ihrer Etiketthöhe 60/62 mm
+              (_frame), endlos Länge = Inhalt auf ganze Druckpunkte + Vorschub, fest: passt hinein, bessere Lage;
+              _inside: Rahmen auf ganze Druckpunkte im Etikett; eigene/„arranged“: erst _adjusted (snap), dann
+              arrange; Hinweis bei Barcodes < 94 %; rund → Fehler); arrange (Spalten längs des Bands, Barcodes 1:1);
+              own_dir/own_types/own_warnings (beschädigt, auch zu tief verschachtelt/falsch kodiert; Dateiname =
+              Kennung, doppelte übergangen)/own_from_dict (geprüft, Kanten ≥ 1 mm in ihrer Seite – pages_mm =
+              Größe je Seite, placement nimmt sie)/
               own_to_dict/save_own/remove_own;
               default_country (Region aus LC_ALL › LC_MESSAGES › LANG, sonst erstes Land), own_id(name, taken)
               („eigen-…“, frei)

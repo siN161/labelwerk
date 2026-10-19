@@ -41,7 +41,8 @@ an der echten Marke bis zum nächsten weißen Rand (höchstens 3 mm).
   mm (das Stück wird genau darauf skaliert), `kind` `barcode` (nicht verkleinert gemeint) oder `text`.
 
 labelwerk skaliert das Layout auf die bedruckbare Breite des Etiketts (breiteres Band → größer) bzw. passt es in
-ein festes Etikett ein; Barcodes unter 97 % ergeben einen Hinweis.
+ein festes Etikett ein – ein Maßstab für alle Etiketten einer Umwandlung, Referenz-Layouts nach ihrer Etiketthöhe
+(60/62 mm wie paketikett.de, auf 58,9 mm bedruckbar also 95–98 %); Barcodes unter 94 % ergeben einen Hinweis.
 
 ## Neuen Typ beisteuern
 
@@ -61,10 +62,12 @@ Anordnung macht labelwerk selbst (Spalten längs des Bands, Barcodes 1:1, Texte 
 
 ```json
 {"version": 1, "id": "meine-marke", "names": {"de": "Meine Marke"},
- "source": {"sizes_mm": [[210, 297]]}, "detect": {"all": ["Meine Firma"]},
+ "source": {"sizes_mm": [[210, 297]], "pages_mm": [[210, 297]]}, "detect": {"all": ["Meine Firma"]},
  "pieces": [{"page": 1, "src": [10, 10, 110, 60], "rotation": 0, "kind": "text"}]}
 ```
 
+`sizes_mm`: Seitengrößen für die Erkennung; `pages_mm` (optional): Größe je Seite – Bereiche werden gegen ihre Seite
+geprüft und so gelegt (Marken mit Seiten verschiedener Größe). Der Dateiname ist die Kennung (`<id>.json`).
 Geprüft beim Lesen: Kennung (Kleinbuchstaben, Ziffern, Bindestrich; keine mitgelieferte), Namen, Seitengrößen
 (5–2000 mm), Begriffe, 1–30 Bereiche mit Kanten ≥ 1 mm innerhalb der Seite, Drehung 0/90/180/270, Art
 `barcode`/`text`. Kaputte Dateien werden übergangen (Hinweis).

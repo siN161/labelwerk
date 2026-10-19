@@ -12,7 +12,7 @@ werden kleiner. Eigene Typen lassen sich auf einer Marke aufziehen.
 
 ## Grundlage (Analyse 2026-10-19)
 
-Testblätter mit QR-Raster (je Zelle ein Code „Blatt x y“) bei paketikett.de umgewandelt (19 Typen + 2 Varianten),
+Testblätter mit QR-Raster (je Zelle ein Code „Blatt x y“) bei paketikett.de umgewandelt (19 Typen der paketikett-Liste + 2 Varianten; 1a als zweite Quelle → 20 Einträge im Katalog),
 ausgewertet: **feste Bereiche je Typ** (Blatt mit wenigen Codes ergibt dieselben), 3–7 Stücke, Drehung 0/90/270°,
 Maßstab 0,58–1,1, Barcode-Stücke 1,0; Ausgabe 300 dpi, 60–62 mm hoch, 145–284 mm lang (Typ 1a: 100 × 150 mm);
 Amazon/Hermes-Retoure zwei Etiketten. Gegenprobe am echten DHL-Original des Nutzers: Lage/Drehung/Maßstab stimmen,
@@ -82,13 +82,17 @@ Beispiele), Briefmarken/Internetmarke (geht schon über `print-file`), Texterken
   auf 8,2 % Abweichung) und nie neu in den Ausschnitt eines anderen Stücks (`_alone`).
 - `convert(source, type, label_id, model)` → `Conversion(documents, notes, layout, scale)`: je Ausgabe-Etikett ein
   `Document` (Rand 0, Stücke als `ImageObject`, Strich/Schwelle 128, Seitenverhältnis frei, vorab gedreht); Inhalt
-  auf seine Fläche beschnitten, quer mittig. **Skalierung:** Endlosband – Inhalt füllt die bedruckbare Breite (breiter
-  → größer, Antwort 2a), Länge = Inhalt + Vorschub, höchstens Modellgrenze; festes Etikett – passt hinein, die Lage
-  (längs/quer) mit dem größeren Maßstab gewinnt. Ab 95 mm bedruckbarer Breite und mit `"100x150"`-Layout → dieses.
+  längs auf seinen Inhalt beschnitten. **Skalierung:** ein Maßstab für alle Etiketten einer Umwandlung (die zweite
+  Retoure-Seite nicht größer als die erste); Referenz-Layouts quer nach ihrer Etiketthöhe (60/62 mm wie paketikett.de)
+  auf die bedruckbare Breite (breiter → größer, Antwort 2a – 62 mm hohe Layouts damit 95 % auf 58,9 mm, wie paketikett
+  sie auch druckt), Länge = Inhalt (ganze Druckpunkte) + Vorschub, höchstens Modellgrenze; festes Etikett – passt hinein,
+  die Lage (längs/quer) mit dem größeren Maßstab gewinnt; Rahmen auf ganze Druckpunkte begrenzt (keine unechte
+  Rückfrage „ragt hinaus“). Ab 95 mm bedruckbarer Breite und mit `"100x150"`-Layout → dieses.
   Spätere Stücke (Malreihenfolge) machen frühere dort weiß, wo sie liegen (sonst verdeckt Tinte darunter z. B. den
   DataMatrix-Code); Ausschnitte außerhalb der Seite sind weiß. Fehlt das Layout fürs Format (nur 100×150, aber
-  schmales Band), ordnet `arrange` die Stücke neu an (Layout „arranged“, Barcodes 1:1).
-  Barcode-Stücke unter 97 % → Hinweis „Barcodes verkleinert auf n % – vor dem Versand prüfen, ob sie sich lesen
+  schmales Band), ordnet `arrange` die Stücke neu an (Layout „arranged“, Barcodes 1:1) – eigene Typen und „arranged“
+  passen erst die Kanten an (`snap`), dann wird angeordnet.
+  Barcode-Stücke unter 94 % → Hinweis „Barcodes verkleinert auf n % – vor dem Versand prüfen, ob sie sich lesen
   lassen.“ Runde Etiketten → `ParcelError`. Marke gerendert in Druckerauflösung × größtem Maßstab (≤ 600 dpi).
 - `arrange(pieces, across_mm)` (eigene Typen): Stücke nacheinander in Spalten längs des Bands bis zur Breite, Texte
   höchstens so verkleinert, dass sie quer passen, Barcodes 1:1 (nur zu breite kleiner); eigene Typen werden nie

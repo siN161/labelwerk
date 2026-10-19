@@ -3046,6 +3046,11 @@ msgid "file is damaged or incomplete"
 msgstr "Datei ist beschädigt oder unvollständig"
 
 #: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "file name does not match the identifier {id}"
+msgstr "Dateiname passt nicht zur Kennung {id}"
+
+#: src/labelwerk/parcel.py
 msgid "file too large"
 msgstr "Datei zu groß"
 
@@ -3060,6 +3065,11 @@ msgstr "Schriftfamilie, z. B. 'Liberation Sans' (siehe 'labelwerk fonts')"
 #: src/labelwerk/parcel.py
 msgid "identifier"
 msgstr "Kennung"
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "identifier {id} appears twice"
+msgstr "Kennung {id} kommt doppelt vor"
 
 #: src/labelwerk/files.py
 msgid "image has too many pixels"

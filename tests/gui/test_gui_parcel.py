@@ -662,3 +662,30 @@ def test_overflow_button_is_highlighted_for_a_hidden_active_tab(qtbot):
         assert ext.property("active") is False
     finally:
         app.setStyleSheet("")
+
+
+def test_overflow_highlight_shows_without_a_stylesheet(qtbot):
+    """Design „Klassisch“ (kein Stylesheet): der Überlauf-Knopf ist trotzdem erkennbar markiert."""
+    from PySide6.QtWidgets import QToolButton
+    assert QApplication.instance().styleSheet() == ""
+    win = _window(qtbot)
+    win.fit_toolbars(resize=False)
+    ext, hidden = None, []
+    for width in (600, 420, 300, 240):                    # ohne Stylesheet sind die Knöpfe schmaler
+        win.resize(width, 700)
+        for _ in range(3):
+            QApplication.processEvents()
+        ext = win.tool_bar.findChild(QToolButton, "qt_toolbar_ext_button")
+        hidden = [k for k, a in win.tool_actions.items()
+                  if not win.tool_bar.widgetForAction(a).isVisible()]
+        if hidden:
+            break
+    assert ext is not None and hidden
+    win._tool_triggered(hidden[-1])
+    win.tool_actions[hidden[-1]].setChecked(True)
+    win._mark_overflow()
+    assert ext.text() == "» •" and ext.font().bold()
+    win._tool_triggered("paper")
+    win.tool_actions["paper"].setChecked(True)
+    win._mark_overflow()
+    assert ext.text() == "»" and not ext.font().bold()

@@ -367,8 +367,9 @@ class ParcelTypeEditor(QDialog):
         name = self.name.text().strip()
         words = [w.strip() for w in self.words.text().split(",") if w.strip()]
         sizes = sorted({(round(w, 1), round(h, 1)) for w, h in self.source.sizes_mm})
+        pages = [[round(w, 1), round(h, 1)] for w, h in self.source.sizes_mm]   # je Seite
         return {"id": parcel.own_id(name, self._taken), "names": {language() or "en": name},
-                "source": {"sizes_mm": [list(s) for s in sizes]},
+                "source": {"sizes_mm": [list(s) for s in sizes], "pages_mm": pages},
                 "detect": {"all": words} if words else {}, "pieces": self.pieces()}
 
     def result_type(self) -> parcel.ParcelType:

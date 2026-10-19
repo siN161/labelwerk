@@ -3025,6 +3025,11 @@ msgid "file is damaged or incomplete"
 msgstr ""
 
 #: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "file name does not match the identifier {id}"
+msgstr ""
+
+#: src/labelwerk/parcel.py
 msgid "file too large"
 msgstr ""
 
@@ -3038,6 +3043,11 @@ msgstr ""
 
 #: src/labelwerk/parcel.py
 msgid "identifier"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "identifier {id} appears twice"
 msgstr ""
 
 #: src/labelwerk/files.py

@@ -169,8 +169,8 @@ def test_convert_dhl_domestic_for_62_mm(tmp_path):
     assert all(o.mode == "line" and not o.keep_ratio for o in doc.objects)
     width, height = label_size(doc, "QL-600")
     assert height == get_label("62").width                   # quer: ganzes Band
-    assert result.scale == pytest.approx(58.93 / 59.58, abs=0.02)
-    assert result.notes == []                                # Barcodes ≥ 97 %
+    assert result.scale == pytest.approx(58.93 / 62, abs=0.002)  # Etiketthöhe des Layouts (62 mm)
+    assert result.notes == []                                # Barcodes 95 %: wie paketikett.de
     assert 160 < doc.length_mm < 190
     for obj in doc.objects:                                  # alles auf dem Etikett
         assert obj.x_mm >= -0.01 and obj.y_mm >= -0.01
@@ -278,7 +278,7 @@ def test_own_types_are_checked(change):
 def test_broken_own_file_is_skipped_with_a_note():
     parcel.own_dir().mkdir(parents=True)
     (parcel.own_dir() / "kaputt.json").write_text("{nicht json")
-    (parcel.own_dir() / "gut.json").write_text(json.dumps(_own(id="own-gut")))
+    (parcel.own_dir() / "own-gut.json").write_text(json.dumps(_own(id="own-gut")))
     assert [t.id for t in parcel.own_types()] == ["own-gut"]
     assert any("kaputt.json" in w for w in parcel.own_warnings())
 
@@ -422,15 +422,18 @@ def test_landscape_page_with_unclear_direction_is_refused(tmp_path):
         parcel.convert(source, parcel.find("dhl-privat-1"), "62", "QL-600")
 
 
-def test_letter_page_sits_top_left_on_a4(tmp_path):
+def test_letter_page_keeps_its_size_and_areas_beyond_it_are_white(tmp_path):
     source = parcel.load(make_pdf(tmp_path / "m.pdf", size_mm=(215.9, 279.4),
                                   rects=[(0, 0, 215.9, 279.4)]))
     ptype = parcel.find("dhl-retour-4")
     page = source.page(1, 50, ptype)
     k = 50 / 25.4
-    assert page.size == pytest.approx((210 * k, 297 * k), abs=1)
+    assert page.size == pytest.approx((215.9 * k, 279.4 * k), abs=1)
     assert page.getpixel((round(100 * k), round(270 * k))) == 0          # Letter-Inhalt
-    assert page.getpixel((round(100 * k), round(290 * k))) == 255        # darunter weiß
+    beyond = parcel._crop_white(page, (round(100 * k), round(275 * k), round(120 * k),
+                                       round(290 * k)))
+    assert beyond.getpixel((5, beyond.height - 3)) == 255                # unter dem Blatt weiß
+    assert parcel._crop_white(page, (5000, 5000, 5010, 5010)).getextrema() == (255, 255)
 
 
 @pytest.mark.parametrize("ptype", [t for t in parcel.types("DE")], ids=lambda t: t.id)
@@ -440,7 +443,7 @@ def test_every_listed_page_size_is_accepted(ptype, tmp_path):
             continue
         source = parcel.load(make_pdf(tmp_path / "m.pdf", size_mm=size))
         place = parcel.placement(source, ptype)
-        assert place.frame_mm == ptype.source_sizes[0] and place.rotation == 0
+        assert place.frame_mm == tuple(size) and place.rotation == 0
 
 
 def test_wrong_page_size_is_a_friendly_error(tmp_path):
@@ -597,3 +600,100 @@ def test_own_area_too_small_names_the_area():
               {"page": 1, "src": [10, 10, 10.5, 60], "rotation": 0, "kind": "text"}]
     with pytest.raises(parcel.ParcelError, match="Bereich 2 ist zu klein"):
         parcel.own_from_dict(_own(pieces=pieces))
+
+
+# --- Abschluss-Review: Rundung, Maßstab, eigene Typen, Seiten verschiedener Größe ----------
+def _blocks(ptype, tmp_path):
+    k = 100 / 25.4
+    w, h = ptype.source_sizes[0]
+    img = Image.new("L", (round(w * k), round(h * k)), 255)
+    draw = ImageDraw.Draw(img)
+    for p in parcel.all_pieces(ptype):
+        x0, y0, x1, y1 = p.src
+        draw.rectangle([(x0 + 2) * k, (y0 + 2) * k, (x1 - 2) * k, (y1 - 2) * k], fill=0)
+    return parcel.load(make_pdf(tmp_path / f"{ptype.id}.pdf", size_mm=(w, h), images=[(0, 0, img, 100)]))
+
+
+@pytest.mark.parametrize("ptype", [t for t in parcel.types("DE") if not t.raster],
+                         ids=lambda t: t.id)
+def test_no_piece_reaches_beyond_the_label(ptype, tmp_path):
+    from labelwerk.layout import objects_outside
+    source = _blocks(ptype, tmp_path)
+    for label, model in (("62", "QL-600"), ("29", "QL-600"), ("102", "QL-1100"),
+                         ("102x152mm@203", "zpl:203")):
+        for doc in parcel.convert(source, ptype, label, model).documents:
+            assert objects_outside(doc, model) == [], (ptype.id, label)
+
+
+def test_one_scale_for_all_labels_of_a_conversion(tmp_path):
+    ptype = parcel.find("dhl-retour-2")
+    result = parcel.convert(_blocks(ptype, tmp_path), ptype, "62", "QL-600")
+    assert len(result.documents) == 2
+    assert result.scale == pytest.approx(58.93 / 60, abs=0.002)
+    second = result.documents[1].objects[0]
+    piece = ptype.layouts["62"][1].pieces[0]
+    assert second.h_mm == pytest.approx((piece.dst[3] - piece.dst[1]) * result.scale, abs=0.5)
+
+
+def test_own_type_snaps_first_then_arranges(tmp_path):
+    k = 300 / 25.4
+    img = Image.new("L", (round(210 * k), round(297 * k)), 255)
+    draw = ImageDraw.Draw(img)
+    draw.rectangle([20 * k, 20 * k, 70 * k, 50 * k], fill=0)     # Barcode 50 × 30 mm
+    draw.rectangle([20 * k, 100 * k, 120 * k, 130 * k], fill=0)  # Text 100 × 30 mm
+    source = parcel.load(make_pdf(tmp_path / "own.pdf", images=[(0, 0, img, 300)]))
+    ptype = parcel.own_from_dict(_own(pieces=[
+        {"page": 1, "src": [22, 22, 68, 48], "rotation": 0, "kind": "barcode"},    # schneidet
+        {"page": 1, "src": [22, 102, 118, 128], "rotation": 0, "kind": "text"}]))
+    result = parcel.convert(source, ptype, "62", "QL-600")
+    code = result.documents[0].objects[0]
+    assert (code.w_mm, code.h_mm) == pytest.approx((50, 30), abs=0.3)        # angepasst und 1:1
+    assert result.notes == []
+
+
+def _two_page_pdf(path, first, second):
+    k = 100 / 25.4
+    pages = []
+    for (w, h), box in (first, second):
+        img = Image.new("L", (round(w * k), round(h * k)), 255)
+        ImageDraw.Draw(img).rectangle([v * k for v in box], fill=0)
+        pages.append(img)
+    pages[0].save(path, save_all=True, append_images=pages[1:], resolution=100)
+    return parcel.load(path)
+
+
+@pytest.mark.parametrize("second", [(210, 148), (297, 210)])
+def test_pages_of_different_size(tmp_path, second):
+    source = _two_page_pdf(tmp_path / "zwei.pdf", ((210, 297), (20, 200, 120, 260)),
+                           (second, (20, 20, 120, 60)))
+    data = _own(source={"sizes_mm": [[210, 297], list(second)], "pages_mm": [[210, 297],
+                                                                            list(second)]},
+                pieces=[{"page": 1, "src": [15, 195, 125, 265], "rotation": 0, "kind": "text"},
+                        {"page": 2, "src": [15, 15, 125, 65], "rotation": 0, "kind": "text"}])
+    ptype = parcel.own_from_dict(data)
+    assert parcel.placement(source, ptype, 2).frame_mm == tuple(map(float, second))
+    doc = parcel.convert(source, ptype, "62", "QL-600").documents[0]
+    for obj in doc.objects:
+        hist = obj.image().convert("L").histogram()
+        assert sum(hist[:128]) > 0.5 * sum(hist)                   # jede Seite trifft ihre Tinte
+    with pytest.raises(parcel.ParcelError):                       # Bereich gegen seine Seite geprüft
+        parcel.own_from_dict(_own(source={"sizes_mm": [[210, 297]], "pages_mm": [[210, 297],
+                                                                                 [210, 148]]},
+                                  pieces=[{"page": 2, "src": [10, 100, 50, 160], "rotation": 0}]))
+
+
+@pytest.mark.parametrize("content", ["[" * 100000 + "]" * 100000, b"\xff\xfe{"])
+def test_deeply_nested_or_badly_encoded_own_files_are_damaged(content):
+    parcel.own_dir().mkdir(parents=True)
+    path = parcel.own_dir() / "own-x.json"
+    path.write_bytes(content.encode() if isinstance(content, str) else content)
+    assert parcel.own_types() == []
+    assert any("beschädigt" in w for w in parcel.own_warnings())
+
+
+def test_own_file_name_must_match_its_identifier():
+    parcel.own_dir().mkdir(parents=True)
+    (parcel.own_dir() / "anders.json").write_text(json.dumps(_own(id="own-a")))
+    (parcel.own_dir() / "own-b.json").write_text(json.dumps(_own(id="own-b")))
+    assert [t.id for t in parcel.own_types()] == ["own-b"]
+    assert any("anders.json" in w for w in parcel.own_warnings())
