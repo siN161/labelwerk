@@ -47,7 +47,8 @@ Code 39, Klartext über dem Code, Logo im QR-Code, Barcodes in der CLI, Ruhezone
     `BarcodeError` „Inhalt zu lang für einen QR-Code (Fehlerkorrektur M)“.
   - Code 128: Zeichen ASCII 32–126 (sonst „Code 128 kann „ä“ nicht darstellen“); Zeichensätze B/C mit
     kürzester Folge (dynamische Programmierung über Wechsel B↔C), Prüfzeichen Modulo 103, Stopp.
-  - Code 39: 0–9, A–Z, Leerzeichen, `- . $ / + %`; Kleinbuchstaben werden groß; Start/Stopp `*` automatisch
+  - Code 39: 0–9, A–Z, Leerzeichen, `- . $ / + %`; Kleinbuchstaben a–z werden groß (andere Zeichen wie „ı“
+    nicht); Start/Stopp `*` automatisch
     (`*` im Inhalt ist ein Fehler); breit = 3 × schmal, Lücke zwischen Zeichen = 1 Modul.
   - EAN-13/EAN-8: nur Ziffern (Leerzeichen werden übergangen); 12 bzw. 7 Ziffern → Prüfziffer ergänzt; 13
     bzw. 8 Ziffern → Prüfziffer geprüft („Prüfziffer falsch – richtig wäre 7“); sonst „EAN-13 braucht 12
@@ -56,15 +57,19 @@ Code 39, Klartext über dem Code, Logo im QR-Code, Barcodes in der CLI, Ruhezone
   - Leerer Inhalt → „Barcode ohne Inhalt“; Strichcodes höchstens `MAX_LINEAR` = 80 Zeichen, jeder Inhalt
     höchstens `MAX_DATA` = 2000 Zeichen.
   - `BarcodeError(ValueError)` mit deutscher Meldung; `check(obj)` prüft auch `kind`, `module`, `h_mm`,
-    `error`, `rotation`.
+    `error`, `rotation` (auch nicht hashbare Werte → `BarcodeError`, nicht TypeError).
 - **Maße** (`barcodes.size(obj) -> (w, h)` in Druckpunkten, ungedreht): QR `n × module` im Quadrat;
   Strichcodes `Module × module` breit (EAN-13 mit Klartext: 7 Module links für die erste Ziffer dazu),
-  `_dots(h_mm)` hoch.
+  `_dots(h_mm)` hoch. `max_size(obj)`: obere Schranke ohne Kodieren (QR Version 40, Code 128/39 mit 80
+  Zeichen) – für die Grenzen fremder Dateien, auch wenn erst die Serie den Inhalt füllt.
 - **Zeichnen** (`barcodes.draw(obj) -> Image "L"`): Module als exakte Rechtecke, weißer Grund, keine
-  Kantenglättung in den Strichen. Klartext (Strichcodes, `text`): DejaVu Sans (fontconfig wie Text), Höhe
-  rund 9 Module, mindestens 6 pt, verkleinert, bis jede Gruppe in ihre Breite passt; Code 128/39 mittig unter
-  dem Code; EAN in der üblichen Anordnung (erste Ziffer links vor dem Code, je 6 bzw. 4 Ziffern zwischen den
-  verlängerten Randzeichen). Strichhöhe unter 1 mm → „Barcode zu niedrig – höher ziehen oder Klartext aus“.
+  Kantenglättung in den Strichen. Klartext (Strichcodes, `text`): DejaVu Sans (fontconfig wie Text), Größe
+  rund 9 Module, mindestens 6 pt, verkleinert, bis jede Gruppe in ihre Breite passt und der Klartext höchstens
+  40 % der Höhe braucht (kleinste Schrift 8 Punkte); sein Platz folgt aus allen Zeichen der Art (Höhe,
+  Unterlänge – in einer Serie bleiben die Striche gleich hoch, nichts wird abgeschnitten); Code 128/39 mittig
+  unter dem Code; EAN in der üblichen Anordnung (erste Ziffer links vor dem Code, je 6 bzw. 4 Ziffern zwischen
+  den verlängerten Randzeichen). Strichhöhe unter 1 mm → „Barcode zu niedrig für den Klartext …“ (ab 2 mm
+  Höhe nicht erreichbar).
 - **Rendern** (`render.py`): `_prepare` misst Barcodes über `barcodes.size` (Rahmen fest, wie Bilder),
   `_finish` zeichnet und dreht wie bei Bildern; Renderfehler sind `BarcodeError` (ValueError) – wie
   `TextTooLarge`.
@@ -74,14 +79,19 @@ Code 39, Klartext über dem Code, Logo im QR-Code, Barcodes in der CLI, Ruhezone
     (Breite ÷ Module, 1–20), QR: Breite und Höhe gleich (das zuletzt geänderte Maß zählt); Höhe → `h_mm`.
   - `resize` (Anfasser): QR hält das Quadrat (`keep_aspect`), die festgehaltene Seite bleibt beim Einrasten
     stehen; Strichcodes: waagerecht rastet `module`, senkrecht `h_mm` frei.
-  - `maximize_object`: größtmögliche Modulbreite, die hineinpasst (abgerundet), mittig.
+  - `maximize_object`: größtmögliche Modulbreite, die hineinpasst (abgerundet), Strichcodes füllen die Höhe
+    für sich; mittig, in der mitwachsenden Achse bleibt der Anfang; passt nicht einmal 1 Punkt je Modul,
+    bleibt der Barcode.
+  - `new_barcode`: Beispielinhalt, Modul 6 (QR) bzw. 3 Punkte, Höhe 10 mm; passt er nicht, wird bei
+    Strichcodes zuerst die Höhe kleiner, dann lieber gedreht als ein kleineres Modul; Platz wie Bilder
+    (`insert_placement`, auf dem Endlosband hinter den vorhandenen Objekten).
   - `to_grid`: nur vorhandene Felder (`h_mm`); Schrift-Funktionen: TypeError wie bei Bildern.
 - **Serie** (`series.py`): `placeholders`, `missing`, `fill` sehen auch `BarcodeObject.data`; gefüllt wird
   der Inhalt (Kopie nur bei Platzhaltern, sonst dasselbe Objekt). Ein Barcode behält je Zeile seine linke obere
   Ecke (die Breite kann wechseln).
 - **Speichern** (`storage.py`): `"type": "barcode"`, Schema `BARCODE` mit Arten `barcode_kind`,
   `barcode_data` (≤ `MAX_DATA`), `module`, `qr_level`; Größe für die Grenze „Etikett zu groß“ aus
-  `barcodes.size` (ungültiger Inhalt zählt 0 – das Rendern meldet ihn). Format-Version bleibt 1 (ältere
+  `barcodes.max_size` (ohne Kodieren beim Laden; Platzhalter und ungültiger Inhalt zählen voll). Format-Version bleibt 1 (ältere
   labelwerk melden „Objektart unbekannt“).
 
 ## 2 – GUI
@@ -98,9 +108,11 @@ Code 39, Klartext über dem Code, Logo im QR-Code, Barcodes in der CLI, Ruhezone
   - **Inhalt** (einzeiliges Feld): jede Eingabe sofort auf der Arbeitsfläche, eine Bearbeitung = ein
     Rückgängig-Schritt; darunter Fehler bzw. Hinweis (`#hint`): Meldung von `barcodes.check`, z. B.
     Prüfziffer.
-  - **Größe:** Modul (Zahlenfeld 1–20 Punkte, angezeigt in mm: „0,25 mm“), Höhe (mm, nur Strichcodes),
+  - **Größe:** Modul (Zahlenfeld 1–20 Punkte, angezeigt in mm wie die anderen Felder: „0.25 mm“, Komma geht
+    auch), Höhe (mm, nur Strichcodes),
     Klartext (nur Strichcodes), Fehlerkorrektur (nur QR: „L – 7 %“, „M – 15 %“, „Q – 25 %“, „H – 30 %“);
-    Hinweis Ruhezone („links und rechts je 2,5 mm frei lassen“: 10 Module bei Strichcodes, 4 bei QR).
+    Hinweis Ruhezone außerhalb des Rahmens („links und rechts je 2,5 mm frei lassen“: 10 Module bei Code
+    128/39, EAN-13 11 bzw. mit Klartext 7 – die erste Ziffer liegt im Rahmen –, EAN-8 7, QR ringsum 4).
   - **Drehen** (Aktionen wie im Reiter Layout), **Position (mm)** mit änderbarer Größe (rastet ein).
 - **Arbeitsfläche:** Barcodes wie Bilder (Auswahl, Ziehen, Anfasser; QR: Ecken und Kanten halten das
   Quadrat). Doppelklick auf einen Barcode: Reiter BARCODE, Fokus ins Inhaltsfeld.
