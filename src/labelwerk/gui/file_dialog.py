@@ -93,8 +93,8 @@ def _size_text(nbytes: int) -> str:
     if nbytes < 1024:
         return ngettext("{count} byte", "{count} bytes", nbytes).format(count=nbytes)
     if nbytes < 1024 * 1024:
-        return _("{size} KB").format(size=number(round(nbytes / 1024, 1)))
-    return _("{size} MB").format(size=number(round(nbytes / 1024 / 1024, 1)))
+        return _("{size} KiB").format(size=number(round(nbytes / 1024, 1)))
+    return _("{size} MiB").format(size=number(round(nbytes / 1024 / 1024, 1)))
 
 
 def _no_preview(info: str) -> Preview:
@@ -287,6 +287,7 @@ class PreviewPane(QWidget):
             self.show_result(self.generation,
                              make_preview(self.path, self.page, PREVIEW_PX, self._model))
         else:
+            _threads().clear()                    # noch nicht begonnene Aufträge sind veraltet
             _threads().start(_Job(self.generation, self.path, self.page, self._model,
                                   self._emitter))
 
@@ -322,6 +323,9 @@ class PreviewFileDialog(QFileDialog):
         layout = self.layout()
         if isinstance(layout, QGridLayout):
             layout.addWidget(self.pane, 0, layout.columnCount(), layout.rowCount(), 1)
+        # Qt speichert den Stand des Dialogs für alle Programme (QtProject.conf): Spalten, Seitenleiste
+        # und Splitter nur für labelwerk einrichten, beim Schließen zurückstellen
+        self._qt_state = self.saveState()
         self._arrange()                         # nach Qts Wiederherstellung des letzten Stands
         self._pending: str | None = None
         self._timer = QTimer(self)
@@ -365,8 +369,15 @@ class PreviewFileDialog(QFileDialog):
         super().showEvent(event)
         self._split()                           # erst sichtbar gelten die Breiten
 
+    def restore_qt_state(self) -> None:
+        """Stand des Qt-Dialogs wie vor ``_arrange`` (Qt speichert ihn beim Zerstören)."""
+        self.restoreState(self._qt_state)
+
     def done(self, result: int) -> None:
+        self._timer.stop()
+        _threads().clear()                      # nur den laufenden Auftrag abwarten
         wait_for_previews()                     # kein Ergebnis mehr nach dem Schließen
+        self.restore_qt_state()
         super().done(result)
 
     def _current_changed(self, path: str) -> None:
@@ -414,4 +425,5 @@ def ask_open(parent, title: str, folder: str, filters: str, *, system: bool = Fa
         path = dialog.selectedFiles()[0]
         return Chosen(path, dialog.page_for(path) if pages else None)
     finally:
+        dialog.restore_qt_state()               # auch ohne done() (Tests): Qt-Stand unverändert
         dialog.deleteLater()

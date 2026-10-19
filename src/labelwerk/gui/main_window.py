@@ -537,7 +537,9 @@ class MainWindow(QMainWindow):
         if not self._restoring:
             indices = self._drop_empty_frames(indices)
         self._follow_selection(indices)
-        if self._restoring:                         # Rückgängig wechselt nicht den Reiter
+        if self._restoring:                         # Rückgängig wechselt nicht den Reiter –
+            if not indices and not self._tool_visible(self._current_tool()):
+                self._show_visible_tool()           # außer weg vom ausgeblendeten der Auswahl
             return
         self.history.select(self.doc, indices)
         if indices:

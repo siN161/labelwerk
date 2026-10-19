@@ -3145,13 +3145,13 @@ msgstr "{printer} nicht gefunden – einschalten oder einen anderen wählen"
 
 #: src/labelwerk/gui/file_dialog.py
 #, python-brace-format
-msgid "{size} KB"
-msgstr "{size} KB"
+msgid "{size} KiB"
+msgstr "{size} KiB"
 
 #: src/labelwerk/gui/file_dialog.py
 #, python-brace-format
-msgid "{size} MB"
-msgstr "{size} MB"
+msgid "{size} MiB"
+msgstr "{size} MiB"
 
 #: src/labelwerk/gui/panels/image.py
 #, python-brace-format

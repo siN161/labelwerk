@@ -3122,12 +3122,12 @@ msgstr ""
 
 #: src/labelwerk/gui/file_dialog.py
 #, python-brace-format
-msgid "{size} KB"
+msgid "{size} KiB"
 msgstr ""
 
 #: src/labelwerk/gui/file_dialog.py
 #, python-brace-format
-msgid "{size} MB"
+msgid "{size} MiB"
 msgstr ""
 
 #: src/labelwerk/gui/panels/image.py

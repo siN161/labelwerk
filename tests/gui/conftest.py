@@ -51,6 +51,15 @@ else:
                           lambda self: "discard")
             yield
 
+    @pytest.fixture(autouse=True, scope="session")
+    def no_real_file_dialog():
+        """Kein Test öffnet einen echten (modalen) Dateidialog – er hinge; Tests, die ihn
+        brauchen, ersetzen ``exec_dialog`` selbst."""
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr("labelwerk.gui.file_dialog.exec_dialog",
+                          lambda dialog: pytest.fail("echter Dateidialog"))
+            yield
+
     @pytest.fixture(autouse=True)
     def no_file_manager(monkeypatch):
         """Kein Test öffnet den echten Dateimanager (Ordner öffnen ist sonst ersetzt)."""

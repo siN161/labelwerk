@@ -330,3 +330,23 @@ def test_start_tab_already_hidden_is_locked_without_restart_hint(qtbot, tmp_path
 def test_start_with_hidden_tools_does_not_fall_back(qtbot):
     win = _window(qtbot, start_tool="text", hidden_tools=["barcode"])
     assert win.panels.currentWidget() is win.panel("text")
+
+
+def test_undo_after_a_shortcut_insert_leaves_the_hidden_panel(qtbot):
+    """Echtes Tastenkürzel fügt bei ausgeblendetem BARCODE ein (Panel nur für die Auswahl);
+    Strg+Z nimmt es zurück – leere Auswahl kehrt zu einem sichtbaren Reiter zurück."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    win = _window(qtbot, hidden_tools=["barcode"], shortcuts={"barcode.insert": "Ctrl+Shift+B"})
+    win.tool_actions["image"].trigger()
+    win.activateWindow()
+    win.canvas.setFocus()
+    qtbot.waitUntil(lambda: win.canvas.hasFocus(), timeout=1000)
+    ctrl = Qt.KeyboardModifier.ControlModifier
+    QTest.keyClick(win.canvas, Qt.Key.Key_B, ctrl | Qt.KeyboardModifier.ShiftModifier)
+    assert any(isinstance(obj, BarcodeObject) for obj in win.doc.objects)
+    assert win.panels.currentWidget() is win.panel("barcode")
+    QTest.keyClick(win.canvas, Qt.Key.Key_Z, ctrl)
+    QApplication.processEvents()
+    assert not any(isinstance(obj, BarcodeObject) for obj in win.doc.objects)
+    assert win.panels.currentWidget() is win.panel("image") and _checked(win) == ["image"]
