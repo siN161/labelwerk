@@ -1,4 +1,5 @@
-"""Serien: Tabellen aus CSV/Excel bzw. Nummerierung und Platzhalter ``{Spalte}`` im Text.
+"""Serien: Tabellen aus CSV/Excel bzw. Nummerierung und Platzhalter ``{Spalte}`` im Text und im
+Inhalt von Barcodes.
 
 Qt-frei. Tabellendateien sind fremde Eingabe: Größe, Zeilen und Spalten sind begrenzt (Zeilen
 werden gestreamt, leere sofort verworfen), jeder Fehler wird zur deutschen ``SeriesError`` –
@@ -19,8 +20,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from .document import (CUTS, MAX_DIGITS, MAX_NUMBER, MAX_SERIES_ROWS, Document, Numbering,
-                       Paragraph, Series, Span, TextObject)
+from .document import (CUTS, MAX_DIGITS, MAX_NUMBER, MAX_SERIES_ROWS, BarcodeObject, Document,
+                       Numbering, Paragraph, Series, Span, TextObject)
 from .storage import LINE_BREAKS
 
 MAX_BYTES = 20 * 1024 * 1024        # Tabellendatei
@@ -335,14 +336,15 @@ def table_for(value: Series, base: str | Path | None = None) -> Table:
 
 # --- Platzhalter -------------------------------------------------------------------------------
 def placeholders(doc: Document) -> list[str]:
-    """Namen der Platzhalter ``{Name}`` in den Textobjekten (Reihenfolge, jeder einmal)."""
+    """Namen der Platzhalter ``{Name}`` in Textobjekten und Barcodes (Reihenfolge, jeder einmal)."""
     names: list[str] = []
     for obj in doc.objects:
-        if isinstance(obj, TextObject):
-            for name in _PLACEHOLDER.findall(obj.text):
-                name = name.strip()              # { Klemme } passt zur Spalte „Klemme“
-                if name not in names:
-                    names.append(name)
+        text = (obj.text if isinstance(obj, TextObject) else obj.data
+                if isinstance(obj, BarcodeObject) else "")
+        for name in _PLACEHOLDER.findall(text):
+            name = name.strip()                  # { Klemme } passt zur Spalte „Klemme“
+            if name not in names:
+                names.append(name)
     return names
 
 
@@ -354,7 +356,8 @@ def missing(doc: Document, columns: list[str]) -> list[str]:
 def fill(doc: Document, columns: list[str], row: list[str], keep: int | None = None) -> Document:
     """``doc`` mit den Werten der Zeile statt der Platzhalter – **nur zum Lesen** (Rendern,
     Drucken): Objekte ohne Platzhalter, Bilder und ``keep`` sind dieselben wie im Original
-    (Renderer-Cache trifft), nur gefüllte Textobjekte sind neu; ``doc`` bleibt unverändert.
+    (Renderer-Cache trifft), nur gefüllte Text- und Barcode-Objekte sind neu; ``doc`` bleibt
+    unverändert.
 
     Der Wert übernimmt die Formatierung des Stücks, in dem sein Platzhalter beginnt (auch über
     Stückgrenzen hinweg); unbekannte Platzhalter bleiben stehen; Zeilenumbrüche und Tabs im
@@ -362,9 +365,15 @@ def fill(doc: Document, columns: list[str], row: list[str], keep: int | None = N
     """
     values = {name: _BREAKS.sub(" ", value) for name, value in zip(columns, row)}
     out = copy.copy(doc)
-    out.objects = [obj if i == keep or not isinstance(obj, TextObject) else _fill_text(obj, values)
+    out.objects = [obj if i == keep else _fill_text(obj, values) if isinstance(obj, TextObject)
+                   else _fill_barcode(obj, values) if isinstance(obj, BarcodeObject) else obj
                    for i, obj in enumerate(doc.objects)]
     return out
+
+
+def _fill_barcode(obj: BarcodeObject, values: dict[str, str]) -> BarcodeObject:
+    data = _PLACEHOLDER.sub(lambda m: values.get(m.group(1).strip(), m.group(0)), obj.data)
+    return obj if data == obj.data else replace(obj, data=data)
 
 
 def _fill_text(obj: TextObject, values: dict[str, str]) -> TextObject:

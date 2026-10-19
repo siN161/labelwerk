@@ -17,12 +17,15 @@ dependencies = [
     "pypdfium2>=4",
     "openpyxl>=3.1",      # Excel-Tabellen für Serien (MIT)
     "defusedxml>=0.7",    # openpyxl liest fremde Dateien damit sicher (PSF)
+    "segno>=1.5",         # QR-Codes (BSD-3-Clause)
 ]
 
 [project.optional-dependencies]
 # PySide6 6.12.0 verliert unter Python < 3.12 Referenzen auf None/True/False → Absturz (6.11.2 ok)
 gui = ["PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'"]
-dev = ["pytest>=8", "pytest-qt>=4", "PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'"]
+# zxing-cpp (Apache-2.0) liest die gedruckten Barcodes in Tests; Wheels erst ab Python 3.12
+dev = ["pytest>=8", "pytest-qt>=4", "PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'",
+       "zxing-cpp>=2.2; python_version >= '3.12'"]
 
 [project.scripts]
 labelwerk = "labelwerk.cli:main"

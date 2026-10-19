@@ -6,7 +6,7 @@ reiner Text sieht dadurch pixelgleich aus wie früher.
 Das Ergebnis (``TextLayout``) zeichnet das Rendern; dieselben Zahlen liefern der
 Arbeitsfläche Schreibmarke, Treffer und Markierung.
 Bild-Objekte werden auf ihren Rahmen skaliert und in Schwarz/Weiß umgewandelt
-(``imaging.to_layers``).
+(``imaging.to_layers``); Barcodes zeichnet ``barcodes.draw`` in ganzen Druckpunkten.
 """
 from __future__ import annotations
 
@@ -19,10 +19,10 @@ from functools import cached_property, lru_cache
 
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
-from . import fonts, imaging
+from . import barcodes, fonts, imaging
 from .document import (ALIGNMENTS, FRAME_LINE_MM, FRAME_STYLES, MAX_FRAME_MM, MAX_MARGIN_MM,
-                       MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS, Document, Frame, ImageObject,
-                       Paragraph, Span, TextObject)
+                       MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS, BarcodeObject, Document, Frame,
+                       ImageObject, Paragraph, Span, TextObject)
 from .labels import DPI, get_label, length_limits
 
 MARGIN = 12            # Punkte, ca. 1 mm
@@ -82,13 +82,13 @@ class RenderedObject:
     """Einzeln gerendertes Objekt in Druckpunkten, in Leserichtung.
 
     ``x``/``y``/``w``/``h``: Rahmen auf dem Etikett (Auswahl, Einrasten, Layout);
-    ``base_pt``: wirksame Grundgröße (Bild-Objekte: 0).
+    ``base_pt``: wirksame Grundgröße (Bild-Objekte, Barcodes: 0).
     ``image``: Graustufen (L), weißer Grund, Tinte schwarz – deckt den Rahmen und die ganze
     Tinte ab (Anschnitt: Kantenglättung, Unterstreichung, Glyphen wie „J“ reichen etwas über
     den Rahmen); seine linke obere Ecke liegt bei ``x + image_dx``, ``y + image_dy``
-    (``image_dx``/``image_dy`` ≤ 0; Bild-Objekte: genau der Rahmen, 0).
+    (``image_dx``/``image_dy`` ≤ 0; Bild-Objekte und Barcodes: genau der Rahmen, 0).
     ``layout``: der Zeilensatz, aus dem das Bild gezeichnet wurde (Schreibmarke, Treffer);
-    None bei Bild-Objekten.
+    None bei Bild-Objekten und Barcodes.
     """
     image: Image.Image
     x: int
@@ -101,7 +101,7 @@ class RenderedObject:
     layout: TextLayout | None = field(default=None, compare=False, repr=False)
 
 
-def render_object(obj: TextObject | ImageObject, doc: Document,
+def render_object(obj: TextObject | ImageObject | BarcodeObject, doc: Document,
                   model: str = "QL-600") -> RenderedObject:
     """Ein Objekt einzeln rendern (Arbeitsfläche); Position bezogen auf das Etikett von ``doc``."""
     return _finish(*_measure(obj, doc, model))
@@ -115,7 +115,7 @@ def text_layout(obj: TextObject, doc: Document, model: str = "QL-600") -> TextLa
     return _place(*_measure(obj, doc, model))[0]
 
 
-def _measure(obj: TextObject | ImageObject, doc: Document,
+def _measure(obj: TextObject | ImageObject | BarcodeObject, doc: Document,
              model: str) -> tuple[Prepared, _Sheet, int, int]:
     """Objekt messen; Etikettgröße nur für ein Objekt ohne Position (mittig), sonst 0."""
     sheet = _sheet(doc, model)
@@ -173,7 +173,7 @@ def label_size(doc: Document, model: str = "QL-600",
     return _label_size(sheet, prepared)
 
 
-def prepare_object(obj: TextObject | ImageObject, doc: Document,
+def prepare_object(obj: TextObject | ImageObject | BarcodeObject, doc: Document,
                    model: str = "QL-600") -> Prepared:
     """Objekt messen (Grundgröße, Zeilen, Rahmengröße) – unabhängig von der Etikettgröße.
 
@@ -223,8 +223,8 @@ class Rendered:
 @dataclass
 class _Cached:
     """Gemessenes und gerendertes Objekt samt Stand, aus dem es entstand."""
-    obj: TextObject | ImageObject  # hält das Objekt fest, damit seine id nicht neu vergeben wird
-    snapshot: TextObject | ImageObject     # Bilder: die PNG-Bytes werden geteilt, nicht kopiert
+    obj: TextObject | ImageObject | BarcodeObject  # hält das Objekt fest (id bleibt vergeben)
+    snapshot: TextObject | ImageObject | BarcodeObject  # Bilder: PNG-Bytes geteilt, nicht kopiert
     context: tuple
     prepared: Prepared
     size: tuple | None = None                  # Etikettgröße des Bilds (None = mit Position)
@@ -398,8 +398,8 @@ def _dots(mm: float) -> int:
 @dataclass
 class Prepared:
     """Gemessenes Objekt: Grundgröße, Zeilen (an der breitesten Zeile ausgerichtet), Tintenbox.
-    Bild-Objekte: keine Zeilen, Tintenbox = Rahmen."""
-    obj: TextObject | ImageObject
+    Bild-Objekte und Barcodes: keine Zeilen, Tintenbox = Rahmen."""
+    obj: TextObject | ImageObject | BarcodeObject
     base: int
     lines: list
     box: tuple[int, int, int, int]
@@ -412,9 +412,12 @@ class Prepared:
         return (h, w) if self.obj.rotation in (90, 270) else (w, h)
 
 
-def _prepare(obj: TextObject | ImageObject, sheet: _Sheet) -> Prepared:
+def _prepare(obj: TextObject | ImageObject | BarcodeObject, sheet: _Sheet) -> Prepared:
     if isinstance(obj, ImageObject):
         return _prepare_image(obj)
+    if isinstance(obj, BarcodeObject):
+        frame = barcodes.size(obj)
+        return Prepared(obj, 0, [], (0, 0, *frame), frame)
     for para in obj.paragraphs:
         if para.align not in ALIGNMENTS:
             raise ValueError(f"Unbekannte Textposition {para.align!r} – erlaubt: links, zentriert, "
@@ -512,6 +515,8 @@ def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedO
     obj = prep.obj
     if isinstance(obj, ImageObject):
         return _finish_image(prep)
+    if isinstance(obj, BarcodeObject):
+        return _finish_barcode(prep)
     text, frame, area, origin = _place(prep, sheet, width, height)
     image, (ix, iy) = _paint(text.pieces, text.x0, text.y0, *frame[2:],
                              at=(origin[0] + frame[0], origin[1] + frame[1]))
@@ -617,6 +622,17 @@ def _finish_image(prep: Prepared) -> RenderedObject:
     if obj.rotation:
         image = image.transpose(_TRANSPOSE[obj.rotation])
         frame = _turn(frame, (w, h), obj.rotation)
+    return RenderedObject(image, _dots(obj.x_mm), _dots(obj.y_mm), frame[2], frame[3], 0.0)
+
+
+def _finish_barcode(prep: Prepared) -> RenderedObject:
+    """Barcode zeichnen (ganze Druckpunkte, ``barcodes.draw``) und drehen wie ein Bild."""
+    obj = prep.obj
+    image = barcodes.draw(obj)
+    frame = (0, 0, *image.size)
+    if obj.rotation:
+        frame = _turn(frame, image.size, obj.rotation)
+        image = image.transpose(_TRANSPOSE[obj.rotation])
     return RenderedObject(image, _dots(obj.x_mm), _dots(obj.y_mm), frame[2], frame[3], 0.0)
 
 

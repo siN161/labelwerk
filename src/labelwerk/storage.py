@@ -1,7 +1,7 @@
 """Etiketten als Datei (*.labelwerk): JSON, versioniert, ohne Qt.
 
 ``{"format": "labelwerk", "version": 1, "document": {…}}`` – Objekte mit ``"type"`` (``text`` |
-``image``) und ihren Feldern; Bilddaten (PNG, SVG) Base64. Eine Datei kann von irgendwoher
+``image`` | ``barcode``) und ihren Feldern; Bilddaten (PNG, SVG) Base64. Eine Datei kann von irgendwoher
 stammen: beim Laden wird jedes Feld nach Art, Wertebereich und Struktur geprüft (``StorageError``
 mit deutscher Meldung statt Traceback; was angenommen wird, scheitert beim Rendern höchstens
 verständlich). Bilddaten müssen PNG sein (Pillow erkennt Formate am Inhalt – EPS liefe sonst
@@ -24,10 +24,12 @@ from pathlib import Path
 
 from PIL import Image
 
-from .document import (ALIGNMENTS, CUTS, FRAME_LINE_MM, FRAME_STYLES, MAX_DIGITS, MAX_FRAME_MM,
-                       MAX_MARGIN_MM, MAX_NUMBER, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS,
-                       ROTATIONS, Document, Frame, ImageObject, Numbering, Paragraph, Series, Span,
-                       TextObject)
+from . import barcodes
+from .document import (ALIGNMENTS, BARCODE_KINDS, BARCODE_MM, CUTS, FRAME_LINE_MM, FRAME_STYLES,
+                       MAX_BARCODE_DATA, MAX_DIGITS, MAX_FRAME_MM, MAX_MARGIN_MM, MAX_MODULE,
+                       MAX_NUMBER, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS, QR_LEVELS,
+                       ROTATIONS, BarcodeObject, Document, Frame, ImageObject, Numbering, Paragraph,
+                       Series, Span, TextObject)
 from .imaging import MAX_PIXELS, MODES
 from .labels import get_label
 
@@ -54,6 +56,9 @@ IMAGE = {"png": "bytes", "source": "str", "page": "page?", "crop": "crop", "x_mm
          "y_mm": "pos", "w_mm": "size", "h_mm": "size", "rotation": "rotation", "mode": "mode",
          "threshold": "threshold", "invert": "bool", "keep_ratio": "bool", "dpi": "dpi",
          "svg": "bytes?"}
+BARCODE = {"kind": "barcode_kind", "data": "barcode_data", "x_mm": "pos", "y_mm": "pos",
+           "module": "module", "h_mm": "barcode_mm", "rotation": "rotation", "text": "bool",
+           "error": "qr_level"}
 FRAME = {"style": "frame_style", "rounded": "bool", "line_mm": "frame_line",
          "inset_mm": "frame_mm", "padding_mm": "frame_mm"}
 NUMBERING = {"start": "number", "step": "step", "count": "count", "digits": "digits"}
@@ -110,6 +115,11 @@ _KINDS = {
     "count": lambda v: _int(v) and 1 <= v <= MAX_SERIES_ROWS,
     "digits": lambda v: _int(v) and 0 <= v <= MAX_DIGITS,
     "cut": lambda v: v in CUTS,
+    "barcode_kind": lambda v: v in BARCODE_KINDS,
+    "barcode_data": lambda v: _text(v) and len(v) <= MAX_BARCODE_DATA,
+    "module": lambda v: _int(v) and 1 <= v <= MAX_MODULE,
+    "barcode_mm": lambda v: _num(v) and BARCODE_MM[0] <= v <= BARCODE_MM[1],
+    "qr_level": lambda v: v in QR_LEVELS,
     "path": lambda v: _text(v) and v != "" and "\x00" not in v,
     "crop": lambda v: v is None or (isinstance(v, list) and len(v) == 4 and all(map(_int, v))),
 }
@@ -164,6 +174,8 @@ def to_dict(doc: Document, base: str | Path | None = None) -> dict:
             objects.append({"type": "text", **_dump(obj, TEXT), "paragraphs": [
                 {**_dump(p, PARAGRAPH), "spans": [_dump(s, SPAN) for s in p.spans]}
                 for p in obj.paragraphs]})
+        elif isinstance(obj, BarcodeObject):
+            objects.append({"type": "barcode", **_dump(obj, BARCODE)})
         else:
             objects.append({"type": "image", **_dump(obj, IMAGE)})
     frame = None if doc.frame is None else _dump(doc.frame, FRAME)
@@ -348,13 +360,24 @@ def from_dict(data, base: str | Path | None = None) -> Document:
             objects.append(_text_object(item, where))
         elif kind == "image":
             objects.append(_image(item, where))
+        elif kind == "barcode":
+            objects.append(BarcodeObject(**_load(item, BARCODE, where, required=("kind", "data"))))
         else:
             raise StorageError(f"Objektart{where} unbekannt: {reprlib.repr(kind)}")
-    dots = sum(o.w_mm * o.h_mm for o in objects if o.w_mm and o.h_mm) * DOTS_PER_MM ** 2
+    dots = sum(_dots(o) for o in objects)
     if dots > MAX_FRAME_DOTS:
         raise StorageError(f"Etikett zu groß (Objekte zusammen {dots / 1e6:.0f} Mio. Druckpunkte, "
                            f"höchstens {MAX_FRAME_DOTS // 1_000_000})")
     return Document(**values, objects=objects)
+
+
+def _dots(obj) -> float:
+    """Rahmenfläche in Druckpunkten (Grenze „Etikett zu groß“); Barcodes mit ihrer größtmöglichen
+    Fläche (``barcodes.max_size``) – ohne Kodieren beim Laden, auch für Platzhalter der Serie."""
+    if isinstance(obj, BarcodeObject):
+        w, h = barcodes.max_size(obj)
+        return w * h
+    return obj.w_mm * obj.h_mm * DOTS_PER_MM ** 2 if obj.w_mm and obj.h_mm else 0
 
 
 def _reject_constant(name: str):

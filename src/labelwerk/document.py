@@ -23,6 +23,12 @@ CUTS = ("each", "end")
 MAX_SERIES_ROWS = 10_000
 MAX_NUMBER = 10**9
 MAX_DIGITS = 10
+# Barcodes: Arten, QR-Fehlerkorrektur, Modulbreite in Druckpunkten, Höhe, Inhalt
+BARCODE_KINDS = ("qr", "code128", "code39", "ean13", "ean8")
+QR_LEVELS = ("L", "M", "Q", "H")
+MAX_MODULE = 20
+BARCODE_MM = (2.0, 100.0)           # Höhe der Strichcodes samt Klartext
+MAX_BARCODE_DATA = 2000
 
 
 @dataclass
@@ -185,6 +191,31 @@ class ImageObject:
             return img.convert("RGB")
 
 
+@dataclass(kw_only=True)
+class BarcodeObject:
+    """Strichcode oder QR-Code. Gezeichnet in ganzen Druckpunkten (``barcodes.draw``): Die Breite
+    folgt aus dem Inhalt (Zahl der Module × ``module``), es gibt kein ``w_mm``. QR-Codes sind
+    quadratisch (``h_mm`` und ``text`` gelten nur für Strichcodes)."""
+    kind: str = "qr"                # BARCODE_KINDS
+    data: str = ""                  # Inhalt; Platzhalter {Spalte} füllt die Serie
+    x_mm: float = 0.0               # linke obere Ecke auf dem Etikett (nach dem Drehen)
+    y_mm: float = 0.0
+    module: int = 3                 # Druckpunkte je Modul (schmalster Strich, QR-Quadrat)
+    h_mm: float = 10.0              # Höhe samt Klartext, ungedreht (nur Strichcodes)
+    rotation: int = 0               # 0 | 90 | 180 | 270
+    text: bool = True               # Klartext unter dem Strichcode
+    error: str = "M"                # QR-Fehlerkorrektur QR_LEVELS
+
+    @property
+    def positioned(self) -> bool:
+        """Ein Barcode hat immer eine Position (wie ein Bild)."""
+        return True
+
+    def is_empty(self) -> bool:
+        """Nie leer: Ohne Inhalt meldet das Rendern einen Fehler (kein unsichtbarer Rahmen)."""
+        return False
+
+
 def _png(img: Image.Image) -> bytes:
     """Bild als PNG-Bytes (verlustfrei)."""
     buffer = io.BytesIO()
@@ -228,7 +259,7 @@ class Document:
     length_mm: float | None = None    # nur Endlosband; None = automatisch
     orientation: str = "vertical"     # "vertical" (Text quer zum Band) | "horizontal" (längs)
     margin_mm: float = 1.0            # Rand ringsum ab Papierkante (unbedruckbarer Streifen zählt mit)
-    objects: list[TextObject | ImageObject] = field(default_factory=list)
+    objects: list[TextObject | ImageObject | BarcodeObject] = field(default_factory=list)
     frame: Frame | None = None        # Zierrahmen; None = keiner
     series: Series | None = None      # Serie aus Tabelle oder Nummerierung; None = Einzeletikett
 

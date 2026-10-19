@@ -6,8 +6,8 @@ import pytest
 from PIL import Image, ImageDraw
 
 from labelwerk import storage
-from labelwerk.document import (Document, Frame, ImageObject, Numbering, Paragraph, Series, Span,
-                                TextObject)
+from labelwerk.document import (BarcodeObject, Document, Frame, ImageObject, Numbering, Paragraph,
+                                Series, Span, TextObject)
 from labelwerk.render import render_document
 from labelwerk.storage import StorageError, load, save
 
@@ -163,6 +163,7 @@ def test_schemas_cover_every_dataclass_field():
     for cls, schema, extra in ((Span, storage.SPAN, set()), (Paragraph, storage.PARAGRAPH, {"spans"}),
                                (TextObject, storage.TEXT, {"paragraphs"}),
                                (ImageObject, storage.IMAGE, set()),
+                               (BarcodeObject, storage.BARCODE, set()),
                                (Frame, storage.FRAME, set()),
                                (Series, storage.SERIES, {"numbering"}),
                                (Numbering, storage.NUMBERING, set()),
