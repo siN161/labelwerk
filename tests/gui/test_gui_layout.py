@@ -402,6 +402,19 @@ def test_paper_align_along_growing_axis_gives_equal_margins(qtbot, orientation, 
     assert abs(start - (length - end)) <= 2 * DOT_MM
 
 
+def test_paper_align_top_ignores_minimum_length_when_other_objects_lengthen_label(qtbot):
+    """Nur der Titel gewählt, ein zweiter Text macht das Etikett lang: „Oben am Etikett“ setzt
+    den Titel an den Anfang, nicht mittig in die Mindestlänge."""
+    doc = Document("62", length_mm=None, orientation="vertical", margin_mm=1, objects=[
+        TextObject("Titel", size_pt=12, x_mm=5, y_mm=10),
+        TextObject("Unten", size_pt=12, x_mm=5, y_mm=60)])
+    win = _window(qtbot, doc)
+    win.canvas.set_selection([0])
+    win.shortcut_actions["align.paper_top"].trigger()
+    assert win.doc.objects[0].y_mm == pytest.approx(0, abs=0.01)
+    assert win.doc.objects[1].y_mm == 60
+
+
 def test_canvas_grabbed_is_not_stale_after_selection_drops(qtbot):
     win = _window(qtbot)
     win.canvas._grabbed = 2

@@ -443,14 +443,15 @@ def test_update_settings_keeps_what_another_instance_saved(tmp_path):
     assert (s.theme, s.last_tool) == ("classic", "series")
 
 
-def test_update_settings_keeps_unknown_and_invalid_entries(tmp_path):
-    """Felder einer neueren Version oder ungültige Werte bleiben in der Datei, wie sie sind."""
+def test_update_settings_keeps_unknown_and_replaces_invalid_entries(tmp_path):
+    """Felder einer neueren Version bleiben in der Datei, wie sie sind; ungültige Werte werden
+    zum Standard (ohne Stand im Speicher) – die Meldung beim Laden käme sonst jedes Mal."""
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"theme": "classic", "neu": [1, 2], "start_zoom": 9999}))
     update_settings(path, recent_files=["/a.labelwerk"])
     raw = json.loads(path.read_text())
-    assert raw == {"theme": "classic", "neu": [1, 2], "start_zoom": 9999,
+    assert raw == {"theme": "classic", "neu": [1, 2], "start_zoom": 200,
                    "recent_files": ["/a.labelwerk"]}
 
 
@@ -476,3 +477,19 @@ def test_update_settings_rejects_unknown_fields(tmp_path):
     from labelwerk.settings import update_settings
     with pytest.raises(KeyError):
         update_settings(tmp_path / "s.json", gibtsnicht=1)
+
+
+def test_update_settings_cleans_invalid_and_old_keys(tmp_path):
+    """Stilles Speichern bereinigt, was beim Laden nur gemeldet wurde: ungültige Werte werden
+    zum Wert im Speicher, die alte Schriftgröße wird umgerechnet – Unbekanntes bleibt stehen."""
+    from labelwerk.settings import update_settings
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"font_size": 100, "theme": "nope", "zukunft": 1}))
+    base = load_settings(path)
+    assert base.warnings                                     # beim Laden gemeldet
+    update_settings(path, base, last_tool="text")
+    data = json.loads(path.read_text())
+    assert "font_size" not in data and data["font_size_pt"] == 24
+    assert data["theme"] == base.theme == "rawblock"
+    assert data["zukunft"] == 1 and data["last_tool"] == "text"
+    assert load_settings(path).warnings == []

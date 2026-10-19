@@ -947,7 +947,14 @@ class MainWindow(QMainWindow):
         min_length = length_limits(self.model)[0] * 25.4 / label.dpi
         self._change_selected(lambda objs, rendered: align_objects(
             objs, rendered, mode, self._paper_area() if paper else None, growing_axis(self.doc),
-            min_length))
+            min_length, self._unselected_rects()))
+
+    def _unselected_rects(self) -> list[Rect]:
+        """Rahmen (mm) der sichtbaren, nicht gewählten Objekte – nach dem Rendern aufrufen."""
+        chosen = set(self.canvas.selection())
+        return [exact_rect(self._layout_object(i), self.rendered[i])
+                for i in range(len(self.doc.objects))
+                if i not in chosen and self._valid(i) and not self.doc.objects[i].is_empty()]
 
     def _paper_area(self) -> Rect:
         """Fläche für „am Etikett“ (Ausrichten, Maximieren): Innenraum des Zierrahmens, sonst

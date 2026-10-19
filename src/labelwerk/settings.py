@@ -172,8 +172,7 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
         return settings
     _migrate_font_size(raw, settings)
     if model is None:
-        model = effective_model(None, *(raw.get(k) if raw.get(k) in SUPPORTED_MODELS else ""
-                                        for k in ("printer_model", "last_model")))
+        model = _model_of(raw)
     for key, valid in _rules(model).items():
         if key not in raw:
             continue
@@ -200,6 +199,12 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
         settings.shortcuts, warnings = _shortcuts.validate(raw["shortcuts"])
         settings.warnings.extend(warnings)
     return settings
+
+
+def _model_of(raw: dict) -> str:
+    """Modell für die Prüfung des Etiketts: aus den Einstellungen (Ersatzmodell, zuletzt erkanntes)."""
+    return effective_model(None, *(raw.get(k) if raw.get(k) in SUPPORTED_MODELS else ""
+                                   for k in ("printer_model", "last_model")))
 
 
 def _text_list(key: str, value: list, warnings: list[str]) -> list[str]:
@@ -268,20 +273,42 @@ def update_settings(path: str | Path | None = None, base: Settings | None = None
     """Nur ``fields`` in die Datei schreiben (stilles Speichern: Zuletzt verwendet, Favoriten,
     gewählter Drucker …): die Datei wird neu gelesen, alles andere bleibt, wie es dort steht –
     auch was eine zweite Instanz inzwischen gespeichert hat oder eine neuere Version kennt.
-    Fehlt die Datei oder ist sie nicht lesbar, gilt ``base`` (Stand im Speicher) bzw. der Standard."""
+    Fehlt die Datei oder ist sie nicht lesbar, gilt ``base`` (Stand im Speicher) bzw. der Standard.
+    Was beim Laden nur gemeldet wurde, wird dabei bereinigt (sonst käme die Meldung bei jedem
+    Start wieder): die alte Schriftgröße umgerechnet, ungültige Werte durch den Wert aus ``base``
+    (bzw. den geprüften der Datei) ersetzt."""
     unknown = [key for key in fields if key not in _KEYS]
     if unknown:
         raise KeyError(unknown[0])
     target = Path(path) if path else settings_path()
+    source = base if base is not None else Settings()
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError("not a JSON object")          # intern, nie angezeigt
     except (OSError, ValueError):
-        source = base if base is not None else Settings()
         data = {key: getattr(source, key) for key in _KEYS}
+    else:
+        _clean(data, target, base)
     data.update(fields)
     return _write(data, target)
+
+
+def _clean(data: dict, path: Path, base: Settings | None) -> None:
+    """Gelesene Einstellungen bereinigen, wie ``load_settings`` sie versteht: alte Schriftgröße
+    umgerechnet; ungültige Werte durch den Wert aus ``base`` (Stand im Speicher), nur teilweise
+    ungültige (einzelne Einträge einer Liste) durch den bereinigten Wert der Datei ersetzt – den
+    Rest kann eine zweite Instanz neuer gespeichert haben. Unbekanntes bleibt stehen."""
+    checked = load_settings(path)
+    if "font_size" in data and "font_size_pt" not in data:
+        data.pop("font_size")
+        data["font_size_pt"] = checked.font_size_pt
+    rules = _rules(_model_of(data))
+    for key in _KEYS:
+        if key not in data or data[key] == getattr(checked, key):
+            continue
+        valid = key in rules and rules[key](data[key])
+        data[key] = getattr(checked if valid or base is None else base, key)
 
 
 def _write(data: dict, path: str | Path | None) -> Path:

@@ -905,6 +905,34 @@ def test_align_to_paper_along_growing_axis_centers_short_content_on_minimum_leng
         assert length - end == pytest.approx(start, abs=2 * 25.4 / DPI)
 
 
+def test_align_to_paper_along_growing_axis_ignores_minimum_when_others_make_label_longer():
+    """Andere (nicht gewählte) Objekte machen das Etikett länger als die Mindestlänge: die
+    Auswahl sitzt am Anfang des Bereichs, nicht mittig in der Mindestlänge."""
+    min_mm = _mm(layout.length_limits("QL-600")[0])
+    doc = Document("62", orientation="vertical", margin_mm=1,
+                   objects=[TextObject("Titel", size_pt=12, x_mm=5, y_mm=10),
+                            TextObject("Unten", size_pt=12, x_mm=5, y_mm=60)])
+    rendered = [render_object(o, doc) for o in doc.objects]
+    area = layout.printable_area(doc)
+    others = [layout.exact_rect(doc.objects[1], rendered[1])]
+    [moved] = layout.align_objects(doc.objects[:1], rendered[:1], "top", area,
+                                   grow=layout.growing_axis(doc), min_length=min_mm, others=others)
+    assert moved.y_mm == pytest.approx(area.y, abs=0.01)
+
+
+def test_align_to_paper_along_growing_axis_centers_when_all_together_stay_short():
+    """Auch mit anderen Objekten: bleibt alles zusammen kürzer als die Mindestlänge, steht die
+    Auswahl mittig darin."""
+    min_mm = _mm(layout.length_limits("QL-600")[0])
+    objs = [TextObject("A", size_pt=12, x_mm=3, y_mm=4)]
+    rendered = [_rendered(3, 4, 10, 4)]
+    area = Rect(0, 0, 58, 50)
+    others = [Rect(20, 4, 10, 4)]
+    [moved] = layout.align_objects(objs, rendered, "top", area, grow="y", min_length=min_mm,
+                                   others=others)
+    assert moved.y_mm == pytest.approx((min_mm - 4) / 2, abs=0.05)
+
+
 @pytest.mark.parametrize("grow, across", [
     ("y", ("left", "hcenter", "right")), ("x", ("top", "vcenter", "bottom"))])
 def test_align_to_paper_across_still_works_on_growing_label(grow, across):
