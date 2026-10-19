@@ -49,7 +49,21 @@ class Capabilities:
     tested: bool                 # auf echter Hardware geprüft
 
 
+CUPS = "cups:"                              # Modell-ID bzw. URI einer CUPS-Warteschlange
+GENERIC_LENGTH = (150, 11811)               # Endlosband gibt es bei anderen Druckern nicht
+
+
+def is_model(model) -> bool:
+    """Bekanntes Modell: Brother-QL oder eine CUPS-Warteschlange („cups:NAME“)."""
+    from . import cups
+    return isinstance(model, str) and (model in SUPPORTED_MODELS or model.startswith(CUPS)
+                                       and cups.valid_name(model[len(CUPS):]))
+
+
 def capabilities(model: str) -> Capabilities:
+    if isinstance(model, str) and model.startswith(CUPS) and is_model(model):
+        # Schneiden bestimmt der Treiber (Reiter SERIE) – ohne CUPS zu fragen
+        return Capabilities(model, False, False, 300, GENERIC_LENGTH, False)
     m = _models().get(model)
     if m is None:
         raise ValueError(f"Unbekanntes Druckermodell: {model!r}")
@@ -82,7 +96,9 @@ class Printer:
 
 
 def backend_for(uri: str) -> str:
-    """brother_ql-Backend zur URI."""
+    """Weg zum Drucker: brother_ql-Backend zur URI bzw. „cups“."""
+    if uri.startswith(CUPS):
+        return "cups"
     if uri.startswith("tcp://"):
         return "network"
     if uri.startswith("usb://"):
@@ -142,12 +158,14 @@ def choose(printers: list[Printer], wanted: str = "") -> Printer | None:
     """Der gewählte Drucker (URI aus den Einstellungen) – fehlt er, None: gedruckt wird nicht auf
     einem anderen als dem gewählten. Automatisch (""): der erste gefundene USB-Drucker mit erkanntem
     Modell (ein Brother-Laser auf lp0 soll keine QL-Daten bekommen), dann der erste USB-Drucker,
-    sonst der erste überhaupt; None = keiner."""
+    sonst der erste andere – CUPS-Warteschlangen nie (darunter sind Bürodrucker im Netz), nur
+    gewählt; None = keiner."""
     if wanted:
         return next((p for p in printers if p.uri == wanted), None)
     usb = [p for p in printers if p.source == "usb"]
     known = [p for p in usb if p.model is not None]
-    return (known or usb or printers or [None])[0]
+    others = [p for p in printers if p.source != "cups"]
+    return (known or usb or others or [None])[0]
 
 
 def printer_for(uri: str, found: list[Printer]) -> Printer:
@@ -156,6 +174,8 @@ def printer_for(uri: str, found: list[Printer]) -> Printer:
     for p in found:
         if p.uri == uri:
             return p
+    if uri.startswith(CUPS):
+        return Printer(uri, uri, f"{uri[len(CUPS):]} · CUPS", "cups")
     model = None
     if uri.startswith("usb://"):
         pid = uri[len("usb://"):].split("/")[0].split(":")[-1].lower().removeprefix("0x")
@@ -168,6 +188,18 @@ def effective_model(printer: Printer | None, fallback: str = "", last: str = "")
     """Modell, nach dem sich Etiketten und Fähigkeiten richten: das erkannte, sonst das Ersatzmodell
     aus den Einstellungen, sonst das zuletzt erkannte, sonst ``DEFAULT_MODEL``."""
     for model in (printer.model if printer else None, fallback, last):
-        if model in SUPPORTED_MODELS:
+        if is_model(model):
             return model
     return DEFAULT_MODEL
+
+
+def cups_printers(direct: list[Printer], keep: str = "", wait: bool = False) -> list[Printer]:
+    """Warteschlangen von CUPS als Drucker; ein Brother-QL, den labelwerk direkt per USB findet,
+    erscheint nicht noch einmal über seine Warteschlange – außer sie ist gewählt (``keep``).
+    ``wait``: auf CUPS warten (CLI), sonst die zuletzt gelesene Liste (``cups.queues``)."""
+    from . import cups
+    brother_direct = any(p.source == "usb" and p.model in SUPPORTED_MODELS for p in direct)
+    return [Printer(CUPS + q.name, CUPS + q.name, f"{q.name} · CUPS", "cups")
+            for q in cups.queues(wait=wait)
+            if CUPS + q.name == keep
+            or not (brother_direct and q.device.lower().startswith("usb://brother/ql"))]

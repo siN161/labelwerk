@@ -486,3 +486,53 @@ def test_missing_chosen_printer_is_named(monkeypatch, capsys):
     _write_settings(printer="file:///dev/usb/lp1")
     assert main(["print", "Hallo", "-l", "62"]) == 2
     assert "Gewählter Drucker file:///dev/usb/lp1 nicht gefunden" in capsys.readouterr().err
+
+
+# --- CUPS ---------------------------------------------------------------------------------------
+@pytest.fixture
+def cups_queue(monkeypatch):
+    """CUPS nachgebildet: Warteschlange „Buero“ ohne PPD, Aufrufe aufgezeichnet."""
+    from labelwerk import cups
+    calls = []
+
+    def run(*args, **kw):
+        calls.append(args)
+        if args[0] == "lpstat":
+            return "Buero\n" if args[1] == "-e" else "device for Buero: ipp://10.0.0.9/ipp/print\n"
+        return "request id is Buero-7 (1 file(s))\n" if args[0] == "lp" else ""
+    monkeypatch.setattr(cups, "_run", run)
+    return calls
+
+
+def test_print_to_a_cups_queue(cups_queue, capsys):
+    assert main(["print", "Hallo", "-p", "cups:Buero", "-l", "57x32mm@300"]) == 0
+    assert "An CUPS übergeben (Auftrag Buero-7)" in capsys.readouterr().out
+    lp = cups_queue[-1]
+    assert lp[:7] == ("lp", "-d", "Buero", "-o", "media=Custom.57x32mm", "-o", "print-scaling=none")
+
+
+def test_cups_queue_needs_its_labels(cups_queue, capsys):
+    assert main(["print", "Hallo", "-p", "cups:Buero", "-l", "62"]) == 2
+    assert "passt nicht zum cups:Buero" in capsys.readouterr().err
+    assert not any(c[0] == "lp" for c in cups_queue)
+
+
+def test_cups_queues_are_listed(cups_queue, capsys):
+    assert main(["printers"]) == 0
+    out = capsys.readouterr().out
+    assert "Buero · CUPS" in out and "cups:Buero" in out and "cups:NAME (ungeprüft)" in out
+    assert main(["-m", "cups:Buero", "labels"]) == 0
+    assert "57x32mm@300" in capsys.readouterr().out
+
+
+def test_print_file_to_cups_in_its_resolution(cups_queue, tmp_path, monkeypatch):
+    from labelwerk import cups
+    monkeypatch.setattr(cups, "queue_info", lambda name: cups.QueueInfo(
+        (("w162h90", 57.2, 31.8),), 203))
+    sizes = []
+    monkeypatch.setattr(cups, "print_images",
+                        lambda name, images, w, h, dpi, options=None: sizes.extend(i.size for i in images)
+                        or cups.Job("Buero-8"))
+    assert main(["print-file", str(_png(tmp_path, 40, 20)), "-p", "cups:Buero",
+                 "-l", "57.2x31.8mm@203"]) == 0
+    assert sizes == [(457, 254)]

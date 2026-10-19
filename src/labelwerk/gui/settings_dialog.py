@@ -48,6 +48,7 @@ class SettingsDialog(QDialog):
         self._symbols = (settings.symbols_recent, settings.symbols_favorites)   # nur durchgereicht
         self._recent_files = settings.recent_files                             # nur durchgereicht
         self._printer, self._last_model = settings.printer, settings.last_model   # nur durchgereicht
+        self._printer_options = settings.printer_options                          # nur durchgereicht
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
@@ -371,6 +372,7 @@ class SettingsDialog(QDialog):
             printer=self._printer,
             printer_model=self.printer_model.currentData(),
             last_model=self._last_model,
+            printer_options=dict(self._printer_options),
             network_printers=self._network_values() or [],
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},

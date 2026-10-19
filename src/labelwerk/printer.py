@@ -150,6 +150,7 @@ def print_image(
     cut_every: int = 1,
     cancelled: Callable[[], bool] | None = None,
     progress: Callable[[int, int], None] | None = None,
+    options: dict[str, str] | None = None,
 ) -> dict:
     """Ein Etikett oder mehrere (Serie) drucken; Status von brother_ql (des letzten Teils).
 
@@ -157,11 +158,15 @@ def print_image(
     wird geprüft; ein Fehler bricht ab und nennt – waren schon Teile gedruckt – die betroffenen
     Etiketten. ``cancelled()`` wird vor jedem Teil gefragt (True → ``PrintCancelled``; ein
     gesendeter Teil läuft zu Ende), ``progress(gedruckt, alle)`` nach jedem. ``backend``: None =
-    aus der URI (``tcp://`` → Netzwerk: ein Auftrag – der Drucker meldet dort keinen Status)."""
+    aus der URI (``tcp://`` → Netzwerk: ein Auftrag – der Drucker meldet dort keinen Status).
+    ``cups:NAME``: ein Auftrag an die CUPS-Warteschlange (``options``: Treiber-Optionen, z. B.
+    Schnitt); Status ``{"outcome": "sent", "job": Kennung}``."""
     backend = backend or backend_for(printer)
     images = [image] if isinstance(image, Image.Image) else list(image)
     if label_id not in {label.id for label in labels_for_model(model)}:
         raise PrintError(f"Etikett {label_id!r} passt nicht zum Drucker ({model}).")
+    if backend == "cups":
+        return _print_cups(printer[len("cups:"):], images, label_id, options, cancelled)
     if backend == "network":
         _reachable(printer)
     part = MAX_JOB_EACH if cut_every == 1 else min(cut_every, MAX_CUT_EVERY)
@@ -186,6 +191,20 @@ def print_image(
         if progress is not None:
             progress(start + len(chunk), len(images))
     return status
+
+
+def _print_cups(name: str, images: list[Image.Image], label_id: str,
+                options: dict[str, str] | None, cancelled: Callable[[], bool] | None) -> dict:
+    """An CUPS übergeben – ein Auftrag; danach druckt die Warteschlange (Abbrechen dort)."""
+    from . import cups
+    if cancelled is not None and cancelled():
+        raise PrintCancelled(0, len(images))
+    label = get_label(label_id)
+    try:
+        job = cups.print_images(name, images, *label.size_mm, label.dpi, options)
+    except cups.CupsError as e:
+        raise PrintError(str(e)) from None
+    return {"outcome": "sent", "did_print": False, "job": job.id}
 
 
 def _send(data: bytes, label_id: str, printer: str, backend: str) -> dict:

@@ -26,6 +26,7 @@ NO_SERIES = "Keine Serie"
 NUMBERING = "Nummerierung"
 CUT_TITLES = {"each": "Nach jedem Etikett", "end": "Nur am Ende"}
 NO_CUTTER = "Drucker ohne Abschneider – Etiketten von Hand abtrennen"
+DRIVER_CUTS = "Schneiden stellt der Druckertreiber ein (Druckerverwaltung des Systems)"
 SHOWN_COLUMNS = 3                   # Spalten in der Zeilentabelle (die Häkchen sitzen in der ersten)
 ROWS_HEIGHT = 180
 
@@ -33,6 +34,7 @@ ROWS_HEIGHT = 180
 class SeriesPanel(Panel):
     table_requested = Signal()          # TABELLE … – das Hauptfenster fragt nach der Datei
     insert_column = Signal(str)         # Spaltenname → als {Name} ins Etikett
+    driver_cut_chosen = Signal(str, str)   # CUPS: Treiber-Option zum Schneiden, gewählter Wert
 
     def __init__(self, doc: Document):
         super().__init__(doc, "Serie")
@@ -132,6 +134,14 @@ class SeriesPanel(Panel):
         self.no_cutter.setWordWrap(True)
         self.no_cutter.hide()
         self.layout_.addWidget(self.no_cutter)
+        # Treiber-Optionen zum Schneiden (Drucker über CUPS): je Option eine Auswahl
+        self.driver_box = QWidget()
+        self.driver_grid = QGridLayout(self.driver_box)
+        self.driver_grid.setContentsMargins(0, 0, 0, 0)
+        self.driver_grid.setColumnStretch(1, 1)
+        self.driver_box.hide()
+        self.layout_.addWidget(self.driver_box)
+        self.driver_cuts: dict[str, QComboBox] = {}
         self.layout_.addStretch()
 
         self.table_button.clicked.connect(self.table_requested)
@@ -334,7 +344,33 @@ class SeriesPanel(Panel):
         """Drucker mit bzw. ohne Abschneider: ohne gibt es keine Schnitt-Auswahl, nur den Hinweis."""
         self.cut_title.setVisible(cutter)
         self.cut.setVisible(cutter)
+        self.no_cutter.setText(NO_CUTTER)
         self.no_cutter.setVisible(not cutter)
+        self.driver_box.hide()
+
+    def set_driver_cuts(self, options, chosen: dict[str, str]) -> None:
+        """Drucker über CUPS: statt „Nach jedem Etikett/Nur am Ende“ die Schnitt-Optionen seines
+        Treibers (``cups.CutOption``), gewählt wie in ``chosen`` (sonst der Standard des Treibers);
+        ohne solche Optionen der Hinweis, dass der Treiber das bestimmt."""
+        while self.driver_grid.count():
+            self.driver_grid.takeAt(0).widget().deleteLater()
+        self.driver_cuts = {}
+        for row, option in enumerate(options):
+            combo = QComboBox()
+            for choice in option.choices:
+                combo.addItem(choice, choice)
+            combo.setCurrentIndex(max(0, combo.findData(chosen.get(option.key, option.default))))
+            combo.currentIndexChanged.connect(
+                lambda _=0, key=option.key, box=combo: self.driver_cut_chosen.emit(
+                    key, box.currentData()))
+            self.driver_grid.addWidget(QLabel(option.title), row, 0)
+            self.driver_grid.addWidget(combo, row, 1)
+            self.driver_cuts[option.key] = combo
+        self.cut.hide()
+        self.cut_title.setVisible(True)
+        self.driver_box.setVisible(bool(options))
+        self.no_cutter.setText(DRIVER_CUTS)
+        self.no_cutter.setVisible(not options)
 
     def _apply_cut(self) -> None:
         if self.doc.series is not None:

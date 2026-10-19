@@ -36,9 +36,9 @@ def _labels(win):
 class FakeWorker:
     instances = []
 
-    def __init__(self, image, label_id, model, cut_every=1, printer=None):
+    def __init__(self, image, label_id, model, cut_every=1, printer=None, options=None):
         self.image, self.label_id, self.model, self.printer = image, label_id, model, printer
-        self.cut_every = cut_every
+        self.cut_every, self.options = cut_every, options
         self.signals = PrintSignals()
         FakeWorker.instances.append(self)
 
@@ -99,7 +99,7 @@ def test_network_printer_from_the_settings(qtbot, monkeypatch, workers):
         {"name": "Büro", "host": "10.0.0.5", "model": "QL-720NW"}])
     assert win.printer.uri == "tcp://10.0.0.5:9100" and win.model == "QL-720NW"
     assert not win.panel("paper").check.isEnabled()                   # Medium prüfen nur USB
-    assert "nur bei Druckern per USB" in win.panel("paper").check.toolTip()
+    assert "nur bei Brother-Druckern per USB" in win.panel("paper").check.toolTip()
     win.panel("text").edit.setPlainText("Hallo")
     win.print_label()
     assert workers[0].printer == "tcp://10.0.0.5:9100" and workers[0].model == "QL-720NW"

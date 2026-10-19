@@ -23,10 +23,12 @@ class PrintWorker(QRunnable):
     Netzwerk). ``cancel()`` (aus dem GUI-Thread) bricht vor dem nächsten Teilauftrag ab."""
 
     def __init__(self, image: Image.Image | list[Image.Image], label_id: str, model: str,
-                 cut_every: int = 1, printer: str | None = None):
+                 cut_every: int = 1, printer: str | None = None,
+                 options: dict[str, str] | None = None):
         super().__init__()
         self.image, self.label_id, self.model = image, label_id, model
         self.printer = printer                     # URI; None = USB-Drucker selbst suchen
+        self.options = options or {}               # Treiber-Optionen (CUPS, z. B. Schnitt)
         self.cut_every = cut_every
         self.signals = PrintSignals()
         self._cancel = threading.Event()
@@ -42,7 +44,7 @@ class PrintWorker(QRunnable):
                 return
             status = print_image(self.image, self.label_id, model=self.model, printer=printer,
                                  cut_every=self.cut_every, cancelled=self._cancel.is_set,
-                                 progress=self.signals.progress.emit)
+                                 progress=self.signals.progress.emit, options=self.options)
         except PrintCancelled as e:
             self.signals.cancelled.emit(str(e))
             return

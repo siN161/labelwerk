@@ -298,3 +298,21 @@ def test_invalid_start_favorite_falls_back(tmp_path, value):
     path.write_text(json.dumps({"start_favorite": value}))
     s = load_settings(path)
     assert s.start_favorite is None and any("start_favorite" in w for w in s.warnings)
+
+
+def test_cups_printer_and_its_options_are_kept(tmp_path):
+    path = tmp_path / "settings.json"
+    save_settings(Settings(printer="cups:Dymo", last_model="cups:Dymo", label_id="57x32mm@300",
+                           printer_options={"cups:Dymo": {"CutMedia": "EndOfJob"}}), path)
+    s = load_settings(path)
+    assert (s.printer, s.last_model, s.label_id) == ("cups:Dymo", "cups:Dymo", "57x32mm@300")
+    assert s.printer_options == {"cups:Dymo": {"CutMedia": "EndOfJob"}} and s.warnings == []
+
+
+@pytest.mark.parametrize("bad", [[], {"cups:Dymo": "x"}, {"cups:Dymo": {"CutMedia": 3}},
+                                 {"cups:Dymo": {"CutMedia": "Off -o x=y"}}])
+def test_bad_printer_options_fall_back(tmp_path, bad):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"printer_options": bad}))
+    s = load_settings(path)
+    assert s.printer_options == {} and s.warnings

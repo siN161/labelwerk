@@ -14,8 +14,8 @@ from . import shortcuts as _shortcuts
 from .clipart import RECENT_LIMIT
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .fonts import DEFAULT_FAMILY
-from .labels import labels_for_model
-from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model
+from .labels import labels_for_model, sized_label
+from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
 THEMES = ("rawblock", "classic")
@@ -42,6 +42,7 @@ class Settings:
     printer_model: str = ""                # Ersatz, wenn das Modell nicht erkannt wird; "" = keins
     last_model: str = ""                   # zuletzt erkanntes Modell (gilt ohne Drucker)
     network_printers: list[dict] = field(default_factory=list)   # {name, host, model}
+    printer_options: dict[str, dict[str, str]] = field(default_factory=dict)  # URI → Treiber-Optionen
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
@@ -55,7 +56,7 @@ def _rules(model: str | None = None) -> dict:
     CLI erst mit dem erkannten Modell (wer zwei Drucker abwechselnd nutzt, behält sein Etikett)."""
     known = {lab.id for m in SUPPORTED_MODELS for lab in labels_for_model(m)}
     return {
-        "label_id": lambda v: isinstance(v, str) and v in known,
+        "label_id": lambda v: isinstance(v, str) and (v in known or sized_label(v) is not None),
         "orientation": lambda v: v in ORIENTATIONS,
         "margin_mm": lambda v: (_is_int(v) or isinstance(v, float)) and 0 <= v <= MAX_MARGIN_MM,
         "font_size_pt": lambda v: v is None or ((_is_int(v) or isinstance(v, float))
@@ -71,14 +72,24 @@ def _rules(model: str | None = None) -> dict:
         "recent_files": lambda v: isinstance(v, list),
         "start_favorite": lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
         "printer": lambda v: isinstance(v, str) and (
-            v == "" or v.startswith(("file://", "tcp://", "usb://"))),
+            v == "" or v.startswith(("file://", "tcp://", "usb://", "cups:"))),
         "printer_model": lambda v: v == "" or v in SUPPORTED_MODELS,
-        "last_model": lambda v: v == "" or v in SUPPORTED_MODELS,
+        "last_model": lambda v: v == "" or is_model(v),
+        "printer_options": lambda v: isinstance(v, dict) and all(
+            isinstance(k, str) and isinstance(o, dict)
+            and all(_option_word(a) and _option_word(b) for a, b in o.items())
+            for k, o in v.items()),
         "network_printers": lambda v: isinstance(v, list),
     }
 
 
 _KEYS = (*_rules(), "shortcuts")
+
+
+def _option_word(value) -> bool:
+    """Schlüssel bzw. Wert einer Druck-Option: ein Wort (``lp -o`` trennt an Leerzeichen)."""
+    return isinstance(value, str) and value.isprintable() and bool(value) \
+        and not any(c.isspace() or c in "='\"" for c in value)
 
 
 def settings_path() -> Path:

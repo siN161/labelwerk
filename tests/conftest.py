@@ -16,6 +16,17 @@ def no_real_sysfs(monkeypatch, tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def no_real_cups(monkeypatch, tmp_path_factory):
+    """Kein Test ruft echte CUPS-Befehle (lpstat, lpoptions, lp) oder liest echte PPDs: ohne
+    eigenen Ersatz gibt es keine Warteschlangen."""
+    from labelwerk import cups
+    monkeypatch.setattr(cups, "PPD_DIR", tmp_path_factory.mktemp("ppd"))
+    monkeypatch.setattr(cups, "_run", lambda *args, **kw: "")
+    monkeypatch.setattr(cups, "BACKGROUND", False)
+    cups.forget()                       # Gemerktes aus einem früheren Test gilt nicht
+
+
+@pytest.fixture(autouse=True)
 def no_leftover_rasterizer():
     """Das Hauptfenster meldet die Qt-Raster-Funktion für Vektorbilder an – danach wieder ohne,
     damit jeder Test im Kern-Zustand startet."""

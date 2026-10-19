@@ -49,8 +49,9 @@ def _add_output_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("-l", "--label", help="Etikett, z. B. 62, oder auto (eingelegte Rolle vom "
                                          "Drucker); Standard aus den Einstellungen")
     p.add_argument("-p", "--printer", default="auto",
-                   help="auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP")
-    p.add_argument("-b", "--backend", choices=["linux_kernel", "pyusb", "network"],
+                   help="auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, "
+                        "cups:NAME (Warteschlange, siehe 'labelwerk printers')")
+    p.add_argument("-b", "--backend", choices=["linux_kernel", "pyusb", "network", "cups"],
                    help="Standard: aus dem Drucker (tcp:// → network)")
     p.add_argument("--no-cut", action="store_true")
     p.add_argument("--preview", metavar="PNG", help="nur Vorschau speichern, nicht drucken")
@@ -113,6 +114,8 @@ _NOT_DETECTED = {
              "Manuell angeben mit -p usb://0x04f9:0xPID",
     "network": "Kein Netzwerkdrucker eingetragen (Einstellungen der GUI).\n"
                "Adresse angeben mit -p tcp://IP",
+    "cups": "Keine CUPS-Warteschlange gefunden (Drucker in der Druckerverwaltung einrichten).\n"
+            "Angeben mit -p cups:NAME",
 }
 
 
@@ -128,24 +131,26 @@ def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
     found = _all_printers(settings)
     if wanted != "auto":
         return printers.printer_for(wanted, found)
-    if backend == "network":
-        found = [p for p in found if p.source == "network"]
+    if backend in ("network", "cups"):
+        found = [p for p in found if p.source == backend]
     elif backend == "linux_kernel":
         found = [p for p in found if p.source == "usb"]
     return printers.choose(found, settings.printer)
 
 
 def _all_printers(settings) -> list[printers.Printer]:
-    return printers.usb_printers() + printers.network_printers(network_entries(settings))
+    """Direkt per USB, eingetragene Netzwerkdrucker und Warteschlangen von CUPS."""
+    direct = printers.usb_printers() + printers.network_printers(network_entries(settings))
+    return direct + printers.cups_printers(direct, wait=True)
 
 
 def _resolve_model(model: str, target: printers.Printer | None, settings) -> str:
     """``-m auto``: Modell des Zieldruckers, sonst Ersatzmodell bzw. zuletzt erkanntes aus den
     Einstellungen; ein angegebenes muss bekannt sein."""
     if model != "auto":
-        if model not in printers.SUPPORTED_MODELS:
+        if not printers.is_model(model):
             raise ValueError(f"Unbekanntes Druckermodell {model!r} – erlaubt: "
-                             f"{', '.join(printers.SUPPORTED_MODELS)}")
+                             f"{', '.join(printers.SUPPORTED_MODELS)} oder cups:NAME")
         return model
     return printers.effective_model(target, settings.printer_model, settings.last_model)
 
@@ -205,12 +210,16 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
         print(e, file=sys.stderr)
         return 2
     ok = status.get("did_print") or status.get("outcome") in ("sent", "printed")
-    print(f"Status: {status.get('outcome')}")
+    if status.get("job"):
+        print(f"An CUPS übergeben (Auftrag {status['job']})")
+    else:
+        print(f"Status: {status.get('outcome')}")
     return 0 if ok else 1
 
 
 def _show_printers(model: str) -> int:
-    """Gefundene Drucker (USB, eingetragene Netzwerkdrucker) und unterstützte Modelle."""
+    """Gefundene Drucker (USB, eingetragene Netzwerkdrucker, CUPS-Warteschlangen) und unterstützte
+    Modelle."""
     found = _all_printers(load_settings())
     for p in found:
         caps = printers.capabilities(p.model) if p.model else None
@@ -222,7 +231,7 @@ def _show_printers(model: str) -> int:
     print(f"Wirksames Modell: {model}")
     print("Unterstützt: " + ", ".join(
         f"{m}{'' if printers.capabilities(m).tested else ' (ungeprüft)'}"
-        for m in printers.SUPPORTED_MODELS))
+        for m in printers.SUPPORTED_MODELS) + ", CUPS-Warteschlangen cups:NAME (ungeprüft)")
     return 0
 
 

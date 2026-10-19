@@ -255,7 +255,7 @@ def test_printing_a_favorite_does_not_touch_the_open_label(qtbot, monkeypatch):
     started = []
 
     class FakeWorker:
-        def __init__(self, image, label_id, model, cut_every=1, printer=None):
+        def __init__(self, image, label_id, model, cut_every=1, printer=None, options=None):
             started.append((image.tobytes(), label_id))
             from labelwerk.gui.print_worker import PrintSignals
             self.signals = PrintSignals()

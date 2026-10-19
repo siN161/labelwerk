@@ -89,7 +89,11 @@ def get_label(label_id: str) -> Label:
 
 def labels_for_model(model: str) -> list[Label]:
     """Etiketten, die ``model`` drucken kann (``printers.capabilities``): bis zu seiner Breite,
-    ohne P-touch-Bänder, Rot/Schwarz nur bei Zweifarb-Modellen; unbekanntes Modell → ValueError."""
+    ohne P-touch-Bänder, Rot/Schwarz nur bei Zweifarb-Modellen; CUPS-Warteschlange („cups:NAME“):
+    die Größen ihres Treibers in seiner Auflösung; unbekanntes Modell → ValueError."""
+    if isinstance(model, str) and model.startswith("cups:"):
+        from . import cups                     # cups liest diese Datei
+        return [get_label(i) for i in cups.queue_info(model[len("cups:"):]).label_ids()]
     caps = capabilities(model)
     result = []
     for raw in _all_raw():
