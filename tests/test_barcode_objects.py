@@ -362,3 +362,30 @@ def test_storage_counts_barcodes_against_the_size_limit():
     assert len(storage.from_dict(storage.to_dict(Document(objects=[big] * fits))).objects) == fits
     with pytest.raises(StorageError, match="Etikett zu groß"):
         storage.from_dict(storage.to_dict(Document(objects=[big] * (fits + 1))))
+
+
+# --- Nachbesserungen nach dem Gesamt-Review -------------------------------------------------------
+def test_large_real_barcodes_can_be_opened_again(tmp_path):
+    """Gültiger Inhalt zählt mit seiner echten Größe – was gespeichert wird, lässt sich öffnen."""
+    objs = [_bar(kind="code39", data="A", module=20, h_mm=100, rotation=90, x_mm=5 + 10 * i)
+            for i in range(4)]
+    path = tmp_path / "gross.labelwerk"
+    storage.save(Document("62", objects=objs), path)
+    assert storage.load(path).objects == objs
+
+
+def test_barcode_content_is_limited_per_file():
+    """Kodieren beim Laden bleibt billig: Inhalte aller Barcodes zusammen begrenzt."""
+    objs = [_bar(kind="qr", data="x" * 2000, module=1, error="L") for _ in range(11)]
+    with pytest.raises(StorageError, match="Barcode-Inhalte zusammen 22000 Zeichen"):
+        storage.from_dict(storage.to_dict(Document(objects=objs)))
+    assert len(storage.from_dict(storage.to_dict(Document(objects=objs[:10]))).objects) == 10
+
+
+def test_exact_rect_takes_the_width_from_the_model():
+    """Die Breite folgt aus Inhalt und Modul – auch wenn das gerenderte Bild veraltet ist
+    (Renderfehler, andere Art)."""
+    obj = _bar(kind="code128", data="AB", module=3)
+    stale = _rendered(_bar(kind="qr", data="labelwerk", module=6))
+    assert exact_rect(obj, stale).w == pytest.approx(_width(obj))
+    assert layout.set_frame(obj, Rect(6.0, 3.0, exact_rect(obj, stale).w, 10.0), stale).module == 3

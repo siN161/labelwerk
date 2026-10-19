@@ -383,3 +383,15 @@ def test_favorite_with_placeholder_barcode_has_a_preview(qtbot):
     favorites.add(doc, "Serie EAN")
     win = _window(qtbot)
     assert win.panel("file").favorite_preview(0) is not None
+
+
+def test_barcode_error_in_a_series_names_the_row_while_writing(qtbot):
+    doc = Document("62x29", objects=[TextObject("{Nummer}", size_pt=10, x_mm=30, y_mm=3),
+                                     BarcodeObject(kind="ean8", data="{Nummer}", x_mm=3, y_mm=3)],
+                   series=Series(numbering=Numbering(count=2)))
+    win = _window(qtbot, doc)
+    win.panel("series").refresh()
+    win.edit_text(0)
+    win.render_now()
+    assert "Zeile 1: EAN-8 braucht" in win.result.text()
+    assert "Schreibmodus" not in win.result.text()

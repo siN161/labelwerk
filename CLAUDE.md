@@ -32,7 +32,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Inhalt (Prüfhinweis und Anfasser rechnen mit der Vorschau-Zeile); Doppelklick/F2/Enter → Inhaltsfeld (Strg+Z dort =
   Rückgängig des Etiketts).
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
-- 1973 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2226 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -102,7 +102,8 @@ src/labelwerk/
               Prüfung je Feld nach Art, Wertebereich (endlich, Grenzen) und Struktur → StorageError (deutsch, mit Dateiname),
               Bilddaten nur PNG (ganz dekodiert, höchstens MAX_PIXELS), Rahmen als eigener Eintrag „frame“ (Schema FRAME, null = keiner), Serie „series“ (SERIES/NUMBERING,
               genau Tabelle oder Nummerierung; Tabelle im Ordner der Datei wird relativ gespeichert: to_dict/from_dict(base)), Etikett bekannt; Grenzen: Datei ≤ 32 MB und regulär (kein FIFO),
-              ≤ 500 Objekte, Rahmenflächen ≤ 100 Mio. Druckpunkte (Barcodes aus barcodes.size; sonst „Etikett zu groß“), Lage ±MAX_POSITION_MM (document.py, wie die
+              ≤ 500 Objekte, Rahmenflächen ≤ 100 Mio. Druckpunkte (Barcodes: echte Größe, mit Platzhalter/ungültig barcodes.max_size;
+              Barcode-Inhalte zusammen ≤ MAX_BARCODE_TOTAL Zeichen; sonst „Etikett zu groß“), Lage ±MAX_POSITION_MM (document.py, wie die
               GUI-Positionsfelder), font_path nur für vorhandene reguläre Datei; exists() (wirft nie); unbekannte Felder übergangen,
               fehlende = Standard; save atomar (Symlink verfolgt, Rechte bleiben/umask, fsync); add_recent_file
   series.py   Serien ohne Qt: load_table(path, sheet) -> Table(columns, rows) (CSV: Kodierung inkl. UTF-16, Trennzeichen aus den

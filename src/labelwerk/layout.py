@@ -297,14 +297,14 @@ def exact_rect(obj: Object, rendered: RenderedObject) -> Rect:
     """Rahmen in mm, wie er im Modell steht (ohne Rundung auf Druckpunkte).
 
     Position aus ``x_mm``/``y_mm``, Größe bei festem Rahmen (Bild, feste Rahmengröße) aus
-    ``w_mm``/``h_mm`` (gedreht), sonst wie gerendert (Strichcodes: Höhe aus ``h_mm``); ein Objekt
-    ohne Position steht, wo es gerendert wurde.
+    ``w_mm``/``h_mm`` (gedreht), bei Barcodes aus Inhalt, Modul und ``h_mm`` (``barcode_rect``; ungültiger
+    Inhalt: wie gerendert), sonst wie gerendert; ein Objekt ohne Position steht, wo es gerendert wurde.
     """
     r = object_rect(rendered)
     x, y = ((obj.x_mm or 0.0, obj.y_mm or 0.0) if obj.positioned else (r.x, r.y))
     w, h = r.w, r.h
-    if isinstance(obj, BarcodeObject) and obj.kind != "qr":    # Breite: ganze Module (gerendert)
-        w, h = (obj.h_mm, h) if obj.rotation in (90, 270) else (w, obj.h_mm)
+    if isinstance(obj, BarcodeObject) and (own := barcode_rect(obj)) is not None:
+        w, h = own.w, own.h                     # aus Inhalt und Modul (auch bei veraltetem Bild)
     if obj.positioned and _framed(obj) and obj.w_mm is not None and obj.h_mm is not None:
         w, h = (obj.h_mm, obj.w_mm) if obj.rotation in (90, 270) else (obj.w_mm, obj.h_mm)
     return Rect(x, y, w, h)

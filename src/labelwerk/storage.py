@@ -40,6 +40,7 @@ RECENT_FILES = 10
 MAX_FILE_BYTES = 32 * 1024 * 1024     # größere Dateien werden nicht gelesen
 MAX_OBJECTS = 500                     # Objekte je Etikett
 MAX_FRAME_DOTS = 100_000_000          # Summe der Rahmenflächen in Druckpunkten (300 dpi)
+MAX_BARCODE_TOTAL = 20_000            # Zeichen aller Barcode-Inhalte (Kodieren beim Laden bleibt billig)
 DOTS_PER_MM = 300 / 25.4
 MAX_SIZE_MM = 1_000.0                 # Rahmen, Etikettlänge (QL: höchstens 1 m)
 MAX_SIZE_PT = 1_000.0                 # Schriftgröße (über MAX_PT hinaus, wie scale_text es lässt)
@@ -364,6 +365,10 @@ def from_dict(data, base: str | Path | None = None) -> Document:
             objects.append(BarcodeObject(**_load(item, BARCODE, where, required=("kind", "data"))))
         else:
             raise StorageError(f"Objektart{where} unbekannt: {reprlib.repr(kind)}")
+    total = sum(len(o.data) for o in objects if isinstance(o, BarcodeObject))
+    if total > MAX_BARCODE_TOTAL:
+        raise StorageError(f"Etikett zu groß (Barcode-Inhalte zusammen {total} Zeichen, höchstens "
+                           f"{MAX_BARCODE_TOTAL})")
     dots = sum(_dots(o) for o in objects)
     if dots > MAX_FRAME_DOTS:
         raise StorageError(f"Etikett zu groß (Objekte zusammen {dots / 1e6:.0f} Mio. Druckpunkte, "
@@ -372,10 +377,17 @@ def from_dict(data, base: str | Path | None = None) -> Document:
 
 
 def _dots(obj) -> float:
-    """Rahmenfläche in Druckpunkten (Grenze „Etikett zu groß“); Barcodes mit ihrer größtmöglichen
-    Fläche (``barcodes.max_size``) – ohne Kodieren beim Laden, auch für Platzhalter der Serie."""
+    """Rahmenfläche in Druckpunkten (Grenze „Etikett zu groß“); Barcodes mit ihrer echten Fläche,
+    mit Platzhaltern der Serie oder ungültigem Inhalt mit der größtmöglichen (``barcodes.max_size``)
+    – was gespeichert wurde, lässt sich wieder öffnen."""
     if isinstance(obj, BarcodeObject):
+        from .series import placeholders            # series liest storage – erst hier
         w, h = barcodes.max_size(obj)
+        if not placeholders(Document(objects=[obj])):
+            try:
+                w, h = barcodes.size(obj)
+            except barcodes.BarcodeError:
+                pass
         return w * h
     return obj.w_mm * obj.h_mm * DOTS_PER_MM ** 2 if obj.w_mm and obj.h_mm else 0
 

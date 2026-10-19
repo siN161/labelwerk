@@ -522,7 +522,7 @@ class MainWindow(QMainWindow):
             self.panel("text").show_error(self._render_error)
             self._set_result(self._render_error, "error")
             return
-        error = self._series_error(result.errors[0][1]) if result.errors else None
+        error = self._series_error(result.errors[0][1], result.errors[0][0]) if result.errors else None
         if self._render_error is not None and self.result.text() == self._render_error:
             self._set_result("", "")   # nur den Renderfehler löschen, kein Druckergebnis
         self._render_error = error
@@ -699,12 +699,14 @@ class MainWindow(QMainWindow):
         keep = self._keep if self._keep is not None else self.edit_session.index
         return fill_anchored(self.doc, *row, self.model, keep=keep)
 
-    def _series_error(self, message: str) -> str:
+    def _series_error(self, message: str, index: int | None = None) -> str:
         """Renderfehler mit Serie: welche Zeile – bzw. dass es im Schreibmodus an den
-        Platzhaltern liegt (sie stehen statt der Werte da)."""
+        Platzhaltern liegt (sie stehen statt der Werte da). ``index``: Objekt des Fehlers, falls
+        bekannt (Barcode als Platzhalter) – nur das Objekt im Schreibmodus zeigt Platzhalter."""
         if self.panel("series").preview() is None:
             return message
-        if self._keep is not None or self.edit_session.active:
+        kept = self._keep if self._keep is not None else self.edit_session.index
+        if kept is not None and index in (None, kept):
             return f"{message} – mit Platzhaltern im Schreibmodus (kleinere Schrift wählen)"
         return f"Zeile {self.panel('series').current_row()}: {message}"
 
@@ -920,7 +922,9 @@ class MainWindow(QMainWindow):
         Wert der Vorschau-Zeile – ihre Breite folgt aus dem Inhalt), sonst das Objekt selbst."""
         obj = self.doc.objects[index]
         shown = self._shown_objects[index] if index < len(self._shown_objects) else obj
-        return shown if isinstance(obj, BarcodeObject) and isinstance(shown, BarcodeObject) else obj
+        if isinstance(obj, BarcodeObject) and isinstance(shown, BarcodeObject):
+            return replace(obj, data=shown.data)   # nur der Inhalt: die Anzeige kann veraltet sein
+        return obj
 
     def _keep_content(self, index: int, changed):
         """Ergebnis von Größe und Lage zurück ins Etikett: Barcodes behalten ihren Inhalt (mit
