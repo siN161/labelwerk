@@ -27,7 +27,7 @@ from PIL import Image
 from . import barcodes
 from .document import (ALIGNMENTS, BARCODE_KINDS, BARCODE_MM, COLORS, CUTS, FRAME_LINE_MM,
                        FRAME_STYLES, MAX_BARCODE_DATA, MAX_DIGITS, MAX_FRAME_MM, MAX_MARGIN_MM,
-                       MAX_MODULE, MAX_NUMBER, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS,
+                       MAX_NUMBER, MODULE_LIMIT, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS,
                        QR_LEVELS, ROTATIONS, BarcodeObject, Document, Frame, ImageObject, Numbering,
                        Paragraph, Series, Span, TextObject)
 from .imaging import MAX_PIXELS, MODES
@@ -39,9 +39,8 @@ SUFFIX = ".labelwerk"
 RECENT_FILES = 10
 MAX_FILE_BYTES = 32 * 1024 * 1024     # größere Dateien werden nicht gelesen
 MAX_OBJECTS = 500                     # Objekte je Etikett
-MAX_FRAME_DOTS = 100_000_000          # Summe der Rahmenflächen in Druckpunkten (300 dpi)
+MAX_FRAME_DOTS = 100_000_000          # Summe der Rahmenflächen in Druckpunkten (in Etikett-dpi)
 MAX_BARCODE_TOTAL = 20_000            # Zeichen aller Barcode-Inhalte (Kodieren beim Laden bleibt billig)
-DOTS_PER_MM = 300 / 25.4
 MAX_SIZE_MM = 1_000.0                 # Rahmen, Etikettlänge (QL: höchstens 1 m)
 MAX_SIZE_PT = 1_000.0                 # Schriftgröße (über MAX_PT hinaus, wie scale_text es lässt)
 LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "   # gehören zwischen Absätze, nicht in Stücke
@@ -118,7 +117,7 @@ _KINDS = {
     "cut": lambda v: v in CUTS,
     "barcode_kind": lambda v: v in BARCODE_KINDS,
     "barcode_data": lambda v: _text(v) and len(v) <= MAX_BARCODE_DATA,
-    "module": lambda v: _int(v) and 1 <= v <= MAX_MODULE,
+    "module": lambda v: _int(v) and 1 <= v <= MODULE_LIMIT,
     "barcode_mm": lambda v: _num(v) and BARCODE_MM[0] <= v <= BARCODE_MM[1],
     "qr_level": lambda v: v in QR_LEVELS,
     "color": lambda v: v in COLORS,
@@ -370,27 +369,28 @@ def from_dict(data, base: str | Path | None = None) -> Document:
     if total > MAX_BARCODE_TOTAL:
         raise StorageError(f"Etikett zu groß (Barcode-Inhalte zusammen {total} Zeichen, höchstens "
                            f"{MAX_BARCODE_TOTAL})")
-    dots = sum(_dots(o) for o in objects)
+    dpi = get_label(values.get("label_id", Document().label_id)).dpi
+    dots = sum(_dots(o, dpi) for o in objects)
     if dots > MAX_FRAME_DOTS:
         raise StorageError(f"Etikett zu groß (Objekte zusammen {dots / 1e6:.0f} Mio. Druckpunkte, "
                            f"höchstens {MAX_FRAME_DOTS // 1_000_000})")
     return Document(**values, objects=objects)
 
 
-def _dots(obj) -> float:
+def _dots(obj, dpi: int) -> float:
     """Rahmenfläche in Druckpunkten (Grenze „Etikett zu groß“); Barcodes mit ihrer echten Fläche,
     mit Platzhaltern der Serie oder ungültigem Inhalt mit der größtmöglichen (``barcodes.max_size``)
     – was gespeichert wurde, lässt sich wieder öffnen."""
     if isinstance(obj, BarcodeObject):
         from .series import placeholders            # series liest storage – erst hier
-        w, h = barcodes.max_size(obj)
+        w, h = barcodes.max_size(obj, dpi)
         if not placeholders(Document(objects=[obj])):
             try:
-                w, h = barcodes.size(obj)
+                w, h = barcodes.size(obj, dpi)
             except barcodes.BarcodeError:
                 pass
         return w * h
-    return obj.w_mm * obj.h_mm * DOTS_PER_MM ** 2 if obj.w_mm and obj.h_mm else 0
+    return obj.w_mm * obj.h_mm * (dpi / 25.4) ** 2 if obj.w_mm and obj.h_mm else 0
 
 
 def _reject_constant(name: str):

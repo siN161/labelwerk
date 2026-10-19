@@ -26,9 +26,9 @@ from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, S
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
 from ..labels import DPI, get_label, labels_for_model
-from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, exact_rect, fill_anchored,
-                      frame_area, growing_axis, insert_placement, match_objects, maximize_object,
-                      move, new_barcode, object_rect, objects_outside, outside_indices,
+from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, change_label, exact_rect,
+                      fill_anchored, frame_area, growing_axis, insert_placement, match_objects,
+                      maximize_object, move, new_barcode, object_rect, objects_outside, outside_indices,
                       printable_area, proportional, reorder, resize, rotate, set_frame, to_grid)
 from ..printer import DEFAULT_MODEL, cut_interval, to_print_mode
 from ..render import (Renderer, RenderedObject, font_warnings, render_document,
@@ -593,6 +593,7 @@ class MainWindow(QMainWindow):
         red = get_label(self.doc.label_id).two_color and capabilities(self.model).two_color
         self.panel("layout").set_red_available(red)
         self.panel("barcode").red_available = red
+        self.panel("barcode").module.set_dpi(get_label(self.doc.label_id).dpi)
         self._update_frame()
         self.panel("barcode").update_check()        # Serie: Prüfhinweis zur Vorschau-Zeile
         self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
@@ -1540,7 +1541,7 @@ class MainWindow(QMainWindow):
         if label in {lbl.id for lbl in labels_for_model(self.model)}:
             return
         if self.files.may_follow_roll() and not self.files.modified():
-            self.doc.label_id = self.files.fitting_label(label)
+            change_label(self.doc, self.files.fitting_label(label))
             self.panel("paper").refresh()
             self.history.reset(self.doc)            # unberührt: kein Schritt zurück zum Unpassenden
             self.files.mark_unchanged()
@@ -1647,8 +1648,8 @@ class MainWindow(QMainWindow):
             editing = self.edit_session.active
             if editing:     # Stand vor der Bearbeitung mit neuer Rolle: eigener Schritt davor
                 before = self.history.current()
-                before.label_id = label_id
-            self.doc.label_id = label_id
+                change_label(before, label_id)
+            change_label(self.doc, label_id)
             self.panel("paper").refresh()
             self.schedule_render()
             if editing:

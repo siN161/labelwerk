@@ -26,11 +26,12 @@ _PDFIUM_PASSWORD = 4   # FPDF_ERR_PASSWORD
 MM = DPI / 25.4      # Punkte pro mm
 
 
-def load_file(path: str | Path, page: int = 1) -> Image.Image:
-    """Datei als Graustufenbild bei 300 dpi (Größe in mm bleibt erhalten)."""
+def load_file(path: str | Path, page: int = 1, dpi: int = DPI) -> Image.Image:
+    """Datei als Graustufenbild bei ``dpi`` (Auflösung des Etiketts; Größe in mm bleibt)."""
     path = _checked(path, _IMAGE_SUFFIXES, "PDF, PNG, JPG", page)
     with _readable(path):
-        return _load_pdf(path, page) if path.suffix.lower() == ".pdf" else _load_image(path)
+        return (_load_pdf(path, page, dpi) if path.suffix.lower() == ".pdf"
+                else _load_image(path, dpi))
 
 
 def load_image(path: str | Path, page: int = 1,
@@ -127,9 +128,9 @@ def _reason(error: Exception) -> str:
     return "Lesefehler"
 
 
-def _load_pdf(path: Path, page: int) -> Image.Image:
+def _load_pdf(path: Path, page: int, dpi: int = DPI) -> Image.Image:
     with _pdf_page(path, page) as pdf_page:
-        return pdf_page.render(scale=DPI / 72).to_pil().convert("L")
+        return pdf_page.render(scale=dpi / 72).to_pil().convert("L")
 
 
 def _load_pdf_page(path: Path, page: int) -> tuple[Image.Image, float]:
@@ -152,21 +153,21 @@ def _pdf_page(path: Path, page: int):
         pdf.close()
 
 
-def _load_image(path: Path) -> Image.Image:
+def _load_image(path: Path, target: int = DPI) -> Image.Image:
     with Image.open(path, formats=_IMAGE_FORMATS) as src:
         dpi = float(src.info.get("dpi", (DPI, DPI))[0]) or DPI
         img = to_8bit(src).convert("RGBA")             # 16-Bit-Graustufen skalieren
     img = Image.alpha_composite(Image.new("RGBA", img.size, "white"), img).convert("L")
-    if round(dpi) != DPI:
-        f = DPI / dpi
+    if round(dpi) != target:
+        f = target / dpi
         img = img.resize((max(1, round(img.width * f)), max(1, round(img.height * f))),
                          Image.LANCZOS)
     return img
 
 
-def crop(img: Image.Image) -> Image.Image:
+def crop(img: Image.Image, dpi: int = DPI) -> Image.Image:
     """Auf den Inhalt zuschneiden; liegen vier Eck-Schnittmarken außen, ohne die Marken."""
-    return img.crop(_content_box(img, DPI, INK))
+    return img.crop(_content_box(img, dpi, INK))
 
 
 def crop_box(img: Image.Image, dpi: float = DPI,
@@ -250,8 +251,10 @@ ROTATIONS = ("auto", 0, 90, 180, 270)
 
 
 def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
-                 model: str = "QL-600", rotate: str | int = "auto") -> Image.Image:
-    """Motiv 1:1 mittig aufs Etikett setzen; verkleinern nur mit fit.
+                 model: str = "QL-600", rotate: str | int = "auto",
+                 dpi: int = DPI) -> Image.Image:
+    """Motiv (``dpi`` wie bei ``load_file``) 1:1 mittig aufs Etikett setzen – in der Auflösung
+    des Etiketts (andere wird umgerechnet); verkleinern nur mit fit.
 
     rotate: "auto" dreht nur wenn nötig (90° gegen den Uhrzeigersinn), sonst feste
     Drehung in Grad im Uhrzeigersinn (0, 90, 180, 270).
@@ -259,6 +262,10 @@ def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
     if rotate not in ROTATIONS:
         raise ValueError(f"Drehung {rotate!r} nicht möglich – erlaubt: auto, 0, 90, 180, 270")
     label = get_label(label_id)
+    if label.dpi != dpi:                         # gleiche Größe in den Punkten des Druckers
+        f = label.dpi / dpi
+        img = img.resize((max(1, round(img.width * f)), max(1, round(img.height * f))),
+                         Image.LANCZOS)
     min_len, max_len = length_limits(model)
     max_w = label.width
     max_h = label.height if label.height else max_len - 2 * MARGIN
@@ -274,10 +281,11 @@ def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
         elif fit:
             img = _shrink(img, max_w, max_h, may_rotate=rotate == "auto")
         else:
-            limit = (f"{format_mm(max_w)} mm breit" if not label.height
-                     else f"{format_mm(max_w)} × {format_mm(max_h)} mm groß")
+            mm = lambda dots: format_mm(dots, label.dpi)   # noqa: E731
+            limit = (f"{mm(max_w)} mm breit" if not label.height
+                     else f"{mm(max_w)} × {mm(max_h)} mm groß")
             raise ValueError(
-                f"Motiv ist {format_mm(img.width)} × {format_mm(img.height)} mm, "
+                f"Motiv ist {mm(img.width)} × {mm(img.height)} mm, "
                 f"Etikett {label_id!r} ist höchstens {limit} – "
                 "mit --fit verkleinern (Codes evtl. nicht mehr lesbar)")
 

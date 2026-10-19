@@ -16,7 +16,7 @@ import math
 from dataclasses import dataclass, field, replace
 
 from . import barcodes
-from .document import (BARCODE_MM, MAX_MODULE, MAX_PT, MIN_PT, ROTATIONS, BarcodeObject, Document,
+from .document import (BARCODE_MM, MAX_PT, MIN_PT, ROTATIONS, BarcodeObject, Document,
                        ImageObject, TextObject)
 from .labels import DPI, get_label, length_limits
 from .render import (PT, REF_PT, RenderedObject, frame_box, span_dots, label_margins, label_size,
@@ -29,8 +29,24 @@ _DECIMALS = 3              # Positionen/Rahmen im Modell: auf 1/1000 mm
 GRID_MM = 0.1              # Raster der Positionsfelder: Ziehen/Skalieren endet darauf
 
 
-def _mm(dots: float) -> float:
-    return dots * 25.4 / DPI
+def _mm(dots: float, dpi: int = DPI) -> float:
+    return dots * 25.4 / dpi
+
+
+def change_label(doc: Document, label_id: str) -> None:
+    """Anderes Etikett für ``doc`` (wird geändert). Hat es eine andere Auflösung, behalten Barcodes
+    ihre Breite in mm: Modulbreite in den Punkten des neuen Druckers (ganze Punkte, 1–``max_module``)."""
+    old, new = _label_dpi(doc), get_label(label_id).dpi
+    doc.label_id = label_id
+    if old == new:
+        return
+    for obj in doc.objects:
+        if isinstance(obj, BarcodeObject) and isinstance(obj.module, int):
+            obj.module = min(max(round(obj.module * new / old), 1), barcodes.max_module(new))
+
+
+def _label_dpi(doc: Document) -> int:
+    return get_label(doc.label_id).dpi
 
 
 @dataclass(frozen=True)
@@ -75,13 +91,15 @@ class Snap:
 # --- Etikett ----------------------------------------------------------------------
 def object_rect(rendered: RenderedObject) -> Rect:
     """Rahmen eines gerenderten Objekts in mm."""
-    return Rect(_mm(rendered.x), _mm(rendered.y), _mm(rendered.w), _mm(rendered.h))
+    dpi = rendered.dpi
+    return Rect(_mm(rendered.x, dpi), _mm(rendered.y, dpi), _mm(rendered.w, dpi),
+                _mm(rendered.h, dpi))
 
 
 def label_rect(doc: Document, model: str = "QL-600") -> Rect:
     """Ganzes Etikett in mm (bei automatischer Länge so lang, wie ``render_document`` es macht)."""
     w, h = label_size(doc, model)
-    return Rect(0.0, 0.0, _mm(w), _mm(h))
+    return Rect(0.0, 0.0, _mm(w, _label_dpi(doc)), _mm(h, _label_dpi(doc)))
 
 
 def growing_axis(doc: Document) -> str | None:
@@ -104,7 +122,8 @@ def printable_area(doc: Document, model: str = "QL-600",
     """
     w, h = size if size is not None else label_size(doc, model)
     mx, my = label_margins(doc, model)
-    return Rect(_mm(mx), _mm(my), _mm(w - 2 * mx), _mm(h - 2 * my))
+    dpi = _label_dpi(doc)
+    return Rect(_mm(mx, dpi), _mm(my, dpi), _mm(w - 2 * mx, dpi), _mm(h - 2 * my, dpi))
 
 
 # --- Einrasten --------------------------------------------------------------------
@@ -224,22 +243,23 @@ def _text_only(obj: Object) -> None:
         raise TypeError(f"Nur für Text-Objekte, nicht für {type(obj).__name__}.")
 
 
-def place(obj: Object, rect: Rect) -> Object:
+def place(obj: Object, rect: Rect, dpi: int = DPI) -> Object:
     """Kopie von ``obj`` an ``rect``; bei festem Rahmen auch Breite/Höhe (ungedreht), bei
     Barcodes Modulbreite und Höhe (``_barcode_frame``)."""
     placed = copy.deepcopy(obj)
     placed.x_mm, placed.y_mm = rect.x, rect.y
     w, h = (rect.h, rect.w) if obj.rotation in (90, 270) else (rect.w, rect.h)
     if isinstance(obj, BarcodeObject):
-        return _barcode_frame(placed, w, h)
+        return _barcode_frame(placed, w, h, dpi=dpi)
     if _framed(obj):
         placed.w_mm, placed.h_mm = w, h
     return placed
 
 
-def _barcode_frame(obj: BarcodeObject, w: float, h: float, down: bool = False) -> BarcodeObject:
+def _barcode_frame(obj: BarcodeObject, w: float, h: float, down: bool = False,
+                   dpi: int = DPI) -> BarcodeObject:
     """``obj`` (wird geändert) für einen Rahmen ``w`` × ``h`` mm (ungedreht): Modulbreite auf
-    ganze Druckpunkte gerundet (``down``: abgerundet – passt sicher hinein), 1–``MAX_MODULE``;
+    ganze Druckpunkte gerundet (``down``: abgerundet – passt sicher hinein), 1–``max_module``;
     Strichcodes: Höhe ``h`` (2–100 mm). QR ist quadratisch: Es zählt das Maß, das sich stärker
     ändert. Lässt sich der Inhalt nicht kodieren, bleibt die Modulbreite."""
     if obj.kind != "qr":
@@ -250,19 +270,19 @@ def _barcode_frame(obj: BarcodeObject, w: float, h: float, down: bool = False) -
     except barcodes.BarcodeError:
         return obj
     if obj.kind == "qr":
-        side = _mm(count * obj.module)
+        side = _mm(count * obj.module, dpi)
         w = w if abs(w - side) >= abs(h - side) else h
-    dots = w * DPI / 25.4 / count
+    dots = w * dpi / 25.4 / count
     module = math.floor(dots + _EPS) if down else round(dots)
-    obj.module = min(max(module, 1), MAX_MODULE)
+    obj.module = min(max(module, 1), barcodes.max_module(dpi))
     return obj
 
 
-def barcode_rect(obj: BarcodeObject) -> Rect | None:
+def barcode_rect(obj: BarcodeObject, dpi: int = DPI) -> Rect | None:
     """Rahmen eines Barcodes in mm (nach dem Drehen) aus Modulbreite und Höhe, wie er gerendert
     wird; None, wenn sich der Inhalt nicht kodieren lässt."""
     try:
-        w = _mm(barcodes.modules(obj) * obj.module)
+        w = _mm(barcodes.modules(obj) * obj.module, dpi)
     except barcodes.BarcodeError:
         return None
     h = w if obj.kind == "qr" else obj.h_mm
@@ -271,14 +291,14 @@ def barcode_rect(obj: BarcodeObject) -> Rect | None:
     return Rect(obj.x_mm, obj.y_mm, w, h)
 
 
-def fix_size(obj: TextObject, base_pt: float) -> TextObject:
+def fix_size(obj: TextObject, base_pt: float, dpi: int = DPI) -> TextObject:
     """Kopie mit der wirksamen Grundgröße ``base_pt`` als fester Schriftgröße, ohne Rahmengröße.
 
     Stücke mit eigener Größe behalten ihr Verhältnis; das Bild bleibt gleich: Jede Größe
     bekommt die kürzeste Dezimalzahl (ab 0,1 pt), die dieselbe Druckgröße ergibt.
     """
     _text_only(obj)
-    base_dots = round(base_pt * PT)
+    base_dots = round(base_pt * dpi / 72)
     fixed = copy.deepcopy(obj)
     fixed.size_pt, fixed.fit = round(base_pt, 1), False   # ergibt wieder base_dots
     for old, new in zip((s for p in obj.paragraphs for s in p.spans),
@@ -303,7 +323,7 @@ def exact_rect(obj: Object, rendered: RenderedObject) -> Rect:
     r = object_rect(rendered)
     x, y = ((obj.x_mm or 0.0, obj.y_mm or 0.0) if obj.positioned else (r.x, r.y))
     w, h = r.w, r.h
-    if isinstance(obj, BarcodeObject) and (own := barcode_rect(obj)) is not None:
+    if isinstance(obj, BarcodeObject) and (own := barcode_rect(obj, rendered.dpi)) is not None:
         w, h = own.w, own.h                     # aus Inhalt und Modul (auch bei veraltetem Bild)
     if obj.positioned and _framed(obj) and obj.w_mm is not None and obj.h_mm is not None:
         w, h = (obj.h_mm, obj.w_mm) if obj.rotation in (90, 270) else (obj.w_mm, obj.h_mm)
@@ -331,7 +351,7 @@ def move(obj: Object, rect: Rect, rendered: RenderedObject) -> Object:
     """
     target = _apply_change(obj, rect, rendered)
     if isinstance(obj, TextObject) and (obj.size_pt is None or (obj.fit and not obj.positioned)):
-        obj = fix_size(obj, rendered.base_pt)
+        obj = fix_size(obj, rendered.base_pt, rendered.dpi)
     moved = copy.deepcopy(obj)
     moved.x_mm, moved.y_mm = target.x, target.y
     return moved
@@ -345,8 +365,8 @@ def set_frame(obj: Object, rect: Rect, rendered: RenderedObject) -> Object:
     feste Schriftgröße.
     """
     if _needs_size(obj):
-        obj = fix_size(obj, rendered.base_pt)
-    return place(obj, rect)
+        obj = fix_size(obj, rendered.base_pt, rendered.dpi)
+    return place(obj, rect, rendered.dpi)
 
 
 def resize(obj: Object, rect: Rect, rendered: RenderedObject, handle: str) -> Object:
@@ -361,24 +381,26 @@ def resize(obj: Object, rect: Rect, rendered: RenderedObject, handle: str) -> Ob
     corner = len(handle) == 2
     target = _apply_change(obj, rect, rendered)
     if isinstance(obj, BarcodeObject):
-        return _resize_barcode(obj, target, exact_rect(obj, rendered), handle)
+        return _resize_barcode(obj, target, exact_rect(obj, rendered), handle, rendered.dpi)
     if isinstance(obj, ImageObject):
         if obj.keep_ratio:
             target = _rounded(keep_aspect(exact_rect(obj, rendered), target, handle))
-        return place(obj, target)
+        return place(obj, target, rendered.dpi)
     if obj.fit:
-        return place(obj, target)
+        return place(obj, target, rendered.dpi)
     if corner:
         old = object_rect(rendered)
         factor = ((rect.w * rect.h) / (old.w * old.h)) ** 0.5 if old.w and old.h else 1.0
-        return place(scale_text(obj, factor, base_pt=rendered.base_pt), target)
+        return place(scale_text(obj, factor, base_pt=rendered.base_pt), target, rendered.dpi)
     # feste Rahmengröße braucht eine feste Schrift: sonst ginge der Rahmen beim Verschieben verloren
-    framed = fix_size(obj, rendered.base_pt) if obj.size_pt is None else copy.deepcopy(obj)
+    framed = (fix_size(obj, rendered.base_pt, rendered.dpi) if obj.size_pt is None
+              else copy.deepcopy(obj))
     framed.fit = True
-    return place(framed, target)
+    return place(framed, target, rendered.dpi)
 
 
-def _resize_barcode(obj: BarcodeObject, target: Rect, old: Rect, handle: str) -> BarcodeObject:
+def _resize_barcode(obj: BarcodeObject, target: Rect, old: Rect, handle: str,
+                    dpi: int = DPI) -> BarcodeObject:
     """Barcode nach Ziehen am Anfasser: QR hält das Quadrat (``keep_aspect``); bei Strichcodes
     ändert das Maß quer zu den Strichen die Modulbreite, das andere die Höhe. Nach dem Einrasten
     bleibt, was der Anfasser festhält (gegenüberliegende Kante, sonst die Mitte)."""
@@ -389,8 +411,8 @@ def _resize_barcode(obj: BarcodeObject, target: Rect, old: Rect, handle: str) ->
     w, h = (target.h, target.w) if turned else (target.w, target.h)
     ow, oh = (old.h, old.w) if turned else (old.w, old.h)
     sized = _barcode_frame(copy.deepcopy(obj), w if (along if turned else across) else ow,
-                           h if (across if turned else along) else oh)
-    shown = barcode_rect(sized) or target
+                           h if (across if turned else along) else oh, dpi=dpi)
+    shown = barcode_rect(sized, dpi) or target
     x = (target.right - shown.w if "l" in handle else target.x if "r" in handle
          else target.cx - shown.w / 2)
     y = (target.bottom - shown.h if "t" in handle else target.y if "b" in handle
@@ -491,8 +513,9 @@ def new_barcode(doc: Document, model: str, area: Rect, kind: str,
     ein Bild (``insert_placement``: mittig in ``area``, auf einem Endlosband hinter ``others``).
     Passt er nicht, wird bei Strichcodes zuerst nur die Höhe kleiner; die Modulbreite schrumpft
     erst, wenn er auch gedreht nicht hineinpasst (``rotate``)."""
+    dpi = _label_dpi(doc)
     obj = BarcodeObject(kind=kind, data=barcodes.SAMPLES[kind],
-                        module=barcodes.INSERT_MODULE.get(kind, 3))
+                        module=barcodes.insert_module(kind, dpi))
     count = barcodes.modules(obj)
     limit_w, limit_h = _insert_limits(doc, model, area)
     best = None                                       # (passt, Modul, Drehung, Höhe)
@@ -500,7 +523,7 @@ def new_barcode(doc: Document, model: str, area: Rect, kind: str,
         w, h = (limit_w, limit_h) if turn == 0 else (limit_h, limit_w)   # ungedreht
         if kind == "qr":
             w = h = min(w, h)
-        module = min(obj.module, math.floor(w * DPI / 25.4 / count + _EPS))
+        module = min(obj.module, math.floor(w * dpi / 25.4 / count + _EPS))
         fits = module >= 1 and (kind == "qr" or h >= BARCODE_MM[0])
         if best is None or (fits, module) > best[:2]:  # gleich gut: ungedreht
             best = (fits, module, turn, h)
@@ -508,7 +531,7 @@ def new_barcode(doc: Document, model: str, area: Rect, kind: str,
     obj.module = max(1, module)
     if kind != "qr":
         obj.h_mm = math.floor(min(max(h, BARCODE_MM[0]), obj.h_mm) * 1000 + _EPS) / 1000
-    shown = barcode_rect(obj)
+    shown = barcode_rect(obj, dpi)
     rect, _, _ = insert_placement(doc, model, area, (shown.w, shown.h), others=others,
                                   rotate=False)
     obj.x_mm = round(rect.cx - shown.w / 2, _DECIMALS)
@@ -527,7 +550,7 @@ def _insert_limits(doc: Document, model: str, area: Rect) -> tuple[float, float]
     if grow is None:
         return area.w, area.h
     mx, my = label_margins(doc, model)
-    longest = _mm(length_limits(model)[1] - 2 * (mx if grow == "x" else my))
+    longest = _mm(length_limits(model)[1] - 2 * (mx if grow == "x" else my), _label_dpi(doc))
     return (longest, area.h) if grow == "x" else (area.w, longest)
 
 
@@ -698,9 +721,9 @@ def match_objects(objs: list[Object], rendered: list[RenderedObject],
         factor = {"same": (fx * fy) ** 0.5, "width": fx, "height": fy}[mode]
         if not isinstance(obj, TextObject):
             result.append(place(obj, _rounded(Rect(old.x, old.y, old.w * factor,
-                                                   old.h * factor))))
+                                                   old.h * factor)), r.dpi))
         else:
-            result.append(place(scale_text(obj, factor, base_pt=r.base_pt), _rounded(old)))
+            result.append(place(scale_text(obj, factor, base_pt=r.base_pt), _rounded(old), r.dpi))
     return result
 
 
@@ -714,7 +737,7 @@ def maximize_object(obj: Object, rendered: RenderedObject, area: Rect, doc: Docu
     """
     grow = growing_axis(doc)
     if isinstance(obj, BarcodeObject):
-        return _maximize_barcode(obj, exact_rect(obj, rendered), area, grow)
+        return _maximize_barcode(obj, exact_rect(obj, rendered), area, grow, rendered.dpi)
     if _framed(obj):
         return set_frame(obj, _rounded(maximize(exact_rect(obj, rendered), area, grow)),
                          rendered)
@@ -746,8 +769,8 @@ def maximize_object(obj: Object, rendered: RenderedObject, area: Rect, doc: Docu
                                        size.w, size.h)))
 
 
-def _maximize_barcode(obj: BarcodeObject, old: Rect, area: Rect, grow: str | None
-                      ) -> BarcodeObject:
+def _maximize_barcode(obj: BarcodeObject, old: Rect, area: Rect, grow: str | None,
+                      dpi: int = DPI) -> BarcodeObject:
     """Barcode so groß wie möglich mittig in ``area``: größte Modulbreite, die hineinpasst
     (abgerundet); Strichcodes füllen die Höhe für sich. In der mitwachsenden Achse begrenzt das
     Etikett nicht – dort bleibt der Anfang (und bei Strichcodes das Maß). Passt nicht einmal
@@ -760,14 +783,14 @@ def _maximize_barcode(obj: BarcodeObject, old: Rect, area: Rect, grow: str | Non
         count = barcodes.modules(obj)
     except barcodes.BarcodeError:
         return copy.deepcopy(obj)
-    module = math.floor((min(w, h) if qr else w) * DPI / 25.4 / count + _EPS)
+    module = math.floor((min(w, h) if qr else w) * dpi / 25.4 / count + _EPS)
     if module < 1:
         return copy.deepcopy(obj)
     sized = copy.deepcopy(obj)
-    sized.module = min(module, MAX_MODULE)
+    sized.module = min(module, barcodes.max_module(dpi))
     if not qr:
         sized.h_mm = math.floor(min(max(h, BARCODE_MM[0]), BARCODE_MM[1]) * 1000 + _EPS) / 1000
-    shown = barcode_rect(sized)
+    shown = barcode_rect(sized, dpi)
     sized.x_mm = round(old.x if grow == "x" else area.cx - shown.w / 2, _DECIMALS)
     sized.y_mm = round(old.y if grow == "y" else area.cy - shown.h / 2, _DECIMALS)
     return sized
@@ -784,11 +807,11 @@ def rotate(obj: Object, rendered: RenderedObject, degrees: int) -> Object:
     """
     old = exact_rect(obj, rendered)
     if _needs_size(obj):
-        obj = fix_size(obj, rendered.base_pt)
+        obj = fix_size(obj, rendered.base_pt, rendered.dpi)
     turned = copy.deepcopy(obj)
     turned.rotation = (obj.rotation + degrees) % 360
     w, h = (old.h, old.w) if degrees % 180 else (old.w, old.h)
-    return place(turned, _rounded(Rect(old.cx - w / 2, old.cy - h / 2, w, h)))
+    return place(turned, _rounded(Rect(old.cx - w / 2, old.cy - h / 2, w, h)), rendered.dpi)
 
 
 def reorder(items: list, indices: list[int], step: int) -> tuple[list, list[int]]:
@@ -903,15 +926,16 @@ def anchor_after_edit(obj: TextObject, old: RenderedObject,
     # Lage des festen Punkts relativ zur linken oberen Ecke des Rahmens (Druckpunkte)
     ox, oy = from_object(old.layout.anchor(align), old, obj.rotation)
     nx, ny = from_object(new.layout.anchor(align), new, obj.rotation)
-    return (round(start.x + _mm(ox - old.x) - _mm(nx - new.x), _DECIMALS),
-            round(start.y + _mm(oy - old.y) - _mm(ny - new.y), _DECIMALS))
+    dpi = old.dpi
+    return (round(start.x + _mm(ox - old.x, dpi) - _mm(nx - new.x, dpi), _DECIMALS),
+            round(start.y + _mm(oy - old.y, dpi) - _mm(ny - new.y, dpi), _DECIMALS))
 
 
 def frame_area(doc: Document, model: str = "QL-600",
                size: tuple[int, int] | None = None) -> Rect | None:
     """Innenraum des Zierrahmens in mm (Ausrichten am Etikett, Einrasten); None ohne Rahmen."""
     box = frame_box(doc, model, size)
-    return None if box is None else Rect(*(_mm(v) for v in box))
+    return None if box is None else Rect(*(_mm(v, _label_dpi(doc)) for v in box))
 
 
 def fill_anchored(doc: Document, columns: list[str], row: list[str], model: str = "QL-600",

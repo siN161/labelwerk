@@ -27,7 +27,7 @@ from .labels import DPI, get_label, length_limits
 from .printers import capabilities
 
 MARGIN = 12            # Punkte, ca. 1 mm
-PT = DPI / 72          # Druckpunkte pro typografischem Punkt
+PT = DPI / 72          # Druckpunkte pro typografischem Punkt bei 300 dpi (Brother); sonst dpi / 72
 REF_PT = 12.0          # Bezugsgröße für automatische Skalierung von Stücken mit eigener Größe
 MIN_DOTS = 8           # kleinste Schrift in Druckpunkten
 _LINE_GAP = 4          # wie Pillow multiline_text
@@ -103,6 +103,7 @@ class RenderedObject:
     image_dy: int = 0
     layout: TextLayout | None = field(default=None, compare=False, repr=False)
     color: str = "black"
+    dpi: int = DPI                     # Auflösung des Etiketts (mm ↔ Druckpunkte)
 
 
 def render_object(obj: TextObject | ImageObject | BarcodeObject, doc: Document,
@@ -293,8 +294,9 @@ class Renderer:
                 except barcodes.BarcodeError as e:
                     if not placeholders:
                         raise
-                    frame = barcodes.placeholder_size(obj)
-                    prepared = Prepared(obj, 0, [], (0, 0, *frame), frame, str(e))
+                    dpi = get_label(doc.label_id).dpi
+                    frame = barcodes.placeholder_size(obj, dpi)
+                    prepared = Prepared(obj, 0, [], (0, 0, *frame), frame, str(e), dpi)
                 entry = _Cached(obj, copy.deepcopy(obj), context, prepared)
             cache[id(obj)] = entry
         self._cache = cache
@@ -345,6 +347,15 @@ class _Sheet:
     frame: Frame | None = None
     round: bool = False        # rundes Etikett: Rahmen ist ein Kreis
     red: bool = False          # Etikett Rot/Schwarz auf einem Zweifarb-Modell: Rot druckt rot
+    dpi: int = DPI             # Auflösung des Etiketts
+
+    def dots(self, mm: float) -> int:
+        return _dots(mm, self.dpi)
+
+    @property
+    def pt(self) -> float:
+        """Druckpunkte je typografischem Punkt."""
+        return self.dpi / 72
 
     def margins(self) -> tuple[int, int]:
         """Ränder (links/rechts, oben/unten) in Leserichtung."""
@@ -360,12 +371,12 @@ class _Sheet:
         if self.round:
             inset = (self.across - _circle_room(self)) // 2
             return inset, inset
-        band = _band(self.frame)
-        inner = band + _dots(self.frame.padding_mm)
+        band = _band(self.frame, self.dpi)
+        inner = band + self.dots(self.frame.padding_mm)
         if self.frame.rounded:          # Ecken des Innenraums bleiben vor den Bögen (auch ohne Abstand)
-            r = _dots(FRAME_RADIUS_MM)  # größter Radius – kleinere Bögen ragen weniger weit
+            r = self.dots(FRAME_RADIUS_MM)  # größter Radius – kleinere Bögen ragen weniger weit
             inner = max(inner, math.ceil(r - (r - band) / math.sqrt(2)) + 1)
-        pad = _dots(self.frame.inset_mm) + inner
+        pad = self.dots(self.frame.inset_mm) + inner
         return mx + pad, my + pad
 
     def room(self, inner: bool = True) -> tuple[int, int]:
@@ -384,21 +395,22 @@ def _sheet(doc: Document, model: str) -> _Sheet:
     label = get_label(doc.label_id)
     min_len, max_len = length_limits(model)
     # Rand ringsum ab Papierkante: der Streifen, den der Drucker dort nicht bedruckt, zählt mit
-    margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)
+    margin = _dots(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM), label.dpi)
     side = max(0, margin - (label.total_width - label.width) // 2)
     if label.height is not None and label.total_height is not None:
         margin = max(0, margin - (label.total_height - label.height) // 2)
     feed = label.height
     if feed is None and doc.length_mm is not None:
-        feed = min(max(_dots(doc.length_mm), min_len), max_len)
-    side = min(side, max(0, (label.width - 2 * MARGIN) // 2))      # Rand darf nicht alles
-    if feed is not None:                                            # aufbrauchen (quer, feste Länge)
-        margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
+        feed = min(max(_dots(doc.length_mm, label.dpi), min_len), max_len)
+    keep = round(MARGIN * label.dpi / DPI)                          # Rand darf nicht alles
+    side = min(side, max(0, (label.width - 2 * keep) // 2))        # aufbrauchen (quer, feste
+    if feed is not None:                                            # Länge): 1 mm bleibt
+        margin = min(margin, max(0, (feed - 2 * keep) // 2))
     if doc.frame is not None:
         _check_frame(doc.frame)
     return _Sheet(doc.label_id, doc.orientation == "horizontal", label.width, feed, margin, side,
                   min_len, max_len, doc.frame, label.shape == "round",
-                  label.two_color and capabilities(model).two_color)
+                  label.two_color and capabilities(model).two_color, label.dpi)
 
 
 FRAME_TOO_BIG = "Rahmen passt nicht aufs Etikett – Abstand, Strichstärke oder Innenabstand verkleinern"
@@ -411,8 +423,8 @@ def _check_room(sheet: _Sheet) -> None:
         raise ValueError(FRAME_TOO_BIG)
 
 
-def _dots(mm: float) -> int:
-    return round(mm * DPI / 25.4)
+def _dots(mm: float, dpi: int = DPI) -> int:
+    return round(mm * dpi / 25.4)
 
 
 @dataclass
@@ -425,6 +437,7 @@ class Prepared:
     box: tuple[int, int, int, int]
     frame: tuple[int, int] | None      # feste Rahmengröße positionierter Objekte (ungedreht)
     error: str | None = None           # Barcode als Platzhalter (``Renderer``, Arbeitsfläche)
+    dpi: int = DPI                     # Auflösung des Etiketts
 
     def size(self) -> tuple[int, int]:
         """Rahmengröße nach dem Drehen."""
@@ -437,10 +450,10 @@ def _prepare(obj: TextObject | ImageObject | BarcodeObject, sheet: _Sheet) -> Pr
     if obj.color not in COLORS:
         raise ValueError(f"Unbekannte Farbe {obj.color!r} – erlaubt: schwarz, rot (black, red)")
     if isinstance(obj, ImageObject):
-        return _prepare_image(obj)
+        return _prepare_image(obj, sheet.dpi)
     if isinstance(obj, BarcodeObject):
-        frame = barcodes.size(obj)
-        return Prepared(obj, 0, [], (0, 0, *frame), frame)
+        frame = barcodes.size(obj, sheet.dpi)
+        return Prepared(obj, 0, [], (0, 0, *frame), frame, dpi=sheet.dpi)
     for para in obj.paragraphs:
         if para.align not in ALIGNMENTS:
             raise ValueError(f"Unbekannte Textposition {para.align!r} – erlaubt: links, zentriert, "
@@ -456,22 +469,22 @@ def _prepare(obj: TextObject | ImageObject | BarcodeObject, sheet: _Sheet) -> Pr
         # Bandlaufrichtung unbegrenzt – der Text wird nur quer eingepasst
         along = sheet.horizontal != (obj.rotation in (90, 270))   # Objektbreite längs zum Band
         open_w, open_h = (sheet.feed is None and along), (sheet.feed is None and not along)
-        frame_w = _dots(obj.w_mm) if obj.w_mm is not None else None if open_w else max_w
-        frame_h = _dots(obj.h_mm) if obj.h_mm is not None else None if open_h else max_h
+        frame_w = sheet.dots(obj.w_mm) if obj.w_mm is not None else None if open_w else max_w
+        frame_h = sheet.dots(obj.h_mm) if obj.h_mm is not None else None if open_h else max_h
         if obj.w_mm is not None or obj.h_mm is not None:
-            auto_start = round(MAX_PT * PT)    # eigener Rahmen: Text füllt ihn aus
+            auto_start = round(MAX_PT * sheet.pt)    # eigener Rahmen: Text füllt ihn aus
         base = _fit(obj, auto_start, _UNBOUNDED if frame_w is None else frame_w,
-                    _UNBOUNDED if frame_h is None else frame_h, sheet.label_id)
+                    _UNBOUNDED if frame_h is None else frame_h, sheet.label_id, sheet.dpi)
         lines = _shape(obj, base)
         l, t, r, b = box = _block_box(lines)
         frame = (r - l if frame_w is None else frame_w, b - t if frame_h is None else frame_h)
-        return Prepared(obj, base, lines, box, frame)
+        return Prepared(obj, base, lines, box, frame, dpi=sheet.dpi)
     if obj.positioned and not obj.auto:
-        base = round(obj.size_pt * PT)         # darf hinausragen – kein TextTooLarge
+        base = round(obj.size_pt * sheet.pt)   # darf hinausragen – kein TextTooLarge
     else:
-        base = _fit(obj, auto_start, max_w, max_h, sheet.label_id)
+        base = _fit(obj, auto_start, max_w, max_h, sheet.label_id, sheet.dpi)
     lines = _shape(obj, base)
-    return Prepared(obj, base, lines, _block_box(lines), None)
+    return Prepared(obj, base, lines, _block_box(lines), None, dpi=sheet.dpi)
 
 
 def _label_size(sheet: _Sheet, preps: list[Prepared]) -> tuple[int, int]:
@@ -488,7 +501,7 @@ def _label_size(sheet: _Sheet, preps: list[Prepared]) -> tuple[int, int]:
             size = w if sheet.horizontal else h
             if prep.obj.positioned:
                 start = prep.obj.x_mm if sheet.horizontal else prep.obj.y_mm
-                needed = max(needed, _dots(start or 0) + size + along)
+                needed = max(needed, sheet.dots(start or 0) + size + along)
             else:
                 needed = max(needed, size + 2 * along)
         if sheet.frame is not None:            # im Rahmen bleibt immer Platz (kein Innenraum ≤ 0)
@@ -517,7 +530,7 @@ def _place(prep: Prepared, sheet: _Sheet, width: int, height: int
             frame = (0, 0, *prep.frame)
             x0, y0, lines = _align(obj, prep.base, lines, prep.box, 0, *prep.frame)
         area = frame[2:]
-        origin = (_dots(obj.x_mm or 0), _dots(obj.y_mm or 0))
+        origin = (sheet.dots(obj.x_mm or 0), sheet.dots(obj.y_mm or 0))
     else:                                      # mittig auf dem Etikett wie bisher
         area = (height, width) if turned else (width, height)
         # Innenrand der Textzeilen: Rand (mit Rahmen: Innenraum) in Richtung der Zeilen
@@ -556,9 +569,10 @@ def _finish_shape(prep: Prepared, sheet: _Sheet, width: int, height: int) -> Ren
         image = image.transpose(_TRANSPOSE[obj.rotation])
         frame = _turn(frame, area, obj.rotation)
         picture = _turn(picture, area, obj.rotation)
-    base_pt = obj.size_pt if not obj.auto else prep.base / PT
+    base_pt = obj.size_pt if not obj.auto else prep.base / sheet.pt
     return RenderedObject(image, origin[0] + frame[0], origin[1] + frame[1], frame[2], frame[3],
-                          base_pt, picture[0] - frame[0], picture[1] - frame[1], text)
+                          base_pt, picture[0] - frame[0], picture[1] - frame[1], text,
+                          dpi=sheet.dpi)
 
 
 _TRANSPOSE = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180,
@@ -621,7 +635,7 @@ def _paint(lines: list, x0: int, y0: int, width: int, height: int,
 
 
 # --- Bild-Objekte -------------------------------------------------------------------
-def _prepare_image(obj: ImageObject) -> Prepared:
+def _prepare_image(obj: ImageObject, dpi: int = DPI) -> Prepared:
     """Bild-Objekt prüfen und messen: Rahmen in Druckpunkten (ungedreht) aus ``w_mm``/``h_mm``."""
     if obj.rotation not in ROTATIONS:
         raise ValueError(f"Unbekannte Drehung {obj.rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
@@ -629,8 +643,8 @@ def _prepare_image(obj: ImageObject) -> Prepared:
     if not (obj.w_mm > 0 and obj.h_mm > 0):
         raise ValueError(f"Größe des Bilds muss größer als 0 sein, nicht "
                          f"{obj.w_mm:g} × {obj.h_mm:g} mm.")
-    frame = (max(1, _dots(obj.w_mm)), max(1, _dots(obj.h_mm)))
-    return Prepared(obj, 0, [], (0, 0, *frame), frame)
+    frame = (max(1, _dots(obj.w_mm, dpi)), max(1, _dots(obj.h_mm, dpi)))
+    return Prepared(obj, 0, [], (0, 0, *frame), frame, dpi=dpi)
 
 
 def _finish_image(prep: Prepared) -> RenderedObject:
@@ -653,19 +667,22 @@ def _finish_image(prep: Prepared) -> RenderedObject:
     if obj.rotation:
         image = image.transpose(_TRANSPOSE[obj.rotation])
         frame = _turn(frame, (w, h), obj.rotation)
-    return RenderedObject(image, _dots(obj.x_mm), _dots(obj.y_mm), frame[2], frame[3], 0.0)
+    return RenderedObject(image, _dots(obj.x_mm, prep.dpi), _dots(obj.y_mm, prep.dpi), frame[2],
+                          frame[3], 0.0, dpi=prep.dpi)
 
 
 def _finish_barcode(prep: Prepared) -> RenderedObject:
     """Barcode zeichnen (ganze Druckpunkte, ``barcodes.draw``; mit Fehler den Platzhalter) und
     drehen wie ein Bild."""
     obj = prep.obj
-    image = barcodes.draw(obj) if prep.error is None else barcodes.placeholder(*prep.frame)
+    image = (barcodes.draw(obj, prep.dpi) if prep.error is None
+             else barcodes.placeholder(*prep.frame))
     frame = (0, 0, *image.size)
     if obj.rotation:
         frame = _turn(frame, image.size, obj.rotation)
         image = image.transpose(_TRANSPOSE[obj.rotation])
-    return RenderedObject(image, _dots(obj.x_mm), _dots(obj.y_mm), frame[2], frame[3], 0.0)
+    return RenderedObject(image, _dots(obj.x_mm, prep.dpi), _dots(obj.y_mm, prep.dpi), frame[2],
+                          frame[3], 0.0, dpi=prep.dpi)
 
 
 # Vektorbilder: der Kern rastert nicht selbst (Qt-frei) – die GUI meldet eine Funktion an
@@ -767,13 +784,14 @@ def span_dots(obj: TextObject, span: Span, base: int) -> int:
     return max(1, round(base * span.size_pt / ref))
 
 
-def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str) -> int:
+def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str,
+         dpi: int = DPI) -> int:
     """Grundgröße in Druckpunkten: fest, oder größte passende ≤ auto_start (Halbierung)."""
     def fits(base: int) -> bool:
         l, t, r, b = _block_box(_shape(obj, base, mode="1"))
         return (r - l) <= max_w and (b - t) <= max_h
 
-    start = auto_start if obj.auto else round(obj.size_pt * PT)
+    start = auto_start if obj.auto else round(obj.size_pt * dpi / 72)
     if fits(start):
         return start
     best, lo, hi = None, MIN_DOTS, start - 1
@@ -787,7 +805,7 @@ def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str
         # Meldung in der größten eingestellten Größe – die sieht der Nutzer im Editor
         largest = max((span.size_pt or obj.size_pt for para in obj.paragraphs
                        for span in para.spans), default=obj.size_pt)
-        max_pt = int(best / PT * largest / obj.size_pt) if best else None
+        max_pt = int(best / (dpi / 72) * largest / obj.size_pt) if best else None
         if max_pt is not None and max_pt < MIN_PT:
             max_pt = None                      # kleiner als erlaubt: zählt als „passt nicht“
         raise TextTooLarge(largest, max_pt, label_id)
@@ -1140,14 +1158,14 @@ def _fmt_mm(value: float) -> str:
     return f"{value:g}".replace(".", ",")
 
 
-def _line(frame: Frame) -> int:
+def _line(frame: Frame, dpi: int = DPI) -> int:
     """Strichstärke in Druckpunkten (mindestens 1)."""
-    return max(1, _dots(frame.line_mm))
+    return max(1, _dots(frame.line_mm, dpi))
 
 
-def _band(frame: Frame) -> int:
+def _band(frame: Frame, dpi: int = DPI) -> int:
     """Breite aller Linien zusammen (doppelt: Linie, Lücke, Linie; dick-dünn: 2, 1, 1)."""
-    lw = _line(frame)
+    lw = _line(frame, dpi)
     return {"double": 3 * lw, "thick_thin": 4 * lw}.get(frame.style, lw)
 
 
@@ -1155,7 +1173,7 @@ def _outer(sheet: _Sheet, width: int, height: int) -> tuple[int, int, int, int]:
     """Außenkante des Rahmens (x0, y0, x1, y1; Ende ausschließlich) in Leserichtung; rund:
     das Quadrat um den Kreis."""
     mx, my = sheet.margins()
-    inset = _dots(sheet.frame.inset_mm)
+    inset = sheet.dots(sheet.frame.inset_mm)
     x0, y0, x1, y1 = mx + inset, my + inset, width - mx - inset, height - my - inset
     if sheet.round:
         d = min(x1 - x0, y1 - y0)
@@ -1167,7 +1185,7 @@ def _outer(sheet: _Sheet, width: int, height: int) -> tuple[int, int, int, int]:
 def _circle_room(sheet: _Sheet) -> int:
     """Seite des Quadrats im Kreisrahmen (Innenraum runder Etiketten) in Druckpunkten."""
     x0, _, x1, _ = _outer(sheet, sheet.across, sheet.across)   # runde Etiketten sind quadratisch
-    radius = (x1 - x0) / 2 - _band(sheet.frame) - _dots(sheet.frame.padding_mm)
+    radius = (x1 - x0) / 2 - _band(sheet.frame, sheet.dpi) - sheet.dots(sheet.frame.padding_mm)
     return int(radius * math.sqrt(2)) if radius > 0 else 0
 
 
@@ -1176,11 +1194,11 @@ def _frame_mask(sheet: _Sheet, width: int, height: int) -> Image.Image | None:
     frame = sheet.frame
     if frame is None:
         return None
-    lw = _line(frame)
+    lw = _line(frame, sheet.dpi)
     box = _outer(sheet, width, height)
     w, h = box[2] - box[0], box[3] - box[1]
     style = "single" if sheet.round and frame.style == "corners" else frame.style
-    radius = (min(_dots(FRAME_RADIUS_MM), min(w, h) // 4)
+    radius = (min(sheet.dots(FRAME_RADIUS_MM), min(w, h) // 4)
               if frame.rounded and not sheet.round else 0)
     mask = Image.new("L", (width, height), 0)
     draw = ImageDraw.Draw(mask)
@@ -1204,7 +1222,7 @@ def _frame_mask(sheet: _Sheet, width: int, height: int) -> Image.Image | None:
     else:
         ring(0, lw)
     if style == "corners":
-        leg = min(_dots(FRAME_CORNER_MM), min(w, h) // 4)
+        leg = min(sheet.dots(FRAME_CORNER_MM), min(w, h) // 4)
         if leg < 2 * lw:                     # sonst blieben nur Quadrate (oder nichts)
             raise ValueError(FRAME_TOO_BIG)
         keep = Image.new("L", mask.size, 0)

@@ -8,8 +8,9 @@ from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QGridLayout, QHBoxLayout,
                                QLabel, QPushButton, QRadioButton, QWidget)
 
+from ... import layout
 from ...document import FRAME_LINE_MM, MAX_FRAME_MM, MAX_MARGIN_MM, Document, Frame
-from ...labels import DPI, get_label, labels_for_model, length_limits
+from ...labels import DPI, get_label, labels_for_model, length_limits, mm_text
 from ...media import Media
 from ...printer import DEFAULT_MODEL
 from ...render import frame_mask
@@ -207,7 +208,7 @@ class PaperPanel(Panel):
         self.length.setRange(round(min_len * 25.4 / DPI, 1), round(max_len * 25.4 / DPI, 1))
 
     def _apply(self) -> None:
-        self.doc.label_id = self.combo.currentData()
+        layout.change_label(self.doc, self.combo.currentData())
         if self._unfit is not None and self._unfit != self.doc.label_id:
             self.combo.blockSignals(True)
             self._fill_labels()                      # Eintrag „passt nicht“ verschwindet
@@ -288,6 +289,7 @@ class PaperPanel(Panel):
         self.length.setEnabled(not self.length_auto.isChecked())
         self.fixed_size.setVisible(not endless)
         w, h = label.size_mm
+        w, h = mm_text(w), mm_text(h)
         self.fixed_size.setText(f"Ø {w} mm · rund" if label.shape == "round"
                                 else f"{w} × {h} mm · gestanzt")
         self._update_frame_widgets()

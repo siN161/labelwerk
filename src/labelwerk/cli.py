@@ -170,9 +170,11 @@ def _auto_label(model: str, target: printers.Printer | None) -> str:
 
 def _make_image(args: argparse.Namespace) -> Image.Image:
     if args.cmd == "print-file":
-        img = crop(load_file(args.file, page=args.page))
+        dpi = get_label(args.label).dpi                # PDF gleich in der Auflösung des Druckers
+        img = crop(load_file(args.file, page=args.page, dpi=dpi), dpi)
         rotate = args.rotate if args.rotate == "auto" else int(args.rotate)
-        return fit_to_label(img, args.label, fit=args.fit, model=args.model, rotate=rotate)
+        return fit_to_label(img, args.label, fit=args.fit, model=args.model, rotate=rotate,
+                            dpi=dpi)
     text = args.text.replace("\\n", "\n")
     obj = TextObject.plain(text, size_pt=args.font_size, align=args.align,
                            family=args.font_family, bold=args.bold, italic=args.italic,
@@ -349,7 +351,9 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as e:
             print(f"Vorschau kann nicht gespeichert werden: {args.preview} ({e})", file=sys.stderr)
             return 2
-        print(f"Vorschau: {args.preview} ({format_mm(img.width)} × {format_mm(img.height)} mm)")
+        dpi = get_label(args.label).dpi
+        print(f"Vorschau: {args.preview} ({format_mm(img.width, dpi)} × "
+              f"{format_mm(img.height, dpi)} mm)")
         return 0
 
     return _send(img, args)

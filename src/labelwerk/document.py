@@ -27,7 +27,8 @@ MAX_DIGITS = 10
 # Barcodes: Arten, QR-Fehlerkorrektur, Modulbreite in Druckpunkten, Höhe, Inhalt
 BARCODE_KINDS = ("qr", "code128", "code39", "ean13", "ean8")
 QR_LEVELS = ("L", "M", "Q", "H")
-MAX_MODULE = 20
+MAX_MODULE = 20                     # bei 300 dpi; andere Auflösungen entsprechend (barcodes.max_module)
+MODULE_LIMIT = 40                   # gültige Modulbreite überhaupt (600 dpi)
 BARCODE_MM = (2.0, 100.0)           # Höhe der Strichcodes samt Klartext
 MAX_BARCODE_DATA = 2000
 

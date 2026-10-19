@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QGridLayout, QHBoxLayout, Q
                                QLineEdit, QPushButton, QToolButton, QWidget)
 
 from ... import barcodes, series
-from ...document import (BARCODE_KINDS, BARCODE_MM, MAX_BARCODE_DATA, MAX_MODULE, BarcodeObject,
+from ...document import (BARCODE_KINDS, BARCODE_MM, MAX_BARCODE_DATA, BarcodeObject,
                          Document)
 from ...labels import DPI
 from ...layout import Rect
@@ -30,7 +30,6 @@ from .position import PositionSection
 
 HINT = "Barcode oder QR-Code einfügen – Art wählen, Inhalt eintippen"
 LEVELS = (("L", "L – 7 %"), ("M", "M – 15 %"), ("Q", "Q – 25 %"), ("H", "H – 30 %"))
-MM_PER_DOT = 25.4 / DPI
 _NUMBER = re.compile(r"\d*[.,]?\d*")
 _ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (Attribut, Aktion, Symbol)
            ("rotate_right", "object.rotate_right", "rotate-right"))
@@ -46,11 +45,19 @@ class ModuleSpin(SpinBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setRange(1, MAX_MODULE)
+        self.dpi = DPI                  # Auflösung des Etiketts: ein Punkt sind 25,4/dpi mm
+        self.setRange(1, barcodes.max_module(DPI))
         self.setSuffix(" mm")
 
+    def set_dpi(self, dpi: int) -> None:
+        """Auflösung gewechselt: dieselbe Punktzahl zeigt eine andere Breite in mm."""
+        if dpi != self.dpi:
+            self.dpi = dpi
+            self.setMaximum(max(barcodes.max_module(dpi), self.value()))
+            self.lineEdit().setText(self.textFromValue(self.value()) + self.suffix())
+
     def textFromValue(self, value: int) -> str:
-        return f"{value * MM_PER_DOT:.2f}"
+        return f"{value * 25.4 / self.dpi:.2f}"
 
     def _dots(self, text: str) -> int | None:
         """Getippte mm → Druckpunkte; None, wenn (noch) keine gültige Zahl."""
@@ -58,20 +65,20 @@ class ModuleSpin(SpinBox):
         if not _NUMBER.fullmatch(core) or core in ("", "."):
             return None
         mm = float(core)
-        return round(mm / MM_PER_DOT) if math.isfinite(mm) else None
+        return round(mm * self.dpi / 25.4) if math.isfinite(mm) else None
 
     def valueFromText(self, text: str) -> int:
         dots = self._dots(text)
-        return self.value() if dots is None else min(max(dots, 1), MAX_MODULE)
+        return self.value() if dots is None else min(max(dots, 1), self.maximum())
 
     def validate(self, text: str, pos: int):
-        """Nur Ziffern mit einem Komma/Punkt; außerhalb 1–``MAX_MODULE`` Punkte unfertig (wird
+        """Nur Ziffern mit einem Komma/Punkt; außerhalb 1–``maximum()`` Punkte unfertig (wird
         nicht übernommen)."""
         core = text.removesuffix(self.suffix()).strip()
         if not _NUMBER.fullmatch(core.replace(",", ".")):
             return QValidator.State.Invalid, text, pos
         dots = self._dots(text)
-        if dots is None or not 1 <= dots <= MAX_MODULE:
+        if dots is None or not 1 <= dots <= self.maximum():
             return QValidator.State.Intermediate, text, pos
         return QValidator.State.Acceptable, text, pos
 
@@ -249,7 +256,8 @@ class BarcodePanel(Panel):
         try:
             kind = self.chosen_kind()
             obj = self.obj if selected else BarcodeObject(
-                kind=kind, data=barcodes.SAMPLES[kind], module=barcodes.INSERT_MODULE.get(kind, 3))
+                kind=kind, data=barcodes.SAMPLES[kind],
+                module=barcodes.insert_module(kind, self.module.dpi))
             if selected:
                 self.kind.setCurrentIndex(self.kind.findData(obj.kind))
             if self.data.text() != obj.data:
@@ -285,7 +293,7 @@ class BarcodePanel(Panel):
         if self.fill_preview is not None and series.placeholders(Document(objects=[obj])):
             obj = self.fill_preview(obj)
         try:
-            barcodes.size(obj)
+            barcodes.size(obj, self.module.dpi)
             code = barcodes.check(obj)
         except barcodes.BarcodeError as e:
             self._set_check(str(e))
@@ -297,7 +305,7 @@ class BarcodePanel(Panel):
         side = "ringsum" if obj.kind == "qr" else "links und rechts je"
         red = (" · Rot lesen viele Scanner schlecht" if obj.color == "red" and self.red_available
                else "")
-        self.quiet.setText(f"Ruhezone: {side} {_mm(barcodes.quiet_mm(obj))} mm frei lassen{red}")
+        self.quiet.setText(f"Ruhezone: {side} {_mm(barcodes.quiet_mm(obj, self.module.dpi))} mm frei lassen{red}")
 
     def _set_check(self, text: str) -> None:
         self.check.setText(text)
@@ -338,7 +346,7 @@ class BarcodePanel(Panel):
         data = barcodes.SAMPLES[kind] if obj.data == barcodes.SAMPLES[obj.kind] else obj.data
         module = obj.module
         if (kind == "qr") != (obj.kind == "qr"):
-            module = barcodes.INSERT_MODULE.get(kind, 3)
+            module = barcodes.insert_module(kind, self.module.dpi)
         return replace(obj, kind=kind, data=data, module=module)
 
     def _data_edited(self, text: str) -> None:

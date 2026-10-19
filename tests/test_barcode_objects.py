@@ -330,7 +330,7 @@ def test_storage_round_trip():
     assert storage.from_dict(json.loads(json.dumps(data))).objects == objs
 
 
-@pytest.mark.parametrize("field, value", [("kind", "pdf417"), ("module", 0), ("module", 21),
+@pytest.mark.parametrize("field, value", [("kind", "pdf417"), ("module", 0), ("module", 41),
                                           ("module", 2.5), ("h_mm", 1), ("h_mm", 101),
                                           ("error", "X"), ("data", 5), ("data", "x" * 2001),
                                           ("text", "ja")])

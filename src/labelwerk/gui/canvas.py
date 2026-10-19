@@ -17,20 +17,20 @@ from PySide6.QtWidgets import (QApplication, QGraphicsPixmapItem, QGraphicsRectI
 
 from .. import layout
 from . import image_import
-from ..labels import DPI, Label, format_mm, length_limits
+from ..labels import DPI, Label, format_mm, length_limits, mm_text
 from ..layout import Rect
 from ..printer import DEFAULT_MODEL
 from ..render import INK, PT, RenderedObject
 
-MM = DPI / 25.4          # Szene-Einheiten (Druckpunkte) pro mm
+MM = DPI / 25.4          # Szene-Einheiten (Druckpunkte) pro mm bei 300 dpi; je Etikett ``Canvas.mm``
 RULER = 22               # Linealbreite in Pixeln
-_CORNER = 2 * MM         # Eckenradius gestanzter Etiketten
-_MARGIN = 15 * MM        # grauer Rand um das Etikett
+_CORNER_MM = 2           # Eckenradius gestanzter Etiketten
+_MARGIN_MM = 15          # grauer Rand um das Etikett
 START_ZOOM = 200         # Prozent; 100 % = echte Größe
 SNAP_PX = 6              # Einrasten: Abstand in Bildschirmpixeln
 HANDLE_PX = 8            # Kantenlänge eines Anfassers in Bildschirmpixeln
 _DRAG_START_PX = 3       # erst ab dieser Mausbewegung wird gezogen (Klick ≠ Verschieben)
-_MIN_FRAME = MM          # kleinster Rahmen beim Skalieren (1 mm)
+_MIN_FRAME_MM = 1        # kleinster Rahmen beim Skalieren
 HANDLES = ("tl", "t", "tr", "r", "br", "b", "bl", "l")   # Ecken und Kanten, im Uhrzeigersinn
 _HANDLE_CURSORS = {
     "tl": Qt.CursorShape.SizeFDiagCursor, "br": Qt.CursorShape.SizeFDiagCursor,
@@ -82,7 +82,7 @@ class ObjectItem(QGraphicsPixmapItem):
     def size(self) -> tuple[float, float]:
         """Rahmengröße in Druckpunkten; ein leerer Text zeigt einen Platzhalter (eine Zeile hoch)."""
         if self.is_empty():
-            line = self.rendered.base_pt * PT
+            line = self.rendered.base_pt * self.rendered.dpi / 72
             return line / 2, line
         return self.rendered.w, self.rendered.h
 
@@ -91,8 +91,8 @@ class ObjectItem(QGraphicsPixmapItem):
         return self.mapRectToParent(QRectF(0, 0, *self.size()))
 
     def frame_mm(self) -> Rect:
-        f = self.frame()
-        return Rect(f.x() / MM, f.y() / MM, f.width() / MM, f.height() / MM)
+        f, mm = self.frame(), self.rendered.dpi / 25.4
+        return Rect(f.x() / mm, f.y() / mm, f.width() / mm, f.height() / mm)
 
 
 class Canvas(QGraphicsView):
@@ -125,6 +125,7 @@ class Canvas(QGraphicsView):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.viewport().setMouseTracking(True)             # Mauszeiger über den Anfassern
         self.setAcceptDrops(True)                          # Bilder und Bilddateien ablegen
+        self.dpi, self.mm = DPI, MM                        # Auflösung des Etiketts, Punkte je mm
         self.set_model(model)
         self.zoom = START_ZOOM
         self.orientation = "vertical"
@@ -184,8 +185,9 @@ class Canvas(QGraphicsView):
         Druckkoordinaten; bei „horizontal“ dreht die Ansicht um −90°, damit das Etikett in
         Leserichtung erscheint – die Objekte liegen in ``sheet``, das in Leserichtung zählt.
         """
-        if orientation != self.orientation:
+        if orientation != self.orientation or label.dpi != self.dpi:
             self.orientation = orientation
+            self.dpi, self.mm = label.dpi, label.dpi / 25.4   # Szene in Druckpunkten des Etiketts
             self._apply_zoom()
         self.cancel_object_drag()
         scene = self.scene()
@@ -200,7 +202,7 @@ class Canvas(QGraphicsView):
         if label.shape == "round":
             path.addEllipse(0, 0, tw, th)
         elif label.shape == "die_cut":
-            path.addRoundedRect(0, 0, tw, th, _CORNER, _CORNER)
+            path.addRoundedRect(0, 0, tw, th, _CORNER_MM * self.mm, _CORNER_MM * self.mm)
         else:
             path.addRect(0, 0, tw, th)
         self.outline = scene.addPath(path, QPen(Qt.PenStyle.NoPen), QBrush(Qt.GlobalColor.white))
@@ -228,15 +230,15 @@ class Canvas(QGraphicsView):
         self.objects = [ObjectItem(i, obj, self._pixmaps[id(obj)][1], ratio, self.sheet, aspect)
                         for i, (obj, ratio, aspect) in enumerate(zip(rendered, ratios, aspects))]
         self._show_edit_cursor()
-        self._label_rect = Rect(0, 0, width / MM, height / MM)
+        self._label_rect = Rect(0, 0, width / self.mm, height / self.mm)
         self._area = area if area is not None else self._label_rect
         self._grow = grow
         dotted = QPen(QColor("#888888"), 1, Qt.PenStyle.DotLine)
         dotted.setCosmetic(True)
         if label.shape != "round" and area is not None:
             # bedruckbarer Bereich mit allen vier Rändern (auch in Bandrichtung), in Leserichtung
-            self.printable = QGraphicsRectItem(QRectF(area.x * MM, area.y * MM,
-                                                      area.w * MM, area.h * MM), self.sheet)
+            self.printable = QGraphicsRectItem(QRectF(area.x * self.mm, area.y * self.mm,
+                                                      area.w * self.mm, area.h * self.mm), self.sheet)
             self.printable.setPen(dotted)
             self.printable.setZValue(-2)                 # unter dem Zierrahmen
         else:
@@ -249,14 +251,15 @@ class Canvas(QGraphicsView):
             self._add_tape(scene, tw, th)
             dashed = QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.DashLine)
             dashed.setCosmetic(True)
-            scene.addLine(-2 * MM, th, tw + 2 * MM, th, dashed)
-            self.handle = scene.addRect(QRectF(tw / 2 - 5 * MM, th + MM, 10 * MM, 2 * MM),
+            scene.addLine(-2 * self.mm, th, tw + 2 * self.mm, th, dashed)
+            self.handle = scene.addRect(QRectF(tw / 2 - 5 * self.mm, th + self.mm, 10 * self.mm, 2 * self.mm),
                                         QPen(Qt.PenStyle.NoPen), QBrush(Qt.GlobalColor.black))
             self.handle.setCursor(Qt.CursorShape.SizeHorCursor if self.orientation == "horizontal"
                                   else Qt.CursorShape.SizeVerCursor)
             self.handle.setToolTip("Ziehen: Länge festlegen · Doppelklick: automatisch")
         self._caption = self._caption_for(th)
-        scene.setSceneRect(-_MARGIN, -_MARGIN, tw + 2 * _MARGIN, th + 2 * _MARGIN)
+        margin = _MARGIN_MM * self.mm
+        scene.setSceneRect(-margin, -margin, tw + 2 * margin, th + 2 * margin)
         self.set_selection([i for i in self._selection if self._selectable(i)])
 
     def _add_tape(self, scene: QGraphicsScene, tw: float, th: float) -> None:
@@ -265,7 +268,7 @@ class Canvas(QGraphicsView):
         dahinter läuft das Band als hellgrauer Streifen weiter (Szene-y; bei „horizontal“ ist
         die Ansicht gedreht). Nur Anzeige: reagiert nicht auf die Maus und gehört weder zum
         Druckbild noch zur Etikettgröße."""
-        self._tape = QRectF(0, th, tw, _MARGIN)
+        self._tape = QRectF(0, th, tw, _MARGIN_MM * self.mm)
         self.tape = scene.addRect(self._tape, QPen(Qt.PenStyle.NoPen), QBrush(_TAPE_COLOR))
         self.tape.setZValue(-1)
         self.tape.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
@@ -423,7 +426,7 @@ class Canvas(QGraphicsView):
             self.edit_requested.emit(item.index, self._reading(pos))
             return
         point = self._reading(pos)
-        x, y = point.x() / MM, point.y() / MM
+        x, y = point.x() / self.mm, point.y() / self.mm
         label = self._label_rect
         if label.x <= x <= label.right and label.y <= y <= label.bottom:
             self.set_tool("select")
@@ -432,7 +435,7 @@ class Canvas(QGraphicsView):
     # --- Geometrie --------------------------------------------------------
     def px_per_mm(self) -> float:
         """Bildschirmpixel je mm beim aktuellen Zoom."""
-        return self._scale * MM
+        return self._scale * self.mm
 
     def guides(self) -> list[tuple[str, float]]:
         """Hilfslinien beim Ziehen: ("x" | "y", mm in Leserichtung)."""
@@ -482,7 +485,7 @@ class Canvas(QGraphicsView):
         self.zoom_changed.emit(self.zoom)
 
     def _apply_zoom(self) -> None:
-        self._scale = self.zoom / 100 * self.logicalDpiX() / DPI   # 100 % = echte Größe
+        self._scale = self.zoom / 100 * self.logicalDpiX() / self.dpi   # 100 % = echte Größe
         self.resetTransform()
         self.scale(self._scale, self._scale)
         if self.orientation == "horizontal":
@@ -491,9 +494,10 @@ class Canvas(QGraphicsView):
     def _caption_for(self, length_dots: float) -> str:
         """Größenangabe in Leserichtung (Breite × Höhe)."""
         w, h = self.label.size_mm
+        w = mm_text(w)
         if self.label.shape == "round":
             return f"Ø {w} mm"
-        along = format_mm(round(length_dots)) if self.label.shape == "endless" else str(h)
+        along = format_mm(round(length_dots)) if self.label.shape == "endless" else mm_text(h)
         return f"{along} × {w} mm" if self.orientation == "horizontal" else f"{w} × {along} mm"
 
     def wheelEvent(self, event) -> None:
@@ -513,7 +517,7 @@ class Canvas(QGraphicsView):
 
     def snap_length(self, scene_y: float) -> float:
         """Szene-y der Unterkante → Länge in mm (Raster 0,5 mm, innerhalb der Modellgrenzen)."""
-        mm = round(scene_y / MM * 2) / 2
+        mm = round(scene_y / self.mm * 2) / 2
         return min(max(mm, self.min_mm), self.max_mm)
 
     def mousePressEvent(self, event) -> None:
@@ -577,8 +581,8 @@ class Canvas(QGraphicsView):
         pos = event.position()
         if self._drag == "length":
             mm = self.snap_length(self.mapToScene(pos.toPoint()).y() - self._grab_offset)
-            self.handle.setY(mm * MM - self.label_height())
-            self._caption = self._caption_for(mm * MM)
+            self.handle.setY(mm * self.mm - self.label_height())
+            self._caption = self._caption_for(mm * self.mm)
             self.viewport().update()
             self._moved = True
             self.length_changed.emit(mm)
@@ -612,28 +616,28 @@ class Canvas(QGraphicsView):
         delta = self._reading(pos) - self._reading(self._press)
         self._guides = []
         if snapping:
-            dx, dy = delta.x() / MM, delta.y() / MM
+            dx, dy = delta.x() / self.mm, delta.y() / self.mm
             frames = [self._start_rect(i).moved(dx, dy) for i in self._start]
             targets = [item.frame_mm() for item in self.objects
                        if item.index not in self._start and not item.is_empty()]
             snap = layout.snap(layout.bounds(frames), targets, self._area,
                                SNAP_PX / self.px_per_mm(), label=self._label_rect,
                                grow=self._grow, inner=self._inner)
-            delta += QPointF(snap.dx * MM, snap.dy * MM)
+            delta += QPointF(snap.dx * self.mm, snap.dy * self.mm)
             self._guides = snap.guides
         for index, start in self._start.items():
             self.objects[index].setPos(start + delta)
 
     def _start_rect(self, index: int) -> Rect:
         start, (w, h) = self._start[index], self.objects[index].size()
-        return Rect(start.x() / MM, start.y() / MM, w / MM, h / MM)
+        return Rect(start.x() / self.mm, start.y() / self.mm, w / self.mm, h / self.mm)
 
     def _drag_resize(self, pos: QPointF) -> None:
         """Vorschau beim Ziehen an einem Anfasser: Bild gestreckt, gerendert wird beim Loslassen."""
         item = self.objects[self._grabbed]
         frame = resized_frame(self._start_frame, self._resize_key,
                               self._reading(pos) + self._handle_offset, item.keep_ratio,
-                              item.keep_aspect)
+                              item.keep_aspect, self.mm)
         item.setPos(frame.topLeft())
         item.setTransform(QTransform.fromScale(frame.width() / item.rendered.w,
                                                frame.height() / item.rendered.h))
@@ -709,7 +713,7 @@ class Canvas(QGraphicsView):
         point = self._reading(event.position())
         # Daten jetzt kopieren (QMimeData lebt nur während des Ablegens), verarbeiten erst
         # danach: ein Dialog (PDF-Seite) im dropEvent hielte die Quelle des Ziehens fest
-        x, y = point.x() / MM, point.y() / MM
+        x, y = point.x() / self.mm, point.y() / self.mm
         if event.mimeData().hasFormat(image_import.MIME_SYMBOL):
             symbol = bytes(event.mimeData().data(image_import.MIME_SYMBOL)).decode(errors="replace")
             QTimer.singleShot(0, self, lambda: self.symbol_dropped.emit(symbol, x, y))
@@ -781,7 +785,7 @@ class Canvas(QGraphicsView):
         """Rote Hilfslinien über die ganze Ansicht, solange ein Objekt einrastet."""
         painter.setPen(QPen(_GUIDE_COLOR, 1))
         for axis, mm in self._guides:
-            point = self._view_point(mm * MM, mm * MM)
+            point = self._view_point(mm * self.mm, mm * self.mm)
             if axis == "x":
                 painter.drawLine(QPointF(point.x(), 0), QPointF(point.x(), vh))
             else:
@@ -795,7 +799,7 @@ class Canvas(QGraphicsView):
 
     def _draw_rulers(self, painter: QPainter, vw: int, vh: int) -> None:
         origin = self.label_view_rect().topLeft() if self.outline else self.mapFromScene(QPointF(0, 0))
-        ppm = self._scale * MM                            # Pixel pro mm
+        ppm = self._scale * self.mm                            # Pixel pro mm
         small = QFont(painter.font())
         small.setPointSize(7)
         small.setBold(False)
@@ -829,22 +833,23 @@ class Canvas(QGraphicsView):
 
 
 def resized_frame(start: QRectF, key: str, point: QPointF, keep_ratio: bool,
-                  keep_aspect: bool = False) -> QRectF:
+                  keep_aspect: bool = False, mm: float = MM) -> QRectF:
     """Rahmen nach Ziehen am Anfasser ``key`` auf ``point`` (Druckpunkte in Leserichtung).
 
-    Die gegenüberliegende Ecke bzw. Kante bleibt stehen; mindestens 1 mm. ``keep_ratio``:
+    Die gegenüberliegende Ecke bzw. Kante bleibt stehen; mindestens 1 mm (``mm``: Druckpunkte je
+    mm des Etiketts). ``keep_ratio``:
     Ecken behalten das Seitenverhältnis (Schrift skalieren); ``keep_aspect``: Ecken und
     Kanten wie beim Loslassen (``layout.keep_aspect``, Bild).
     """
     left, top, right, bottom = start.left(), start.top(), start.right(), start.bottom()
     if "l" in key:
-        left = min(point.x(), right - _MIN_FRAME)
+        left = min(point.x(), right - _MIN_FRAME_MM * mm)
     if "r" in key:
-        right = max(point.x(), left + _MIN_FRAME)
+        right = max(point.x(), left + _MIN_FRAME_MM * mm)
     if "t" in key:
-        top = min(point.y(), bottom - _MIN_FRAME)
+        top = min(point.y(), bottom - _MIN_FRAME_MM * mm)
     if "b" in key:
-        bottom = max(point.y(), top + _MIN_FRAME)
+        bottom = max(point.y(), top + _MIN_FRAME_MM * mm)
     if keep_aspect:
         old = Rect(start.x(), start.y(), start.width(), start.height())
         new = layout.keep_aspect(old, Rect(left, top, right - left, bottom - top), key)

@@ -24,7 +24,7 @@ from PySide6.QtGui import QGuiApplication, QKeySequence, QTextCursor, QTextDocum
 from PySide6.QtWidgets import QAbstractButton, QApplication
 
 from .. import layout
-from ..render import PT, RenderedObject, TextLayout, from_utf16, to_utf16
+from ..render import RenderedObject, TextLayout, from_utf16, to_utf16
 
 _VERTICAL = {Qt.Key.Key_Up: -1, Qt.Key.Key_Down: 1}
 _TABS = (Qt.Key.Key_Tab, Qt.Key.Key_Backtab)
@@ -264,7 +264,7 @@ class TextEditSession(QObject):
             box = _label_rect(rendered, rotation, left, lines[0].top, right - left,
                               bottom - lines[0].top)
             return box.united(QRectF(rendered.x, rendered.y, rendered.w, rendered.h))
-        width = rendered.base_pt * PT / 2
+        width = rendered.base_pt * rendered.dpi / 72 / 2
         obj = self._window.doc.objects[self.index]
         align = obj.paragraphs[0].align if obj.paragraphs else "left"
         left = x - {"center": width / 2, "right": width}.get(align, 0.0)

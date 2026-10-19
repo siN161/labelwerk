@@ -15,7 +15,7 @@ import segno
 from PIL import Image, ImageDraw
 
 from . import fonts
-from .document import (BARCODE_KINDS, BARCODE_MM, MAX_BARCODE_DATA, MAX_MODULE, QR_LEVELS,
+from .document import (BARCODE_KINDS, BARCODE_MM, MAX_BARCODE_DATA, MAX_MODULE, MODULE_LIMIT, QR_LEVELS,
                        ROTATIONS, BarcodeObject)
 from .labels import DPI
 
@@ -23,7 +23,7 @@ TITLES = {"qr": "QR-Code", "code128": "Code 128", "code39": "Code 39", "ean13": 
           "ean8": "EAN-8"}
 SAMPLES = {"qr": "labelwerk", "code128": "ABC-123", "code39": "ABC-123", "ean13": "590123412345",
            "ean8": "9638507"}                 # Beispielinhalt beim Einfügen
-INSERT_MODULE = {"qr": 6}    # Modulbreite beim Einfügen (sonst 3 Druckpunkte = 0,25 mm)
+INSERT_MODULE = {"qr": 6}    # Modulbreite beim Einfügen bei 300 dpi (sonst 3 Druckpunkte = 0,25 mm)
 MAX_LINEAR = 80              # Zeichen je Strichcode
 # Ruhezone in Modulen außerhalb des Rahmens (sonst 10) – EAN-13 links 11, davon 7 für die erste Ziffer
 QUIET = {"qr": 4, "ean13": 11, "ean8": 7}
@@ -243,8 +243,8 @@ def _ean8(data: str) -> Code:
 
 
 # --- Maße und Zeichnen -----------------------------------------------------------------------
-def _dots(mm: float) -> int:
-    return round(mm * DPI / 25.4)
+def _dots(mm: float, dpi: int = DPI) -> int:
+    return round(mm * dpi / 25.4)
 
 
 def _number(v) -> bool:
@@ -256,8 +256,8 @@ def check(obj: BarcodeObject) -> Code:
     if obj.rotation not in ROTATIONS:
         raise BarcodeError(f"Unbekannte Drehung {obj.rotation!r} – erlaubt: 0, 90, 180, 270 Grad")
     if not isinstance(obj.module, int) or isinstance(obj.module, bool) \
-            or not 1 <= obj.module <= MAX_MODULE:
-        raise BarcodeError(f"Modulbreite {obj.module!r} ungültig – erlaubt: 1–{MAX_MODULE} "
+            or not 1 <= obj.module <= MODULE_LIMIT:
+        raise BarcodeError(f"Modulbreite {obj.module!r} ungültig – erlaubt: 1–{MODULE_LIMIT} "
                            f"Druckpunkte")
     if not isinstance(obj.text, bool):
         raise BarcodeError(f"Klartext muss an oder aus sein, nicht {obj.text!r}")
@@ -275,10 +275,10 @@ def modules(obj: BarcodeObject) -> int:
     return len(code.rows) if code.matrix else len(code.rows[0]) + (code.lead if obj.text else 0)
 
 
-def quiet_mm(obj: BarcodeObject) -> float:
+def quiet_mm(obj: BarcodeObject, dpi: int = DPI) -> float:
     """Ruhezone links und rechts (mm) außerhalb des Rahmens, die frei bleiben sollte."""
     modules = 7 if obj.kind == "ean13" and obj.text else QUIET.get(obj.kind, 10)
-    return modules * obj.module * 25.4 / DPI
+    return modules * obj.module * 25.4 / dpi
 
 
 # höchstens so viele Module breit (QR: Version 40; Code 128 ganz in B; Code 39 mit Lücken)
@@ -286,11 +286,11 @@ MAX_MODULES = {"qr": 177, "code128": 11 * (MAX_LINEAR + 2) + 13, "code39": 16 * 
                "ean13": 102, "ean8": 67}
 
 
-def max_size(obj: BarcodeObject) -> tuple[int, int]:
+def max_size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
     """Obere Schranke der Größe (Druckpunkte, ungedreht) ohne Kodieren – für die Grenzen fremder
     Dateien, auch wenn erst die Serie den Inhalt füllt."""
     side = MAX_MODULES.get(obj.kind, 0) * obj.module
-    return (side, side) if obj.kind == "qr" else (side, _dots(obj.h_mm))
+    return (side, side) if obj.kind == "qr" else (side, _dots(obj.h_mm, dpi))
 
 
 @dataclass(frozen=True)
@@ -303,24 +303,24 @@ class _Layout:
     baseline: int = 0
 
 
-def size(obj: BarcodeObject) -> tuple[int, int]:
-    """Größe (Breite, Höhe) in Druckpunkten, ungedreht."""
-    layout = _layout(obj, check(obj))
+def size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
+    """Größe (Breite, Höhe) in Druckpunkten bei ``dpi``, ungedreht."""
+    layout = _layout(obj, check(obj), dpi)
     return layout.width, layout.height
 
 
-def _layout(obj: BarcodeObject, code: Code) -> _Layout:
+def _layout(obj: BarcodeObject, code: Code, dpi: int = DPI) -> _Layout:
     m = obj.module
     if code.matrix:
         side = len(code.rows) * m
         return _Layout(side, side, side, side)
     width = (len(code.rows[0]) + (code.lead if obj.text else 0)) * m
-    height = _dots(obj.h_mm)
+    height = _dots(obj.h_mm, dpi)
     if not obj.text:
         return _Layout(width, height, height, height)
-    font, top, bottom, gap = _text_font(code, m, height)
+    font, top, bottom, gap = _text_font(code, m, height, dpi)
     bars = height - gap - top - bottom
-    if bars < _dots(MIN_BARS_MM):
+    if bars < _dots(MIN_BARS_MM, dpi):
         raise BarcodeError("Barcode zu niedrig für den Klartext – höher ziehen oder Klartext aus")
     return _Layout(width, height, bars, bars + (gap + top) // 2, font, bars + gap + top)
 
@@ -330,11 +330,26 @@ def _font_path() -> str:
     return fonts.resolve(None, False, False).path
 
 
-def _text_font(code: Code, m: int, height: int):
+def scaled(dots: int, dpi: int) -> int:
+    """Druckpunkte bei 300 dpi in der Auflösung ``dpi`` (gleiche Größe in mm, mindestens 1)."""
+    return dots if dpi == DPI else max(1, round(dots * dpi / DPI))
+
+
+def insert_module(kind: str, dpi: int = DPI) -> int:
+    """Modulbreite beim Einfügen in Druckpunkten bei ``dpi`` (gleiche mm wie bei 300 dpi)."""
+    return scaled(INSERT_MODULE.get(kind, 3), dpi)
+
+
+def max_module(dpi: int = DPI) -> int:
+    """Größte Modulbreite, die Einpassen und Eingabe bei ``dpi`` zulassen (1,7 mm)."""
+    return min(scaled(MAX_MODULE, dpi), MODULE_LIMIT)
+
+
+def _text_font(code: Code, m: int, height: int, dpi: int = DPI):
     """Klartext-Schrift und ihr Platz (Schrift, über und unter der Grundlinie, Abstand zu den
     Strichen): rund ``TEXT_MODULES`` Module groß (mindestens 6 pt), verkleinert, bis jede Gruppe in
     ihre Breite passt und der Klartext höchstens ``TEXT_SHARE`` der Höhe braucht."""
-    dots = max(TEXT_MODULES * m, MIN_TEXT_DOTS)
+    dots = max(TEXT_MODULES * m, scaled(MIN_TEXT_DOTS, dpi))
     path = _font_path()
     while True:
         font = fonts.load(path, dots)
@@ -342,15 +357,15 @@ def _text_font(code: Code, m: int, height: int):
         top, bottom, gap = -top, max(0, bottom), max(2, dots // 8)
         over = max(font.getlength(text) / ((end - start) * m) for text, start, end in code.text)
         over = max(over, (gap + top + bottom) / (TEXT_SHARE * height))
-        if over <= 1 or dots <= MIN_FIT_DOTS:
+        if over <= 1 or dots <= scaled(MIN_FIT_DOTS, dpi):
             return font, top, bottom, gap
         dots = max(MIN_FIT_DOTS, min(dots - 1, math.floor(dots / over)))
 
 
-def draw(obj: BarcodeObject) -> Image.Image:
+def draw(obj: BarcodeObject, dpi: int = DPI) -> Image.Image:
     """Barcode als Graustufenbild (L, weißer Grund, Tinte schwarz) in ``size(obj)``, ungedreht."""
     code = check(obj)
-    layout = _layout(obj, code)
+    layout = _layout(obj, code, dpi)
     img = Image.new("L", (layout.width, layout.height), 255)
     pen = ImageDraw.Draw(img)
     m = obj.module
@@ -370,10 +385,11 @@ def draw(obj: BarcodeObject) -> Image.Image:
     return img
 
 
-def placeholder_size(obj: BarcodeObject) -> tuple[int, int]:
+def placeholder_size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
     """Größe (Druckpunkte, ungedreht) für einen Barcode, der sich nicht kodieren lässt – etwa so
     groß, wie er mit diesem Inhalt würde (Arbeitsfläche: bleibt sichtbar und wählbar)."""
-    m = obj.module if isinstance(obj.module, int) and 1 <= obj.module <= MAX_MODULE else 3
+    m = (obj.module if isinstance(obj.module, int) and 1 <= obj.module <= MODULE_LIMIT
+         else scaled(3, dpi))
     n = len(obj.data) if isinstance(obj.data, str) else 1
     if obj.kind == "qr":
         side = (21 + 4 * min(39, n // 20)) * m
@@ -382,7 +398,7 @@ def placeholder_size(obj: BarcodeObject) -> tuple[int, int]:
     count = {"ean13": 102 if obj.text is True else 95, "ean8": 67,
              "code39": 16 * (n + 2)}.get(obj.kind, 11 * (n + 3) + 13)
     h = obj.h_mm if _number(obj.h_mm) and BARCODE_MM[0] <= obj.h_mm <= BARCODE_MM[1] else 10.0
-    return count * m, _dots(h)
+    return count * m, _dots(h, dpi)
 
 
 def placeholder(width: int, height: int) -> Image.Image:

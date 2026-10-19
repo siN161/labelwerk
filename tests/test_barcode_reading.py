@@ -66,3 +66,11 @@ def test_zxing_reads_every_qr_level(level):
 def test_zxing_reads_one_dot_modules():
     assert _read(barcodes.draw(_bar(kind="ean13", data="400638133393", module=1, h_mm=8))) \
         == ["4006381333931"]
+
+
+def test_zxing_reads_barcodes_on_a_203_dpi_label():
+    """Andere Drucker: Module in ganzen Punkten bei 203 dpi bleiben lesbar."""
+    objs = [_bar(kind="qr", data="Zebra 203", module=3, x_mm=2, y_mm=2),
+            _bar(kind="code128", data="Z-203", module=2, x_mm=22, y_mm=4, h_mm=10)]
+    found = _read(render_document(Document("57x32mm@203", objects=objs)))
+    assert sorted(found) == ["Z-203", "Zebra 203"]

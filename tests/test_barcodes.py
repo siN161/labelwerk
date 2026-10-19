@@ -182,7 +182,7 @@ def test_empty_and_too_long_content():
 
 
 @pytest.mark.parametrize("field, value, message", [
-    ("module", 0, "Modulbreite"), ("module", 21, "Modulbreite"), ("module", True, "Modulbreite"),
+    ("module", 0, "Modulbreite"), ("module", 41, "Modulbreite"), ("module", True, "Modulbreite"),
     ("module", 2.0, "Modulbreite"), ("h_mm", 1.9, "Höhe"), ("h_mm", 100.5, "Höhe"),
     ("h_mm", float("nan"), "Höhe"), ("h_mm", True, "Höhe"), ("text", 1, "Klartext"),
     ("error", "m", "Fehlerkorrektur"), ("rotation", 45, "Drehung")])
