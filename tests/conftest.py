@@ -10,6 +10,12 @@ def isolated_config(monkeypatch, tmp_path_factory):
 
 
 @pytest.fixture(autouse=True)
+def no_real_sysfs(monkeypatch, tmp_path_factory):
+    """Kein Test sieht echte Drucker in /sys (Erkennung über ``printers.usb_printers``)."""
+    monkeypatch.setattr("labelwerk.printers.SYS_ROOT", str(tmp_path_factory.mktemp("usbmisc")))
+
+
+@pytest.fixture(autouse=True)
 def no_leftover_rasterizer():
     """Das Hauptfenster meldet die Qt-Raster-Funktion für Vektorbilder an – danach wieder ohne,
     damit jeder Test im Kern-Zustand startet."""
@@ -34,5 +40,6 @@ def no_real_hardware(monkeypatch):
         return blocked
     monkeypatch.setattr("labelwerk.media.query_status", guard("query_status"))
     monkeypatch.setattr("labelwerk.printer.send", guard("send"))
+    monkeypatch.setattr("labelwerk.printer.socket.create_connection", guard("create_connection"))
     yield
     assert not calls, f"Test hat echte Hardware-Funktionen erreicht: {calls}"

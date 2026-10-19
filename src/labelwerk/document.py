@@ -11,6 +11,7 @@ from .imaging import MAX_DPI, limit_size, on_white
 ORIENTATIONS = ("vertical", "horizontal")
 ALIGNMENTS = ("left", "center", "right", "justify")
 ROTATIONS = (0, 90, 180, 270)      # Grad im Uhrzeigersinn
+COLORS = ("black", "red")          # Farbe je Objekt; Rot nur auf Etiketten Rot/Schwarz (62red)
 MAX_MARGIN_MM = 20.0
 MAX_POSITION_MM = 999.9            # Lage eines Objekts (Positionsfelder der GUI, auch neben dem Etikett)
 MIN_PT, MAX_PT = 4.0, 100.0
@@ -67,6 +68,7 @@ class TextObject:
                                     # (Endlosband, automatische Länge: längs = Textlänge)
     h_mm: float | None = None
     rotation: int = 0               # 0 | 90 | 180 | 270
+    color: str = "black"            # COLORS
 
     @property
     def positioned(self) -> bool:
@@ -123,6 +125,7 @@ class ImageObject:
     dpi: float = 300.0              # Auflösung von ``png`` – ergibt die Größe 1:1 (``natural_mm``)
     svg: bytes | None = field(default=None, repr=False)   # Vektorbild: beim Rendern in Rahmengröße
                                     # gerastert (``render.set_svg_rasterizer``); ``png`` ist Vorschau
+    color: str = "black"            # COLORS
 
     def __post_init__(self) -> None:
         if self.crop is not None:                # JSON liefert eine Liste
@@ -205,6 +208,7 @@ class BarcodeObject:
     rotation: int = 0               # 0 | 90 | 180 | 270
     text: bool = True               # Klartext unter dem Strichcode
     error: str = "M"                # QR-Fehlerkorrektur QR_LEVELS
+    color: str = "black"            # COLORS
 
     @property
     def positioned(self) -> bool:

@@ -1,6 +1,7 @@
 """Erzeugt Brother-Rasterdaten und sendet sie an den Drucker."""
 from __future__ import annotations
 
+import socket
 from collections.abc import Callable
 
 from brother_ql.backends.helpers import send
@@ -9,8 +10,9 @@ from brother_ql.raster import BrotherQLRaster
 from PIL import Image
 
 from .document import CUTS
+from .labels import get_label, labels_for_model
+from .printers import DEFAULT_MODEL, backend_for, capabilities
 
-DEFAULT_MODEL = "QL-600"
 DEFAULT_BACKEND = "linux_kernel"
 DEFAULT_PRINTER = "file:///dev/usb/lp0"
 
@@ -48,13 +50,34 @@ MAX_CUT_EVERY = 255         # Brother ESC i A n: höchstens alle 255 Etiketten
 # den Teilen lässt sich abbrechen – kleine Teile, damit das schnell wirkt.
 MAX_JOB_EACH = 10
 THRESHOLD = 70.0            # brother_ql: ein Punkt druckt ab (100 − THRESHOLD) % Schwarz
+CONNECT_TIMEOUT_S = 5       # Netzwerkdrucker: so lange auf die Verbindung warten
 
 
-def to_print_mode(image: Image.Image) -> Image.Image:
+_LEVEL = min(255, max(0, int((100.0 - THRESHOLD) / 100.0 * 255)))   # wie brother_ql.convert
+
+
+def to_print_mode(image: Image.Image, red: bool = False) -> Image.Image:
     """Druckbild als 1-Bit-Bild mit derselben Schwelle wie brother_ql – druckt bitgleich, braucht
-    aber nur ein Vierundzwanzigstel des Speichers von RGB (Serien mit vielen Etiketten)."""
-    level = min(255, max(0, int((100.0 - THRESHOLD) / 100.0 * 255)))   # wie brother_ql.convert
-    return image.convert("L").point(lambda v: 0 if 255 - v >= level else 255, mode="1")
+    aber nur ein Vierundzwanzigstel des Speichers von RGB (Serien mit vielen Etiketten).
+    ``red`` (Etikett Rot/Schwarz): reines Schwarz, Rot, Weiß (``pure_colors``) – 1 Bit verlöre
+    das Rot."""
+    if red:
+        return pure_colors(image)
+    return image.convert("L").point(lambda v: 0 if 255 - v >= _LEVEL else 255, mode="1")
+
+
+def pure_colors(image: Image.Image) -> Image.Image:
+    """Druckbild Rot/Schwarz auf reine Farben gebracht – mit derselben Schwelle wie ein
+    Schwarz-Weiß-Etikett (brother_ql nähme sonst nur sehr dunkle Punkte als Schwarz, Text würde
+    dünner als in der Vorschau). Schwarze Tinte senkt alle Kanäle, rote nur Grün und Blau:
+    Schwarz, wo Rot dunkel genug ist; Rot, wo sonst Grün dunkel genug ist."""
+    r, g, _ = image.convert("RGB").split()
+    black = r.point(lambda v: 255 if 255 - v >= _LEVEL else 0, mode="1")
+    red = g.point(lambda v: 255 if 255 - v >= _LEVEL else 0, mode="1")
+    out = Image.new("RGB", image.size, "white")
+    out.paste((255, 0, 0), (0, 0), red)
+    out.paste((0, 0, 0), (0, 0), black)
+    return out
 
 
 def cut_interval(mode: str, count: int) -> int:
@@ -88,27 +111,32 @@ def build_instructions(
     cut: bool = True, cut_every: int = 1,
 ) -> bytes:
     """Rasterdaten für ein Etikett oder mehrere in einem Auftrag (Serie); ``cut``: überhaupt
-    schneiden, ``cut_every``: alle n Etiketten (``cut_interval``) und am Ende."""
+    schneiden (ohne Abschneider des Modells nie), ``cut_every``: alle n Etiketten
+    (``cut_interval``) und am Ende. Etiketten Rot/Schwarz (62red) mit Rot-Ebene."""
     images = [images] if isinstance(images, Image.Image) else list(images)
     if not images:
         raise ValueError("Keine Etiketten zum Drucken")
     if not isinstance(cut_every, int) or isinstance(cut_every, bool) or cut_every < 1:
         raise ValueError(f"Schneiden alle n Etiketten: n muss eine ganze Zahl ab 1 sein, "
                          f"nicht {cut_every!r}")
+    if label_id not in {label.id for label in labels_for_model(model)}:
+        raise ValueError(f"Etikett {label_id!r} passt nicht zum {model} – siehe "
+                         f"'labelwerk -m {model} labels'")
     qlr = _Raster(model, cut_every)
     qlr.exception_on_warning = True
+    red = get_label(label_id).two_color          # nur Zweifarb-Modelle haben 62red (oben geprüft)
     return bytes(convert(
         qlr=qlr,
-        images=images,
+        images=[pure_colors(img) for img in images] if red else images,
         label=label_id,
         rotate="0",
         threshold=THRESHOLD,
         dither=False,
         compress=False,
-        red=False,
+        red=red,
         dpi_600=False,
         hq=True,
-        cut=cut,
+        cut=cut and capabilities(model).cutter,
     ))
 
 
@@ -117,7 +145,7 @@ def print_image(
     label_id: str,
     model: str = DEFAULT_MODEL,
     printer: str = DEFAULT_PRINTER,
-    backend: str = DEFAULT_BACKEND,
+    backend: str | None = None,
     cut: bool = True,
     cut_every: int = 1,
     cancelled: Callable[[], bool] | None = None,
@@ -128,8 +156,14 @@ def print_image(
     Eine Serie geht in Teilaufträgen hinaus (``MAX_JOB_EACH`` bzw. ``cut_every`` Etiketten), jeder
     wird geprüft; ein Fehler bricht ab und nennt – waren schon Teile gedruckt – die betroffenen
     Etiketten. ``cancelled()`` wird vor jedem Teil gefragt (True → ``PrintCancelled``; ein
-    gesendeter Teil läuft zu Ende), ``progress(gedruckt, alle)`` nach jedem."""
+    gesendeter Teil läuft zu Ende), ``progress(gedruckt, alle)`` nach jedem. ``backend``: None =
+    aus der URI (``tcp://`` → Netzwerk)."""
+    backend = backend or backend_for(printer)
     images = [image] if isinstance(image, Image.Image) else list(image)
+    if label_id not in {label.id for label in labels_for_model(model)}:
+        raise PrintError(f"Etikett {label_id!r} passt nicht zum Drucker ({model}).")
+    if backend == "network":
+        _reachable(printer)
     part = MAX_JOB_EACH if cut_every == 1 else min(cut_every, MAX_CUT_EVERY)
     status: dict = {}
     for start in range(0, len(images), part):
@@ -155,12 +189,11 @@ def _send(data: bytes, label_id: str, printer: str, backend: str) -> dict:
     try:
         status = send(instructions=data, printer_identifier=printer,
                       backend_identifier=backend, blocking=True)
-    except FileNotFoundError:
-        raise PrintError(f"Drucker nicht gefunden: {printer}\n"
-                         "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', "
-                         "'lsmod | grep usblp'.") from None
-    except PermissionError:
-        raise PrintError(f"Keine Berechtigung für {printer} – Benutzer in Gruppe 'lp'?") from None
+    except OSError as e:                  # pyusb: USBError ist ein OSError
+        if backend != "network":
+            raise _usb_error(e, printer) from None
+        raise PrintError(f"Netzwerkdrucker {printer} nicht erreichbar ({e.strerror or e}) – "
+                         "eingeschaltet, im selben Netz, Adresse richtig?") from None
     except ValueError as e:
         if str(e) != "Device not found":  # pyusb
             raise
@@ -173,3 +206,27 @@ def _send(data: bytes, label_id: str, printer: str, backend: str) -> dict:
             _PRINTER_ERRORS.get(err, "Druckerfehler: {err}").format(label=label_id, err=err)
             for err in errors))
     return status
+
+
+def _usb_error(e: OSError, printer: str) -> PrintError:
+    """Verständliche Meldung für ein fehlendes, gesperrtes oder belegtes USB-Gerät."""
+    if isinstance(e, PermissionError):
+        return PrintError(f"Keine Berechtigung für {printer} – Benutzer in Gruppe 'lp'?")
+    if isinstance(e, FileNotFoundError):
+        return PrintError(f"Drucker nicht gefunden: {printer}\n"
+                          "Prüfen: eingeschaltet, Editor-Lite-LED aus, 'lsusb', "
+                          "'lsmod | grep usblp'.")
+    return PrintError(f"Drucker {printer} nicht bereit ({e.strerror or e}) – belegt oder "
+                      "gerade beschäftigt? Kurz warten bzw. aus- und einschalten.")
+
+
+def _reachable(printer: str) -> None:
+    """Netzwerkdrucker vorab mit Zeitlimit ansprechen – brother_ql wartet sonst ohne Grenze
+    (bei einer falschen Adresse rund zwei Minuten)."""
+    host, _, port = printer[len("tcp://"):].partition(":")
+    try:
+        socket.create_connection((host, int(port or 9100)), timeout=CONNECT_TIMEOUT_S).close()
+    except (OSError, ValueError) as e:
+        reason = "keine Antwort" if isinstance(e, TimeoutError) else getattr(e, "strerror", None) or e
+        raise PrintError(f"Netzwerkdrucker {printer} nicht erreichbar ({reason}) – "
+                         "eingeschaltet, im selben Netz, Adresse richtig?") from None

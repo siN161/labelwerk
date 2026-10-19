@@ -15,6 +15,7 @@ from .clipart import RECENT_LIMIT
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .fonts import DEFAULT_FAMILY
 from .labels import labels_for_model
+from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model
 from .storage import RECENT_FILES
 
 THEMES = ("rawblock", "classic")
@@ -37,6 +38,10 @@ class Settings:
     symbols_favorites: list[str] = field(default_factory=list)   # Symbol-ids
     recent_files: list[str] = field(default_factory=list)   # Zuletzt geöffnet (Pfade), neueste zuerst
     start_favorite: str | None = None      # Favorit, mit dem labelwerk startet; None = leer
+    printer: str = ""                      # gewählter Drucker (URI); "" = automatisch
+    printer_model: str = ""                # Ersatz, wenn das Modell nicht erkannt wird; "" = keins
+    last_model: str = ""                   # zuletzt erkanntes Modell (gilt ohne Drucker)
+    network_printers: list[dict] = field(default_factory=list)   # {name, host, model}
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
@@ -63,6 +68,11 @@ def _rules(model: str) -> dict:
         "symbols_favorites": lambda v: isinstance(v, list),
         "recent_files": lambda v: isinstance(v, list),
         "start_favorite": lambda v: v is None or (isinstance(v, str) and bool(v.strip())),
+        "printer": lambda v: isinstance(v, str) and (
+            v == "" or v.startswith(("file://", "tcp://", "usb://"))),
+        "printer_model": lambda v: v == "" or v in SUPPORTED_MODELS,
+        "last_model": lambda v: v == "" or v in SUPPORTED_MODELS,
+        "network_printers": lambda v: isinstance(v, list),
     }
 
 
@@ -74,7 +84,9 @@ def settings_path() -> Path:
     return Path(base) / "labelwerk" / "settings.json"
 
 
-def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Settings:
+def load_settings(path: str | Path | None = None, model: str | None = None) -> Settings:
+    """``model``: Modell für die Prüfung des Etiketts; None = aus den Einstellungen (Ersatzmodell,
+    zuletzt erkanntes)."""
     path = Path(path) if path else settings_path()
     settings = Settings()
     try:
@@ -87,6 +99,9 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
         settings.warnings.append(f"Einstellungen nicht lesbar ({path}): {e} – Standardwerte aktiv.")
         return settings
     _migrate_font_size(raw, settings)
+    if model is None:
+        model = effective_model(None, *(raw.get(k) if raw.get(k) in SUPPORTED_MODELS else ""
+                                        for k in ("printer_model", "last_model")))
     for key, valid in _rules(model).items():
         if key not in raw:
             continue
@@ -100,6 +115,8 @@ def load_settings(path: str | Path | None = None, model: str = "QL-600") -> Sett
                 value = _symbol_ids(key, value, settings.warnings)
             elif key == "recent_files":
                 value = _text_list(key, value, settings.warnings)[:RECENT_FILES]
+            elif key == "network_printers":
+                value = _network(value, settings.warnings)
             setattr(settings, key, value)
         else:
             settings.warnings.append(f"Einstellung {key!r} ungültig ({value!r}) – "
@@ -116,6 +133,31 @@ def _text_list(key: str, value: list, warnings: list[str]) -> list[str]:
     if len(valid) != len(value):
         warnings.append(f"Einstellung {key!r}: ungültige Einträge verworfen.")
     return list(dict.fromkeys(valid))
+
+
+def _network(value: list, warnings: list[str]) -> list[dict]:
+    """Netzwerkdrucker: Einträge mit Host (ohne Leerzeichen, ohne Schema) und bekanntem Modell;
+    ungültige einzeln verworfen (mit Hinweis)."""
+    valid = [{"name": e.get("name") or "", "host": e["host"].strip(), "model": e["model"]}
+             for e in value if isinstance(e, dict) and isinstance(e.get("host"), str)
+             and valid_host(e["host"]) and e.get("model") in SUPPORTED_MODELS
+             and isinstance(e.get("name", ""), str)]
+    if len(valid) != len(value):
+        warnings.append("Einstellung 'network_printers': ungültige Einträge verworfen.")
+    return valid
+
+
+def valid_host(host: str) -> bool:
+    """IPv4-Adresse oder Hostname (ohne Schema, Pfad, Port, Leer- und Steuerzeichen; IPv6 geht
+    nicht – „:“ trennt den Port)."""
+    host = host.strip()
+    return (bool(host) and host.isprintable() and not any(c in host for c in " /:")
+            and len(host) <= 253)
+
+
+def network_entries(settings: Settings) -> list[NetworkEntry]:
+    """Netzwerkdrucker der Einstellungen für ``printers.network_printers``."""
+    return [NetworkEntry(e["name"], e["host"], e["model"]) for e in settings.network_printers]
 
 
 def _symbol_ids(key: str, value: list, warnings: list[str]) -> list[str]:

@@ -25,11 +25,11 @@ from pathlib import Path
 from PIL import Image
 
 from . import barcodes
-from .document import (ALIGNMENTS, BARCODE_KINDS, BARCODE_MM, CUTS, FRAME_LINE_MM, FRAME_STYLES,
-                       MAX_BARCODE_DATA, MAX_DIGITS, MAX_FRAME_MM, MAX_MARGIN_MM, MAX_MODULE,
-                       MAX_NUMBER, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS, QR_LEVELS,
-                       ROTATIONS, BarcodeObject, Document, Frame, ImageObject, Numbering, Paragraph,
-                       Series, Span, TextObject)
+from .document import (ALIGNMENTS, BARCODE_KINDS, BARCODE_MM, COLORS, CUTS, FRAME_LINE_MM,
+                       FRAME_STYLES, MAX_BARCODE_DATA, MAX_DIGITS, MAX_FRAME_MM, MAX_MARGIN_MM,
+                       MAX_MODULE, MAX_NUMBER, MAX_POSITION_MM, MAX_SERIES_ROWS, ORIENTATIONS,
+                       QR_LEVELS, ROTATIONS, BarcodeObject, Document, Frame, ImageObject, Numbering,
+                       Paragraph, Series, Span, TextObject)
 from .imaging import MAX_PIXELS, MODES
 from .labels import get_label
 
@@ -52,14 +52,14 @@ SPAN = {"text": "span_text", "family": "str?", "size_pt": "pt?", "bold": "bool",
         "underline": "bool"}
 PARAGRAPH = {"align": "align"}                                    # dazu „spans“
 TEXT = {"size_pt": "pt?", "font_path": "str?", "fit": "bool", "x_mm": "pos?", "y_mm": "pos?",
-        "w_mm": "size?", "h_mm": "size?", "rotation": "rotation"}  # dazu „paragraphs“
+        "w_mm": "size?", "h_mm": "size?", "rotation": "rotation", "color": "color"}  # dazu „paragraphs“
 IMAGE = {"png": "bytes", "source": "str", "page": "page?", "crop": "crop", "x_mm": "pos",
          "y_mm": "pos", "w_mm": "size", "h_mm": "size", "rotation": "rotation", "mode": "mode",
          "threshold": "threshold", "invert": "bool", "keep_ratio": "bool", "dpi": "dpi",
-         "svg": "bytes?"}
+         "svg": "bytes?", "color": "color"}
 BARCODE = {"kind": "barcode_kind", "data": "barcode_data", "x_mm": "pos", "y_mm": "pos",
            "module": "module", "h_mm": "barcode_mm", "rotation": "rotation", "text": "bool",
-           "error": "qr_level"}
+           "error": "qr_level", "color": "color"}
 FRAME = {"style": "frame_style", "rounded": "bool", "line_mm": "frame_line",
          "inset_mm": "frame_mm", "padding_mm": "frame_mm"}
 NUMBERING = {"start": "number", "step": "step", "count": "count", "digits": "digits"}
@@ -121,6 +121,7 @@ _KINDS = {
     "module": lambda v: _int(v) and 1 <= v <= MAX_MODULE,
     "barcode_mm": lambda v: _num(v) and BARCODE_MM[0] <= v <= BARCODE_MM[1],
     "qr_level": lambda v: v in QR_LEVELS,
+    "color": lambda v: v in COLORS,
     "path": lambda v: _text(v) and v != "" and "\x00" not in v,
     "crop": lambda v: v is None or (isinstance(v, list) and len(v) == 4 and all(map(_int, v))),
 }

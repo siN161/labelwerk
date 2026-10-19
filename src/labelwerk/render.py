@@ -20,10 +20,11 @@ from functools import cached_property, lru_cache
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from . import barcodes, fonts, imaging
-from .document import (ALIGNMENTS, FRAME_LINE_MM, FRAME_STYLES, MAX_FRAME_MM, MAX_MARGIN_MM,
-                       MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS, BarcodeObject, Document, Frame,
-                       ImageObject, Paragraph, Span, TextObject)
+from .document import (ALIGNMENTS, COLORS, FRAME_LINE_MM, FRAME_STYLES, MAX_FRAME_MM,
+                       MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, ROTATIONS, BarcodeObject,
+                       Document, Frame, ImageObject, Paragraph, Span, TextObject)
 from .labels import DPI, get_label, length_limits
+from .printers import capabilities
 
 MARGIN = 12            # Punkte, ca. 1 mm
 PT = DPI / 72          # Druckpunkte pro typografischem Punkt
@@ -33,6 +34,7 @@ _LINE_GAP = 4          # wie Pillow multiline_text
 _SLANT = 0.2           # Ersatzkursive: Scherung, wenn die Schrift keine echte Kursive hat
 FRAME_RADIUS_MM = 2.0  # Eckradius abgerundeter Rahmen (höchstens ¼ der kürzeren Seite)
 FRAME_CORNER_MM = 4.0  # Schenkel bei „nur Ecken“ (höchstens ¼ der kürzeren Seite)
+INK = {"black": (0, 0, 0), "red": (255, 0, 0)}   # Druckfarben im Druckbild (brother_ql trennt Rot)
 
 
 class TextTooLarge(ValueError):
@@ -88,7 +90,8 @@ class RenderedObject:
     den Rahmen); seine linke obere Ecke liegt bei ``x + image_dx``, ``y + image_dy``
     (``image_dx``/``image_dy`` ≤ 0; Bild-Objekte und Barcodes: genau der Rahmen, 0).
     ``layout``: der Zeilensatz, aus dem das Bild gezeichnet wurde (Schreibmarke, Treffer);
-    None bei Bild-Objekten und Barcodes.
+    None bei Bild-Objekten und Barcodes. ``color``: Druckfarbe der Tinte (``INK``) – Rot nur auf
+    Etiketten Rot/Schwarz, sonst schwarz.
     """
     image: Image.Image
     x: int
@@ -99,6 +102,7 @@ class RenderedObject:
     image_dx: int = 0
     image_dy: int = 0
     layout: TextLayout | None = field(default=None, compare=False, repr=False)
+    color: str = "black"
 
 
 def render_object(obj: TextObject | ImageObject | BarcodeObject, doc: Document,
@@ -155,7 +159,7 @@ def compose(rendered: list[RenderedObject], size: tuple[int, int],
     if frame is not None:
         img.paste((0, 0, 0), (0, 0), frame)
     for obj in rendered:
-        img.paste((0, 0, 0), (obj.x + obj.image_dx, obj.y + obj.image_dy),
+        img.paste(INK[obj.color], (obj.x + obj.image_dx, obj.y + obj.image_dy),
                   ImageOps.invert(obj.image))
     return img.rotate(-90, expand=True) if orientation == "horizontal" else img
 
@@ -340,6 +344,7 @@ class _Sheet:
     max_len: int
     frame: Frame | None = None
     round: bool = False        # rundes Etikett: Rahmen ist ein Kreis
+    red: bool = False          # Etikett Rot/Schwarz auf einem Zweifarb-Modell: Rot druckt rot
 
     def margins(self) -> tuple[int, int]:
         """Ränder (links/rechts, oben/unten) in Leserichtung."""
@@ -392,7 +397,8 @@ def _sheet(doc: Document, model: str) -> _Sheet:
     if doc.frame is not None:
         _check_frame(doc.frame)
     return _Sheet(doc.label_id, doc.orientation == "horizontal", label.width, feed, margin, side,
-                  min_len, max_len, doc.frame, label.shape == "round")
+                  min_len, max_len, doc.frame, label.shape == "round",
+                  label.two_color and capabilities(model).two_color)
 
 
 FRAME_TOO_BIG = "Rahmen passt nicht aufs Etikett – Abstand, Strichstärke oder Innenabstand verkleinern"
@@ -428,6 +434,8 @@ class Prepared:
 
 
 def _prepare(obj: TextObject | ImageObject | BarcodeObject, sheet: _Sheet) -> Prepared:
+    if obj.color not in COLORS:
+        raise ValueError(f"Unbekannte Farbe {obj.color!r} – erlaubt: schwarz, rot (black, red)")
     if isinstance(obj, ImageObject):
         return _prepare_image(obj)
     if isinstance(obj, BarcodeObject):
@@ -525,6 +533,14 @@ def _place(prep: Prepared, sheet: _Sheet, width: int, height: int
 
 
 def _finish(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedObject:
+    """Objekt zeichnen und platzieren (``_finish_shape``); Rot nur auf Etiketten Rot/Schwarz."""
+    rendered = _finish_shape(prep, sheet, width, height)
+    if prep.obj.color == "red" and sheet.red:
+        rendered.color = "red"
+    return rendered
+
+
+def _finish_shape(prep: Prepared, sheet: _Sheet, width: int, height: int) -> RenderedObject:
     """Objektbild aus dem Zeilensatz (``_place``) zeichnen und auf dem Etikett platzieren;
     Bild, Rahmen und Bildlage werden mit der Fläche gedreht."""
     obj = prep.obj

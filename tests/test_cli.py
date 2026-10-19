@@ -357,3 +357,114 @@ def test_install_desktop_reports_failed_update_tools(tmp_path, monkeypatch, caps
     monkeypatch.setattr("labelwerk.desktop.update_databases", lambda data, **kw: ["update-mime-database"])
     assert main(["install-desktop"]) == 0
     assert "update-mime-database" in capsys.readouterr().err
+
+
+# --- Drucker-Kompatibilität ----------------------------------------------------------------------
+def _detected(monkeypatch, *found):
+    from labelwerk.printers import Printer
+    monkeypatch.setattr("labelwerk.cli.printers.usb_printers",
+                        lambda *a, **k: [Printer(uri, model, f"{model} · x") for uri, model in found])
+
+
+def test_model_auto_uses_the_detected_printer(monkeypatch, capsys):
+    _detected(monkeypatch, ("file:///dev/usb/lp1", "QL-1100"))
+    assert main(["labels"]) == 0
+    assert "102 " in capsys.readouterr().out
+
+
+def test_model_auto_without_printer_uses_the_last_model(monkeypatch, capsys):
+    _write_settings(last_model="QL-820NWB")
+    assert main(["labels"]) == 0
+    assert "62red" in capsys.readouterr().out
+
+
+def test_unknown_model_is_an_error(capsys):
+    assert main(["-m", "QL-9", "labels"]) == 2
+    assert "Unbekanntes Druckermodell 'QL-9'" in capsys.readouterr().err
+
+
+def test_printers_command_lists_printers_and_models(monkeypatch, capsys):
+    _detected(monkeypatch, ("file:///dev/usb/lp1", "QL-600"), ("file:///dev/usb/lp2", "QL-700"))
+    _write_settings(network_printers=[{"name": "Büro", "host": "10.0.0.5", "model": "QL-720NW"}])
+    assert main(["printers"]) == 0
+    out = capsys.readouterr().out
+    assert "file:///dev/usb/lp1" in out and "geprüft" in out
+    assert "QL-700" in out and "ungeprüft – Rückmeldung erwünscht" in out
+    assert "tcp://10.0.0.5:9100" in out
+    assert "Wirksames Modell: QL-600" in out and "QL-1100 (ungeprüft)" in out
+
+
+def test_label_auto_reads_the_loaded_roll(monkeypatch, tmp_path):
+    from labelwerk.media import Media
+    monkeypatch.setattr("labelwerk.cli.find_brother_lp", lambda: "file:///dev/usb/lp0")
+    monkeypatch.setattr("labelwerk.cli.read_media", lambda printer: Media(29, 0, "endless"))
+    out = tmp_path / "v.png"
+    assert main(["print", "Hallo", "-l", "auto", "--preview", str(out)]) == 0
+    assert Image.open(out).width == 306                       # 29 mm endlos
+
+
+@pytest.mark.parametrize("media, message", [(None, "nicht gefunden"),
+                                            ("none", "Keine Rolle eingelegt"),
+                                            ("odd", "Kein Etikett für die eingelegte Rolle")])
+def test_label_auto_errors(monkeypatch, capsys, media, message):
+    from labelwerk.media import Media
+    monkeypatch.setattr("labelwerk.cli.find_brother_lp",
+                        lambda: None if media is None else "file:///dev/usb/lp0")
+    monkeypatch.setattr("labelwerk.cli.brother_busy", lambda: False)
+    roll = Media(0, 0, "none") if media == "none" else Media(70, 0, "endless")
+    monkeypatch.setattr("labelwerk.cli.read_media", lambda printer: roll)
+    assert main(["print", "Hallo", "-l", "auto", "--preview", "x.png"]) == 2
+    assert message in capsys.readouterr().err
+
+
+def test_auto_printer_includes_network_printers(monkeypatch):
+    _write_settings(network_printers=[{"name": "Büro", "host": "10.0.0.5", "model": "QL-720NW"}])
+    sent = {}
+
+    def fake_print(img, label, **kw):
+        sent.update(kw)
+        return {"outcome": "sent", "did_print": True}
+    monkeypatch.setattr("labelwerk.cli.prn.print_image", fake_print)
+    assert main(["print", "Hallo", "-l", "62"]) == 0
+    assert sent["printer"] == "tcp://10.0.0.5:9100" and sent["backend"] is None
+    assert sent["model"] == "QL-720NW"                        # Modell des Netzwerkdruckers
+
+
+def test_given_printer_decides_the_model(monkeypatch):
+    _detected(monkeypatch, ("file:///dev/usb/lp0", "QL-600"), ("file:///dev/usb/lp1", "QL-1100"))
+    sent = {}
+
+    def fake_print(img, label, **kw):
+        sent.update(kw, label=label, width=img.width)
+        return {"outcome": "printed", "did_print": True}
+    monkeypatch.setattr("labelwerk.cli.prn.print_image", fake_print)
+    assert main(["print", "Hallo", "-l", "102", "-p", "file:///dev/usb/lp1"]) == 0
+    assert (sent["model"], sent["label"], sent["width"]) == ("QL-1100", "102", 1164)
+    assert main(["print", "Hallo", "-l", "102", "-p", "usb://0x04f9:0x20a7"]) == 0
+    assert sent["model"] == "QL-1100"
+
+
+def test_label_that_does_not_fit_the_model_is_an_error(capsys):
+    assert main(["-m", "QL-600", "print", "Hallo", "-l", "62red", "--preview", "x.png"]) == 2
+    assert "Etikett '62red' passt nicht zum QL-600" in capsys.readouterr().err
+
+
+def test_label_auto_asks_the_chosen_printer(monkeypatch):
+    from labelwerk.media import Media
+    _detected(monkeypatch, ("file:///dev/usb/lp0", "QL-600"), ("file:///dev/usb/lp1", "QL-700"))
+    asked = []
+    monkeypatch.setattr("labelwerk.cli.read_media",
+                        lambda printer: asked.append(printer) or Media(62, 0, "endless"))
+    assert main(["print", "Hallo", "-l", "auto", "-p", "file:///dev/usb/lp1",
+                 "--preview", "x.png"]) == 0
+    assert asked == ["file:///dev/usb/lp1"]
+
+
+def test_label_auto_needs_usb(capsys):
+    assert main(["print", "Hallo", "-l", "auto", "-p", "tcp://10.0.0.5", "--preview", "x.png"]) == 2
+    assert "nur bei Druckern per USB" in capsys.readouterr().err
+
+
+def test_network_backend_without_entries_explains(capsys, monkeypatch):
+    assert main(["print", "Hallo", "-l", "62", "-b", "network"]) == 2
+    assert "Kein Netzwerkdrucker eingetragen" in capsys.readouterr().err
