@@ -20,8 +20,9 @@ bleibt. Platzhalter `{Spalte}` aus der Serie gehen auch im Inhalt.
 5. **QR-Fehlerkorrektur** Standard M, wählbar L/M/Q/H.
 6. **QR-Inhalt:** freier Text (Links gehen damit).
 7. Eigener **Reiter BARCODE** (nach Bild) mit Knopf „Barcode einfügen“ und Panel.
-8. **Falscher Inhalt:** Hinweis im Panel; die Arbeitsfläche zeigt den letzten gültigen Stand (wie bei jedem
-   Renderfehler), Drucken meldet den Fehler. EAN mit 12 bzw. 7 Ziffern: Prüfziffer wird ergänzt.
+8. **Falscher Inhalt:** Hinweis im Panel; die Arbeitsfläche zeigt den Barcode als schraffierten Platzhalter
+   (bleibt wählbar – ein halb getippter EAN legt sonst die Fläche lahm), Drucken meldet den Fehler. EAN mit 12
+   bzw. 7 Ziffern: Prüfziffer wird ergänzt.
 9. **CLI** später.
 
 ## Nicht enthalten
@@ -72,7 +73,9 @@ Code 39, Klartext über dem Code, Logo im QR-Code, Barcodes in der CLI, Ruhezone
   Höhe nicht erreichbar).
 - **Rendern** (`render.py`): `_prepare` misst Barcodes über `barcodes.size` (Rahmen fest, wie Bilder),
   `_finish` zeichnet und dreht wie bei Bildern; Renderfehler sind `BarcodeError` (ValueError) – wie
-  `TextTooLarge`.
+  `TextTooLarge`. `Renderer.render(…, placeholders=True)` (nur Arbeitsfläche): ein Barcode, der sich nicht
+  kodieren lässt, wird zum schraffierten Platzhalter (`barcodes.placeholder_size`/`placeholder`), `Rendered.errors`
+  nennt ihn; das Druckbild bleibt ein Fehler.
 - **Layout** (`layout.py`): Barcodes haben einen festen Rahmen aus Modulbreite und Höhe:
   - `exact_rect`: Lage aus dem Modell, Breite wie gerendert, Höhe aus `h_mm` (Strichcodes).
   - `place`/`set_frame` (Felder, Ausrichten, Angleichen, Drehen): Breite → `module` = gerundet
@@ -115,10 +118,13 @@ Code 39, Klartext über dem Code, Logo im QR-Code, Barcodes in der CLI, Ruhezone
     128/39, EAN-13 11 bzw. mit Klartext 7 – die erste Ziffer liegt im Rahmen –, EAN-8 7, QR ringsum 4).
   - **Drehen** (Aktionen wie im Reiter Layout), **Position (mm)** mit änderbarer Größe (rastet ein).
 - **Arbeitsfläche:** Barcodes wie Bilder (Auswahl, Ziehen, Anfasser; QR: Ecken und Kanten halten das
-  Quadrat). Doppelklick auf einen Barcode: Reiter BARCODE, Fokus ins Inhaltsfeld.
+  Quadrat). Doppelklick, F2 oder Enter auf einen Barcode: Reiter BARCODE, Fokus ins Inhaltsfeld; Strg+Z
+  dort ist das Rückgängig des Etiketts. Inhalt höchstens 2000 Zeichen (Feld begrenzt, Spalte einfügen auch).
 - **Serie:** Spalte einfügen (Doppelklick in der Spaltenliste) bei gewähltem Barcode: Beispielinhalt wird durch
   `{Spalte}` ersetzt, sonst angehängt (ohne Leerzeichen). Vorschau und Druck füllen den Inhalt je Zeile;
-  ein ungültiger Wert meldet „Zeile n: …“ (wie bei Text).
+  ein ungültiger Wert meldet „Zeile n: …“ (wie bei Text). Prüfhinweis, Anfasser, Felder und Layout rechnen
+  mit dem Wert der Vorschau-Zeile (die Breite folgt aus dem Inhalt), der Inhalt behält seine Platzhalter.
+  Favoriten-Vorschau mit Platzhalter-Barcode: Platzhalter statt keiner Vorschau.
 - **Drucken:** keine Änderung – ungültiger Barcode verhindert den Druck mit der Meldung des Renderfehlers.
 
 ## Tests
