@@ -42,7 +42,9 @@ und Farbe je Zeichen, 600-dpi-Modus, Druckerstatus-Überwachung (Papier leer, De
     die brother_ql kennt.
   - `network_printers(entries)`: Einträge aus den Einstellungen (Name, Host, Modell) – Port 9100, ohne Prüfung
     der Erreichbarkeit (kein Netzverkehr außer beim Drucken).
-  - `choose(printers, wanted)`: gewählter (URI aus den Einstellungen) bzw. erster gefundener; None = keiner.
+  - `choose(printers, wanted)`: gewählter (URI aus den Einstellungen) – fehlt er, None (kein Druck auf einem
+    anderen); automatisch: erster USB-Drucker mit erkanntem Modell, dann erster USB, dann erster. `printer_for(uri)`
+    für `-p` (gefunden bzw. aus der URI, `usb://…:0xPID` → Modell).
   - `Capabilities` / `capabilities(model)`: `cutter`, `two_color`, `max_tape_mm` (62 bzw. 104 aus
     brother_ql: Bytes je Zeile), `length_limits`, `tested` (nur `TESTED_MODELS = {"QL-600"}`).
   - `SUPPORTED_MODELS`: QL-Modelle aus brother_ql (ohne PT).
@@ -51,11 +53,14 @@ und Farbe je Zeichen, 600-dpi-Modus, Druckerstatus-Überwachung (Papier leer, De
 - **Einstellungen** (`settings.py`): `printer` (gewählte URI, "" = automatisch), `printer_model` (Ersatz,
   "" = automatisch), `last_model` (zuletzt erkanntes Modell – gilt ohne Drucker), `network_printers` (Liste
   `{name, host, model}`, geprüft: Host ohne Leerzeichen/Schema, Modell bekannt). Etikett-Prüfung mit dem
-  wirksamen Modell.
+  wirksamen Modell – geprüft wird nur, ob es ein bekanntes QL-Etikett ist (wer zwei Drucker abwechselnd nutzt,
+  behält sein Etikett); ob es zum Drucker passt, prüfen GUI (neues, unberührtes Etikett nimmt ein passendes:
+  Rolle › 62 › erstes) und CLI (Meldung).
 - **Drucken** (`printer.py`): `print_image(…, printer, backend, cut)` – Backend aus der URI (`network` für
   `tcp://`); ohne Abschneider `cut=False`; Rot: `build_instructions(…, red=True)` für Etiketten
-  BLACK_RED_WHITE (RGB-Druckbild, `to_print_mode` behält Rot). Meldungen für Netzwerkfehler (nicht erreichbar,
-  Zeitüberschreitung).
+  BLACK_RED_WHITE (`pure_colors`: reines Schwarz/Rot/Weiß mit derselben Schwelle wie Schwarz-Weiß – brother_ql
+  nähme sonst nur sehr dunkle Punkte als Schwarz); Etikett muss zum Modell passen (sonst Meldung). Netzwerk:
+  Verbindung vorab mit 5 s Zeitlimit; der Drucker meldet keinen Status („Gesendet ✓“). USB belegt → Meldung.
 - **Farbe** (`document.py`): `color` (`COLORS` = black, red; Standard black) an Text-, Bild- und Barcode-
   Objekten; gespeichert (Schemata). `render`: rote Objekte rot (RGB 255/0/0), aber nur, wenn das Etikett Rot
   kann (sonst schwarz – Vorschau = Druck); `compose` klebt je Farbe. Barcodes in Rot: Hinweis „Scanner lesen
@@ -71,7 +76,8 @@ und Farbe je Zeichen, 600-dpi-Modus, Druckerstatus-Überwachung (Papier leer, De
 
 - **Statusleiste:** Druckeranzeige wird ein Knopf mit Menü: gefundene Drucker (USB und eingetragene Netzwerk-
   drucker, „● QL-600 · lp1“), „Automatisch (erster gefundener)“; ungeprüfte Modelle mit „ungeprüft“ und
-  Tooltip „Rückmeldung erwünscht“. Wahl wird gespeichert.
+  Tooltip „Rückmeldung erwünscht“. Wahl wird gespeichert; fehlt der gewählte: „gewählter Drucker fehlt“, kein
+  Druck auf einem anderen. Wechsel zwischen USB-Druckern vergisst die geprüfte Rolle (neu prüfen).
 - **Modell wechselt** (anderer Drucker, Wahl, Einstellung): `MainWindow.set_model(model)` – Etikettenliste
   (Reiter Papier), Längengrenzen, Schnitt, Farbe, Medium prüfen folgen; das offene Etikett bleibt, passt es
   nicht zum Modell → Hinweis (wie beim Öffnen: „Etikett passt nicht zum Drucker“), `last_model` gespeichert.
@@ -79,8 +85,8 @@ und Farbe je Zeichen, 600-dpi-Modus, Druckerstatus-Überwachung (Papier leer, De
   (Liste mit Hinzufügen/Entfernen: Name, Host, Modell).
 - **Ohne Abschneider:** Reiter SERIE ohne Schnitt-Auswahl, Hinweis „Drucker ohne Abschneider – Etiketten von
   Hand abtrennen“.
-- **Farbe:** Reiter LAYOUT, Bereich „Farbe“ (Schwarz/Rot) für die Auswahl – nur mit Etikett 62red auf einem
-  Zweifarb-Modell, sonst mit Tooltip gesperrt.
+- **Farbe:** Reiter LAYOUT, Bereich „Farbe“ (Schwarz/Rot) für die Auswahl – Rot nur mit Etikett 62red auf einem
+  Zweifarb-Modell (sonst mit Tooltip gesperrt), Schwarz immer (zurück).
 - **Medium prüfen:** nur USB (bei Netzwerkdrucker gesperrt, Tooltip).
 
 ## 3 – Doku
