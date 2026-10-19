@@ -160,13 +160,17 @@ def print_image(
     gesendeter Teil läuft zu Ende), ``progress(gedruckt, alle)`` nach jedem. ``backend``: None =
     aus der URI (``tcp://`` → Netzwerk: ein Auftrag – der Drucker meldet dort keinen Status).
     ``cups:NAME``: ein Auftrag an die CUPS-Warteschlange (``options``: Treiber-Optionen, z. B.
-    Schnitt); Status ``{"outcome": "sent", "job": Kennung}``."""
+    Schnitt); Status ``{"outcome": "sent", "job": Kennung}``. ``zpl+file://…``/``zpl+tcp://…``:
+    Zebra, ein Datenstrom (``options["mode"]``: "" wie am Drucker, T/C/P); Status
+    ``{"outcome": "sent"}``."""
     backend = backend or backend_for(printer)
     images = [image] if isinstance(image, Image.Image) else list(image)
     if label_id not in {label.id for label in labels_for_model(model)}:
         raise PrintError(f"Etikett {label_id!r} passt nicht zum Drucker ({model}).")
     if backend == "cups":
         return _print_cups(printer[len("cups:"):], images, label_id, options, cancelled)
+    if backend == "zpl":
+        return _print_zpl(printer, images, options, cancelled)
     if backend == "network":
         _reachable(printer)
     part = MAX_JOB_EACH if cut_every == 1 else min(cut_every, MAX_CUT_EVERY)
@@ -205,6 +209,20 @@ def _print_cups(name: str, images: list[Image.Image], label_id: str,
     except cups.CupsError as e:
         raise PrintError(str(e)) from None
     return {"outcome": "sent", "did_print": False, "job": job.id}
+
+
+def _print_zpl(uri: str, images: list[Image.Image], options: dict[str, str] | None,
+               cancelled: Callable[[], bool] | None) -> dict:
+    """Zebra: alle Etiketten als ein ZPL-Datenstrom (der Drucker meldet keinen Status)."""
+    from . import zpl
+    if cancelled is not None and cancelled():
+        raise PrintCancelled(0, len(images))
+    mode = (options or {}).get("mode", "")
+    try:
+        zpl.send(zpl.stream(images, mode if mode in zpl.MODES else ""), uri)
+    except zpl.ZplError as e:
+        raise PrintError(str(e)) from None
+    return {"outcome": "sent", "did_print": False}
 
 
 def _send(data: bytes, label_id: str, printer: str, backend: str) -> dict:

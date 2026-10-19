@@ -17,10 +17,11 @@ STORED = json.loads((ROOT / "tests" / "golden" / "raster.json").read_text())
 
 
 def test_every_supported_model_has_references():
-    assert sorted(STORED) == sorted(SUPPORTED_MODELS)
+    assert sorted(STORED) == sorted(golden.MODELS)
+    assert set(SUPPORTED_MODELS) < set(golden.MODELS) and "zpl:203" in STORED
 
 
-@pytest.mark.parametrize("model", SUPPORTED_MODELS)
+@pytest.mark.parametrize("model", golden.MODELS)
 def test_raster_data_is_unchanged(model):
     current = {name: golden.hashlib.sha256(data).hexdigest()
                for name, data in golden.cases(model).items()}

@@ -49,12 +49,19 @@ eines schon an CUPS übergebenen Auftrags (geht über die Druckerverwaltung des 
   Liste je Hersteller (`MEDIA_LISTS`: Dymo-Klassiker 99010/99012/11352/…, Zebra 2×1"/4×6" …). Auflösung aus der PPD,
   sonst 300 dpi. `cut_options(queue)`: Optionen aus `lpoptions -l`, deren Name oder Titel „Cut“/„Schnitt“ enthält
   (Titel und Werte wie angegeben). Aufrufe mit Zeitlimit; Fehler → `CupsError` (deutsch).
-- **Drucken** (`printer.print_image` für `cups:NAME`): PNG je Etikett in Druckerauflösung, `lp -d NAME -o ppi=<dpi>
-  -o PageSize=<Größe> [Schnitt-Optionen] datei1.png …` – eine Serie = ein Auftrag mit mehreren Dateien; Auftrags-ID
-  aus der Antwort („An die Warteschlange übergeben ✓ (Auftrag QL-12)“). Fehler (Warteschlange gestoppt/unbekannt) →
-  `PrintError`.
-- **Modell-ID** `cups:NAME`: `labels_for_model` = Etiketten der Warteschlange, `capabilities` (Abschneider = es gibt
-  eine Schnitt-Option, kein Rot, `tested` = nein).
+- **Drucken** (`printer.print_image` für `cups:NAME`): ein PDF mit einer Seite je Etikett in Druckerauflösung
+  (Seite = Etikett), `lp -d NAME -o media=<Größe> -o print-scaling=none -o orientation-requested=3
+  -o fit-to-page=false [-o PageSize=<Größe des Treibers>] [Schnitt-Optionen] -- etiketten.pdf` – eine Serie = ein
+  Auftrag, ein Dokument (keine Grenze von 1000 Dateien, „am Ende schneiden“ gilt für den Auftrag); Auftrags-ID aus
+  der Antwort („An die Druckwarteschlange übergeben ✓ (Auftrag QL-12)“). Fehler (Warteschlange gestoppt/unbekannt) →
+  `PrintError`. Befehle mit `LC_MESSAGES=C` (Antworten englisch, Namen UTF-8), Namen geprüft (kein `/`, kein `-`
+  am Anfang).
+- **Modell-ID** `cups:NAME`: `labels_for_model` = Etiketten der Warteschlange, `capabilities` (Schneiden bestimmt der
+  Treiber – Reiter SERIE –, kein Rot, `tested` = nein; ohne CUPS zu fragen).
+- **Nicht blockieren:** die Liste der Warteschlangen liest ein Hintergrund-Thread (alle 30 s, `lpstat -e` findet auch
+  Drucker im Netz); Treiber-Angaben werden beim Wählen gelesen und 5 min gemerkt, Fehler nicht.
+- **Nie automatisch:** „Automatisch“ nimmt Brother direkt › Zebra direkt › Netzwerk – CUPS-Warteschlangen nur, wenn
+  gewählt (sonst landete man ohne QL auf dem Bürolaser).
 
 ## 3 – Zebra direkt (ZPL)
 
@@ -65,7 +72,8 @@ eines schon an CUPS übergebenen Auftrags (geht über die Druckerverwaltung des 
   Auflösung des Druckers.
 - **ZPL:** `^XA ^PW<Breite> ^LL<Länge> ^MM<Modus> ^FO0,0 ^GFA,…(Bild als Hex, Zeilen komprimiert nach Zebra-ASCII)
   ^FS ^PQ1 ^XZ` je Etikett; Serie = ein Datenstrom. Schnitt-Modus (Reiter SERIE): Abreißen (T), Schneiden (C),
-  Ablösen (P). Senden roh an `/dev/usb/lpN` bzw. TCP 9100 (Zeitlimit wie Brother-Netzwerk).
+  Ablösen (P), gespeichert je Drucker (URI). Senden roh an `/dev/usb/lpN` bzw. TCP 9100 (Zeitlimit wie
+  Brother-Netzwerk).
 - **Modell-ID** `zpl:203` / `zpl:300`; URIs `zpl+file:///dev/usb/lpN`, `zpl+tcp://host:9100`.
 - **Referenztests:** ZPL eines festen Testetiketts je Auflösung als SHA-256 (wie die Brother-Referenzen).
 

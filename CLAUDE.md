@@ -38,14 +38,21 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Farbe; Netzwerkdrucker per IP in den Einstellungen (Medium prüfen nur USB); Rot/Schwarz je Objekt (Reiter Layout →
   Farbe, nur 62red auf QL-8xx, ungeprüft); CLI -m/-l auto, labelwerk printers; Referenztests je Modell (tests/golden).
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
-- 2348 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- Drucker anderer Hersteller (Etappe 6b, alles ungeprüft): Auflösung je Etikett (Etiketten „57x32mm@203“, Rendern/Layout/
+  Barcodes/Arbeitsfläche in Druckerauflösung, Barcode-Maße in mm, Etikettwechsel rechnet Module um); CUPS-Warteschlangen
+  im Druckermenü (nie automatisch), Etiketten/Auflösung aus dem Treiber, Druck als PDF in einem Auftrag, Schnitt-Optionen
+  des Treibers im Reiter SERIE; Zebra direkt (ZPL, USB/Netzwerk, Modus Abreißen/Schneiden/Ablösen); CLI -p cups:NAME,
+  zpl+file://, zpl+tcp:// mit -m zpl:203.
+- 2454 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
 src/labelwerk/
   labels.py   Etikettentypen je Modell (Daten aus brother_ql.labels.LabelsManager): labels_for_model nach
               printers.capabilities (Breite, restricted_to_models, ohne PT-Bänder, 62red nur Zweifarb-Modelle);
-              Label.two_color
+              Label.two_color, Label.dpi (Brother 300); Etiketten anderer Drucker als ID „BxHmm@dpi“ (sized_id/sized_label,
+              fest, ganz bedruckbar, eine Schreibweise; get_label versteht sie ohne Drucker), mm_text (Maß mit Komma);
+              cups:NAME → Etiketten des Treibers, zpl:DPI → zpl.MEDIA
   render.py   render_text(text, label_id, size_pt, font_path) -> PIL.Image; render_document(doc, model) -> PIL.Image
               render_object(obj, doc, model) -> RenderedObject (Bild mit Anschnitt image_dx/dy, Rahmen x/y/w/h, base_pt);
               compose(rendered, size, orientation) -> Druckbild; label_size/label_margins; schrittweise:
@@ -82,7 +89,8 @@ src/labelwerk/
   imaging.py  Bilder ohne Qt: to_layers(img, mode line|photo, threshold, invert) -> {"black": Bild "1"} (später "red" für QL-8xx),
               on_white, to_8bit (16-Bit-Graustufen skalieren), limit_size (höchstens 600 dpi bzw. 6000 px längste Seite,
               Druckgröße bleibt); Foto: Gammakurve photo_curve (Weiß/Schwarz fest), dann Floyd-Steinberg
-  printer.py  build_instructions(image | [images], label_id, model, cut, cut_every) -> bytes (Brother-Raster, mehrere
+  printer.py  (cups:NAME → cups.print_images, zpl+… → zpl.build/send: je ein Auftrag, Status „sent“)
+              build_instructions(image | [images], label_id, model, cut, cut_every) -> bytes (Brother-Raster, mehrere
               Etiketten = ein Auftrag; _Raster: schneiden alle n über ESC i A n, Folgeseiten markiert, bytearray statt
               bytes += – sonst quadratisch langsam), cut_interval(each|end, Anzahl)
               print_image(image | [images], ..., cut_every, cancelled, progress) -> status-dict; Serien in Teilaufträgen
@@ -94,7 +102,17 @@ src/labelwerk/
               product, idProduct → PRODUCT_IDS; SYS_ROOT in Tests leer), network_printers(NetworkEntry), choose (gewählt –
               fehlt er: None, kein Ersatz; automatisch: USB mit Modell › USB › erster), printer_for(uri) (usb://…:0xPID → Modell), effective_model (erkannt › Ersatz ›
               zuletzt › QL-600), capabilities(model) (cutter, two_color, max_tape_mm 62/104, length_limits, tested),
-              SUPPORTED_MODELS (QL ohne PT), TESTED_MODELS, backend_for(uri)
+              SUPPORTED_MODELS (QL ohne PT), TESTED_MODELS, backend_for(uri) (… | cups | zpl), is_model (QL, cups:NAME,
+              zpl:203/300/600), zebra_printers() (sysfs Vendor 0a5f, dpi aus der Kennung, sonst 203; source zebra),
+              Netzwerkeintrag mit Modell zpl:… → zpl+tcp://, cups_printers(direct, keep, wait) (Brother-QL-Warteschlange
+              nicht doppelt, außer gewählt); choose automatisch nie CUPS
+  cups.py     CUPS ohne Qt: _run (lpstat/lpoptions/lp, Zeitlimit, LC_MESSAGES=C; Tests ersetzen _run, BACKGROUND aus),
+              queues() (Hintergrund-Thread, 30 s; wait=True für die CLI), queue_info(name) -> QueueInfo(media, dpi,
+              cut_options, source ppd|options|list; 5 min gemerkt, Fehler nicht), PPD aus PPD_DIR, valid_name,
+              print_images(name, images, w, h, dpi, options) -> Job (ein PDF, media=/PageSize=, print-scaling=none)
+  zpl.py      Zebra ohne Qt: graphic(img) (^GFA, Zebra-ASCII-Kompression, „:“ = gleiche Zeile), build(images, mode T|C|P),
+              send(data, uri) (zpl+file:// bzw. zpl+tcp://, Zeitlimit) → ZplError; MEDIA, CUT_OPTION (Reiter SERIE),
+              Referenz-Hashes in tests/golden wie Brother
   document.py Etikett-Dokument (Etikett, Länge, Objekte), UI-unabhängig; Span/Paragraph/TextObject (zeichenweise Formatierung, fit);
               TextObject: Position x_mm/y_mm (None = mittig wie bisher), Rahmen w_mm/h_mm (mit fit), Drehen rotation 0/90/180/270
               ImageObject: png (Farboriginal), source/page/crop, Rahmen x/y/w/h_mm immer gesetzt, rotation, mode/threshold/invert,

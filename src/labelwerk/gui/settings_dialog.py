@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
                                QTabWidget,
                                QVBoxLayout, QWidget)
 
-from .. import favorites, shortcuts
+from .. import favorites, shortcuts, zpl
 from ..document import MAX_MARGIN_MM, MAX_PT, MIN_PT
 from ..labels import get_label, labels_for_model
 from ..printer import DEFAULT_MODEL
@@ -131,6 +131,14 @@ class SettingsDialog(QDialog):
         self.printer_model.setToolTip("Nur nötig, wenn labelwerk das Modell nicht erkennt "
                                       "(gilt dann und ohne angeschlossenen Drucker)")
         form.addRow("Druckermodell", self.printer_model)
+        self.zebra_dpi = QComboBox()
+        self.zebra_dpi.addItem("Automatisch (erkannt)", 0)
+        for dpi in zpl.RESOLUTIONS:
+            self.zebra_dpi.addItem(f"{dpi} dpi", dpi)
+        self.zebra_dpi.setCurrentIndex(max(0, self.zebra_dpi.findData(settings.zebra_dpi)))
+        self.zebra_dpi.setToolTip("Auflösung der Zebra-Drucker am USB, falls labelwerk sie nicht "
+                                  "richtig erkennt (sonst 203 dpi)")
+        form.addRow("Zebra-Auflösung", self.zebra_dpi)
         self.network = QTableWidget(0, 3)
         self.network.setHorizontalHeaderLabels(["Name", "Adresse", "Modell"])
         self.network.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -327,7 +335,7 @@ class SettingsDialog(QDialog):
         self.network.insertRow(row)
         self.network.setItem(row, 0, QTableWidgetItem(name))
         self.network.setItem(row, 1, QTableWidgetItem(host))
-        combo = _model_combo(None)
+        combo = _model_combo(None, zebra=True)
         combo.setCurrentIndex(max(0, combo.findData(model)))
         self.network.setCellWidget(row, 2, combo)
 
@@ -373,6 +381,7 @@ class SettingsDialog(QDialog):
             printer_model=self.printer_model.currentData(),
             last_model=self._last_model,
             printer_options=dict(self._printer_options),
+            zebra_dpi=self.zebra_dpi.currentData(),
             network_printers=self._network_values() or [],
             shortcuts={action_id: seq for action_id, seq in self._keys.items()
                        if not _same(seq, shortcuts.action(action_id).default)},
@@ -394,13 +403,17 @@ class SettingsDialog(QDialog):
         super().accept()
 
 
-def _model_combo(automatic: str | None) -> QComboBox:
-    """Druckermodelle (ungeprüfte gekennzeichnet); ``automatic``: erster Eintrag mit Wert ""."""
+def _model_combo(automatic: str | None, zebra: bool = False) -> QComboBox:
+    """Druckermodelle (ungeprüfte gekennzeichnet); ``automatic``: erster Eintrag mit Wert "";
+    ``zebra``: auch Zebra (ZPL) je Auflösung (Netzwerkdrucker)."""
     combo = QComboBox()
     if automatic is not None:
         combo.addItem(automatic, "")
     for model in SUPPORTED_MODELS:
         combo.addItem(model if capabilities(model).tested else f"{model} – ungeprüft", model)
+    if zebra:
+        for dpi in zpl.RESOLUTIONS:
+            combo.addItem(f"Zebra (ZPL) {dpi} dpi – ungeprüft", zpl.model_for(dpi))
     return combo
 
 

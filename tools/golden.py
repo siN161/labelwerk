@@ -5,8 +5,8 @@
 
 Je Modell ein festes Testetikett (nur Formen, keine Schrift – Schriftversionen dürfen nicht
 zählen) als SHA-256 der Rasterdaten: Endlos 62 mm mit und ohne Schnitt, gestanzt 62×29, bei
-breiten Modellen 102 mm, bei Zweifarb-Modellen 62red. Beweist, was gesendet wird – nicht, was
-gedruckt wird. Die Werte hängen an brother_ql (pyproject: auf 1.3.x festgelegt) – nach einem
+breiten Modellen 102 mm, bei Zweifarb-Modellen 62red; Zebra (ZPL) je Auflösung 57×32 mm,
+102×152 mm mit Schneiden und eine Serie. Beweist, was gesendet wird – nicht, was gedruckt wird. Die Werte hängen an brother_ql (pyproject: auf 1.3.x festgelegt) – nach einem
 Update der Bibliothek prüfen und neu erzeugen.
 """
 from __future__ import annotations
@@ -18,9 +18,13 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from labelwerk.labels import get_label, labels_for_model
+from labelwerk import zpl
+from labelwerk.labels import get_label, labels_for_model, sized_id
 from labelwerk.printer import build_instructions
 from labelwerk.printers import SUPPORTED_MODELS
+
+ZPL_MODELS = tuple(zpl.model_for(dpi) for dpi in zpl.RESOLUTIONS)
+MODELS = SUPPORTED_MODELS + ZPL_MODELS
 
 GOLDEN = Path(__file__).resolve().parent.parent / "tests" / "golden" / "raster.json"
 
@@ -42,6 +46,11 @@ def test_image(label_id: str, length: int = 200) -> Image.Image:
 
 
 def cases(model: str) -> dict[str, bytes]:
+    if zpl.is_model(model):
+        small, large = (sized_id(w, h, zpl.dpi_of(model)) for w, h in ((57, 32), (102, 152)))
+        return {"57x32": zpl.build([test_image(small)]),
+                "102x152-schneiden": zpl.build([test_image(large)], "C"),
+                "57x32-serie": zpl.build([test_image(small)] * 3)}
     available = {label.id for label in labels_for_model(model)}
     out = {"62": build_instructions(test_image("62"), "62", model),
            "62-ohne-schnitt": build_instructions(test_image("62"), "62", model, cut=False),
@@ -56,7 +65,7 @@ def cases(model: str) -> dict[str, bytes]:
 
 def digests() -> dict[str, dict[str, str]]:
     return {model: {name: hashlib.sha256(data).hexdigest() for name, data in cases(model).items()}
-            for model in SUPPORTED_MODELS}
+            for model in MODELS}
 
 
 def main(argv: list[str]) -> int:

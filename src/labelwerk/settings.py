@@ -15,6 +15,7 @@ from .clipart import RECENT_LIMIT
 from .document import MAX_MARGIN_MM, MAX_PT, MIN_PT, ORIENTATIONS, Document, TextObject
 from .fonts import DEFAULT_FAMILY
 from .labels import labels_for_model, sized_label
+from . import zpl
 from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
@@ -42,7 +43,8 @@ class Settings:
     printer_model: str = ""                # Ersatz, wenn das Modell nicht erkannt wird; "" = keins
     last_model: str = ""                   # zuletzt erkanntes Modell (gilt ohne Drucker)
     network_printers: list[dict] = field(default_factory=list)   # {name, host, model}
-    printer_options: dict[str, dict[str, str]] = field(default_factory=dict)  # URI → Treiber-Optionen
+    printer_options: dict[str, dict[str, str]] = field(default_factory=dict)  # Modell → Druck-Optionen
+    zebra_dpi: int = 0                  # Auflösung der Zebras am USB, 0 = erkannt
     shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
@@ -75,6 +77,7 @@ def _rules(model: str | None = None) -> dict:
             v == "" or v.startswith(("file://", "tcp://", "usb://", "cups:"))),
         "printer_model": lambda v: v == "" or v in SUPPORTED_MODELS,
         "last_model": lambda v: v == "" or is_model(v),
+        "zebra_dpi": lambda v: v in (0, *zpl.RESOLUTIONS) and not isinstance(v, bool),
         "printer_options": lambda v: isinstance(v, dict) and all(
             isinstance(k, str) and isinstance(o, dict)
             and all(_option_word(a) and _option_word(b) for a, b in o.items())
@@ -149,11 +152,13 @@ def _text_list(key: str, value: list, warnings: list[str]) -> list[str]:
 
 
 def _network(value: list, warnings: list[str]) -> list[dict]:
-    """Netzwerkdrucker: Einträge mit Host (ohne Leerzeichen, ohne Schema) und bekanntem Modell;
+    """Netzwerkdrucker: Einträge mit Host (ohne Leerzeichen, ohne Schema) und bekanntem Modell
+    (Brother-QL oder Zebra „zpl:203“);
     ungültige einzeln verworfen (mit Hinweis)."""
     valid = [{"name": e.get("name") or "", "host": e["host"].strip(), "model": e["model"]}
              for e in value if isinstance(e, dict) and isinstance(e.get("host"), str)
-             and valid_host(e["host"]) and e.get("model") in SUPPORTED_MODELS
+             and valid_host(e["host"]) and (e.get("model") in SUPPORTED_MODELS
+                                             or zpl.is_model(e.get("model")))
              and isinstance(e.get("name", ""), str)]
     if len(valid) != len(value):
         warnings.append("Einstellung 'network_printers': ungültige Einträge verworfen.")

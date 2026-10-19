@@ -50,8 +50,9 @@ def _add_output_options(p: argparse.ArgumentParser) -> None:
                                          "Drucker); Standard aus den Einstellungen")
     p.add_argument("-p", "--printer", default="auto",
                    help="auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, "
-                        "cups:NAME (Warteschlange, siehe 'labelwerk printers')")
-    p.add_argument("-b", "--backend", choices=["linux_kernel", "pyusb", "network", "cups"],
+                        "cups:NAME (Warteschlange, siehe 'labelwerk printers'), "
+                        "zpl+file:///dev/usb/lpN bzw. zpl+tcp://IP (Zebra, mit -m zpl:203/300/600)")
+    p.add_argument("-b", "--backend", choices=["linux_kernel", "pyusb", "network", "cups", "zebra"],
                    help="Standard: aus dem Drucker (tcp:// → network)")
     p.add_argument("--no-cut", action="store_true")
     p.add_argument("--preview", metavar="PNG", help="nur Vorschau speichern, nicht drucken")
@@ -63,8 +64,8 @@ _UNSET = object()   # -s nicht angegeben (None bedeutet „auto“)
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog=desktop.APP_NAME)
     p.add_argument("-m", "--model", default="auto",
-                   help="auto (Standard: erkannt, sonst aus den Einstellungen) oder z. B. QL-700; "
-                        "siehe 'labelwerk printers'")
+                   help="auto (Standard: erkannt, sonst aus den Einstellungen) oder z. B. QL-700, "
+                        "zpl:300 (Zebra), cups:NAME; siehe 'labelwerk printers'")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("labels", help="Etiketten für das Modell auflisten")
@@ -116,6 +117,8 @@ _NOT_DETECTED = {
                "Adresse angeben mit -p tcp://IP",
     "cups": "Keine CUPS-Warteschlange gefunden (Drucker in der Druckerverwaltung einrichten).\n"
             "Angeben mit -p cups:NAME",
+    "zebra": "Kein Zebra-Drucker gefunden.\n"
+             "Angeben mit -p zpl+file:///dev/usb/lpN bzw. -p zpl+tcp://IP und -m zpl:203",
 }
 
 
@@ -131,7 +134,7 @@ def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
     found = _all_printers(settings)
     if wanted != "auto":
         return printers.printer_for(wanted, found)
-    if backend in ("network", "cups"):
+    if backend in ("network", "cups", "zebra"):
         found = [p for p in found if p.source == backend]
     elif backend == "linux_kernel":
         found = [p for p in found if p.source == "usb"]
@@ -140,7 +143,8 @@ def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
 
 def _all_printers(settings) -> list[printers.Printer]:
     """Direkt per USB, eingetragene Netzwerkdrucker und Warteschlangen von CUPS."""
-    direct = printers.usb_printers() + printers.network_printers(network_entries(settings))
+    direct = (printers.usb_printers() + printers.zebra_printers(dpi=settings.zebra_dpi)
+              + printers.network_printers(network_entries(settings)))
     return direct + printers.cups_printers(direct, wait=True)
 
 
@@ -150,7 +154,8 @@ def _resolve_model(model: str, target: printers.Printer | None, settings) -> str
     if model != "auto":
         if not printers.is_model(model):
             raise ValueError(f"Unbekanntes Druckermodell {model!r} – erlaubt: "
-                             f"{', '.join(printers.SUPPORTED_MODELS)} oder cups:NAME")
+                             f"{', '.join(printers.SUPPORTED_MODELS)}, zpl:203/300/600 oder "
+                             "cups:NAME")
         return model
     return printers.effective_model(target, settings.printer_model, settings.last_model)
 
@@ -205,7 +210,9 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
 
     try:
         status = prn.print_image(img, args.label, model=args.model, printer=args.printer,
-                                 backend=args.backend, cut=not args.no_cut)
+                                 backend={"zebra": "zpl"}.get(args.backend, args.backend),
+                                 cut=not args.no_cut,
+                                 options=load_settings().printer_options.get(args.model, {}))
     except prn.PrintError as e:
         print(e, file=sys.stderr)
         return 2
@@ -231,7 +238,8 @@ def _show_printers(model: str) -> int:
     print(f"Wirksames Modell: {model}")
     print("Unterstützt: " + ", ".join(
         f"{m}{'' if printers.capabilities(m).tested else ' (ungeprüft)'}"
-        for m in printers.SUPPORTED_MODELS) + ", CUPS-Warteschlangen cups:NAME (ungeprüft)")
+        for m in printers.SUPPORTED_MODELS)
+          + ", Zebra zpl:203/300/600 (ungeprüft), CUPS-Warteschlangen cups:NAME (ungeprüft)")
     return 0
 
 

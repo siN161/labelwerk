@@ -10,7 +10,7 @@ from brother_ql.labels import Color, FormFactor, LabelsManager
 from .printers import capabilities
 
 DPI = 300  # Druckauflösung der QL-Drucker
-DPI_RANGE = (100, 600)       # Auflösungen anderer Drucker
+DPI_RANGE = (100, 610)       # Auflösungen anderer Drucker (Zebra „600 dpi“ = 24 Punkte/mm = 610)
 SIZE_MM = (5.0, 300.0)       # Kanten fester Etiketten anderer Drucker
 _SIZED = re.compile(r"(\d{1,3}(?:\.\d)?)x(\d{1,3}(?:\.\d)?)mm@(\d{2,3})")
 
@@ -90,7 +90,11 @@ def get_label(label_id: str) -> Label:
 def labels_for_model(model: str) -> list[Label]:
     """Etiketten, die ``model`` drucken kann (``printers.capabilities``): bis zu seiner Breite,
     ohne P-touch-Bänder, Rot/Schwarz nur bei Zweifarb-Modellen; CUPS-Warteschlange („cups:NAME“):
-    die Größen ihres Treibers in seiner Auflösung; unbekanntes Modell → ValueError."""
+    die Größen ihres Treibers in seiner Auflösung; Zebra („zpl:203“): ``zpl.MEDIA``; unbekanntes
+    Modell → ValueError."""
+    from . import zpl                          # zpl liest diese Datei
+    if zpl.is_model(model):
+        return [get_label(i) for i in zpl.label_ids(model)]
     if isinstance(model, str) and model.startswith("cups:"):
         from . import cups                     # cups liest diese Datei
         return [get_label(i) for i in cups.queue_info(model[len("cups:"):]).label_ids()]

@@ -20,9 +20,9 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileD
 from .. import barcodes, clipart, favorites, series
 from ..desktop import APP_NAME
 from ..detect import brother_busy
-from .. import cups
+from .. import cups, zpl
 from ..printers import (UNTESTED_HINT, Printer, capabilities, choose, cups_printers,
-                        effective_model, network_printers, usb_printers)
+                        effective_model, network_printers, usb_printers, zebra_printers)
 from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, Series, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
@@ -1448,7 +1448,8 @@ class MainWindow(QMainWindow):
         Erscheinen eines USB-Druckers ggf. Medium prüfen."""
         tip = ""
         try:
-            direct = usb_printers() + network_printers(network_entries(self.settings))
+            direct = (usb_printers() + zebra_printers(dpi=self.settings.zebra_dpi)
+                      + network_printers(network_entries(self.settings)))
             found = direct + cups_printers(direct, keep=self.settings.printer)
             busy = not any(p.source == "usb" for p in found) and brother_busy()
         except OSError:
@@ -1539,18 +1540,25 @@ class MainWindow(QMainWindow):
 
     def _update_cut_choices(self) -> None:
         """Reiter SERIE: Schnitt nach dem Drucker – Brother: nach jedem/nur am Ende bzw. ohne
-        Abschneider der Hinweis; CUPS: die Schnitt-Optionen seines Treibers."""
+        Abschneider der Hinweis; CUPS: die Schnitt-Optionen seines Treibers; Zebra: der Modus."""
         panel = self.panel("series")
+        chosen = self.settings.printer_options.get(self._options_key(), {})
         if self.model.startswith("cups:"):
-            options = cups.queue_info(self.model[len("cups:"):]).cut_options
-            panel.set_driver_cuts(options, self.settings.printer_options.get(self.model, {}))
+            panel.set_driver_cuts(cups.queue_info(self.model[len("cups:"):]).cut_options, chosen)
+        elif zpl.is_model(self.model):
+            panel.set_driver_cuts((zpl.CUT_OPTION,), chosen)
         else:
             panel.set_cutter(capabilities(self.model).cutter)
 
+    def _options_key(self) -> str:
+        """Unter diesem Schlüssel stehen die Druck-Optionen in den Einstellungen: das Modell
+        („cups:NAME“ bzw. „zpl:203“ – die Nummer lpN eines USB-Geräts wechselt beim Einstecken)."""
+        return self.model
+
     def _driver_cut_chosen(self, key: str, value: str) -> None:
-        """Treiber-Option zum Schneiden gewählt – gilt für diesen Drucker (Einstellungen)."""
-        if self.model.startswith("cups:"):
-            self.settings.printer_options.setdefault(self.model, {})[key] = value
+        """Schnitt-Option bzw. Modus gewählt – gilt für diesen Drucker (Einstellungen)."""
+        if self.model.startswith("cups:") or zpl.is_model(self.model):
+            self.settings.printer_options.setdefault(self._options_key(), {})[key] = value
             self._save_settings()
 
     def _fit_label(self) -> None:
@@ -1877,8 +1885,8 @@ class MainWindow(QMainWindow):
         self.result.setProperty("state", "")  # altes Rot/Grün nicht stehen lassen
         self.result.style().polish(self.result)
         self.result.setText("Drucke …")
-        options = (self.settings.printer_options.get(printer.uri, {})
-                   if printer is not None and printer.source == "cups" else {})
+        options = (self.settings.printer_options.get(model, {})
+                   if model.startswith("cups:") or zpl.is_model(model) else {})
         worker = PrintWorker(image, doc.label_id, model, cut_every,
                              printer=printer.uri if printer else None, options=options)
         self._print_signals = worker.signals  # Referenz bis zum Ende des Drucks

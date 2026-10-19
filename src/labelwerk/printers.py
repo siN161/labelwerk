@@ -5,6 +5,7 @@ Modell es ist; die Fähigkeiten (Etikettenbreite, Abschneider, Zweifarbdruck, L�
 brother_ql (``capabilities``). Erkannt wird über sysfs ohne USB-Zugriff: Modell aus der
 IEEE-1284-Kennung des Druckers, sonst aus dem USB-Produktnamen, sonst aus der Produkt-ID.
 Netzwerkdrucker stehen in den Einstellungen; erkannt wird dort nichts (kein Netzverkehr).
+Andere Hersteller: CUPS-Warteschlangen (``cups:NAME``) und Zebra direkt (ZPL, ``zpl:203``).
 """
 from __future__ import annotations
 
@@ -54,9 +55,11 @@ GENERIC_LENGTH = (150, 11811)               # Endlosband gibt es bei anderen Dru
 
 
 def is_model(model) -> bool:
-    """Bekanntes Modell: Brother-QL oder eine CUPS-Warteschlange („cups:NAME“)."""
-    from . import cups
-    return isinstance(model, str) and (model in SUPPORTED_MODELS or model.startswith(CUPS)
+    """Bekanntes Modell: Brother-QL, eine CUPS-Warteschlange („cups:NAME“) oder Zebra
+    („zpl:203“)."""
+    from . import cups, zpl
+    return isinstance(model, str) and (model in SUPPORTED_MODELS or zpl.is_model(model)
+                                       or model.startswith(CUPS)
                                        and cups.valid_name(model[len(CUPS):]))
 
 
@@ -64,6 +67,9 @@ def capabilities(model: str) -> Capabilities:
     if isinstance(model, str) and model.startswith(CUPS) and is_model(model):
         # Schneiden bestimmt der Treiber (Reiter SERIE) – ohne CUPS zu fragen
         return Capabilities(model, False, False, 300, GENERIC_LENGTH, False)
+    from . import zpl
+    if zpl.is_model(model):                 # Schneiden: der Modus im Reiter SERIE
+        return Capabilities(model, False, False, 104, GENERIC_LENGTH, False)
     m = _models().get(model)
     if m is None:
         raise ValueError(f"Unbekanntes Druckermodell: {model!r}")
@@ -88,7 +94,7 @@ def known_model(name: str | None) -> str | None:
 class Printer:
     """Ein Drucker: ``uri`` wie für ``printer.print_image`` (``file:///dev/usb/lp1`` bzw.
     ``tcp://host:9100``), ``model`` (None = nicht erkannt), ``name`` zur Anzeige, ``source``
-    ``usb`` | ``network``."""
+    ``usb`` | ``network`` (Brother) | ``cups`` | ``zebra``."""
     uri: str
     model: str | None
     name: str
@@ -99,6 +105,8 @@ def backend_for(uri: str) -> str:
     """Weg zum Drucker: brother_ql-Backend zur URI bzw. „cups“."""
     if uri.startswith(CUPS):
         return "cups"
+    if uri.startswith(("zpl+file://", "zpl+tcp://")):
+        return "zpl"
     if uri.startswith("tcp://"):
         return "network"
     if uri.startswith("usb://"):
@@ -141,6 +149,29 @@ def usb_printers(sys_root: str | Path | None = None,
     return found
 
 
+def zebra_printers(sys_root: str | Path | None = None, dev_root: str = "/dev/usb",
+                   dpi: int = 0) -> list[Printer]:
+    """Zebra-Drucker unter ``/dev/usb/lp*`` (Hersteller 0a5f), die ZPL sprechen (EPL-Geräte und
+    Kartendrucker nicht); Auflösung ``dpi`` (Einstellung), sonst aus der IEEE-1284-Kennung bzw.
+    dem Produktnamen, sonst 203 dpi."""
+    from . import zpl
+    found = []
+    for entry in sorted(Path(sys_root or SYS_ROOT).glob("lp*")):
+        iface = (entry / "device").resolve()
+        for node in (iface, *iface.parents):
+            if not (node / "idVendor").exists():
+                continue
+            ieee = _read(iface / "ieee1284_id")
+            if _read(node / "idVendor") == zpl.VENDOR_ID and zpl.speaks_zpl(ieee):
+                name = _ieee1284_model(ieee) or _read(node / "product") or "Zebra"
+                found_dpi = (dpi if dpi in zpl.RESOLUTIONS else None) or zpl.dpi_from_id(ieee) \
+                    or zpl.dpi_from_id(name) or zpl.DEFAULT_DPI
+                found.append(Printer(f"zpl+file://{dev_root}/{entry.name}",
+                                     zpl.model_for(found_dpi), f"{name} · {entry.name}", "zebra"))
+            break
+    return found
+
+
 @dataclass(frozen=True)
 class NetworkEntry:
     """Netzwerkdrucker aus den Einstellungen."""
@@ -150,7 +181,12 @@ class NetworkEntry:
 
 
 def network_printers(entries: list[NetworkEntry]) -> list[Printer]:
-    return [Printer(f"tcp://{e.host}:{NETWORK_PORT}", e.model, f"{e.name or e.host} · Netzwerk",
+    """Eingetragene Netzwerkdrucker: Brother (``tcp://``) bzw. Zebra (Modell „zpl:…“,
+    ``zpl+tcp://``)."""
+    from . import zpl
+    return [Printer(f"zpl+tcp://{e.host}:{NETWORK_PORT}", e.model, f"{e.name or e.host} · Netzwerk",
+                    "zebra") if zpl.is_model(e.model) else
+            Printer(f"tcp://{e.host}:{NETWORK_PORT}", e.model, f"{e.name or e.host} · Netzwerk",
                     "network") for e in entries]
 
 
@@ -176,6 +212,9 @@ def printer_for(uri: str, found: list[Printer]) -> Printer:
             return p
     if uri.startswith(CUPS):
         return Printer(uri, uri, f"{uri[len(CUPS):]} · CUPS", "cups")
+    if uri.startswith(("zpl+file://", "zpl+tcp://")):
+        from . import zpl
+        return Printer(uri, zpl.model_for(zpl.DEFAULT_DPI), uri, "zebra")
     model = None
     if uri.startswith("usb://"):
         pid = uri[len("usb://"):].split("/")[0].split(":")[-1].lower().removeprefix("0x")
@@ -194,12 +233,14 @@ def effective_model(printer: Printer | None, fallback: str = "", last: str = "")
 
 
 def cups_printers(direct: list[Printer], keep: str = "", wait: bool = False) -> list[Printer]:
-    """Warteschlangen von CUPS als Drucker; ein Brother-QL, den labelwerk direkt per USB findet,
-    erscheint nicht noch einmal über seine Warteschlange – außer sie ist gewählt (``keep``).
+    """Warteschlangen von CUPS als Drucker; ein Brother-QL bzw. Zebra, den labelwerk direkt per USB
+    findet, erscheint nicht noch einmal über seine Warteschlange – außer sie ist gewählt (``keep``).
     ``wait``: auf CUPS warten (CLI), sonst die zuletzt gelesene Liste (``cups.queues``)."""
     from . import cups
-    brother_direct = any(p.source == "usb" and p.model in SUPPORTED_MODELS for p in direct)
+    doubles = tuple(prefix for prefix, here in (
+        ("usb://brother/ql", any(p.source == "usb" and p.model in SUPPORTED_MODELS for p in direct)),
+        ("usb://zebra", any(p.source == "zebra" and p.uri.startswith("zpl+file://")
+                            for p in direct))) if here)
     return [Printer(CUPS + q.name, CUPS + q.name, f"{q.name} · CUPS", "cups")
             for q in cups.queues(wait=wait)
-            if CUPS + q.name == keep
-            or not (brother_direct and q.device.lower().startswith("usb://brother/ql"))]
+            if CUPS + q.name == keep or not (doubles and q.device.lower().startswith(doubles))]

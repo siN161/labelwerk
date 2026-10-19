@@ -12,13 +12,24 @@ Getestet mit: QL-600 (USB). Andere QL-Modelle sollten funktionieren, Rückmeldun
 | **sollte funktionieren** (ungeprüft) | QL-500, QL-550, QL-560, QL-570, QL-580N, QL-650TD, QL-700, QL-710W, QL-720NW, QL-800, QL-810W, QL-820NWB – Etiketten bis 62 mm, USB oder Netzwerk |
 | **sollte funktionieren** (ungeprüft) | breite Modelle QL-1050, QL-1060N, QL-1100, QL-1110NWB, QL-1115NWB – Etiketten bis 102/104 mm |
 | **ungeprüft** | Rot/Schwarz-Druck (QL-8xx mit DK-22251 „62red“): Farbe je Objekt im Reiter Layout |
-| **nicht unterstützt** | P-touch-Bandgeräte (PT-…), Drucker anderer Hersteller |
+| **ungeprüft** | Zebra-Etikettendrucker direkt in ZPL (USB oder Netzwerk, 203/300/600 dpi, feste Etiketten) |
+| **ungeprüft** | jeder in CUPS eingerichtete Etikettendrucker (z. B. Dymo LabelWriter): Etiketten und Auflösung aus dem Treiber |
+| **nicht unterstützt** | P-touch-Bandgeräte (PT-…), Bluetooth-Drucker (Niimbot, Phomemo), Endlosband bei anderen Herstellern |
 
 labelwerk erkennt das Modell des angeschlossenen Druckers selbst (`labelwerk printers` zeigt, was es
 findet); Etiketten, Abschneider und Farben richten sich danach. Wird ein Modell nicht erkannt, lässt
 es sich in den Einstellungen festlegen. Netzwerkdrucker (WLAN/LAN-Modelle) trägst du in den
 Einstellungen mit IP-Adresse ein; „Medium prüfen“ geht nur per USB. Hast du ein ungeprüftes Modell
 ausprobiert, freue ich mich über eine Rückmeldung (Issue mit Modell, Rolle und Ergebnis).
+
+**Andere Hersteller:** Zebra-Drucker am USB erkennt labelwerk selbst (Auflösung aus der Kennung des
+Druckers, sonst 203 dpi); Netzwerk-Zebras trägst du in den Einstellungen mit Modell „Zebra (ZPL)“ und
+Auflösung ein. Drucker, die in der Druckerverwaltung des Systems (CUPS) eingerichtet sind, stehen im
+Druckermenü als „Name · CUPS“ – sie werden nie automatisch gewählt (darunter sind oft Bürodrucker).
+Gedruckt wird in der echten Auflösung des Druckers, damit Barcodes scharf bleiben. Schneiden stellst du
+im Reiter SERIE ein: bei CUPS die Schnitt-Optionen des Treibers, bei Zebra Abreißen/Schneiden/Ablösen.
+Grenzen: Der Treiber kann einen unbedruckbaren Rand haben (Rand im Reiter PAPIER vergrößern), „Medium
+prüfen“ und Abbrechen gibt es nur bei Brother per USB.
 
 ## Installation
 
@@ -53,6 +64,7 @@ labelwerk print "Max Mustermann\nMusterstr. 5\n12345 Musterstadt" --orientation 
 ```
 
 Optionen: `-s` Schriftgröße (`auto` oder 8–400), `--font` eigene TTF, `-m QL-700` Modell (Standard: erkannt), `-p tcp://IP` Netzwerkdrucker, `-b pyusb` alternatives USB-Backend, `--no-cut`.
+Andere Hersteller: `-p cups:NAME` (Warteschlange, Etiketten mit `labelwerk -m cups:NAME labels`), Zebra `-p zpl+file:///dev/usb/lp2` bzw. `-p zpl+tcp://IP` mit `-m zpl:203|300|600`; Etiketten heißen dort `57x32mm@203` (Breite × Höhe @ dpi).
 `print-file` schneidet auf den Inhalt zu (Schnittmarken, z. B. der Internetmarke, und Leerraum fallen weg), dreht bei Bedarf und druckt 1:1; `--rotate 0|90|180|270` legt die Drehung fest (Grad im Uhrzeigersinn), `--fit` verkleinert zu große Motive, `--page N` wählt die PDF-Seite. Internetmarke quer wie im PDF: `--rotate 0 --fit`.
 
 ## Grafische Oberfläche
@@ -96,11 +108,13 @@ Ausrichten, Größe angleichen und Maximieren haben ab Werk kein Kürzel. Im Sch
 ## Architektur
 
 ```
-render.py   Inhalt → Bild in exakter Druckbreite (300 dpi)
+render.py   Inhalt → Bild in exakter Druckbreite (Auflösung des Etiketts: Brother 300 dpi)
 files.py    PDF/Bild → zugeschnitten, 1:1 aufs Etikett gesetzt
-labels.py   Etikettentypen je Modell
+labels.py   Etikettentypen je Modell, Etiketten anderer Drucker „BxHmm@dpi“
 printer.py  Bild → Brother-Rasterdaten → Drucker (via brother_ql)
 printers.py Drucker erkennen (Modell), Fähigkeiten je Modell, Netzwerkdrucker
+cups.py     CUPS-Warteschlangen (lpstat/lpoptions/lp): Etiketten aus dem Treiber, Druck als PDF
+zpl.py      Zebra direkt: Bild → ZPL (^GFA, komprimiert), Senden an USB/TCP
 cli.py      Kommandozeile
 document.py Etikett-Dokument (Etikett, Länge, Objekte)
 settings.py Einstellungen (JSON)

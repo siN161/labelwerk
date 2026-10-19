@@ -536,3 +536,25 @@ def test_print_file_to_cups_in_its_resolution(cups_queue, tmp_path, monkeypatch)
     assert main(["print-file", str(_png(tmp_path, 40, 20)), "-p", "cups:Buero",
                  "-l", "57.2x31.8mm@203"]) == 0
     assert sizes == [(457, 254)]
+
+
+# --- Zebra --------------------------------------------------------------------------------------
+def test_print_to_a_zebra_device(tmp_path, capsys, monkeypatch):
+    from labelwerk import zpl
+    monkeypatch.setattr(zpl, "_is_device", lambda info: True)    # Datei statt Gerät
+    device = tmp_path / "lp2"
+    device.write_bytes(b"")
+    assert main(["-m", "zpl:300", "print", "Hallo", "-p", f"zpl+file://{device}",
+                 "-l", "57x32mm@305", "-b", "zebra"]) == 0
+    assert device.read_bytes().startswith(b"^XA^PW684^LL384")     # ohne ^MM: wie am Drucker
+    assert main(["print", "Hallo", "-p", f"zpl+file://{device}", "-l", "57x32mm@305"]) == 2
+    assert "passt nicht zum zpl:203" in capsys.readouterr().err     # ohne -m: 203 dpi
+
+
+def test_zebra_on_usb_is_listed(tmp_path, monkeypatch, capsys):
+    from labelwerk import printers
+    monkeypatch.setattr(printers, "zebra_printers", lambda **kw: [printers.Printer(
+        "zpl+file:///dev/usb/lp2", "zpl:203", "ZTC GK420d · lp2", "zebra")])
+    assert main(["printers"]) == 0
+    out = capsys.readouterr().out
+    assert "ZTC GK420d · lp2" in out and "zpl+file:///dev/usb/lp2" in out and "Zebra zpl:203" in out

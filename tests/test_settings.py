@@ -316,3 +316,13 @@ def test_bad_printer_options_fall_back(tmp_path, bad):
     path.write_text(json.dumps({"printer_options": bad}))
     s = load_settings(path)
     assert s.printer_options == {} and s.warnings
+
+
+def test_network_zebra_is_kept(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"network_printers": [
+        {"name": "Lager", "host": "10.0.0.8", "model": "zpl:203"},
+        {"name": "x", "host": "10.0.0.9", "model": "zpl:250"}]}))
+    s = load_settings(path)
+    assert s.network_printers == [{"name": "Lager", "host": "10.0.0.8", "model": "zpl:203"}]
+    assert s.warnings

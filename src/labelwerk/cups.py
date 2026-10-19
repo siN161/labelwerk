@@ -59,11 +59,13 @@ class Queue:
 
 @dataclass(frozen=True)
 class CutOption:
-    """Schnitt-Option des Treibers: Schlüssel, Titel und Werte (wie ``lpoptions -l``)."""
+    """Schnitt-Option des Treibers: Schlüssel, Titel und Werte (wie ``lpoptions -l``);
+    ``labels``: Anzeige der Werte (sonst die Werte selbst)."""
     key: str
     title: str
     choices: tuple[str, ...]
     default: str
+    labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -349,16 +349,16 @@ class SeriesPanel(Panel):
         self.driver_box.hide()
 
     def set_driver_cuts(self, options, chosen: dict[str, str]) -> None:
-        """Drucker über CUPS: statt „Nach jedem Etikett/Nur am Ende“ die Schnitt-Optionen seines
-        Treibers (``cups.CutOption``), gewählt wie in ``chosen`` (sonst der Standard des Treibers);
-        ohne solche Optionen der Hinweis, dass der Treiber das bestimmt."""
+        """Drucker über CUPS bzw. Zebra: statt „Nach jedem Etikett/Nur am Ende“ die Schnitt-Optionen
+        seines Treibers bzw. der Modus (``cups.CutOption``), gewählt wie in ``chosen`` (sonst der
+        Standard); ohne solche Optionen der Hinweis, dass der Treiber das bestimmt."""
         while self.driver_grid.count():
             self.driver_grid.takeAt(0).widget().deleteLater()
         self.driver_cuts = {}
         for row, option in enumerate(options):
             combo = QComboBox()
-            for choice in option.choices:
-                combo.addItem(choice, choice)
+            for choice, text in zip(option.choices, option.labels or option.choices):
+                combo.addItem(text, choice)
             combo.setCurrentIndex(max(0, combo.findData(chosen.get(option.key, option.default))))
             combo.currentIndexChanged.connect(
                 lambda _=0, key=option.key, box=combo: self.driver_cut_chosen.emit(
