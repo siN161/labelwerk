@@ -57,18 +57,20 @@ class Table:
     rows: list[list[str]]
     sheet: str | None = field(default=None, compare=False)
     sheets: list[str] = field(default_factory=list, compare=False)
+    more: bool = field(default=False, compare=False)   # nur der Anfang gelesen (limit), es folgen weitere
 
 
 # --- Tabellen lesen ----------------------------------------------------------------------------
-def load_table(path: str | Path, sheet: str | None = None) -> Table:
+def load_table(path: str | Path, sheet: str | None = None, limit: int | None = None) -> Table:
     """CSV oder Excel; erste Zeile = Spaltennamen; leere Zeilen entfallen (auch mittendrin).
-    ``sheet``: Excel-Blatt (None = erstes sichtbares Arbeitsblatt)."""
+    ``sheet``: Excel-Blatt (None = erstes sichtbares Arbeitsblatt); ``limit``: nur so viele
+    Zeilen lesen (Vorschau), ``Table.more`` sagt, ob weitere folgen."""
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix in EXCEL_SUFFIXES:
-        return _read_excel(path, sheet)
+        return _read_excel(path, sheet, limit)
     if suffix in CSV_SUFFIXES:
-        return _read_csv(path)
+        return _read_csv(path, limit)
     raise SeriesError(_("{name}: not a table format – CSV or Excel (.xlsx)").format(
         name=path.name or path))
 
@@ -136,22 +138,22 @@ def _separator(text: str) -> str:
     return best
 
 
-def _read_csv(path: Path) -> Table:
+def _read_csv(path: Path, limit: int | None = None) -> Table:
     text = _decode(_read_bytes(path), path)
     if "\x00" in text:                                   # Binärdatei mit falscher Endung
         raise SeriesError(_("{name}: table not readable (not a text file)").format(name=path.name))
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=_separator(text))
-    limit = csv.field_size_limit()
+    field_limit = csv.field_size_limit()
     try:
         csv.field_size_limit(MAX_CELL)
-        return _collect(reader, path)
+        return _collect(reader, path, limit)
     except csv.Error as e:
         if "field larger" in str(e):
             raise SeriesError(_("{name}: cell too long (at most {limit} characters)").format(
                 name=path.name, limit=i18n.thousands(MAX_CELL))) from e
         raise SeriesError(_("{name}: table not readable").format(name=path.name)) from e
     finally:
-        csv.field_size_limit(limit)
+        csv.field_size_limit(field_limit)
 
 
 def _open_excel(path: Path):
@@ -172,7 +174,7 @@ def _open_excel(path: Path):
         raise SeriesError(_("{name}: Excel file not readable").format(name=path.name)) from e
 
 
-def _read_excel(path: Path, sheet: str | None) -> Table:
+def _read_excel(path: Path, sheet: str | None, limit: int | None = None) -> Table:
     book = _open_excel(path)
     try:
         sheets = book.worksheets                          # ohne Diagrammblätter
@@ -192,7 +194,7 @@ def _read_excel(path: Path, sheet: str | None) -> Table:
             width = max(1, min(width, chosen.max_column))
         rows = ([_cell(cell.value, getattr(cell, "number_format", "General")) for cell in row]
                 for row in _limited(chosen.iter_rows(max_col=width), path))
-        table = _collect(rows, path)
+        table = _collect(rows, path, limit)
         table.sheet, table.sheets = chosen.title, [ws.title for ws in sheets]
         return table
     except SeriesError:
@@ -254,11 +256,13 @@ def _number(value: int | float, number_format: str) -> str:
     return f"{value:.15g}".replace(".", i18n.content_decimal()) + suffix
 
 
-def _collect(rows: Iterable[list], path: Path) -> Table:
+def _collect(rows: Iterable[list], path: Path, limit: int | None = None) -> Table:
     """Zeilen einsammeln: Zellen als Text (Umbrüche → Leerzeichen), leere Zellen am Zeilenende
-    und leere Zeilen weg, Spaltennamen eindeutig, Grenzen sofort prüfen."""
+    und leere Zeilen weg, Spaltennamen eindeutig, Grenzen sofort prüfen; ``limit``: nach so
+    vielen Zeilen aufhören (``more``: es folgt noch eine)."""
     header: list[str] | None = None
     data: list[list[str]] = []
+    more = False
     for row in rows:
         cells = [_BREAKS.sub(" ", str(cell)) for cell in row]
         while cells and not cells[-1].strip():
@@ -271,6 +275,9 @@ def _collect(rows: Iterable[list], path: Path) -> Table:
                     name=path.name, limit=MAX_COLUMNS))
             header = cells
             continue
+        if limit is not None and len(data) == limit:
+            more = True
+            break
         if len(data) == MAX_ROWS:
             raise SeriesError(_("{name}: too many rows (at most {limit})").format(
                 name=path.name, limit=i18n.thousands(MAX_ROWS)))
@@ -285,7 +292,7 @@ def _collect(rows: Iterable[list], path: Path) -> Table:
             unique, n = f"{name} ({n})", n + 1
         columns.append(unique)
     width = len(columns)
-    return Table(columns, [(row + [""] * width)[:width] for row in data])
+    return Table(columns, [(row + [""] * width)[:width] for row in data], more=more)
 
 
 # --- Nummerierung und Serie --------------------------------------------------------------------

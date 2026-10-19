@@ -579,6 +579,10 @@ msgstr "Löschen …"
 msgid "Design and print labels (Brother QL)"
 msgstr "Etiketten gestalten und drucken (Brother QL)"
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Dialog of the desktop instead of the labelwerk dialog with preview (takes effect after a restart)"
+msgstr "Dialog des Desktops statt des labelwerk-Dialogs mit Vorschau (wirkt nach einem Neustart)"
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "Die-cut"
 msgstr "Gestanzt"
@@ -1415,6 +1419,10 @@ msgstr ""
 msgid "No permission for {device} – is the user in group 'lp'?"
 msgstr "Keine Berechtigung für {device} – Benutzer in Gruppe 'lp'?"
 
+#: src/labelwerk/gui/file_dialog.py
+msgid "No preview"
+msgstr "Keine Vorschau"
+
 #: src/labelwerk/gui/main_window.py
 msgid "No printer for this label – choose a printer in the status bar."
 msgstr "Kein Drucker für dieses Etikett – in der Statusleiste einen Drucker wählen."
@@ -1444,6 +1452,10 @@ msgstr "Keine Serie"
 #, python-brace-format
 msgid "Not a Zebra address: {uri}"
 msgstr "Keine Zebra-Adresse: {uri}"
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Not available: this Qt installation has no module for the file dialog of the system"
+msgstr "Nicht verfügbar: Dieser Qt-Installation fehlt das Modul für die Dateiauswahl des Systems"
 
 #: src/labelwerk/cli.py
 #, python-brace-format
@@ -1624,6 +1636,15 @@ msgstr "Innenabstand des Rahmens muss zwischen {low} und {high} mm liegen"
 #: src/labelwerk/files.py
 msgid "Page must be at least 1."
 msgstr "Seite muss mindestens 1 sein."
+
+#: src/labelwerk/gui/file_dialog.py
+msgid "Page of the PDF to insert"
+msgstr "Seite der PDF, die eingefügt wird"
+
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "Page {page} of {count}"
+msgstr "Seite {page} von {count}"
 
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/tools.py
@@ -2545,6 +2566,10 @@ msgstr "Ungespeicherte Änderungen"
 msgid "Untitled"
 msgstr "Unbenannt"
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Use the file dialog of the system"
+msgstr "Dateiauswahl des Systems verwenden"
+
 #. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
 #: src/labelwerk/storage.py
 #, python-brace-format
@@ -2756,6 +2781,13 @@ msgstr "Rand ringsum ab Papierkante in mm – die Streifen, die der Drucker frei
 msgid "model not detected"
 msgstr "Modell nicht erkannt"
 
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "more than {count} row"
+msgid_plural "more than {count} rows"
+msgstr[0] "mehr als {count} Zeile"
+msgstr[1] "mehr als {count} Zeilen"
+
 #: src/labelwerk/storage.py
 msgid "name too long"
 msgstr "Name zu lang"
@@ -2884,12 +2916,26 @@ msgstr "{app}-Etikett"
 msgid "{checked} of {total} selected"
 msgstr "{checked} von {total} gewählt"
 
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{count} byte"
+msgid_plural "{count} bytes"
+msgstr[0] "{count} Byte"
+msgstr[1] "{count} Byte"
+
 #: src/labelwerk/cli.py
 #, python-brace-format
 msgid "{count} office printer hidden – “labelwerk printers --all” shows it, print with -p cups:NAME"
 msgid_plural "{count} office printers hidden – “labelwerk printers --all” shows them, print with -p cups:NAME"
 msgstr[0] "{count} Bürodrucker ausgeblendet – „labelwerk printers --all“ zeigt ihn, drucken mit -p cups:NAME"
 msgstr[1] "{count} Bürodrucker ausgeblendet – „labelwerk printers --all“ zeigt sie, drucken mit -p cups:NAME"
+
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{count} row"
+msgid_plural "{count} rows"
+msgstr[0] "{count} Zeile"
+msgstr[1] "{count} Zeilen"
 
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/settings_dialog.py
@@ -3097,6 +3143,16 @@ msgstr "{percent} %"
 msgid "{printer} not found – switch it on or choose another one"
 msgstr "{printer} nicht gefunden – einschalten oder einen anderen wählen"
 
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{size} KB"
+msgstr "{size} KB"
+
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{size} MB"
+msgstr "{size} MB"
+
 #: src/labelwerk/gui/panels/image.py
 #, python-brace-format
 msgid "{source} · page {page}"
@@ -3154,8 +3210,8 @@ msgid "Ø {width} mm · round"
 msgstr "Ø {width} mm · rund"
 
 #: src/labelwerk/gui/settings_dialog.py
-msgid "“New label” applies to new labels, start zoom, tab at startup and language from the next start, everything else immediately."
-msgstr "„Neues Etikett“ gilt für neue Etiketten, Startzoom, Reiter beim Start und Sprache ab dem nächsten Start, alles andere sofort."
+msgid "“New label” applies to new labels, start zoom, tab at startup, file dialog and language from the next start, everything else immediately."
+msgstr "„Neues Etikett“ gilt für neue Etiketten, Startzoom, Reiter beim Start, Dateiauswahl und Sprache ab dem nächsten Start, alles andere sofort."
 
 #: src/labelwerk/gui/settings_dialog.py
 #, python-brace-format

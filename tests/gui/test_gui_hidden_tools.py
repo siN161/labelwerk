@@ -264,3 +264,69 @@ def test_hiding_the_start_tab_switches_to_last_used(qtbot, tmp_path):
     dialog.tool_boxes["barcode"].setChecked(False)
     assert dialog.start_tool.currentData() == "last"
     assert dialog.values().start_tool == "last"
+
+
+# --- SERIE: Panel gezeigt → Knopf bleibt, bis der Reiter wechselt ------------------
+def _series_window(qtbot):
+    win = _window(qtbot, hidden_tools=["series"])
+    win.panel("series").numbering_button.click()                    # Nummerierung als Serie
+    win.render_now()
+    assert win.doc.series is not None
+    win.tool_actions["series"].trigger()
+    assert win.panels.currentWidget() is win.panel("series")
+    return win
+
+
+def test_series_button_stays_after_remove_while_shown(qtbot):
+    win = _series_window(qtbot)
+    win.panel("series").remove_button.click()
+    win.render_now()
+    assert win.doc.series is None and win.tool_actions["series"].isVisible()
+    win.tool_actions["text"].trigger()
+    assert not win.tool_actions["series"].isVisible()
+
+
+def test_series_button_stays_after_new_label_while_shown(qtbot):
+    win = _series_window(qtbot)
+    win.files.new()
+    win.render_now()
+    assert win.doc.series is None
+    assert win.panels.currentWidget() is not win.panel("series") \
+        or win.tool_actions["series"].isVisible()
+    win.tool_actions["paper"].trigger()
+    assert not win.tool_actions["series"].isVisible()
+
+
+def test_series_button_stays_after_printer_change_while_shown(qtbot, monkeypatch, queue, workers):
+    from test_gui_printers import _window as printer_window
+    win = printer_window(qtbot, monkeypatch, [], printer="cups:Dymo", hidden_tools=["series"])
+    win.tool_actions["series"].trigger()
+    win.choose_printer("cups:Laser")
+    assert win.tool_actions["series"].isVisible()
+    win.tool_actions["paper"].trigger()
+    assert not win.tool_actions["series"].isVisible()
+
+
+def test_unchanged_hidden_tools_in_other_order_do_not_fall_back(qtbot, monkeypatch):
+    win = _window(qtbot, objects=[TextObject("A"), BarcodeObject(kind="qr", data="X", module=4)],
+                  hidden_tools=["barcode", "layout"])
+    win.render_now()
+    win.canvas.set_selection([1])
+    QApplication.processEvents()
+    win.canvas.set_selection([1])
+    _save_with(win, monkeypatch, hidden_tools=["layout", "barcode"])
+    assert win.panels.currentWidget() is win.panel("barcode")
+
+
+def test_start_tab_already_hidden_is_locked_without_restart_hint(qtbot, tmp_path):
+    dialog = SettingsDialog(Settings(start_tool="series", hidden_tools=["series"]), tmp_path / "s.json")
+    qtbot.addWidget(dialog)
+    dialog.show()
+    assert not _enabled(dialog.start_tool, "series")
+    assert not dialog.restart_hint.isVisible()
+    assert dialog.values().start_tool == "paper"                  # wie es tatsächlich startet
+
+
+def test_start_with_hidden_tools_does_not_fall_back(qtbot):
+    win = _window(qtbot, start_tool="text", hidden_tools=["barcode"])
+    assert win.panels.currentWidget() is win.panel("text")

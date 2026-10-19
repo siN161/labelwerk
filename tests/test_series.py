@@ -533,3 +533,25 @@ def test_unnamed_columns_in_every_language(tmp_path):
     doc = Document("62", objects=[TextObject("{Spalte 2} {Column 2}")])
     assert missing(doc, table.columns) == []
     assert fill(doc, table.columns, table.rows[0]).objects[0].text == "24V 24V"
+
+
+# --- nur der Anfang (Vorschau im Dateidialog) --------------------------------------------------
+@pytest.mark.parametrize("count, more", [(3, False), (4, True), (50, True)])
+def test_load_table_reads_only_the_first_rows(tmp_path, count, more):
+    path = tmp_path / "t.csv"
+    path.write_text("A;B\n" + "".join(f"{i};x\n\n" for i in range(count)))   # leere Zeilen zählen nicht
+    table = load_table(path, limit=3)
+    assert table.columns == ["A", "B"] and [r[0] for r in table.rows] == ["0", "1", "2"][:count]
+    assert table.more is more
+
+
+def test_load_table_limit_in_excel(tmp_path):
+    path = tmp_path / "t.xlsx"
+    book = openpyxl.Workbook()
+    book.active.append(["A"])
+    for i in range(10):
+        book.active.append([i])
+    book.save(path)
+    table = load_table(path, limit=2)
+    assert table.rows == [["0"], ["1"]] and table.more is True
+    assert load_table(path).more is False and len(load_table(path).rows) == 10

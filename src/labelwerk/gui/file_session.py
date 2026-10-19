@@ -26,6 +26,7 @@ from ..labels import labels_for_model
 from ..render import Renderer
 from ..settings import new_document
 from ..storage import SUFFIX, StorageError, exists, os_reason
+from . import file_dialog
 from .history import restore
 from .panels.file import PREVIEW
 
@@ -68,6 +69,9 @@ class FileSession(QObject):
         dialog = QFileDialog(self.window, _("Save label"), suggested, _file_filter())
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setDefaultSuffix(SUFFIX[1:])
+        # eigener Weg: Qts Dialog (fragt selbst vor dem Ersetzen); mit Dateiauswahl des Systems der
+        # des Desktops – save_as fragt dann selbst nach
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog, not self.window.system_dialog)
         try:
             return dialog.selectedFiles()[0] if dialog.exec() and dialog.selectedFiles() else None
         finally:
@@ -93,9 +97,9 @@ class FileSession(QObject):
                 loaded=loaded, label=label_id))
 
     def ask_open_file(self) -> str | None:
-        path, _filter = QFileDialog.getOpenFileName(self.window, _("Open label"), self._dir,
-                                                    _file_filter())
-        return path or None
+        return file_dialog.ask_open(self.window, _("Open label"), self._dir, _file_filter(),
+                                    system=self.window.system_dialog,
+                                    model=self.window.model)
 
     def ask_save_changes(self) -> str:
         """„save“ | „discard“ | „cancel“."""
@@ -259,6 +263,8 @@ class FileSession(QObject):
             path = path.with_name(path.name + SUFFIX)
             if path.exists() and not self.ask_replace_file(path):   # Dialog sah den Namen ohne
                 return False
+        elif self.window.system_dialog and path.exists() and not self.ask_replace_file(path):
+            return False                    # Dialoge des Desktops fragen nicht immer selbst
         return self._write(path)
 
     def _write(self, path: Path) -> bool:

@@ -54,6 +54,10 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
 - Einstellungen: Reiter beim Start (fest oder zuletzt benutzter), Standard für neue Bilder (Strich/Foto, Schwelle),
   Reiter ausblenden (Ansicht → „Reiter in der Leiste“; DATEI/PAPIER immer; Objekte ausgeblendeter Reiter bleiben
   bearbeitbar – Auswahl zeigt ihr Panel, Tastenkürzel wirken).
+- Dateiauswahl mit Vorschau (Etappe Oberfläche): eigener Öffnen-Dialog (Bild einfügen, Etikett öffnen, Tabelle
+  der Serie) mit Vorschau rechts (Bilder, SVG, PDF mit Seitenwahl – keine Seitenfrage danach –, Etiketten,
+  Tabellen; im Hintergrund gelesen); Einstellung „Dateiauswahl des Systems verwenden“ (nach Neustart: Qt-Platform-
+  Theme xdgdesktopportal als Argument = Dialog des Desktops über das XDG-Portal; ohne Qt-Plugin gesperrt).
 - Schriftliste (Abnahme-Korrekturen): nur Schriften mit deutschen Zeichen, ohne Kopien (Powerline/Nerd Font),
   Symbol-/Farbschriften und CJK-Regionsvarianten, jede in ihrer Schrift (FontCombo statt QFontComboBox, keine
   Qt-Sammelnamen wie „Sans Serif“); Einstellung „Alle Schriften zeigen“ (`fonts_all`, sofort), CLI `fonts --all`;
@@ -63,7 +67,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   gewählte bleibt sichtbar).
 - Stilles Speichern (Zuletzt geöffnet/verwendet, Favoriten, gewählter Drucker, letzter Reiter) schreibt nur sein
   Feld (`settings.update_settings`) – was eine zweite Instanz gespeichert hat, bleibt.
-- 2709 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2762 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -174,8 +178,10 @@ src/labelwerk/
               Port/Schema/Steuerzeichen; Modell auch zpl:…), network_entries(settings); `printer_options` (Modell →
               Druck-Optionen: CUPS-Schnitt-Optionen, Zebra-Modus; je Eintrag geprüft, leerer Wert erlaubt), `zebra_dpi`
               (0 = erkannt), `cups_all` (auch CUPS-Bürodrucker im Druckermenü/`labelwerk printers`; Dialog → Drucker),
-              `fonts_all` (alle Schriften in den Auswahlen, sofort), `language` ("" = System); RESTART_KEYS (language, start_zoom, start_tool), started_values/
-              restart_pending (wirksamer Vergleich mit dem Start), configured_language (vor allem anderen gelesen);
+              `fonts_all` (alle Schriften in den Auswahlen, sofort), `language` ("" = System); `system_file_dialog` (Dateiauswahl des Systems); RESTART_KEYS (language, start_zoom, start_tool,
+              system_file_dialog), start_tool_for (ausgeblendeter Start-Reiter = PAPIER, so verglichen und
+              gespeichert), started_values/restart_pending(values, started) (wirksamer Vergleich mit dem
+              Start), configured_language/configured_file_dialog (vor allem anderen gelesen);
               load_settings(path, model=None): Etikett muss nur ein bekanntes Etikett sein (auch
               „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI); save_settings schreibt alles,
               update_settings(path, base, **felder) nur diese Felder in die neu gelesene Datei (Rest bleibt wie dort,
@@ -197,7 +203,8 @@ src/labelwerk/
               (Spalte „Nummer“), check, table_for(series, base); Endungen .csv/.tsv/.txt bzw. .xlsx/.xlsm; Excel höchstens
               MAX_RAW_ROWS Zeilen samt leeren; Table.sheet/sheets (gelesenes Blatt, alle Arbeitsblätter);
               Platzhalter {Spalte} in Text und Barcode-Inhalt (Leerzeichen in den Klammern egal):
-              placeholders, missing, fill(doc, columns, row, keep) – nur zum Lesen: unveränderte Objekte bleiben dieselben
+              placeholders, missing, fill(doc, columns, row, keep) – nur zum Lesen: unveränderte Objekte bleiben dieselben;
+              load_table(…, limit=n): nur die ersten n Zeilen (Vorschau), Table.more = es folgen weitere
   favorites.py Favoriten = *.labelwerk in $XDG_DATA_HOME/labelwerk/favoriten: favorites, find, add (overwrite), rename, remove
   clipart.py  Symbol-Bibliothek ohne Qt: catalog() aus clipart_data/clipart.zip (catalog.json + SVGs, einmal ganz gelesen;
               Einträge mit names/subgroups {de, en} – Anzeige in der Sprache, je Sprache gecacht, Suche über beide;
@@ -251,7 +258,7 @@ src/labelwerk/
                     ganz; start(path) (Datei bzw. Start-Favorit),
                     print_document(doc) (anderes Etikett drucken, gleiche Rückfragen); closeEvent fragt bei Änderungen;
                     apply_hidden_tools(fall_back) (Knöpfe ausgeblendeter Reiter unsichtbar – SERIE bleibt, solange Serie
-                    oder Schnitt-Optionen des Druckers: _tool_visible; nach SPEICHERN nur bei geänderten hidden_tools und
+                    oder Schnitt-Optionen des Druckers: _tool_needed, bzw. solange ihr Panel zu sehen ist: _tool_visible; nach SPEICHERN nur bei geänderten hidden_tools und
                     Panel nicht für Auswahl/Schreibmodus → zuletzt benutzter sichtbarer bzw. PAPIER; leere Auswahl ebenso;
                     Start-Reiter und last_tool überspringen ausgeblendete)
     panels/barcode.py Reiter Barcode: Art (für den gewählten bzw. nächsten), BARCODE EINFÜGEN (Aktion barcode.insert),
@@ -304,6 +311,16 @@ src/labelwerk/
                     jede Schrift in ihrer Schrift, fremde Schrift bleibt oben gewählt, None = leer bei gemischten Schriften;
                     Breite unabhängig von den Namen; Signal family_chosen) – Reiter Text
                     und Einstellungen
+    file_dialog.py  Öffnen-Dialoge: ask_open(parent, title, folder, filters, system, pages, model) -> Chosen | None
+                    (Chosen = Pfad als str mit .page: im Dialog gewählte PDF-Seite); PreviewFileDialog (nicht nativ,
+                    Vorschau rechts: PreviewPane, ◀ n/N ▶ bei PDF mit pages; Platz: Orte ≥ 160 px, Name dehnt sich,
+                    ohne Typ; ≤ 90 % Bildschirm), make_preview(path, page, size, model) -> Preview (Bild verkleinert
+                    gelesen samt EXIF-Lage, Pixelgrenze vor dem Dekodieren außer JPEG, SVG, PDF, *.labelwerk, Tabellen
+                    nur der Anfang; Fehler → „Keine Vorschau“) – im Hintergrund-Thread (Generation, veraltete
+                    verfallen), PDF im GUI-Thread (PDFium); system: QFileDialog des Systems; system_dialog_available
+                    (Qt-Plugin platformthemes/*xdgdesktopportal*); exec_dialog in Tests ersetzt;
+                    MainWindow.system_dialog = Weg vom Start (Einstellung beim Start und Plugin), auch „Speichern unter“
+                    (dann eigene Ersetzen-Rückfrage); app.qt_arguments: „-platformtheme xdgdesktopportal“ beim Start
     symbols.py      Liniensymbole (gui/icons) je Design, weiß beim Darüberfahren in RawBlock
     print_worker.py Drucken im Hintergrund-Thread (cancel(): threading.Event; Signale progress, cancelled)
     media_worker.py  Medium prüfen im Hintergrund (MediaWorker(model, printer): URI des gewählten USB-Druckers; Ergebnis eines
@@ -314,7 +331,7 @@ src/labelwerk/
                     Schriftart (FontCombo) mit „Alle Schriften zeigen“ darunter (sofort); Bilder einfügen: Zuschnitt, Drehen,
                     Umwandlung Strich/Foto, Schwelle; Ansicht: Start-Zoom, Reiter beim Start, Reiter in der Leiste (tool_boxes, sperren
                     ausgeblendete im Start-Reiter; tools_note),
-                    Design, Sprache) und
+                    Design, Dateiauswahl des Systems, Sprache) und
                     Tastenkürzel (Konflikte sperren Speichern); restart_hint neben SPEICHERN (Stand beim Start: started)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)
@@ -361,7 +378,7 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
 
-Nächste Schritte: Paketierung (8).
+Nächste Schritte: Paketmarken umwandeln (Spec 2026-10-19-paketmarken), dann Paketierung (8).
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld
@@ -378,7 +395,7 @@ Umsetzung:
 - GUI bleibt dünn: Logik, die testbar ist, gehört in den Kern
 
 ## Roadmap danach
-0. Etappen P-touch-Übernahme: 1 Papier komplett (erledigt) · 2 Verwendungsart – **zurückgestellt** (P-touch-Vorlagen wie Kabelfahne/Kabelwickel/Patchfeld; erst klären, welche Arten der P-touch Editor beim QL-600 anbietet – Screenshot der Liste) · 3a/3b Text-Formatierung (erledigt) · 3d-1 Freies Platzieren (erledigt, Spec 2026-10-17-freies-platzieren) · 3d-1b Direkt auf dem Etikett schreiben (erledigt, Spec 2026-10-17-direkt-schreiben) · 3d-2a Bild (erledigt, Spec 2026-10-17-bild-objekt) · 3d-2b Bildschirmfoto (erledigt, Spec 2026-10-18-bildschirmfoto) · 3d-2c Symbole/ClipArt (erledigt, Spec 2026-10-18-symbole) · 3c Neu/Öffnen/Speichern + Favoriten (erledigt, Spec 2026-10-18-dateien-favoriten) · Zierrahmen ums Etikett (erledigt, Spec 2026-10-18-zierrahmen) · 3e Serien aus CSV/Excel und Nummerierung (erledigt, Spec 2026-10-18-serien) · Barcodes/QR (erledigt, Spec 2026-10-19-barcodes).
+0. Etappen P-touch-Übernahme: 1 Papier komplett (erledigt) · 2 Verwendungsart – **zurückgestellt** (P-touch-Vorlagen wie Kabelfahne/Kabelwickel/Patchfeld; erst klären, welche Arten der P-touch Editor beim QL-600 anbietet – Screenshot der Liste) · 3a/3b Text-Formatierung (erledigt) · 3d-1 Freies Platzieren (erledigt, Spec 2026-10-17-freies-platzieren) · 3d-1b Direkt auf dem Etikett schreiben (erledigt, Spec 2026-10-17-direkt-schreiben) · 3d-2a Bild (erledigt, Spec 2026-10-17-bild-objekt) · 3d-2b Bildschirmfoto (erledigt, Spec 2026-10-18-bildschirmfoto) · 3d-2c Symbole/ClipArt (erledigt, Spec 2026-10-18-symbole) · 3c Neu/Öffnen/Speichern + Favoriten (erledigt, Spec 2026-10-18-dateien-favoriten) · Zierrahmen ums Etikett (erledigt, Spec 2026-10-18-zierrahmen) · 3e Serien aus CSV/Excel und Nummerierung (erledigt, Spec 2026-10-18-serien) · Barcodes/QR (erledigt, Spec 2026-10-19-barcodes) · Abnahme-Korrekturen (erledigt, Spec 2026-10-19-abnahme-korrekturen) · Oberfläche (erledigt, Spec 2026-10-19-oberflaeche).
 1. ~~Text 90° drehen (Text längs zum Endlosband, wichtig für 12–29 mm)~~ erledigt in Etappe 1
 2. Eingelegte Rolle automatisch aus dem Druckerstatus auslesen → teilweise erledigt in Etappe 1 (GUI-Vorauswahl, `labelwerk media`); `-l auto` in der CLI fehlt noch
 3. ~~Barcodes und QR-Codes~~ erledigt (QR, Code 128, Code 39, EAN-13/8; später ggf. DataMatrix, ITF, GS1-128)

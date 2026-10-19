@@ -363,10 +363,10 @@ def test_file_dialog_filter_accepts_uppercase_names():
 def test_file_dialog_filter_in_the_language(qtbot, monkeypatch):
     """Der Dialog „Bild einfügen“ bekommt den Filter in der Sprache der Oberfläche."""
     from labelwerk import i18n
-    from labelwerk.gui import main_window
+    from labelwerk.gui import file_dialog
     seen = []
-    monkeypatch.setattr(main_window.QFileDialog, "getOpenFileName",
-                        lambda parent, title, folder, filter_: seen.append((title, filter_)) or ("", ""))
+    monkeypatch.setattr(file_dialog, "exec_dialog",
+                        lambda d: seen.append((d.windowTitle(), ";;".join(d.nameFilters()))) and False)
     win = _window(qtbot)
     win.ask_image_file()
     assert seen[-1][0] == "Bild einfügen" and seen[-1][1].startswith("Bilder und PDF (")

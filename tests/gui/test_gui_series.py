@@ -521,8 +521,9 @@ def test_table_is_read_once_when_chosen(qtbot, tmp_path, monkeypatch):
 def test_file_dialog_starts_at_the_current_table(qtbot, tmp_path, monkeypatch):
     win, path = _with_table(qtbot, tmp_path)
     seen = []
-    monkeypatch.setattr(main_window.QFileDialog, "getOpenFileName",
-                        lambda parent, title, folder, filters: seen.append(folder) or ("", ""))
+    from labelwerk.gui import file_dialog
+    monkeypatch.setattr(file_dialog, "exec_dialog",
+                        lambda dialog: seen.append(dialog.directory().absolutePath()) and False)
     del win.ask_series_file
     win.choose_series_table()
     assert seen == [str(path.parent)]

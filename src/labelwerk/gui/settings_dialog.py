@@ -23,7 +23,8 @@ from ..labels import get_label, labels_for_model
 from ..printer import DEFAULT_MODEL
 from ..printers import SUPPORTED_MODELS, capabilities
 from ..settings import (HIDEABLE_TOOLS, Settings, restart_pending, save_settings,
-                        started_values, valid_host)
+                        start_tool_for, started_values, valid_host)
+from . import file_dialog
 from .tools import TOOLS
 from .widgets import DoubleSpinBox, FontCombo, SpinBox
 
@@ -232,6 +233,15 @@ class SettingsDialog(QDialog):
         self.theme.addItem(_("Classic"), "classic")
         self.theme.setCurrentIndex(max(0, self.theme.findData(settings.theme)))
         form.addRow(_("Theme"), self.theme)
+        self.system_file_dialog = QCheckBox(_("Use the file dialog of the system"))
+        self.system_file_dialog.setToolTip(_("Dialog of the desktop instead of the labelwerk dialog "
+                                             "with preview (takes effect after a restart)"))
+        self.system_file_dialog.setChecked(settings.system_file_dialog)
+        if not file_dialog.system_dialog_available():         # Qt-Plugin fehlt: nur eigener Dialog
+            self.system_file_dialog.setEnabled(False)
+            self.system_file_dialog.setToolTip(_("Not available: this Qt installation has no "
+                                                 "module for the file dialog of the system"))
+        form.addRow(self.system_file_dialog)
         self.language = QComboBox()
         system = i18n.system_language()
         self.language.addItem(_("Automatic (system language: {language})").format(
@@ -251,9 +261,10 @@ class SettingsDialog(QDialog):
         self.language.currentIndexChanged.connect(self._update_restart_hint)
         self.zoom.valueChanged.connect(self._update_restart_hint)
         self.start_tool.currentIndexChanged.connect(self._update_restart_hint)
+        self.system_file_dialog.toggled.connect(self._update_restart_hint)
 
-        hint = QLabel(_("“New label” applies to new labels, start zoom, tab at startup and language "
-                        "from the next start, everything else immediately."))
+        hint = QLabel(_("“New label” applies to new labels, start zoom, tab at startup, file dialog "
+                        "and language from the next start, everything else immediately."))
         hint.setWordWrap(True)
         layout.addWidget(hint)
         layout.addStretch()
@@ -444,6 +455,10 @@ class SettingsDialog(QDialog):
     def _family_changed(self, _family) -> None:
         self._family_touched = True
 
+    def _hidden_tools(self) -> list[str]:
+        return [key for key, box in self.tool_boxes.items()
+                if key in HIDEABLE_TOOLS and not box.isChecked()]
+
     def _enable_start_tools(self) -> None:
         """„Reiter beim Start“: ausgeblendete Reiter gesperrt (gekoppelt an die Häkchen)."""
         model = self.start_tool.model()
@@ -456,12 +471,17 @@ class SettingsDialog(QDialog):
         self._enable_start_tools()
         if not self.tool_boxes[key].isChecked() and self.start_tool.currentData() == key:
             self.start_tool.setCurrentIndex(self.start_tool.findData("last"))
+        self._update_restart_hint()             # wirksamer Start-Reiter hängt an den Häkchen
 
     def restart_needed(self) -> bool:
         """Wirkt eine gewählte Einstellung erst nach einem Neustart anders als jetzt? (Liest nur die
         Felder der Neustart-Einstellungen – keine Prüfung anderer Felder.)"""
-        return restart_pending(self.language.currentData(), self.zoom.value(),
-                               self.start_tool.currentData(), self._started)
+        return restart_pending({"language": self.language.currentData(),
+                                "start_zoom": self.zoom.value(),
+                                "start_tool": start_tool_for(self.start_tool.currentData(),
+                                                             self._hidden_tools()),
+                                "system_file_dialog": self.system_file_dialog.isChecked()},
+                               self._started)
 
     def _update_restart_hint(self) -> None:
         self.restart_hint.setVisible(self.restart_needed())
@@ -477,11 +497,11 @@ class SettingsDialog(QDialog):
             fonts_all=self.fonts_all.isChecked(),
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
-            start_tool=self.start_tool.currentData(),
+            start_tool=start_tool_for(self.start_tool.currentData(), self._hidden_tools()),
             last_tool=self._last_tool,
-            hidden_tools=[key for key, box in self.tool_boxes.items()
-                          if key in HIDEABLE_TOOLS and not box.isChecked()],
+            hidden_tools=self._hidden_tools(),
             theme=self.theme.currentData(),
+            system_file_dialog=self.system_file_dialog.isChecked(),
             image_crop=self.image_crop.isChecked(),
             image_rotate=self.image_rotate.isChecked(),
             image_mode=self.image_mode.currentData(),

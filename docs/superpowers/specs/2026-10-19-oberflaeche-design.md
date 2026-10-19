@@ -37,21 +37,29 @@ Prüfung mit der Abnahme.
 ## 2 – Dateiauswahl mit Vorschau
 
 - **Eigener Dialog** `gui/file_dialog.py`: `QFileDialog` (nicht nativ) mit Vorschau-Bereich rechts, für alle
-  Öffnen-Dialoge (Etikett öffnen, Bild einfügen, Tabelle der Serie, später Paketmarke). Speichern bleibt wie bisher
-  (ohne Vorschau).
-  - Vorschau je Datei, beim Markieren: Bilder (PNG/JPG/GIF/BMP/WebP, verkleinert gelesen, EXIF-Lage), SVG,
-    PDF (Seite gerendert, bei mehreren Seiten Seitenwahl ◀ n/N ▶ – die gewählte Seite gilt, die Seitenfrage danach
-    entfällt), `*.labelwerk` (Etikett gerendert wie bei Favoriten), Tabellen (erste Zeilen); sonst Name und Größe.
-  - Grenzen wie beim Einfügen (Dateigröße, Pixel); Fehler → „Keine Vorschau“, nie ein Absturz; große Dateien
-    blockieren nicht spürbar (verkleinertes Lesen, PDF nur die gewählte Seite klein).
-  - Merkt Ordner wie bisher; Ablegen/Doppelklick wie gewohnt.
-- **Einstellung** `system_file_dialog: bool = False` – „Dateiauswahl des Systems verwenden“ (Dialog → Ansicht).
-  An: Dateiauswahl des Desktops über das XDG-Portal (`org.freedesktop.portal.FileChooser`, QtDBus wie das
-  Bildschirmfoto); ohne Portal Qt-Dialog. Vorschau und PDF-Seitenwahl dann wie vom Desktop (Seitenfrage danach wie
-  bisher).
-- **Tests:** Vorschau je Dateiart (erzeugte Dateien), defekte Datei, PDF-Seitenwahl ersetzt die Seitenfrage,
-  Einstellung schaltet den Weg; Portal gegen ein Test-Portal auf privatem Bus (eigene Config ohne servicedir, wie
-  tests/gui/fake_portal.py) – nie das echte Portal.
+  Öffnen-Dialoge (Etikett öffnen, Bild einfügen, Tabelle der Serie, später Paketmarke). Speichern ohne Vorschau,
+  auf diesem Weg ebenfalls Qts Dialog (fragt selbst vor dem Ersetzen).
+  - Vorschau je Datei, beim Markieren (kurz verzögert): Bilder (PNG/JPG/GIF/BMP/WebP, verkleinert gelesen,
+    EXIF-Lage), SVG, PDF (Seite gerendert, bei mehreren Seiten Seitenwahl ◀ n/N ▶ – die gewählte Seite gilt, die
+    Seitenfrage danach entfällt), `*.labelwerk` (Etikett gerendert, mit Rand), Tabellen (nur Kopf + erste 8
+    Zeilen gelesen – `series.load_table(limit=)`, „mehr als 8 Zeilen“); sonst Name und Größe.
+  - Grenzen: Dateigröße, Pixel vor dem Dekodieren (JPEG ausgenommen – verkleinert schon beim Dekodieren),
+    extreme Seitenverhältnisse; Fehler → „Keine Vorschau“, nie ein Absturz.
+  - Ohne Blockade: gelesen wird in einem Hintergrund-Thread (QImage dort, QPixmap im GUI-Thread, Generationszähler –
+    veraltete Ergebnisse verfallen); PDF im GUI-Thread (PDFium ist nicht threadsicher, kleine Seite ~50 ms).
+  - Platz für die Liste: Orte links mindestens 160 px, Spalte Name dehnt sich, Typ entfällt, Größe/Datum aus der
+    Schriftbreite; Fenster ~1100 × 640, höchstens 90 % des Bildschirms.
+- **Einstellung** `system_file_dialog: bool = False` – „Dateiauswahl des Systems verwenden“ (Dialog → Ansicht),
+  **wirkt nach einem Neustart** (Hinweis neben SPEICHERN): labelwerk startet dann mit dem Qt-Platform-Theme
+  `xdgdesktopportal` (Argument `-platformtheme`, keine Umgebungsvariable – Kindprozesse erben nichts), Qt nimmt den
+  Dialog des Desktops über das XDG-Portal samt Filtern und Ordner (eigene QtDBus-Aufrufe gehen nicht: PySide6 kann
+  die Filter `a(sa(us))` nicht übergeben); ohne Portal Qts eigener Dialog. Bis zum Neustart gilt der Weg vom Start.
+  Fehlt das Qt-Plugin (`platformthemes/*xdgdesktopportal*`), ist die Einstellung gesperrt (Erläuterung) und es gilt
+  der eigene Dialog. Mit Dialog des Desktops: Seitenfrage danach wie bisher; „Speichern unter“ fragt vor dem
+  Ersetzen selbst (Dialoge des Desktops tun es nicht immer).
+- **Tests:** Vorschau je Dateiart (erzeugte Dateien), defekte/zu große Dateien, Hintergrund und veraltete
+  Ergebnisse, PDF-Seitenwahl ersetzt die Seitenfrage, Weg vom Start, Plugin fehlt, Argumente der Anwendung,
+  Ersetzen-Rückfrage, Layout – kein echter modaler Dialog (`exec_dialog` ersetzt).
 
 ## Nicht enthalten
 

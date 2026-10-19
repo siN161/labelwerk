@@ -424,8 +424,34 @@ def test_start_tool_needs_a_restart():
     started = started_values(Settings(start_tool="paper"))
     assert started["start_tool"] == "paper"
     language = started["language"]
-    assert not restart_pending(language, 200, "paper", started)
-    assert restart_pending(language, 200, "last", started)
+    assert not restart_pending({**started, "start_tool": "paper"}, started)
+    assert restart_pending({**started, "start_tool": "last"}, started)
+
+
+# --- Dateiauswahl des Systems ---------------------------------------------------------
+def test_system_file_dialog_default_validation_and_restart(tmp_path):
+    from labelwerk.settings import RESTART_KEYS, started_values
+    path = tmp_path / "s.json"
+    assert load_settings(path).system_file_dialog is False       # eigener Dialog mit Vorschau
+    save_settings(Settings(system_file_dialog=True), path)
+    assert load_settings(path).system_file_dialog is True
+    path.write_text(json.dumps({"system_file_dialog": "ja"}))
+    s = load_settings(path)
+    assert s.system_file_dialog is False and s.warnings
+    assert "system_file_dialog" in RESTART_KEYS
+    assert started_values(Settings(system_file_dialog=True))["system_file_dialog"] is True
+
+
+@pytest.mark.parametrize("raw, expected", [({"system_file_dialog": True}, True),
+                                           ({"system_file_dialog": False}, False),
+                                           ({"system_file_dialog": "ja"}, False), ([], False),
+                                           (None, False)])
+def test_configured_file_dialog_is_read_before_everything(tmp_path, raw, expected):
+    from labelwerk.settings import configured_file_dialog
+    path = tmp_path / "s.json"
+    if raw is not None:
+        path.write_text(json.dumps(raw))
+    assert configured_file_dialog(path) is expected
 
 
 # --- stilles Speichern einzelner Felder ------------------------------------------------

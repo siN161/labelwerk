@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image
 from PySide6.QtCore import QMimeData, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileDialog, QFrame,
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame,
                                QHBoxLayout, QInputDialog, QLineEdit,
                                QLabel, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
@@ -42,7 +42,7 @@ from ..shortcuts import effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
 from .history import History, restore
-from . import image_import
+from . import file_dialog, image_import
 from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS, SCREENSHOT, SYMBOL_SOURCE
 from .media_worker import MediaWorker
 from .panels.image import CROP_FAILED
@@ -181,8 +181,9 @@ class MainWindow(QMainWindow):
         start = self._start_tool()
         self.tool_actions[start].setChecked(True)
         self.panels.setCurrentWidget(self._panel_by_key[start])
-        self.apply_hidden_tools()
+        self.apply_hidden_tools(fall_back=False)    # Start-Reiter überspringt ausgeblendete schon
         self.panels.currentChanged.connect(self._remember_tool)    # erst nach dem Start-Reiter
+        self.panels.currentChanged.connect(self._update_tool_buttons)   # SERIE: Knopf bis zum Wechsel
         self._stored_tool = self.settings.last_tool   # zuletzt benutzter Reiter, wie in der Datei
         self.panel("image").set_defaults(self.settings.image_mode, self.settings.image_threshold)
         spacer = QWidget()
@@ -267,6 +268,9 @@ class MainWindow(QMainWindow):
         self.statusBar().addWidget(self.cancel_button)
         # Stand beim Start: der Einstellungsdialog zeigt danach, was erst ein Neustart ändert
         self._started = started_values(self.settings)
+        # Dateiauswahl des Systems gilt ab dem Start (Platform-Theme der Anwendung) und nur mit Plugin
+        self.system_dialog = (self._started["system_file_dialog"]
+                              and file_dialog.system_dialog_available())
         self._sync_tool()                           # Start im Reiter Text: „Text anlegen“
         self.zoom_label = QLabel()
         for text, delta in (("−", -ZOOM_STEP), ("+", ZOOM_STEP)):
@@ -440,20 +444,28 @@ class MainWindow(QMainWindow):
         zum Schreibmodus, geht es zum zuletzt benutzten sichtbaren Reiter (sonst PAPIER)."""
         self._update_tool_buttons()
         current = self._current_tool()
-        if fall_back and not self._tool_visible(current) and not self._panel_in_use(current):
+        if fall_back and not self._tool_needed(current) and not self._panel_in_use(current):
             self._show_visible_tool()
 
-    def _update_tool_buttons(self) -> None:
+    def _update_tool_buttons(self, _index: int = 0) -> None:
         """Knöpfe der Leiste nach ``hidden_tools`` – SERIE erscheint trotzdem, solange sie
         gebraucht wird (Serie im Etikett, Schnitt-Optionen des Druckers)."""
         for key, action in self.tool_actions.items():
             action.setVisible(self._tool_visible(key))
 
-    def _tool_visible(self, key: str) -> bool:
+    def _tool_needed(self, key: str) -> bool:
+        """Knopf gehört in die Leiste: nicht ausgeblendet – oder SERIE wird gebraucht (Serie im
+        Etikett, Schnitt-Optionen des Druckers)."""
         if key not in self.settings.hidden_tools:
             return True
         return key == "series" and (self.doc.series is not None
                                     or not self.panel("series").driver_box.isHidden())
+
+    def _tool_visible(self, key: str) -> bool:
+        """Wie ``_tool_needed``; SERIE bleibt außerdem, solange ihr Panel zu sehen ist – der Knopf
+        verschwindet erst beim Wechsel (nach ENTFERNEN, Neu, Druckerwechsel)."""
+        return self._tool_needed(key) or (key == "series"
+                                          and self.panels.currentWidget() is self.panel("series"))
 
     def _panel_in_use(self, key: str) -> bool:
         """Gehört das Panel zur Auswahl (Objekt seiner Art zuletzt gewählt) bzw. zum Schreibmodus?"""
@@ -466,7 +478,7 @@ class MainWindow(QMainWindow):
     def _show_visible_tool(self) -> None:
         """Zum zuletzt benutzten sichtbaren Reiter (sonst PAPIER) – wie ein Klick auf ihn."""
         key = self.settings.last_tool
-        if key not in self.tool_actions or not self._tool_visible(key):
+        if key not in self.tool_actions or not self._tool_needed(key):
             key = START_TOOL
         self._tool_triggered(key)
         self.tool_actions[key].setChecked(True)
@@ -830,10 +842,10 @@ class MainWindow(QMainWindow):
         """Dialog für die Tabelle einer Serie (in Tests ersetzbar); beginnt im Ordner der
         aktuellen Tabelle."""
         current = self.doc.series.source if self.doc.series is not None else None
-        path, _filter = QFileDialog.getOpenFileName(
+        return file_dialog.ask_open(
             self, _("Table for the series"), str(Path(current).parent) if current else "",
-            _("Tables (*.csv *.xlsx *.xlsm *.tsv *.txt);;All files (*)"))
-        return path or None
+            _("Tables (*.csv *.xlsx *.xlsm *.tsv *.txt);;All files (*)"),
+            system=self.system_dialog)
 
     def choose_series_table(self) -> None:
         """TABELLE …: Datei wählen, lesen (Fehler → Meldung, nichts geändert), verknüpfen."""
@@ -1193,16 +1205,19 @@ class MainWindow(QMainWindow):
         """„Bild einfügen …“: Datei wählen; das Bild kommt in die Mitte des bedruckbaren
         Bereichs."""
         path = self.ask_image_file()
-        if path:
-            self.insert_image_files([Path(path)])
+        if path:                                    # im Dialog gewählte PDF-Seite: keine Seitenfrage
+            self.insert_image_files([Path(path)], page=getattr(path, "page", None))
 
     def ask_image_file(self) -> str | None:
-        """Dateidialog „Bilder und PDF“ (in Tests ersetzbar); None = abgebrochen."""
-        path, _filter = QFileDialog.getOpenFileName(self, _("Insert image"), self._image_dir,
-                                              image_import.file_filter())
+        """Dateidialog „Bilder und PDF“ mit Vorschau (in Tests ersetzbar); None = abgebrochen.
+        Ergebnis ``file_dialog.Chosen``: Pfad, bei PDF evtl. mit gewählter Seite (``page``)."""
+        path = file_dialog.ask_open(self, _("Insert image"), self._image_dir,
+                                    image_import.file_filter(),
+                                    system=self.system_dialog, pages=True,
+                                    model=self.model)
         if path:
             self._image_dir = str(Path(path).parent)
-        return path or None
+        return path
 
     def ask_pdf_page(self, path: Path, count: int) -> int | None:
         """Seitenwahl für ein PDF mit mehreren Seiten (in Tests ersetzbar); None = abgebrochen."""
@@ -1755,7 +1770,7 @@ class MainWindow(QMainWindow):
             if saved.printer.startswith(("tcp://", "zpl+tcp://")) and saved.printer not in {
                     p.uri for p in network_printers(network_entries(saved))}:
                 saved.printer = ""                  # Netzwerkdrucker entfernt/geändert: automatisch
-            hidden_changed = saved.hidden_tools != self.settings.hidden_tools
+            hidden_changed = set(saved.hidden_tools) != set(self.settings.hidden_tools)
             self.settings = saved
             self._save_settings()
             from PySide6.QtWidgets import QApplication

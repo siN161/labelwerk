@@ -96,6 +96,8 @@ QCheckBox::indicator { width: 16px; height: 16px; border: 3px solid #000000; bac
 QCheckBox::indicator:checked { background: #000000; }
 QCheckBox:disabled, QRadioButton:disabled, QLabel:disabled { color: #999999; }
 QCheckBox::indicator:disabled { border-color: #CCCCCC; background: #F5F5F5; }
+/* gesperrt, aber gesetzt (z. B. DATEI/PAPIER unter „Reiter in der Leiste“): sichtbar gefüllt */
+QCheckBox::indicator:checked:disabled { border-color: #999999; background: #999999; }
 /* Schieberegler (Schwelle): schwarze Linie, eckiger Griff */
 QSlider::groove:horizontal { height: 3px; background: #000000; }
 QSlider::handle:horizontal { width: 12px; margin: -9px 0; background: #000000; border: none; }

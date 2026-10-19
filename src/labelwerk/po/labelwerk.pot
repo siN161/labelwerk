@@ -570,6 +570,10 @@ msgstr ""
 msgid "Design and print labels (Brother QL)"
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Dialog of the desktop instead of the labelwerk dialog with preview (takes effect after a restart)"
+msgstr ""
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "Die-cut"
 msgstr ""
@@ -1398,6 +1402,10 @@ msgstr ""
 msgid "No permission for {device} – is the user in group 'lp'?"
 msgstr ""
 
+#: src/labelwerk/gui/file_dialog.py
+msgid "No preview"
+msgstr ""
+
 #: src/labelwerk/gui/main_window.py
 msgid "No printer for this label – choose a printer in the status bar."
 msgstr ""
@@ -1426,6 +1434,10 @@ msgstr ""
 #: src/labelwerk/zpl.py
 #, python-brace-format
 msgid "Not a Zebra address: {uri}"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Not available: this Qt installation has no module for the file dialog of the system"
 msgstr ""
 
 #: src/labelwerk/cli.py
@@ -1606,6 +1618,15 @@ msgstr ""
 
 #: src/labelwerk/files.py
 msgid "Page must be at least 1."
+msgstr ""
+
+#: src/labelwerk/gui/file_dialog.py
+msgid "Page of the PDF to insert"
+msgstr ""
+
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "Page {page} of {count}"
 msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py
@@ -2524,6 +2545,10 @@ msgstr ""
 msgid "Untitled"
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Use the file dialog of the system"
+msgstr ""
+
 #. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
 #: src/labelwerk/storage.py
 #, python-brace-format
@@ -2735,6 +2760,13 @@ msgstr ""
 msgid "model not detected"
 msgstr ""
 
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "more than {count} row"
+msgid_plural "more than {count} rows"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/labelwerk/storage.py
 msgid "name too long"
 msgstr ""
@@ -2863,10 +2895,24 @@ msgstr ""
 msgid "{checked} of {total} selected"
 msgstr ""
 
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{count} byte"
+msgid_plural "{count} bytes"
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/labelwerk/cli.py
 #, python-brace-format
 msgid "{count} office printer hidden – “labelwerk printers --all” shows it, print with -p cups:NAME"
 msgid_plural "{count} office printers hidden – “labelwerk printers --all” shows them, print with -p cups:NAME"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{count} row"
+msgid_plural "{count} rows"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -3074,6 +3120,16 @@ msgstr ""
 msgid "{printer} not found – switch it on or choose another one"
 msgstr ""
 
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{size} KB"
+msgstr ""
+
+#: src/labelwerk/gui/file_dialog.py
+#, python-brace-format
+msgid "{size} MB"
+msgstr ""
+
 #: src/labelwerk/gui/panels/image.py
 #, python-brace-format
 msgid "{source} · page {page}"
@@ -3131,7 +3187,7 @@ msgid "Ø {width} mm · round"
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
-msgid "“New label” applies to new labels, start zoom, tab at startup and language from the next start, everything else immediately."
+msgid "“New label” applies to new labels, start zoom, tab at startup, file dialog and language from the next start, everything else immediately."
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py

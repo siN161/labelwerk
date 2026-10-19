@@ -10,8 +10,9 @@ from PySide6.QtWidgets import QApplication
 
 from .. import i18n
 from ..desktop import APP_ID, APP_NAME
-from ..settings import configured_language
+from ..settings import configured_file_dialog, configured_language
 
+from . import file_dialog
 from .main_window import MainWindow
 
 
@@ -57,9 +58,19 @@ def set_language() -> str:
     return language
 
 
+def qt_arguments(argv: list[str], system_dialog: bool) -> list[str]:
+    """Argumente der Anwendung; Dateiauswahl des Systems: Platform-Theme „xdgdesktopportal“ (Qt
+    nimmt dann den Dialog des Desktops über das XDG-Portal) – als Argument, nicht als
+    Umgebungsvariable, die Kindprozesse erben würden. Qt entfernt die Option aus ``arguments()``."""
+    if not system_dialog:
+        return list(argv)
+    return [*argv[:1], "-platformtheme", "xdgdesktopportal", *argv[1:]]
+
+
 def main() -> int:
     set_language()
-    app = QApplication(sys.argv)
+    app = QApplication(qt_arguments(sys.argv, configured_file_dialog()
+                                    and file_dialog.system_dialog_available()))
     apply_identity(app)
     install_translations(app)
     window = MainWindow()

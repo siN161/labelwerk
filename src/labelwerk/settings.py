@@ -23,7 +23,7 @@ from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
 THEMES = ("rawblock", "classic")
-RESTART_KEYS = ("language", "start_zoom", "start_tool")   # wirken erst nach einem Neustart (Hinweis)
+RESTART_KEYS = ("language", "start_zoom", "start_tool", "system_file_dialog")   # erst nach Neustart (Hinweis)
 # Reiter beim Start: „last“ = zuletzt benutzter, sonst Schlüssel der Werkzeuge (gui/tools.py TOOLS)
 START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series")
 # Reiter, die sich ausblenden lassen (DATEI und PAPIER bleiben immer – dort wird das Etikett gewählt)
@@ -47,6 +47,7 @@ class Settings:
     last_tool: str = ""                    # zuletzt benutzter Reiter (still gespeichert)
     hidden_tools: list[str] = field(default_factory=list)   # ausgeblendete Reiter (HIDEABLE_TOOLS)
     theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
+    system_file_dialog: bool = False       # Dateiauswahl des Desktops (Portal) statt eigener mit Vorschau
     image_crop: bool = True                # Bilder beim Einfügen auf den Inhalt zuschneiden
     image_rotate: bool = False             # Bilder drehen, wenn sie nur gedreht 1:1 passen
     image_mode: str = "line"               # neue Bilder: Strich ("line") oder Foto ("photo")
@@ -86,6 +87,7 @@ def _rules(model: str | None = None) -> dict:
         "check_media_on_start": lambda v: isinstance(v, bool),
         "start_zoom": lambda v: _is_int(v) and 25 <= v <= 400,
         "theme": lambda v: v in THEMES,
+        "system_file_dialog": lambda v: isinstance(v, bool),
         "image_crop": lambda v: isinstance(v, bool),
         "image_rotate": lambda v: isinstance(v, bool),
         "image_mode": lambda v: v in MODES,
@@ -130,29 +132,50 @@ def _printer_options(value: dict, warnings: list[str]) -> dict[str, dict[str, st
     return {k: o for k, o in valid.items() if o}
 
 
+def start_tool_for(start_tool: str, hidden_tools: list[str]) -> str:
+    """Reiter, mit dem labelwerk wirklich startet: ein ausgeblendeter Start-Reiter wird PAPIER
+    (wie ``MainWindow._start_tool``)."""
+    return "paper" if start_tool in hidden_tools else start_tool
+
+
 def started_values(settings: Settings) -> dict:
     """Was beim Start galt (für ``restart_pending``): die gesetzte Sprache und die Neustart-
-    Einstellungen."""
-    return {**{key: getattr(settings, key) for key in RESTART_KEYS}, "language": i18n.language()}
+    Einstellungen (Start-Reiter wirksam, ausgeblendet = PAPIER)."""
+    return {**{key: getattr(settings, key) for key in RESTART_KEYS}, "language": i18n.language(),
+            "start_tool": start_tool_for(settings.start_tool, settings.hidden_tools)}
 
 
-def restart_pending(language: str, start_zoom: int, start_tool: str, started: dict) -> bool:
-    """Wirkt eine Einstellung erst nach einem Neustart anders als jetzt? Sprache wirksam verglichen
-    ("" = Systemsprache), Start-Zoom und Reiter beim Start mit dem Wert beim Start."""
+def restart_pending(values: dict, started: dict) -> bool:
+    """Wirkt eine Einstellung erst nach einem Neustart anders als jetzt? ``values``: gewählte Werte
+    der Neustart-Einstellungen (``RESTART_KEYS``); Sprache wirksam verglichen ("" = Systemsprache),
+    die übrigen mit dem Wert beim Start."""
+    language = values["language"]
     effective = language if language in i18n.available() else i18n.system_language()
-    return (effective != started["language"] or start_zoom != started["start_zoom"]
-            or start_tool != started["start_tool"])
+    return effective != started["language"] or any(
+        values[key] != started[key] for key in RESTART_KEYS if key != "language")
+
+
+def _configured(path: str | Path | None, key: str, valid) -> object | None:
+    """Wert ``key`` direkt aus der Datei (vor allem anderen gelesen); unlesbar/ungültig → None."""
+    try:
+        raw = json.loads(Path(path or settings_path()).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    value = raw.get(key) if isinstance(raw, dict) else None
+    return value if valid(value) else None
 
 
 def configured_language(path: str | Path | None = None) -> str:
     """Eingestellte Sprache ("" = System) – vor allem anderen gelesen (die Meldungen beim Laden der
     Einstellungen kommen schon in dieser Sprache); unlesbar oder ungültig → ""."""
-    try:
-        raw = json.loads(Path(path or settings_path()).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ""
-    value = raw.get("language") if isinstance(raw, dict) else None
-    return value if isinstance(value, str) and value in i18n.available() else ""
+    return _configured(path, "language",
+                       lambda v: isinstance(v, str) and v in i18n.available()) or ""
+
+
+def configured_file_dialog(path: str | Path | None = None) -> bool:
+    """Dateiauswahl des Systems eingestellt? – vor dem Start der Oberfläche gelesen (das
+    Platform-Theme von Qt gilt ab dem Anlegen der Anwendung)."""
+    return _configured(path, "system_file_dialog", lambda v: isinstance(v, bool)) is True
 
 
 def settings_path() -> Path:
