@@ -1,0 +1,2767 @@
+{
+ "version": 1,
+ "countries": {
+  "DE": {
+   "names": {
+    "de": "Deutschland",
+    "en": "Germany"
+   },
+   "carriers": {
+    "dhl": {
+     "de": "DHL",
+     "en": "DHL"
+    },
+    "hermes": {
+     "de": "Hermes",
+     "en": "Hermes"
+    }
+   }
+  }
+ },
+ "types": [
+  {
+   "id": "dhl-privat-1",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL national (dhl.de, Post-Shop, eBay)",
+    "en": "DHL domestic (dhl.de, Post shop, eBay)"
+   },
+   "verified": true,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Online Frankierung",
+     "Sendungsnummer",
+     "Leitcode",
+     "Paket"
+    ],
+    "none": [
+     "Warenpost",
+     "Retoure",
+     "International",
+     "Geschäftskunden",
+     "Amazon"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       180.0,
+       62.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         9.5,
+         24.25,
+         35.25,
+         123.75
+        ],
+        "rotation": 90,
+        "dst": [
+         3.4,
+         2.86,
+         78.09,
+         22.15
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         35.75,
+         54.25,
+         74.0,
+         124.0
+        ],
+        "rotation": 90,
+        "dst": [
+         3.42,
+         23.29,
+         48.78,
+         48.15
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         95.0,
+         47.25,
+         126.0,
+         123.5
+        ],
+        "rotation": 0,
+        "dst": [
+         83.2,
+         1.66,
+         106.39,
+         58.88
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         18.25,
+         24.5,
+         45.75,
+         53.75
+        ],
+        "rotation": 90,
+        "dst": [
+         51.86,
+         9.83,
+         81.41,
+         37.27
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         136.75,
+         38.25,
+         165.25,
+         107.5
+        ],
+        "rotation": 90,
+        "dst": [
+         109.26,
+         3.29,
+         178.5,
+         31.82
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         173.25,
+         38.25,
+         201.75,
+         107.5
+        ],
+        "rotation": 90,
+        "dst": [
+         109.33,
+         32.67,
+         178.48,
+         61.24
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         82.25,
+         24.75,
+         95.5,
+         123.75
+        ],
+        "rotation": 90,
+        "dst": [
+         3.2,
+         48.73,
+         77.45,
+         58.67
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-privat-1a",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL national 100 × 150 mm (dhl.de, Post-Shop, eBay)",
+    "en": "DHL domestic 100 × 150 mm (dhl.de, Post shop, eBay)"
+   },
+   "verified": true,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Online Frankierung",
+     "Sendungsnummer",
+     "Leitcode",
+     "Paket"
+    ],
+    "none": [
+     "Warenpost",
+     "Retoure",
+     "International",
+     "Geschäftskunden",
+     "Amazon"
+    ]
+   },
+   "layouts": {
+    "100x150": [
+     {
+      "size_mm": [
+       100.0,
+       149.9
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         9.25,
+         22.0,
+         126.5,
+         126.75
+        ],
+        "rotation": 90,
+        "dst": [
+         2.54,
+         2.07,
+         70.71,
+         78.31
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         18.0,
+         23.25,
+         46.75,
+         54.5
+        ],
+        "rotation": 90,
+        "dst": [
+         50.05,
+         7.67,
+         81.31,
+         36.29
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         126.25,
+         22.0,
+         202.25,
+         126.75
+        ],
+        "rotation": 90,
+        "dst": [
+         2.55,
+         80.33,
+         96.87,
+         148.76
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-privat-1a-100x150",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL national, Marke 100 × 150 mm",
+    "en": "DHL domestic, 100 × 150 mm label"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      100,
+      150
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Online Frankierung",
+     "Sendungsnummer",
+     "Paket"
+    ],
+    "none": [
+     "Warenpost",
+     "Retoure",
+     "Amazon"
+    ]
+   },
+   "layouts": {
+    "100x150": [
+     {
+      "size_mm": [
+       100.0,
+       149.9
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         9.25,
+         22.0,
+         100.0,
+         126.75
+        ],
+        "rotation": 90,
+        "dst": [
+         2.53,
+         2.07,
+         70.66,
+         61.11
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         18.0,
+         23.25,
+         46.5,
+         54.5
+        ],
+        "rotation": 90,
+        "dst": [
+         49.96,
+         7.73,
+         81.33,
+         36.13
+        ],
+        "kind": "barcode"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-privat-2",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL national/international (dhl.de, Post-Shop, eBay)",
+    "en": "DHL domestic/international (dhl.de, Post shop, eBay)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "International",
+     "Online Frankierung",
+     "Sendungsnummer"
+    ],
+    "none": [
+     "Warenpost",
+     "Retoure",
+     "Geschäftskunden",
+     "Amazon"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       220.0,
+       62.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         9.5,
+         24.25,
+         35.25,
+         123.75
+        ],
+        "rotation": 90,
+        "dst": [
+         3.4,
+         2.86,
+         78.11,
+         22.14
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         35.75,
+         54.25,
+         74.0,
+         124.0
+        ],
+        "rotation": 90,
+        "dst": [
+         3.41,
+         23.3,
+         48.78,
+         48.15
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         95.0,
+         47.25,
+         132.0,
+         123.5
+        ],
+        "rotation": 0,
+        "dst": [
+         83.24,
+         1.65,
+         111.02,
+         58.89
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         18.25,
+         24.25,
+         45.75,
+         54.25
+        ],
+        "rotation": 90,
+        "dst": [
+         51.53,
+         9.79,
+         81.6,
+         37.24
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         133.25,
+         24.75,
+         154.75,
+         124.0
+        ],
+        "rotation": 90,
+        "dst": [
+         118.54,
+         3.34,
+         217.85,
+         24.91
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         162.75,
+         24.75,
+         184.25,
+         124.0
+        ],
+        "rotation": 90,
+        "dst": [
+         118.57,
+         24.87,
+         217.88,
+         46.55
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         192.25,
+         24.5,
+         205.75,
+         124.25
+        ],
+        "rotation": 90,
+        "dst": [
+         118.59,
+         46.59,
+         217.96,
+         60.65
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         82.25,
+         24.75,
+         95.5,
+         123.75
+        ],
+        "rotation": 90,
+        "dst": [
+         3.2,
+         48.73,
+         77.45,
+         58.67
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-privat-3",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Warenpost national",
+    "en": "DHL Warenpost domestic"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Warenpost"
+    ],
+    "any": [
+     "DHL",
+     "Deutsche Post"
+    ],
+    "none": [
+     "International",
+     "CN 23",
+     "CN23",
+     "Zoll",
+     "Customs"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       220.1,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         3.0,
+         12.0,
+         102.5,
+         71.25
+        ],
+        "rotation": 0,
+        "dst": [
+         10.13,
+         2.64,
+         104.6,
+         59.05
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         3.0,
+         77.75,
+         29.0,
+         98.5
+        ],
+        "rotation": 0,
+        "dst": [
+         84.63,
+         2.58,
+         109.37,
+         22.43
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         3.25,
+         113.0,
+         102.5,
+         134.0
+        ],
+        "rotation": 0,
+        "dst": [
+         118.72,
+         2.65,
+         218.02,
+         23.73
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         3.0,
+         140.0,
+         102.5,
+         161.5
+        ],
+        "rotation": 0,
+        "dst": [
+         118.5,
+         23.62,
+         217.99,
+         45.27
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         3.0,
+         168.25,
+         102.5,
+         181.0
+        ],
+        "rotation": 0,
+        "dst": [
+         118.46,
+         45.07,
+         217.98,
+         57.69
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         4.75,
+         4.5,
+         69.0,
+         10.75
+        ],
+        "rotation": 270,
+        "dst": [
+         2.5,
+         2.31,
+         7.5,
+         53.71
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-privat-4",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Warenpost international ohne Zoll",
+    "en": "DHL Warenpost international without customs"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Warenpost"
+    ],
+    "any": [
+     "International"
+    ],
+    "none": [
+     "CN 23",
+     "CN23",
+     "Zoll",
+     "Customs"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       283.6,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         3.25,
+         6.0,
+         102.25,
+         66.5
+        ],
+        "rotation": 0,
+        "dst": [
+         1.87,
+         1.72,
+         96.98,
+         59.9
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         3.0,
+         67.25,
+         95.75,
+         119.75
+        ],
+        "rotation": 0,
+        "dst": [
+         99.91,
+         1.68,
+         183.42,
+         49.05
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         31.5,
+         67.25,
+         102.25,
+         119.75
+        ],
+        "rotation": 0,
+        "dst": [
+         125.55,
+         1.67,
+         189.26,
+         49.01
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         1.75,
+         122.75,
+         102.25,
+         186.5
+        ],
+        "rotation": 0,
+        "dst": [
+         189.24,
+         1.63,
+         279.69,
+         59.14
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-privat-4a",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Warenpost international mit Zoll",
+    "en": "DHL Warenpost international with customs"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Warenpost"
+    ],
+    "any": [
+     "CN 23",
+     "CN23",
+     "Zoll",
+     "Customs",
+     "International"
+    ],
+    "none": []
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       223.5,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         111.75,
+         0.0,
+         163.25,
+         23.75
+        ],
+        "rotation": 270,
+        "dst": [
+         31.68,
+         4.36,
+         55.48,
+         55.98
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         164.75,
+         0.0,
+         210.0,
+         26.0
+        ],
+        "rotation": 270,
+        "dst": [
+         2.03,
+         7.57,
+         30.8,
+         57.41
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         110.75,
+         26.25,
+         182.0,
+         51.75
+        ],
+        "rotation": 270,
+        "dst": [
+         55.46,
+         -0.08,
+         75.8,
+         57.09
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         111.0,
+         52.5,
+         206.5,
+         105.5
+        ],
+        "rotation": 270,
+        "dst": [
+         79.57,
+         2.54,
+         111.3,
+         59.95
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         58.75,
+         0.0,
+         110.25,
+         105.0
+        ],
+        "rotation": 270,
+        "dst": [
+         118.49,
+         8.55,
+         223.53,
+         60.11
+        ],
+        "kind": "barcode"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-privat-4b",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Warenpost international mit Zoll (neu)",
+    "en": "DHL Warenpost international with customs (new)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Warenpost"
+    ],
+    "any": [
+     "CN 23",
+     "CN23",
+     "Zoll",
+     "Customs",
+     "International"
+    ],
+    "none": []
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       276.0,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         3.25,
+         6.0,
+         102.25,
+         66.5
+        ],
+        "rotation": 0,
+        "dst": [
+         1.87,
+         1.72,
+         96.99,
+         59.9
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         3.0,
+         67.25,
+         102.25,
+         131.25
+        ],
+        "rotation": 0,
+        "dst": [
+         99.89,
+         1.67,
+         189.27,
+         59.39
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         1.75,
+         134.0,
+         98.25,
+         197.75
+        ],
+        "rotation": 0,
+        "dst": [
+         189.23,
+         1.71,
+         276.11,
+         59.21
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-business-1",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Geschäftskunden A5 national",
+    "en": "DHL business customers A5 domestic"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      148,
+      210
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Geschäftskunden",
+     "DHL PAKET",
+     "Sendungsnummer"
+    ],
+    "none": [
+     "International",
+     "Warenpost",
+     "Retoure"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       220.1,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         22.75,
+         6.75,
+         124.5,
+         61.5
+        ],
+        "rotation": 0,
+        "dst": [
+         0.74,
+         1.65,
+         89.27,
+         49.36
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.25,
+         69.75,
+         123.25,
+         81.25
+        ],
+        "rotation": 0,
+        "dst": [
+         0.74,
+         49.93,
+         87.79,
+         59.94
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.25,
+         83.0,
+         123.25,
+         124.0
+        ],
+        "rotation": 270,
+        "dst": [
+         93.15,
+         1.7,
+         116.91,
+         59.75
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.25,
+         124.5,
+         123.25,
+         141.5
+        ],
+        "rotation": 0,
+        "dst": [
+         118.34,
+         2.94,
+         218.35,
+         19.92
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.5,
+         148.25,
+         123.25,
+         170.75
+        ],
+        "rotation": 0,
+        "dst": [
+         118.55,
+         19.89,
+         218.36,
+         42.47
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.5,
+         178.0,
+         123.25,
+         194.75
+        ],
+        "rotation": 0,
+        "dst": [
+         118.57,
+         42.47,
+         218.35,
+         59.29
+        ],
+        "kind": "barcode"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-business-2",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Geschäftskunden 105 × 203 mm national",
+    "en": "DHL business customers 105 × 203 mm domestic"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      105,
+      203
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Geschäftskunden",
+     "DHL PAKET",
+     "Sendungsnummer"
+    ],
+    "none": [
+     "International",
+     "Warenpost",
+     "Retoure"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       203.2,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         2.75,
+         3.5,
+         102.75,
+         58.75
+        ],
+        "rotation": 0,
+        "dst": [
+         0.86,
+         0.77,
+         85.89,
+         47.87
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         2.75,
+         66.75,
+         102.5,
+         80.75
+        ],
+        "rotation": 0,
+        "dst": [
+         0.87,
+         48.24,
+         85.69,
+         60.07
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         2.75,
+         120.25,
+         101.5,
+         146.5
+        ],
+        "rotation": 0,
+        "dst": [
+         93.19,
+         1.22,
+         191.92,
+         27.43
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         2.75,
+         150.75,
+         101.5,
+         180.0
+        ],
+        "rotation": 0,
+        "dst": [
+         93.21,
+         27.49,
+         191.92,
+         56.88
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         2.25,
+         58.25,
+         99.5,
+         67.0
+        ],
+        "rotation": 270,
+        "dst": [
+         87.09,
+         2.92,
+         92.12,
+         58.84
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-business-3",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Geschäftskunden 99 × 200 mm national (Shopify)",
+    "en": "DHL business customers 99 × 200 mm domestic (Shopify)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      99,
+      200
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Shopify",
+     "Geschäftskunden",
+     "DHL PAKET",
+     "Sendungsnummer"
+    ],
+    "none": [
+     "International",
+     "Warenpost",
+     "Retoure"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       210.0,
+       62.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         0.0,
+         0.0,
+         98.75,
+         76.5
+        ],
+        "rotation": 0,
+        "dst": [
+         3.39,
+         -0.01,
+         83.43,
+         62.02
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         0.0,
+         77.75,
+         99.0,
+         118.75
+        ],
+        "rotation": 270,
+        "dst": [
+         84.66,
+         1.67,
+         108.39,
+         59.12
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         0.0,
+         119.0,
+         98.75,
+         137.5
+        ],
+        "rotation": 0,
+        "dst": [
+         110.02,
+         1.77,
+         208.86,
+         20.24
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         0,
+         142.75,
+         99,
+         158.25
+        ],
+        "rotation": 0,
+        "dst": [
+         110.09,
+         20.36,
+         209.17,
+         35.79
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         0.0,
+         164.25,
+         99.0,
+         187.5
+        ],
+        "rotation": 0,
+        "dst": [
+         110.01,
+         35.76,
+         209.14,
+         59.09
+        ],
+        "kind": "barcode"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-business-4",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Geschäftskunden A5 international",
+    "en": "DHL business customers A5 international"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      148,
+      210
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "International",
+     "Geschäftskunden",
+     "CN 23",
+     "CN23"
+    ],
+    "none": [
+     "Warenpost",
+     "Retoure"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       220.1,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         22.75,
+         6.75,
+         124.5,
+         61.5
+        ],
+        "rotation": 0,
+        "dst": [
+         0.73,
+         -0.06,
+         89.3,
+         47.68
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.25,
+         69.75,
+         123.25,
+         82.75
+        ],
+        "rotation": 0,
+        "dst": [
+         0.73,
+         48.27,
+         87.8,
+         59.53
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.25,
+         127.0,
+         123.25,
+         143.0
+        ],
+        "rotation": 0,
+        "dst": [
+         118.34,
+         1.22,
+         218.33,
+         17.15
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.25,
+         83.0,
+         123.25,
+         119.0
+        ],
+        "rotation": 270,
+        "dst": [
+         93.14,
+         1.71,
+         114.08,
+         59.76
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.5,
+         148.25,
+         123.25,
+         171.5
+        ],
+        "rotation": 0,
+        "dst": [
+         118.56,
+         17.01,
+         218.36,
+         40.33
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         23.5,
+         177.5,
+         123.25,
+         194.75
+        ],
+        "rotation": 0,
+        "dst": [
+         118.56,
+         40.25,
+         218.35,
+         57.63
+        ],
+        "kind": "barcode"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-business-5",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Geschäftskunden A6 international",
+    "en": "DHL business customers A6 international"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      105,
+      148
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "International",
+     "Geschäftskunden",
+     "CN 23",
+     "CN23"
+    ],
+    "none": [
+     "Warenpost",
+     "Retoure"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       170.0,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         17.0,
+         4.0,
+         87.25,
+         59.0
+        ],
+        "rotation": 0,
+        "dst": [
+         3.45,
+         1.88,
+         73.75,
+         56.97
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         17.0,
+         57.5,
+         87.25,
+         86.75
+        ],
+        "rotation": 270,
+        "dst": [
+         74.4,
+         3.35,
+         96.51,
+         56.16
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         17.0,
+         86.5,
+         85.25,
+         136.25
+        ],
+        "rotation": 0,
+        "dst": [
+         98.21,
+         4.24,
+         170.07,
+         56.72
+        ],
+        "kind": "barcode"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-retour-1",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Retoure (Retourenportal)",
+    "en": "DHL return (returns portal)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Retoure",
+     "Retourenportal",
+     "Return"
+    ],
+    "none": [
+     "Amazon"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       203.3,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         16.25,
+         26.25,
+         91.0,
+         130.5
+        ],
+        "rotation": 90,
+        "dst": [
+         3.33,
+         0.09,
+         86.73,
+         60.05
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         87.25,
+         28.0,
+         158.25,
+         132.25
+        ],
+        "rotation": 90,
+        "dst": [
+         87.96,
+         0.0,
+         171.33,
+         56.94
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         169.5,
+         44.25,
+         192.25,
+         108.75
+        ],
+        "rotation": 0,
+        "dst": [
+         177.84,
+         0.02,
+         198.46,
+         58.35
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-retour-2",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Retoure (neues Retourenportal)",
+    "en": "DHL return (new returns portal)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "DHL"
+    ],
+    "any": [
+     "Retoure",
+     "Retourenportal",
+     "Return"
+    ],
+    "none": [
+     "Amazon"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       183.9,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         7.5,
+         27.75,
+         62.75,
+         119.25
+        ],
+        "rotation": 90,
+        "dst": [
+         1.76,
+         1.58,
+         93.29,
+         56.92
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         99.75,
+         51.5,
+         119.5,
+         103.0
+        ],
+        "rotation": 0,
+        "dst": [
+         71.83,
+         8.43,
+         91.6,
+         60.11
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         120.0,
+         28.25,
+         181.75,
+         119.25
+        ],
+        "rotation": 90,
+        "dst": [
+         97.4,
+         0.09,
+         183.87,
+         58.92
+        ],
+        "kind": "text"
+       }
+      ]
+     },
+     {
+      "size_mm": [
+       87.1,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         64.75,
+         27.5,
+         92.75,
+         119.0
+        ],
+        "rotation": 90,
+        "dst": [
+         0.16,
+         -0.11,
+         87.27,
+         26.78
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-retour-3",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Retoure Amazon (GIF)",
+    "en": "DHL return Amazon (GIF)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ],
+    "raster": {
+     "dpi": 300,
+     "x_mm": -2.5,
+     "y_mm": 189.4,
+     "px": [
+      1800,
+      1200
+     ]
+    }
+   },
+   "detect": {
+    "all": [],
+    "any": [],
+    "none": []
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       160.0,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         4.75,
+         238.25,
+         48.25,
+         285.25
+        ],
+        "rotation": 90,
+        "dst": [
+         3.91,
+         2.98,
+         50.98,
+         46.51
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         78.5,
+         198.75,
+         94.5,
+         285.5
+        ],
+        "rotation": 90,
+        "dst": [
+         71.94,
+         1.73,
+         158.83,
+         17.93
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         56.5,
+         202.25,
+         76.0,
+         282.0
+        ],
+        "rotation": 0,
+        "dst": [
+         50.88,
+         0.04,
+         65.67,
+         60.05
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         103.25,
+         198.75,
+         129.25,
+         285.5
+        ],
+        "rotation": 90,
+        "dst": [
+         71.96,
+         17.84,
+         158.86,
+         44.03
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         135.75,
+         198.75,
+         149.5,
+         285.5
+        ],
+        "rotation": 90,
+        "dst": [
+         71.96,
+         44.0,
+         158.84,
+         57.7
+        ],
+        "kind": "barcode"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "dhl-retour-4",
+   "country": "DE",
+   "carrier": "dhl",
+   "names": {
+    "de": "DHL Retoure Amazon (PDF)",
+    "en": "DHL return Amazon (PDF)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ],
+     [
+      215.9,
+      279.4
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Amazon"
+    ],
+    "any": [
+     "Rücksendung",
+     "Rücksendeetikett",
+     "DHL"
+    ],
+    "none": [
+     "Hermes"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       145.2,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         32.5,
+         102.5,
+         86.0,
+         137.0
+        ],
+        "rotation": 0,
+        "dst": [
+         4.2,
+         4.16,
+         55.11,
+         37.05
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         60.0,
+         177.25,
+         152.75,
+         193.5
+        ],
+        "rotation": 0,
+        "dst": [
+         1.91,
+         42.34,
+         90.12,
+         57.98
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         45.0,
+         148.5,
+         76.75,
+         169.5
+        ],
+        "rotation": 0,
+        "dst": [
+         59.15,
+         16.86,
+         84.46,
+         33.66
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         116.75,
+         115.5,
+         160.5,
+         168.0
+        ],
+        "rotation": 0,
+        "dst": [
+         105.72,
+         5.91,
+         145.14,
+         53.23
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         127.75,
+         102.0,
+         174.5,
+         112.75
+        ],
+        "rotation": 0,
+        "dst": [
+         54.98,
+         3.34,
+         99.4,
+         13.56
+        ],
+        "kind": "text"
+       }
+      ]
+     },
+     {
+      "size_mm": [
+       145.2,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         19.5,
+         225.25,
+         190.25,
+         286.25
+        ],
+        "rotation": 0,
+        "dst": [
+         0.03,
+         0.74,
+         145.23,
+         52.74
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         103.25,
+         225.5,
+         171.0,
+         277.75
+        ],
+        "rotation": 0,
+        "dst": [
+         71.17,
+         0.98,
+         128.86,
+         45.57
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "hermes-1",
+   "country": "DE",
+   "carrier": "hermes",
+   "names": {
+    "de": "Hermes Retoure Amazon",
+    "en": "Hermes return Amazon"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ],
+     [
+      215.9,
+      279.4
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Amazon"
+    ],
+    "any": [
+     "Rücksendung",
+     "Rücksendeetikett",
+     "Hermes"
+    ],
+    "none": [
+     "DHL"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       145.2,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         32.5,
+         102.5,
+         86.0,
+         137.0
+        ],
+        "rotation": 0,
+        "dst": [
+         4.2,
+         4.16,
+         55.11,
+         37.05
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         60.0,
+         177.25,
+         152.75,
+         193.5
+        ],
+        "rotation": 0,
+        "dst": [
+         1.91,
+         42.34,
+         90.12,
+         57.98
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         45.0,
+         148.5,
+         76.75,
+         169.5
+        ],
+        "rotation": 0,
+        "dst": [
+         59.15,
+         16.86,
+         84.46,
+         33.66
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         116.75,
+         115.5,
+         160.5,
+         168.0
+        ],
+        "rotation": 0,
+        "dst": [
+         105.72,
+         5.91,
+         145.14,
+         53.23
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         127.75,
+         102.0,
+         174.5,
+         112.75
+        ],
+        "rotation": 0,
+        "dst": [
+         54.98,
+         3.34,
+         99.4,
+         13.56
+        ],
+        "kind": "text"
+       }
+      ]
+     },
+     {
+      "size_mm": [
+       145.2,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         19.5,
+         225.25,
+         190.25,
+         286.25
+        ],
+        "rotation": 0,
+        "dst": [
+         0.03,
+         0.74,
+         145.23,
+         52.74
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         103.25,
+         225.5,
+         171.0,
+         277.75
+        ],
+        "rotation": 0,
+        "dst": [
+         71.17,
+         0.98,
+         128.86,
+         45.57
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "hermes-2",
+   "country": "DE",
+   "carrier": "hermes",
+   "names": {
+    "de": "Hermes Paketschein (V4.2)",
+    "en": "Hermes parcel label (V4.2)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Hermes"
+    ],
+    "any": [
+     "Paketschein",
+     "Sendungsnummer",
+     "V4.2"
+    ],
+    "none": [
+     "Amazon",
+     "V1.0"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       154.9,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         18.25,
+         32.25,
+         53.25,
+         89.25
+        ],
+        "rotation": 0,
+        "dst": [
+         0.4,
+         0.28,
+         34.56,
+         55.74
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         16.25,
+         99.0,
+         77.0,
+         126.0
+        ],
+        "rotation": 0,
+        "dst": [
+         33.97,
+         32.97,
+         94.88,
+         59.99
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         98.75,
+         25.5,
+         138.75,
+         42.5
+        ],
+        "rotation": 0,
+        "dst": [
+         94.07,
+         0.03,
+         122.1,
+         11.94
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         99.5,
+         52.0,
+         142.5,
+         114.0
+        ],
+        "rotation": 0,
+        "dst": [
+         94.94,
+         13.56,
+         125.12,
+         56.73
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         67.5,
+         76.25,
+         97.5,
+         93.25
+        ],
+        "rotation": 0,
+        "dst": [
+         71.84,
+         16.93,
+         92.83,
+         28.85
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         145.5,
+         49.25,
+         181.75,
+         88.25
+        ],
+        "rotation": 0,
+        "dst": [
+         125.09,
+         15.36,
+         150.48,
+         42.7
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         17.75,
+         16.75,
+         69.25,
+         22.25
+        ],
+        "rotation": 0,
+        "dst": [
+         34.44,
+         2.41,
+         70.49,
+         6.26
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         141.0,
+         13.5,
+         188.0,
+         22.5
+        ],
+        "rotation": 0,
+        "dst": [
+         125.75,
+         2.51,
+         153.95,
+         7.91
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         67.5,
+         25.25,
+         97.5,
+         37.5
+        ],
+        "rotation": 0,
+        "dst": [
+         69.69,
+         8.36,
+         90.69,
+         16.94
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "hermes-3",
+   "country": "DE",
+   "carrier": "hermes",
+   "names": {
+    "de": "Hermes Paketschein (V1.0)",
+    "en": "Hermes parcel label (V1.0)"
+   },
+   "verified": false,
+   "source": {
+    "sizes_mm": [
+     [
+      210,
+      297
+     ]
+    ]
+   },
+   "detect": {
+    "all": [
+     "Hermes"
+    ],
+    "any": [
+     "Paketschein",
+     "Sendungsnummer",
+     "V1.0"
+    ],
+    "none": [
+     "Amazon",
+     "V4.2"
+    ]
+   },
+   "layouts": {
+    "62": [
+     {
+      "size_mm": [
+       169.9,
+       60.0
+      ],
+      "pieces": [
+       {
+        "page": 1,
+        "src": [
+         20.0,
+         29.75,
+         51.0,
+         91.5
+        ],
+        "rotation": 0,
+        "dst": [
+         2.46,
+         -0.11,
+         32.6,
+         59.9
+        ],
+        "kind": "barcode"
+       },
+       {
+        "page": 1,
+        "src": [
+         20.0,
+         98.5,
+         88.5,
+         133.25
+        ],
+        "rotation": 0,
+        "dst": [
+         41.4,
+         23.51,
+         106.55,
+         56.58
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         97.0,
+         36.25,
+         145.5,
+         62.25
+        ],
+        "rotation": 0,
+        "dst": [
+         131.18,
+         1.52,
+         169.89,
+         22.43
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         69.0,
+         77.0,
+         94.5,
+         98.0
+        ],
+        "rotation": 0,
+        "dst": [
+         105.8,
+         16.91,
+         123.73,
+         31.69
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         97.25,
+         76.75,
+         145.75,
+         113.75
+        ],
+        "rotation": 0,
+        "dst": [
+         131.14,
+         27.07,
+         169.94,
+         56.74
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         162.25,
+         117.5,
+         187.75,
+         132.0
+        ],
+        "rotation": 0,
+        "dst": [
+         110.02,
+         48.19,
+         127.81,
+         58.48
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         139.25,
+         13.5,
+         188.0,
+         22.5
+        ],
+        "rotation": 0,
+        "dst": [
+         88.58,
+         2.51,
+         122.71,
+         8.81
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         97.0,
+         24.75,
+         141.75,
+         37.75
+        ],
+        "rotation": 0,
+        "dst": [
+         42.32,
+         8.34,
+         80.36,
+         19.39
+        ],
+        "kind": "text"
+       },
+       {
+        "page": 1,
+        "src": [
+         15.0,
+         15.0,
+         109.0,
+         22.25
+        ],
+        "rotation": 0,
+        "dst": [
+         41.79,
+         2.84,
+         88.79,
+         6.47
+        ],
+        "kind": "text"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (QFileDialog, QFrame, QGridLayout, QHBoxLayout, QH
                                QListView, QPushButton, QSplitter, QTreeView, QVBoxLayout, QWidget)
 
 from .. import series, storage
+from ..files import PDFIUM_LOCK
 from ..i18n import _, ngettext, number
 from ..render import Renderer
 from ..storage import SUFFIX
@@ -145,17 +146,18 @@ def _svg(path: Path, size: int, info: str) -> Preview:
 def _pdf(path: Path, page: int, size: int, info: str) -> Preview:
     import pypdfium2 as pdfium
 
-    pdf = pdfium.PdfDocument(path)
-    try:
-        pages = len(pdf)
-        if pages < 1:
-            return _no_preview(info)
-        page = min(max(page, 1), pages)
-        pdf_page = pdf[page - 1]
-        scale = size / max(pdf_page.get_size())
-        image = _qimage(pdf_page.render(scale=scale).to_pil())
-    finally:
-        pdf.close()
+    with PDFIUM_LOCK:                                 # PDFium ist nicht threadsicher
+        pdf = pdfium.PdfDocument(path)
+        try:
+            pages = len(pdf)
+            if pages < 1:
+                return _no_preview(info)
+            page = min(max(page, 1), pages)
+            pdf_page = pdf[page - 1]
+            scale = size / max(pdf_page.get_size())
+            image = _qimage(pdf_page.render(scale=scale).to_pil())
+        finally:
+            pdf.close()
     text = _("Page {page} of {count}").format(page=page, count=pages)
     return Preview(image, f"{info}\n{text}", pages, page)
 

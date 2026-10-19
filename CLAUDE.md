@@ -67,7 +67,14 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   gewählte bleibt sichtbar).
 - Stilles Speichern (Zuletzt geöffnet/verwendet, Favoriten, gewählter Drucker, letzter Reiter) schreibt nur sein
   Feld (`settings.update_settings`) – was eine zweite Instanz gespeichert hat, bleibt.
-- 2767 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- Paketmarken (Etappe Paketmarken, Kern + CLI): `labelwerk parcel MARKE [--type ID|auto] [--country DE] [-l …]
+  [--preview]`, `parcel --list`; 19 Typen DE (DHL privat/Business/Warenpost/Retoure, Hermes, Amazon-Retoure) aus
+  Testblättern bei paketikett.de ermittelt (`parcel_data/catalog.json`, Werkzeuge `tools/parcel/`), DHL national 1/1a
+  am echten Original geprüft (DataMatrix + 2 ITF lesbar); erkennt Typ an Text/Seitengröße (Gleichstand ungeprüfter
+  Typen → `--type` verlangt), schneidet/dreht/skaliert die Stücke (Barcodes 1:1, verdeckte Teile weiß), quer
+  liegende Marken gedreht, breiteres Band → größer, 100×150-Layout ab 95 mm (fehlt das Layout: neu angeordnet);
+  eigene Typen in `$XDG_DATA_HOME/labelwerk/paketmarken`.
+- 2886 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -118,7 +125,8 @@ src/labelwerk/
               families() = kurze Liste (:lang=de, ohne Farbschriften, Powerline/Nerd-Font-Kopien, Symbolschriften,
               CJK-Regionsvarianten), families(all=True) alle (Einstellung `fonts_all`, CLI fonts --all); canonical:
               alte Qt-Namen „Name [Hersteller]“ → „Name“ (resolve, font_warnings, FontCombo)
-  files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi)
+  files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi); PDFIUM_LOCK (RLock: jeder
+              PDFium-Aufruf in files, gui/file_dialog und parcel – PDFium ist nicht threadsicher)
               crop(img) -> auf Inhalt, ohne Schnittmarken/Leerraum; fit_to_label(img, label_id, fit, rotate) -> 1:1, auto/feste Drehung
               load_image(path, page, dpi=None) -> (RGB-Bild, dpi) für Bild-Objekte (PNG/JPG/GIF/BMP/WebP/PDF, Transparenz → weiß, EXIF-Lage; dpi gesetzt: Dateiauflösung gilt nicht, quadratisch diese dpi);
               crop_box(img, dpi, ink) -> (l, t, r, b) | None, dieselbe Logik wie crop() (Bilder: ink=NOT_WHITE); page_count(path) (PDF-Seitenwahl)
@@ -217,6 +225,27 @@ src/labelwerk/
               Rang: genaues Wort/Kürzel › Namenswort beginnt › Suchbegriff beginnt › im Namen › sonst), find/resolve(ids), data, is_vector, own_dir/own_symbols ($XDG_DATA_HOME/labelwerk/symbole,
               SVG/PNG, ohne versteckte), add_recent; Archiv fehlt/defekt: OSError/BadZipFile/KeyError/ValueError (GUI: Meldung „Symbol-Bibliothek nicht lesbar“)
   media.py    Medium prüfen: Statusabfrage ESC i S (nicht blockierend, 2 s), Media, label_for_media
+  parcel.py   Paketmarken ohne Qt: Katalog parcel_data/catalog.json (Länder → Dienste → Typen; Format/Herkunft/
+              eigene Typen/„Neuen Typ beisteuern“ in parcel_data/README.md, gepflegt mit tools/parcel/ – Arbeitsordner
+              außerhalb des Repos Pflicht, workdir.py) – countries, carriers, types(country) (+ eigene), find;
+              ParcelType (names {de,en} → name, source_sizes – erste = Seitenfläche, raster-Regel für Bildmarken {dpi,
+              x_mm, y_mm, px}, detect all/any/none, layouts "62"/"100x150" → Sheet(size_mm, pieces), verified, own),
+              Piece(page, src mm, rotation im Uhrzeigersinn, dst-Rechteck mm, kind barcode|text), all_pieces;
+              load(path) → Source (PDF: Größen + Text; Bild über files.load_image, Pixel vor dem Dekodieren begrenzt,
+              dpi < 50/> 1200 = keine Angabe; page(n, dpi, type) in der Seitenfläche des Typs, außen weiß, ≤
+              MAX_PAGE_PIXELS); placement(source, type, n) → Placement(frame, content, rotation, offset): passende
+              Größe wie sie ist (Letter oben links auf A4), quer → gedreht (_turn: mehr Tinte in den Bereichen,
+              sonst Fehler), Bild: Regel bzw. Seitenverhältnis ±3 % gestreckt, sonst ParcelError; detect(source,
+              country, label_id, own) (_fits, all muss vorkommen; Gleichstand: geprüft, passendes Layout,
+              Katalogreihenfolge), ambiguous(found) (Gleichstand ohne geprüften Sieger → fragen); snap (Kante bis
+              weiß, ≤ 3 mm, nur ungeprüfte Typen, _alone: nie in andere Stücke); convert(source, type, label_id,
+              model) → Conversion(documents, notes, layout "62"/"100x150"/"arranged"/"own", scale) (Seitenlage
+              geprüft, je Ausgabe-Etikett ein Document mit ImageObjects, Rand 0, spätere Stücke maskieren frühere
+              weiß – _mask_covered, Ausschnitte außerhalb weiß – _crop_white; endlos: Länge = Inhalt + Vorschub,
+              Breite füllt das Band; fest: passt hinein, bessere Lage; fehlt das Layout fürs Format: arrange;
+              Hinweis bei Barcodes < 97 %; rund → Fehler); arrange (Spalten längs des Bands, Barcodes 1:1);
+              own_dir/own_types/own_warnings (beschädigt …)/own_from_dict (geprüft, Kanten ≥ 1 mm in der Seite)/
+              own_to_dict/save_own/remove_own
   layout.py   Platzier-Logik ohne Qt (mm-Rechtecke): snap, align, match_size, maximize, scale_text, outside_indices/objects_outside,
               growing_axis (Endlosband wächst mit; align_objects am Papier: Anfang des Bereichs, auf Mindestlänge mittig –
               min_length –, nur wenn auch mit den übrigen Objekten (others) das Etikett dort klemmt), to_grid (0,1 mm nach Ziehen), Objekte: move/resize/set_frame/rotate/*_objects
@@ -335,7 +364,8 @@ src/labelwerk/
                     Tastenkürzel (Konflikte sperren Speichern); restart_hint neben SPEICHERN (Stand beim Start: started)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)
-  cli.py      labelwerk labels | labelwerk media | labelwerk printers [--all] (Bürodrucker; sonst Zeile „n ausgeblendet“) | labelwerk fonts [--all] | -m auto (Modell des Zieldruckers:
+  cli.py      labelwerk labels | labelwerk media | labelwerk printers [--all] (Bürodrucker; sonst Zeile „n ausgeblendet“) | labelwerk fonts [--all] | labelwerk parcel DATEI [--type ID|auto] [--country DE] [--preview A.png] /
+              parcel --list | -m auto (Modell des Zieldruckers:
               -p bzw. gewählter/erster) | -l auto (Rolle des Zieldruckers per USB) | Etikett muss zum Modell passen | labelwerk print "Text\nZeile 2" -l 62 [--preview out.png] [--orientation horizontal|vertical] [--margin MM] | labelwerk print-file DATEI -l 62 [--rotate auto|0|90|180|270] [--fit] [--page N]
 ```
 Die Kernlogik ist UI-unabhängig. Jede UI (GUI, später evtl. Web) setzt nur auf `render`, `files`, `labels`, `printer`, `printers`, `detect`, `settings`, `media` auf – keine Drucklogik in der UI.
@@ -378,7 +408,7 @@ labelwerk print "X1 -K3\nKlemme 24V" -l 62
 ## GUI (MVP umgesetzt)
 Desktop-GUI mit **PySide6** (LGPL, GPL-kompatibel).
 
-Nächste Schritte: Paketmarken umwandeln (eigener Branch paketmarken), dann Paketierung (8).
+Nächste Schritte: Paketierung (8).
 
 Anforderungen MVP:
 - Mehrzeiliges Textfeld

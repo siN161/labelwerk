@@ -7,3 +7,11 @@ build/
 *.egg-info/
 .pytest_cache/
 /*.png
+# Pflege der Paketmarken (tools/parcel): Ausgaben und echte Marken nie einchecken
+check/
+result/
+analyse/
+analyse.json
+templates*.json
+templates-bericht.txt
+Original/

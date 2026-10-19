@@ -64,6 +64,8 @@ labelwerk labels                                   # verfügbare Etiketten
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29 --preview vorschau.png
 labelwerk print "X1 -K3\nKlemme 24V" -l 62x29      # drucken (Drucker wird automatisch erkannt)
 labelwerk print-file internetmarke.pdf -l 62       # PDF/PNG/JPG 1:1 drucken
+labelwerk parcel paketmarke.pdf -l 62              # Paketmarke (DHL, Hermes …) fürs Etikett umwandeln
+labelwerk parcel --list                            # Markentypen (DE) – geprüft/ungeprüft/eigene
 labelwerk media                                            # eingelegte Rolle anzeigen (druckt nichts)
 labelwerk printers                                         # gefundene Drucker und unterstützte Modelle
 labelwerk printers --all                                   # auch CUPS-Bürodrucker
@@ -116,6 +118,17 @@ Tastenkürzel (Standard):
 
 Ausrichten, Größe angleichen und Maximieren haben ab Werk kein Kürzel. Im Schreibmodus gelten die Tasten des Texts statt der Objekt-Kürzel (Pfeile bewegen die Schreibmarke, Entf löscht Zeichen); Esc zum Beenden ist fest. Alle Kürzel lassen sich unter „Einstellungen“ → „Tastenkürzel“ ändern (Zeile anklicken, neue Kombination drücken; Esc, Enter und Tab sind nicht belegbar). Doppelt belegte Kürzel werden rot markiert und sperren das Speichern; stehen in einer von Hand bearbeiteten `settings.json` doppelte, behält die erste Aktion ihr Kürzel und die Statusleiste meldet es.
 
+## Paketmarken
+
+`labelwerk parcel MARKE.pdf` wandelt Paketmarken (DHL privat/Geschäftskunden/Warenpost/Retoure, Hermes, Amazon-Retouren –
+19 Typen für Deutschland) für den Etikettendrucker um: der Typ wird an Text und Seitengröße erkannt (`--type ID`
+legt ihn fest), die Marke wird in Stücke geschnitten und neu angeordnet – Barcodes in Originalgröße, Adressen kleiner.
+Auf 62 mm endlos ergibt das ein 15–28 cm langes Etikett, auf breiteren Bändern wird alles größer, Typ „1a“ ergibt
+100 × 150 mm (4×6-Drucker). Mehrere Etiketten (Retoure) gehen in einem Auftrag, `--preview a.png` schreibt `a-1.png`,
+`a-2.png`. Geprüft an einer echten Marke sind DHL national (1/1a), die übrigen Typen stammen aus Testblättern
+(„ungeprüft“; ihre Kanten rücken an der Marke bis zum nächsten weißen Rand). Eigene Typen und neue Länder:
+`src/labelwerk/parcel_data/README.md`. Vor dem Versand prüfen, ob die Barcodes lesbar sind.
+
 ## Architektur
 
 ```
@@ -135,6 +148,7 @@ imaging.py  Bilder: Schwarz/Weiß-Umwandlung (Strich/Foto), Größe begrenzen
 barcodes.py Barcodes: Code 128/39, EAN-13/8 (eigene Kodierung), QR (segno), in ganzen Druckpunkten
 layout.py   Platzieren: Einrasten, Ausrichten, Größe angleichen, ragt hinaus
 shortcuts.py Tastenkürzel-Verzeichnis (Standard, Konflikte, Prüfung)
+parcel.py   Paketmarken: Typen je Land (parcel_data/catalog.json), Erkennen, Umwandeln, eigene Typen
 gui/        PySide6-Oberfläche (nur Anzeige/Bearbeitung, kein Druckcode)
 ```
 

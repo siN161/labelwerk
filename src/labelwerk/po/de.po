@@ -159,6 +159,11 @@ msgstr "Längs zum Band lässt der Drucker {mm} mm frei – ein kleinerer Rand w
 msgid "Also copies, symbol fonts and fonts without German characters – otherwise only fonts that can write German"
 msgstr "Auch Kopien, Symbolschriften und Schriften ohne deutsche Zeichen – sonst nur Schriften, die Deutsch schreiben können"
 
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Also possible: {ids} (--type)"
+msgstr "Auch möglich: {ids} (--type)"
+
 #: src/labelwerk/gui/main_window.py
 msgid "An object extends beyond the label and will be cut off. Print anyway?"
 msgstr "Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?"
@@ -214,6 +219,11 @@ msgstr "Barcode ohne Inhalt"
 #: src/labelwerk/gui/tools.py
 msgid "Barcodes and QR codes"
 msgstr "Barcodes und QR-Codes"
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Barcodes shrunk to {percent} % – check before shipping that they can be read."
+msgstr "Barcodes verkleinert auf {percent} % – vor dem Versand prüfen, ob sie sich lesen lassen."
 
 #: src/labelwerk/gui/panels/text.py
 #: src/labelwerk/shortcuts.py
@@ -1045,6 +1055,11 @@ msgstr "Ungültige Adresse: {uri}"
 msgid "Invalid name for the favorite: “{name}” (not empty, not too long, without / and \\ and control characters, not starting with a dot)"
 msgstr "Name für den Favoriten ungültig: „{name}“ (nicht leer, nicht zu lang, ohne / und \\ und Steuerzeichen, nicht mit Punkt beginnend)"
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Invalid parcel label type: {what}"
+msgstr "Ungültiger Markentyp: {what}"
+
 #: src/labelwerk/cups.py
 #, python-brace-format
 msgid "Invalid queue name: {name!r}"
@@ -1604,6 +1619,11 @@ msgstr "Reihenfolge"
 msgid "Orientation"
 msgstr "Ausrichtung"
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Own parcel label type {name} not readable: {reason}"
+msgstr "Eigener Markentyp {name} nicht lesbar: {reason}"
+
 #: src/labelwerk/files.py
 msgid "PDF is encrypted"
 msgstr "PDF ist verschlüsselt"
@@ -1650,6 +1670,44 @@ msgstr "Seite {page} von {count}"
 #: src/labelwerk/gui/tools.py
 msgid "Paper"
 msgstr "Papier"
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label file too large: {name}"
+msgstr "Paketmarke zu groß: {name}"
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label has too many pages: {name}"
+msgstr "Paketmarke hat zu viele Seiten: {name}"
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label image has too many pixels: {name}"
+msgstr "Bild der Paketmarke hat zu viele Pixel: {name}"
+
+#: src/labelwerk/cli.py
+msgid "Parcel label missing – labelwerk parcel FILE (or --list)"
+msgstr "Paketmarke fehlt – labelwerk parcel DATEI (oder --list)"
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label page too large: {name}"
+msgstr "Seite der Paketmarke zu groß: {name}"
+
+#: src/labelwerk/cli.py
+msgid "Parcel label type not recognized – specify it with --type (see 'labelwerk parcel --list')."
+msgstr "Markentyp nicht erkannt – mit --type angeben (siehe „labelwerk parcel --list“)."
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Parcel label type not unique – choose one with --type: {ids}"
+msgstr "Markentyp nicht eindeutig – mit --type wählen: {ids}"
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Parcel label: {name} ({id})"
+msgstr "Paketmarke: {name} ({id})"
 
 #: src/labelwerk/shortcuts.py
 msgid "Paste"
@@ -1928,6 +1986,10 @@ msgstr "Drehung {rotate!r} nicht möglich – erlaubt: auto, 0, 90, 180, 270"
 #: src/labelwerk/gui/panels/paper.py
 msgid "Round"
 msgstr "Rund"
+
+#: src/labelwerk/parcel.py
+msgid "Round labels are not suitable for parcel labels."
+msgstr "Runde Etiketten eignen sich nicht für Paketmarken."
 
 #: src/labelwerk/gui/panels/paper.py
 msgid "Rounded"
@@ -2349,6 +2411,11 @@ msgstr "Schreibmodus"
 msgid "Text with automatic font size needs the effective base size (base_pt) for scaling."
 msgstr "Text mit automatischer Schriftgröße braucht die wirksame Grundgröße (base_pt) zum Skalieren."
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The PDF has no pages: {name}"
+msgstr "Die PDF hat keine Seiten: {name}"
+
 #: src/labelwerk/files.py
 #, python-brace-format
 msgid "The PDF has only {count} page."
@@ -2359,6 +2426,11 @@ msgstr[1] "PDF hat nur {count} Seite(n)."
 #: src/labelwerk/files.py
 msgid "The file has no printable content."
 msgstr "Datei enthält keinen druckbaren Inhalt."
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The image does not fit the type {name}."
+msgstr "Das Bild passt nicht zum Typ {name}."
 
 #: src/labelwerk/gui/main_window.py
 msgid "The label is empty. Print anyway?"
@@ -2372,6 +2444,20 @@ msgstr "Etikettenrolle ist leer."
 #, python-brace-format
 msgid "The loaded roll does not match the label {label!r} – check the roll or choose another label."
 msgstr "Eingelegte Rolle passt nicht zum Etikett {label!r} – Rolle prüfen oder anderes Etikett wählen."
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The parcel label ({width} × {height} mm) does not fit the type {name}."
+msgstr "Die Paketmarke ({width} × {height} mm) passt nicht zum Typ {name}."
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The parcel label has no page {page}."
+msgstr "Die Paketmarke hat keine Seite {page}."
+
+#: src/labelwerk/parcel.py
+msgid "The parcel label is in landscape and its direction is unclear – save it in portrait first."
+msgstr "Die Paketmarke liegt quer und ihre Richtung ist nicht eindeutig – bitte zuerst hochkant speichern."
 
 #: src/labelwerk/gui/main_window.py
 msgid "The table has changed and was read again – check the selection and print again."
@@ -2520,6 +2606,11 @@ msgstr "Objektart{where} unbekannt: {kind}"
 #, python-brace-format
 msgid "Unknown orientation {orientation!r} – allowed: horizontal, vertical"
 msgstr "Unbekannte Ausrichtung {orientation!r} – erlaubt: horizontal, vertical"
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Unknown parcel label type: {id}"
+msgstr "Unbekannter Markentyp: {id}"
 
 #: src/labelwerk/cli.py
 #, python-brace-format
@@ -2676,9 +2767,17 @@ msgstr "alle Schriftfamilien, auch Kopien, Symbolschriften und andere Schriftsys
 msgid "also list office printers (CUPS queues with A4/Letter paper)"
 msgstr "auch Bürodrucker zeigen (CUPS-Warteschlangen mit A4/Letter-Papier)"
 
+#: src/labelwerk/parcel.py
+msgid "areas"
+msgstr "Bereiche"
+
 #: src/labelwerk/cli.py
 msgid "auto (default), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (queue, see 'labelwerk printers'), zpl+file:///dev/usb/lpN or zpl+tcp://IP (Zebra, with -m zpl:203/300/600)"
 msgstr "auto (Standard), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (Warteschlange, siehe 'labelwerk printers'), zpl+file:///dev/usb/lpN bzw. zpl+tcp://IP (Zebra, mit -m zpl:203/300/600)"
+
+#: src/labelwerk/cli.py
+msgid "auto (default: detect) or a type from 'labelwerk parcel --list'"
+msgstr "auto (Standard: erkennen) oder ein Typ aus „labelwerk parcel --list“"
 
 #: src/labelwerk/cli.py
 msgid "auto (default: detected, otherwise from the settings) or e.g. QL-700, zpl:300 (Zebra), cups:NAME; see 'labelwerk printers'"
@@ -2693,6 +2792,22 @@ msgid "bold (default) or --no-bold"
 msgstr "fett (Standard) bzw. --no-bold"
 
 #: src/labelwerk/cli.py
+msgid "convert a parcel label (DHL, Hermes …) for the label printer"
+msgstr "Paketmarke (DHL, Hermes …) für den Etikettendrucker umwandeln"
+
+#: src/labelwerk/cli.py
+msgid "country of the parcel label types (default DE)"
+msgstr "Land der Markentypen (Standard DE)"
+
+#: src/labelwerk/parcel.py
+msgid "damaged"
+msgstr "beschädigt"
+
+#: src/labelwerk/parcel.py
+msgid "data"
+msgstr "Daten"
+
+#: src/labelwerk/cli.py
 msgid "default: from the printer (tcp:// → network)"
 msgstr "Standard: aus dem Drucker (tcp:// → network)"
 
@@ -2704,6 +2819,10 @@ msgstr "nicht schneiden (Brother; bei CUPS/Zebra stellt das der Treiber bzw. der
 msgid "file is damaged or incomplete"
 msgstr "Datei ist beschädigt oder unvollständig"
 
+#: src/labelwerk/parcel.py
+msgid "file too large"
+msgstr "Datei zu groß"
+
 #: src/labelwerk/storage.py
 msgid "folder missing"
 msgstr "Ordner fehlt"
@@ -2711,6 +2830,10 @@ msgstr "Ordner fehlt"
 #: src/labelwerk/cli.py
 msgid "font family, e.g. 'Liberation Sans' (see 'labelwerk fonts')"
 msgstr "Schriftfamilie, z. B. 'Liberation Sans' (siehe 'labelwerk fonts')"
+
+#: src/labelwerk/parcel.py
+msgid "identifier"
+msgstr "Kennung"
 
 #: src/labelwerk/files.py
 msgid "image has too many pixels"
@@ -2774,6 +2897,10 @@ msgid "list the labels for the model"
 msgstr "Etiketten für das Modell auflisten"
 
 #: src/labelwerk/cli.py
+msgid "list the parcel label types"
+msgstr "Markentypen auflisten"
+
+#: src/labelwerk/cli.py
 msgid "margin all around from the paper edge in mm – the strips the printer leaves free count (about 1.5 mm across, 3 mm along a continuous tape; default from the settings)"
 msgstr "Rand ringsum ab Papierkante in mm – die Streifen, die der Drucker freilässt, zählen mit (quer rund 1,5 mm, längs zum Endlosband 3 mm; Standard aus den Einstellungen)"
 
@@ -2791,6 +2918,10 @@ msgstr[1] "mehr als {count} Zeilen"
 #: src/labelwerk/storage.py
 msgid "name too long"
 msgstr "Name zu lang"
+
+#: src/labelwerk/parcel.py
+msgid "names"
+msgstr "Namen"
 
 #: src/labelwerk/printer.py
 msgid "no answer"
@@ -2842,6 +2973,18 @@ msgid "only save a preview, do not print"
 msgstr "nur Vorschau speichern, nicht drucken"
 
 #: src/labelwerk/cli.py
+msgid "own"
+msgstr "eigener"
+
+#: src/labelwerk/parcel.py
+msgid "page sizes"
+msgstr "Seitengrößen"
+
+#: src/labelwerk/cli.py
+msgid "parcel label as PDF, PNG, JPG or GIF"
+msgstr "Paketmarke als PDF, PNG, JPG oder GIF"
+
+#: src/labelwerk/cli.py
 msgid "path to a .ttf file"
 msgstr "Pfad zu einer .ttf-Datei"
 
@@ -2860,6 +3003,10 @@ msgstr "eingelegte Rolle vom Drucker abfragen (druckt nichts)"
 #: src/labelwerk/files.py
 msgid "read error"
 msgstr "Lesefehler"
+
+#: src/labelwerk/parcel.py
+msgid "recognition words"
+msgstr "Erkennungsbegriffe"
 
 #: src/labelwerk/cli.py
 msgid "remove the entry and icon again"
@@ -2893,6 +3040,10 @@ msgstr "unterstrichen"
 #: src/labelwerk/gui/panels/file.py
 msgid "unreadable"
 msgstr "nicht lesbar"
+
+#: src/labelwerk/cli.py
+msgid "untested"
+msgstr "ungeprüft"
 
 #: src/labelwerk/printers.py
 msgid "untested – feedback welcome"

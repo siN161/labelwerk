@@ -3,6 +3,7 @@ Bild-Objekte (``load_image``)."""
 from __future__ import annotations
 
 import struct
+import threading
 import zlib
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,6 +14,9 @@ from .i18n import _, ngettext
 from .imaging import MAX_PIXELS, limit_size, on_white, to_8bit
 from .labels import DPI, format_mm, get_label, length_limits
 from .render import MARGIN
+
+# PDFium ist nicht threadsicher: jeder Aufruf (hier, Vorschau im Dateidialog, Paketmarken) hält diese Sperre
+PDFIUM_LOCK = threading.RLock()
 
 _IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
 # Bild-Objekte: zusätzlich GIF (erstes Bild), BMP, WebP; SVG rastert die Oberfläche
@@ -73,7 +77,7 @@ def _file_dpi(src: Image.Image) -> tuple[float, float]:
 def page_count(path: str | Path) -> int:
     """Seitenzahl einer PDF-Datei (für die Seitenwahl vor ``load_image``)."""
     path = _checked(path, (), "PDF", 1)
-    with _readable(path):
+    with _readable(path), PDFIUM_LOCK:
         import pypdfium2 as pdfium
 
         pdf = pdfium.PdfDocument(path)
@@ -147,14 +151,16 @@ def _load_pdf_page(path: Path, page: int) -> tuple[Image.Image, float]:
 def _pdf_page(path: Path, page: int):
     import pypdfium2 as pdfium
 
-    pdf = pdfium.PdfDocument(path)
-    try:
-        if not 1 <= page <= len(pdf):
-            raise ValueError(ngettext("The PDF has only {count} page.", "The PDF has only {count} pages.",
-                                      len(pdf)).format(count=len(pdf)))
-        yield pdf[page - 1]
-    finally:
-        pdf.close()
+    with PDFIUM_LOCK:
+        pdf = pdfium.PdfDocument(path)
+        try:
+            if not 1 <= page <= len(pdf):
+                raise ValueError(ngettext("The PDF has only {count} page.",
+                                          "The PDF has only {count} pages.",
+                                          len(pdf)).format(count=len(pdf)))
+            yield pdf[page - 1]
+        finally:
+            pdf.close()
 
 
 def _load_image(path: Path, target: int = DPI) -> Image.Image:

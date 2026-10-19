@@ -158,6 +158,11 @@ msgstr ""
 msgid "Also copies, symbol fonts and fonts without German characters – otherwise only fonts that can write German"
 msgstr ""
 
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Also possible: {ids} (--type)"
+msgstr ""
+
 #: src/labelwerk/gui/main_window.py
 msgid "An object extends beyond the label and will be cut off. Print anyway?"
 msgstr ""
@@ -212,6 +217,11 @@ msgstr ""
 
 #: src/labelwerk/gui/tools.py
 msgid "Barcodes and QR codes"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Barcodes shrunk to {percent} % – check before shipping that they can be read."
 msgstr ""
 
 #: src/labelwerk/gui/panels/text.py
@@ -1036,6 +1046,11 @@ msgstr ""
 msgid "Invalid name for the favorite: “{name}” (not empty, not too long, without / and \\ and control characters, not starting with a dot)"
 msgstr ""
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Invalid parcel label type: {what}"
+msgstr ""
+
 #: src/labelwerk/cups.py
 #, python-brace-format
 msgid "Invalid queue name: {name!r}"
@@ -1587,6 +1602,11 @@ msgstr ""
 msgid "Orientation"
 msgstr ""
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Own parcel label type {name} not readable: {reason}"
+msgstr ""
+
 #: src/labelwerk/files.py
 msgid "PDF is encrypted"
 msgstr ""
@@ -1632,6 +1652,44 @@ msgstr ""
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/tools.py
 msgid "Paper"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label file too large: {name}"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label has too many pages: {name}"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label image has too many pixels: {name}"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "Parcel label missing – labelwerk parcel FILE (or --list)"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Parcel label page too large: {name}"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "Parcel label type not recognized – specify it with --type (see 'labelwerk parcel --list')."
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Parcel label type not unique – choose one with --type: {ids}"
+msgstr ""
+
+#: src/labelwerk/cli.py
+#, python-brace-format
+msgid "Parcel label: {name} ({id})"
 msgstr ""
 
 #: src/labelwerk/shortcuts.py
@@ -1906,6 +1964,10 @@ msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py
 msgid "Round"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "Round labels are not suitable for parcel labels."
 msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py
@@ -2328,6 +2390,11 @@ msgstr ""
 msgid "Text with automatic font size needs the effective base size (base_pt) for scaling."
 msgstr ""
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The PDF has no pages: {name}"
+msgstr ""
+
 #: src/labelwerk/files.py
 #, python-brace-format
 msgid "The PDF has only {count} page."
@@ -2337,6 +2404,11 @@ msgstr[1] ""
 
 #: src/labelwerk/files.py
 msgid "The file has no printable content."
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The image does not fit the type {name}."
 msgstr ""
 
 #: src/labelwerk/gui/main_window.py
@@ -2350,6 +2422,20 @@ msgstr ""
 #: src/labelwerk/printer.py
 #, python-brace-format
 msgid "The loaded roll does not match the label {label!r} – check the roll or choose another label."
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The parcel label ({width} × {height} mm) does not fit the type {name}."
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The parcel label has no page {page}."
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "The parcel label is in landscape and its direction is unclear – save it in portrait first."
 msgstr ""
 
 #: src/labelwerk/gui/main_window.py
@@ -2498,6 +2584,11 @@ msgstr ""
 #: src/labelwerk/render.py
 #, python-brace-format
 msgid "Unknown orientation {orientation!r} – allowed: horizontal, vertical"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Unknown parcel label type: {id}"
 msgstr ""
 
 #: src/labelwerk/cli.py
@@ -2655,8 +2746,16 @@ msgstr ""
 msgid "also list office printers (CUPS queues with A4/Letter paper)"
 msgstr ""
 
+#: src/labelwerk/parcel.py
+msgid "areas"
+msgstr ""
+
 #: src/labelwerk/cli.py
 msgid "auto (default), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (queue, see 'labelwerk printers'), zpl+file:///dev/usb/lpN or zpl+tcp://IP (Zebra, with -m zpl:203/300/600)"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "auto (default: detect) or a type from 'labelwerk parcel --list'"
 msgstr ""
 
 #: src/labelwerk/cli.py
@@ -2672,6 +2771,22 @@ msgid "bold (default) or --no-bold"
 msgstr ""
 
 #: src/labelwerk/cli.py
+msgid "convert a parcel label (DHL, Hermes …) for the label printer"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "country of the parcel label types (default DE)"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "damaged"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "data"
+msgstr ""
+
+#: src/labelwerk/cli.py
 msgid "default: from the printer (tcp:// → network)"
 msgstr ""
 
@@ -2683,12 +2798,20 @@ msgstr ""
 msgid "file is damaged or incomplete"
 msgstr ""
 
+#: src/labelwerk/parcel.py
+msgid "file too large"
+msgstr ""
+
 #: src/labelwerk/storage.py
 msgid "folder missing"
 msgstr ""
 
 #: src/labelwerk/cli.py
 msgid "font family, e.g. 'Liberation Sans' (see 'labelwerk fonts')"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "identifier"
 msgstr ""
 
 #: src/labelwerk/files.py
@@ -2753,6 +2876,10 @@ msgid "list the labels for the model"
 msgstr ""
 
 #: src/labelwerk/cli.py
+msgid "list the parcel label types"
+msgstr ""
+
+#: src/labelwerk/cli.py
 msgid "margin all around from the paper edge in mm – the strips the printer leaves free count (about 1.5 mm across, 3 mm along a continuous tape; default from the settings)"
 msgstr ""
 
@@ -2769,6 +2896,10 @@ msgstr[1] ""
 
 #: src/labelwerk/storage.py
 msgid "name too long"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "names"
 msgstr ""
 
 #: src/labelwerk/printer.py
@@ -2821,6 +2952,18 @@ msgid "only save a preview, do not print"
 msgstr ""
 
 #: src/labelwerk/cli.py
+msgid "own"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "page sizes"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "parcel label as PDF, PNG, JPG or GIF"
+msgstr ""
+
+#: src/labelwerk/cli.py
 msgid "path to a .ttf file"
 msgstr ""
 
@@ -2838,6 +2981,10 @@ msgstr ""
 
 #: src/labelwerk/files.py
 msgid "read error"
+msgstr ""
+
+#: src/labelwerk/parcel.py
+msgid "recognition words"
 msgstr ""
 
 #: src/labelwerk/cli.py
@@ -2871,6 +3018,10 @@ msgstr ""
 
 #: src/labelwerk/gui/panels/file.py
 msgid "unreadable"
+msgstr ""
+
+#: src/labelwerk/cli.py
+msgid "untested"
 msgstr ""
 
 #: src/labelwerk/printers.py

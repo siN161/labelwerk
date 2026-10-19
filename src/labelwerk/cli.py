@@ -1,5 +1,5 @@
-"""Kommandozeile: labelwerk labels | print "Text" | print-file datei.pdf | media | printers | fonts |
-install-desktop"""
+"""Kommandozeile: labelwerk labels | print "Text" | print-file datei.pdf | parcel marke.pdf | media |
+printers | fonts | install-desktop"""
 from __future__ import annotations
 
 import argparse
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import desktop, i18n
+from . import desktop, i18n, parcel
 from . import printer as prn
 from . import printers
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
@@ -138,6 +138,14 @@ def _parser() -> argparse.ArgumentParser:
     pf.add_argument("--rotate", default="auto", choices=["auto", "0", "90", "180", "270"],
                     help=_("auto (default: rotate only if needed) or degrees clockwise"))
     _add_output_options(pf)
+
+    pa = sub.add_parser("parcel", help=_("convert a parcel label (DHL, Hermes …) for the label printer"))
+    pa.add_argument("file", nargs="?", help=_("parcel label as PDF, PNG, JPG or GIF"))
+    pa.add_argument("--type", default="auto",
+                    help=_("auto (default: detect) or a type from 'labelwerk parcel --list'"))
+    pa.add_argument("--country", default="DE", help=_("country of the parcel label types (default DE)"))
+    pa.add_argument("--list", action="store_true", help=_("list the parcel label types"))
+    _add_output_options(pa)
 
     sub.add_parser("media", help=_("query the roll loaded in the printer (prints nothing)"))
     pp = sub.add_parser("printers", help=_("list found printers and supported models"))
@@ -286,6 +294,63 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _list_parcel_types(country: str) -> int:
+    """labelwerk parcel --list: Typen des Lands und eigene (Kennung, Name, Prüfstand)."""
+    for ptype in parcel.types(country):
+        state = _("own") if ptype.own else (_("tested") if ptype.verified else _("untested"))
+        print(f"{ptype.id:<24} {ptype.name} ({state})")
+    for warning in parcel.own_warnings():
+        print(warning, file=sys.stderr)
+    return 0
+
+
+def _parcel(args: argparse.Namespace) -> int:
+    """labelwerk parcel DATEI: Typ erkennen (bzw. --type), umwandeln, Vorschau oder drucken."""
+    try:
+        source = parcel.load(args.file)
+        if args.type == "auto":
+            found = parcel.detect(source, args.country, label_id=args.label)
+            if not found:
+                print(_("Parcel label type not recognized – specify it with --type "
+                        "(see 'labelwerk parcel --list')."), file=sys.stderr)
+                return 2
+            tied = parcel.ambiguous(found)
+            if tied:
+                print(_("Parcel label type not unique – choose one with --type: {ids}").format(
+                    ids=", ".join(f"{t.id} ({t.name})" for t in tied)), file=sys.stderr)
+                return 2
+            ptype = found[0][0]
+            others = [t.id for t, score in found[1:] if score == found[0][1]]
+        else:
+            ptype, others = parcel.find(args.type), []
+        result = parcel.convert(source, ptype, args.label, args.model)
+        images = [render_document(doc, args.model) for doc in result.documents]
+    except (ValueError, FileNotFoundError) as e:
+        print(e, file=sys.stderr)
+        return 2
+    print(_("Parcel label: {name} ({id})").format(name=ptype.name, id=ptype.id))
+    if others:
+        print(_("Also possible: {ids} (--type)").format(ids=", ".join(others)))
+    for note in result.notes:
+        print(note, file=sys.stderr)
+    if not args.preview:
+        return _send(images, args)
+    paths = ([Path(args.preview)] if len(images) == 1 else
+             [Path(args.preview).with_name(f"{Path(args.preview).stem}-{n}{Path(args.preview).suffix}")
+              for n in range(1, len(images) + 1)])
+    dpi = get_label(args.label).dpi
+    for img, path in zip(images, paths):
+        try:
+            img.save(path)
+        except (OSError, ValueError) as e:
+            print(_("Preview cannot be saved: {path} ({error})").format(path=path, error=e),
+                  file=sys.stderr)
+            return 2
+        print(_("Preview: {path} ({width} × {height} mm)").format(
+            path=path, width=format_mm(img.width, dpi), height=format_mm(img.height, dpi)))
+    return 0
+
+
 def _show_printers(model: str, show_all: bool = False) -> int:
     """Gefundene Drucker (USB, eingetragene Netzwerkdrucker, CUPS-Warteschlangen – Bürodrucker nur
     mit ``show_all`` bzw. Einstellung ``cups_all``) und unterstützte Modelle."""
@@ -428,6 +493,12 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(families(all=args.all)))
         return 0
 
+    if args.cmd == "parcel" and args.list:
+        return _list_parcel_types(args.country)
+    if args.cmd == "parcel" and not args.file:
+        print(_("Parcel label missing – labelwerk parcel FILE (or --list)"), file=sys.stderr)
+        return 2
+
     if args.cmd == "print" and args.font and args.font_family:
         print(_("--font (font file) and --font-family exclude each other."), file=sys.stderr)
         return 2
@@ -437,6 +508,8 @@ def main(argv: list[str] | None = None) -> int:
         print(e, file=sys.stderr)
         return 2
 
+    if args.cmd == "parcel":
+        return _parcel(args)
     try:
         img = _make_image(args)
     except (ValueError, FileNotFoundError) as e:
