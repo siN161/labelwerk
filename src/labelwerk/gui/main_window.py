@@ -13,7 +13,7 @@ from PySide6.QtCore import QMimeData, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileDialog, QFrame,
                                QHBoxLayout, QInputDialog, QLineEdit,
-                               QLabel, QMainWindow, QMessageBox,
+                               QLabel, QMainWindow, QMessageBox, QPushButton,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
@@ -106,6 +106,8 @@ class MainWindow(QMainWindow):
         self._shown_objects: list = []              # Objekte der Anzeige (Serie: gefüllte Zeile)
         self._hint: str | None = None               # Hinweis (ragt hinaus, Schrift ersetzt)
         self._print_signals = None
+        self._worker = None                         # laufender Druck (Abbrechen)
+        self._cancel_requested = False              # Serie: beim Vorbereiten abbrechen
         self._media_signals = None
         self._printer_present = False
         self._printing = False
@@ -228,6 +230,13 @@ class MainWindow(QMainWindow):
         self.media_status.hide()
         self.statusBar().addWidget(self.media_status)
         self.statusBar().addWidget(self.result, 1)
+        self.cancel_button = QPushButton("ABBRECHEN")   # Serie: beim Vorbereiten und Drucken
+        self.cancel_button.setObjectName("cancelPrint")
+        self.cancel_button.setToolTip("Serie abbrechen – ein schon gesendeter Teil (bis zu 10 "
+                                      "Etiketten, bei „Nur am Ende“ der ganze Auftrag) läuft zu Ende")
+        self.cancel_button.clicked.connect(self.cancel_print)
+        self.cancel_button.hide()
+        self.statusBar().addWidget(self.cancel_button)
         self.zoom_label = QLabel()
         for text, delta in (("−", -ZOOM_STEP), ("+", ZOOM_STEP)):
             button = QToolButton()
@@ -1611,11 +1620,16 @@ class MainWindow(QMainWindow):
         doc = copy.deepcopy(doc)                    # Eingaben während des Vorbereitens zählen nicht
         renderer = Renderer()                       # unveränderte Objekte aus dem Cache
         self._set_printing(True)                    # gesperrt, solange vorbereitet wird
+        self._cancel_requested = False
+        self.cancel_button.setVisible(len(rows) > 1)
         try:
             for done, (number, values) in enumerate(rows):
                 if done % PROGRESS_EVERY == 0 and len(rows) > PROGRESS_EVERY:
                     self._set_result(f"Bereite {done + 1}/{len(rows)} vor …", "")
-                    QApplication.processEvents()
+                    QApplication.processEvents()    # auch „Abbrechen“
+                    if self._cancel_requested:
+                        self._set_result("Abgebrochen – nichts gedruckt", "")
+                        return
                 try:
                     result = renderer.render(fill_anchored(doc, table.columns, values, self.model),
                                              self.model)
@@ -1627,6 +1641,7 @@ class MainWindow(QMainWindow):
                 images.append(to_print_mode(result.image))   # 1 Bit: wenig Speicher
         finally:
             self._set_printing(False)
+            self.cancel_button.hide()
         if outside and not self.confirm_outside_rows(outside):
             self._set_result("", "")
             return
@@ -1696,9 +1711,22 @@ class MainWindow(QMainWindow):
         self.result.setText("Drucke …")
         worker = PrintWorker(image, doc.label_id, self.model, cut_every)
         self._print_signals = worker.signals  # Referenz bis zum Ende des Drucks
+        self._worker = worker
         worker.signals.done.connect(self._print_done)
         worker.signals.failed.connect(self._print_failed)
+        worker.signals.progress.connect(
+            lambda done, total: self._set_result(f"Drucke … {done} von {total}", ""))
+        worker.signals.cancelled.connect(self._print_cancelled)
+        self.cancel_button.setVisible(isinstance(image, list) and len(image) > 1)
         QThreadPool.globalInstance().start(worker)
+
+    def cancel_print(self) -> None:
+        """„Abbrechen“: beim Vorbereiten sofort (nichts gedruckt), beim Drucken vor dem nächsten
+        Teilauftrag."""
+        self._cancel_requested = True
+        if self._worker is not None:
+            self._worker.cancel()
+            self._set_result("Wird abgebrochen …", "")
 
     def _set_printing(self, printing: bool) -> None:
         self._printing = printing
@@ -1712,6 +1740,11 @@ class MainWindow(QMainWindow):
         self.result.setText("Gedruckt ✓" if ok else f"Status: {status.get('outcome')}")
         self._print_finished()
 
+    def _print_cancelled(self, message: str) -> None:
+        self.result.setProperty("state", "")
+        self.result.setText(message)
+        self._print_finished()
+
     def _print_failed(self, message: str) -> None:
         self.result.setProperty("state", "error")
         self.result.setText(message.replace("\n", " "))
@@ -1719,6 +1752,8 @@ class MainWindow(QMainWindow):
 
     def _print_finished(self) -> None:
         self._print_signals = None
+        self._worker = None
+        self.cancel_button.hide()
         self.result.style().polish(self.result)
         self._set_printing(False)
         self.refresh_printer()

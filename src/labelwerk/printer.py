@@ -1,6 +1,8 @@
 """Erzeugt Brother-Rasterdaten und sendet sie an den Drucker."""
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from brother_ql.backends.helpers import send
 from brother_ql.conversion import convert
 from brother_ql.raster import BrotherQLRaster
@@ -29,11 +31,22 @@ class PrintError(Exception):
     """Druck fehlgeschlagen; die Meldung ist für Nutzer gedacht."""
 
 
+class PrintCancelled(Exception):
+    """Serie abgebrochen (vor einem Teilauftrag) – kein Fehler; ``printed`` von ``total`` sind
+    schon gesendet."""
+
+    def __init__(self, printed: int, total: int):
+        self.printed, self.total = printed, total
+        super().__init__(f"Abgebrochen – {printed} von {total} Etiketten gedruckt" if printed
+                         else "Abgebrochen – nichts gedruckt")
+
+
 MAX_CUT_EVERY = 255         # Brother ESC i A n: höchstens alle 255 Etiketten
 # Teilaufträge: Der Drucker meldet Fehler nur kurz nach dem Senden (brother_ql: 10 s ab Beginn) –
 # lange Serien gehen deshalb in Teilen hinaus, jeder wird geprüft. „Nur am Ende“ schneidet nach
-# jedem Teil (er ist so lang wie der Schnittabstand), „nach jedem“ merkt nichts davon.
-MAX_JOB_EACH = 50
+# jedem Teil (er ist so lang wie der Schnittabstand), „nach jedem“ merkt nichts davon. Zwischen
+# den Teilen lässt sich abbrechen – kleine Teile, damit das schnell wirkt.
+MAX_JOB_EACH = 10
 THRESHOLD = 70.0            # brother_ql: ein Punkt druckt ab (100 − THRESHOLD) % Schwarz
 
 
@@ -107,16 +120,21 @@ def print_image(
     backend: str = DEFAULT_BACKEND,
     cut: bool = True,
     cut_every: int = 1,
+    cancelled: Callable[[], bool] | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> dict:
     """Ein Etikett oder mehrere (Serie) drucken; Status von brother_ql (des letzten Teils).
 
     Eine Serie geht in Teilaufträgen hinaus (``MAX_JOB_EACH`` bzw. ``cut_every`` Etiketten), jeder
     wird geprüft; ein Fehler bricht ab und nennt – waren schon Teile gedruckt – die betroffenen
-    Etiketten."""
+    Etiketten. ``cancelled()`` wird vor jedem Teil gefragt (True → ``PrintCancelled``; ein
+    gesendeter Teil läuft zu Ende), ``progress(gedruckt, alle)`` nach jedem."""
     images = [image] if isinstance(image, Image.Image) else list(image)
     part = MAX_JOB_EACH if cut_every == 1 else min(cut_every, MAX_CUT_EVERY)
     status: dict = {}
     for start in range(0, len(images), part):
+        if cancelled is not None and cancelled():
+            raise PrintCancelled(start, len(images))
         chunk = images[start:start + part]
         try:
             status = _send(build_instructions(chunk, label_id, model=model, cut=cut,
@@ -128,6 +146,8 @@ def print_image(
             # der Drucker meldet verzögert – der Fehler kann auch zu Etiketten davor gehören
             raise PrintError(f"Fehler bei Etikett {start + 1}–{start + len(chunk)} von {len(images)} "
                              f"(auch die davor prüfen): {e}") from None
+        if progress is not None:
+            progress(start + len(chunk), len(images))
     return status
 
 

@@ -24,7 +24,8 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   bleiben im Innenraum.
 - Serien (Etappe 3e): Reiter SERIE – Tabelle (CSV/Excel) oder Nummerierung, Platzhalter {Spalte} im Text (Spaltenliste fügt
   ein), Zeilen mit Häkchen, Vorschau ◀ Zeile n/N ▶ auf der Arbeitsfläche, DRUCKEN druckt die gewählten Zeilen in einem
-  Auftrag (Schnitt nach jedem Etikett oder nur am Ende); die Datei merkt sich die Tabelle und liest sie neu.
+  Auftrag (Schnitt nach jedem Etikett oder nur am Ende); die Datei merkt sich die Tabelle und liest sie neu;
+  ABBRECHEN in der Statusleiste (beim Vorbereiten sofort, beim Drucken vor dem nächsten Teil – bis zu 10 Etiketten).
 - Barcodes und QR-Codes: Reiter BARCODE – Art (QR, Code 128, Code 39, EAN-13, EAN-8), BARCODE EINFÜGEN (Beispielinhalt,
   Inhalt markiert im Fokus), Inhalt live (ein Rückgängig-Schritt), Modulbreite in ganzen Druckpunkten (Anfasser/Felder
   rasten ein; QR quadratisch), Höhe/Klartext bzw. Fehlerkorrektur, Prüfhinweise (EAN-Prüfziffer), Ruhezone; ungültiger
@@ -32,7 +33,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Inhalt (Prüfhinweis und Anfasser rechnen mit der Vorschau-Zeile); Doppelklick/F2/Enter → Inhaltsfeld (Strg+Z dort =
   Rückgängig des Etiketts).
 - Datei und Favoriten (Etappe 3c): Reiter DATEI – Neu/Öffnen/Speichern (*.labelwerk, Strg+N/O/S, Strg+Umschalt+S), Titel mit „•“ bei Änderungen, Rückfrage Speichern/Verwerfen/Abbrechen; Favoriten mit Vorschau (Klick = neues Etikett nach Vorlage, ⎙ druckt direkt, Umbenennen/Löschen/Beim Start), Zuletzt geöffnet; `labelwerk-gui DATEI`, Start-Favorit (Einstellungen „Beim Start“); `labelwerk install-desktop` meldet *.labelwerk an (Doppelklick öffnet).
-- 2226 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2238 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -78,8 +79,9 @@ src/labelwerk/
   printer.py  build_instructions(image | [images], label_id, model, cut, cut_every) -> bytes (Brother-Raster, mehrere
               Etiketten = ein Auftrag; _Raster: schneiden alle n über ESC i A n, Folgeseiten markiert, bytearray statt
               bytes += – sonst quadratisch langsam), cut_interval(each|end, Anzahl)
-              print_image(image | [images], ..., cut_every) -> status-dict; Serien in Teilaufträgen (MAX_JOB_EACH bzw.
-              cut_every Etiketten), jeder geprüft – Fehler nennt „Etikett k–m von N“; to_print_mode (1 Bit, bitgleich
+              print_image(image | [images], ..., cut_every, cancelled, progress) -> status-dict; Serien in Teilaufträgen
+              (MAX_JOB_EACH = 10 bzw. cut_every Etiketten), jeder geprüft – Fehler nennt „Etikett k–m von N“; vor jedem
+              Teil cancelled() → PrintCancelled(printed, total) (kein PrintError), nach jedem progress(k, N); to_print_mode (1 Bit, bitgleich
               zur Schwelle von brother_ql: 100 − THRESHOLD %)
   detect.py   find_brother_lp() -> "file:///dev/usb/lpN" | None
   document.py Etikett-Dokument (Etikett, Länge, Objekte), UI-unabhängig; Span/Paragraph/TextObject (zeichenweise Formatierung, fit);
@@ -200,7 +202,7 @@ src/labelwerk/
     actions.py      QActions aus shortcuts.ACTIONS – jedes Kürzel der App läuft hierüber (apply_shortcuts)
     history.py      Rückgängig/Wiederherstellen: Dokument-Schnappschüsse samt Auswahl, höchstens 100; amend (ohne eigenen Schritt)
     symbols.py      Liniensymbole (gui/icons) je Design, weiß beim Darüberfahren in RawBlock
-    print_worker.py Drucken im Hintergrund-Thread
+    print_worker.py Drucken im Hintergrund-Thread (cancel(): threading.Event; Signale progress, cancelled)
     media_worker.py  Medium prüfen im Hintergrund
     settings_dialog.py Einstellungen: Reiter Allgemein (inkl. Design, sofort wirksam über app.apply_theme) und Tastenkürzel (Konflikte sperren Speichern)
     theme/          QSS-Stylesheet (rawblock.qss)

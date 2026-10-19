@@ -248,3 +248,41 @@ def test_single_label_is_byte_identical_to_plain_brother_ql():
     expected = convert(qlr=plain, images=[image], label="62", rotate="0", threshold=70.0,
                        dither=False, compress=False, red=False, dpi_600=False, hq=True, cut=True)
     assert build_instructions(image, "62") == bytes(expected)
+
+
+# --- Abbrechen ---------------------------------------------------------------------------------
+from labelwerk.printer import PrintCancelled  # noqa: E402
+
+
+def test_parts_are_small_enough_to_cancel_quickly():
+    assert MAX_JOB_EACH == 10                    # „Abbrechen“ wirkt nach höchstens 10 Etiketten
+
+
+def test_series_can_be_cancelled_between_parts(monkeypatch):
+    sent, done = [], []
+    monkeypatch.setattr("labelwerk.printer.send", _sender([], sent))
+    total = 2 * MAX_JOB_EACH + 1
+    with pytest.raises(PrintCancelled) as exc:
+        print_image(_blank(total), "62", printer="file:///dev/usb/lp0",
+                    cancelled=lambda: len(sent) == 1, progress=lambda d, n: done.append((d, n)))
+    assert len(sent) == 1
+    assert (exc.value.printed, exc.value.total) == (MAX_JOB_EACH, total)
+    assert str(exc.value) == f"Abgebrochen – {MAX_JOB_EACH} von {total} Etiketten gedruckt"
+    assert done == [(MAX_JOB_EACH, total)]
+    assert not isinstance(exc.value, PrintError)          # kein Fehler: eigene Meldung
+
+
+def test_cancel_before_the_first_part_sends_nothing(monkeypatch):
+    sent = []
+    monkeypatch.setattr("labelwerk.printer.send", _sender([], sent))
+    with pytest.raises(PrintCancelled, match="^Abgebrochen – nichts gedruckt$"):
+        print_image(_blank(3), "62", printer="file:///dev/usb/lp0", cancelled=lambda: True)
+    assert sent == []
+
+
+def test_progress_is_reported_after_every_part(monkeypatch):
+    done = []
+    monkeypatch.setattr("labelwerk.printer.send", _sender([], []))
+    print_image(_blank(23), "62", printer="file:///dev/usb/lp0",
+                progress=lambda d, n: done.append((d, n)))
+    assert done == [(10, 23), (20, 23), (23, 23)]
