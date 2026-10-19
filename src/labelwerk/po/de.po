@@ -2089,6 +2089,10 @@ msgstr "Serie"
 msgid "Series from a table or numbering"
 msgstr "Serien aus Tabelle oder Nummerierung"
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Series still appears when the label has a series or the printer offers cut options."
+msgstr "Serie erscheint trotzdem, wenn das Etikett eine Serie hat oder der Drucker Schnitt-Optionen bietet."
+
 #: src/labelwerk/gui/file_session.py
 #: src/labelwerk/gui/main_window.py
 #, python-brace-format
@@ -2288,6 +2292,10 @@ msgstr "Tabelle nicht gefunden: {path}"
 #: src/labelwerk/gui/main_window.py
 msgid "Tables (*.csv *.xlsx *.xlsm *.tsv *.txt);;All files (*)"
 msgstr "Tabellen (*.csv *.xlsx *.xlsm *.tsv *.txt);;Alle Dateien (*)"
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Tabs in the toolbar"
+msgstr "Reiter in der Leiste"
 
 #: src/labelwerk/zpl.py
 msgid "Tear off"

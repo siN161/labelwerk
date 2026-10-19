@@ -51,7 +51,9 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   CLI `--lang` (auch argparse-Texte); Zahlen mit dem Dezimaltrenner der Sprache (Eingabe Komma und Punkt),
   Excel-Zahlen im Etikett nach der Region des Systems; `{Nummer}`/`{Number}` und „Spalte n“/„Column n“ in
   jeder Sprache; Symbole mit deutschen und englischen Namen (Suche in beiden); Layout-Test je Sprache.
-- Einstellungen: Reiter beim Start (fest oder zuletzt benutzter), Standard für neue Bilder (Strich/Foto, Schwelle).
+- Einstellungen: Reiter beim Start (fest oder zuletzt benutzter), Standard für neue Bilder (Strich/Foto, Schwelle),
+  Reiter ausblenden (Ansicht → „Reiter in der Leiste“; DATEI/PAPIER immer; Objekte ausgeblendeter Reiter bleiben
+  bearbeitbar – Auswahl zeigt ihr Panel, Tastenkürzel wirken).
 - Schriftliste (Abnahme-Korrekturen): nur Schriften mit deutschen Zeichen, ohne Kopien (Powerline/Nerd Font),
   Symbol-/Farbschriften und CJK-Regionsvarianten, jede in ihrer Schrift (FontCombo statt QFontComboBox, keine
   Qt-Sammelnamen wie „Sans Serif“); Einstellung „Alle Schriften zeigen“ (`fonts_all`, sofort), CLI `fonts --all`;
@@ -61,7 +63,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   gewählte bleibt sichtbar).
 - Stilles Speichern (Zuletzt geöffnet/verwendet, Favoriten, gewählter Drucker, letzter Reiter) schreibt nur sein
   Feld (`settings.update_settings`) – was eine zweite Instanz gespeichert hat, bleibt.
-- 2680 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2709 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -165,6 +167,7 @@ src/labelwerk/
               `image_threshold` (Bilder einfügen: Zuschnitt, Drehen, Strich/Foto, Schwelle neuer Bilder; Symbole nicht),
               `start_tool` (Reiter beim Start: START_TOOLS = „last“ + Werkzeug-Schlüssel, gleich mit gui/tools.py TOOLS – Test)/
               `last_tool` (zuletzt benutzter Reiter: GUI merkt ihn im Speicher, schreibt beim Schließen; ungültig → "" ohne Hinweis, QUIET_KEYS),
+              `hidden_tools` (ausgeblendete Reiter, nur HIDEABLE_TOOLS = alle außer file/paper; Rest still verworfen, QUIET_KEYS),
               `symbols_recent` (höchstens 24)/`symbols_favorites` (Symbol-ids), `recent_files` (höchstens 10)/`start_favorite`
               (der Einstellungsdialog reicht sie durch); Drucker: `printer` (gewählte URI, "" = automatisch), `printer_model`
               (Ersatz), `last_model` (zuletzt erkannt), `network_printers` ({name, host, model}; valid_host: IPv4/Name ohne
@@ -246,7 +249,11 @@ src/labelwerk/
                     insert_column (Reiter SERIE bleibt), _print_series (Prüfungen und ask_print_count vor dem Rendern, eigener
                     Renderer, confirm_outside_rows, 1 Bit, ein Auftrag mit cut_interval), print_document druckt Serien-Favoriten
                     ganz; start(path) (Datei bzw. Start-Favorit),
-                    print_document(doc) (anderes Etikett drucken, gleiche Rückfragen); closeEvent fragt bei Änderungen
+                    print_document(doc) (anderes Etikett drucken, gleiche Rückfragen); closeEvent fragt bei Änderungen;
+                    apply_hidden_tools(fall_back) (Knöpfe ausgeblendeter Reiter unsichtbar – SERIE bleibt, solange Serie
+                    oder Schnitt-Optionen des Druckers: _tool_visible; nach SPEICHERN nur bei geänderten hidden_tools und
+                    Panel nicht für Auswahl/Schreibmodus → zuletzt benutzter sichtbarer bzw. PAPIER; leere Auswahl ebenso;
+                    Start-Reiter und last_tool überspringen ausgeblendete)
     panels/barcode.py Reiter Barcode: Art (für den gewählten bzw. nächsten), BARCODE EINFÜGEN (Aktion barcode.insert),
                     Inhalt (textEdited live, erster Anschlag/editingFinished = ein Schritt), Prüfhinweis, Modul (ModuleSpin:
                     Punkte, angezeigt in mm), Höhe/Klartext bzw. Fehlerkorrektur, Ruhezone, Drehen, Position; focus_data
@@ -305,7 +312,9 @@ src/labelwerk/
                     Druckermodell als Ersatz, Zebra-Auflösung, Netzwerkdrucker-Tabelle mit Prüfung der Adresse und Modell
                     Brother/Zebra, „Alle CUPS-Drucker zeigen“; Etikett eines anderen Druckers bleibt; Neues Etikett: …,
                     Schriftart (FontCombo) mit „Alle Schriften zeigen“ darunter (sofort); Bilder einfügen: Zuschnitt, Drehen,
-                    Umwandlung Strich/Foto, Schwelle; Ansicht: Start-Zoom, Reiter beim Start, Design, Sprache) und
+                    Umwandlung Strich/Foto, Schwelle; Ansicht: Start-Zoom, Reiter beim Start, Reiter in der Leiste (tool_boxes, sperren
+                    ausgeblendete im Start-Reiter; tools_note),
+                    Design, Sprache) und
                     Tastenkürzel (Konflikte sperren Speichern); restart_hint neben SPEICHERN (Stand beim Start: started)
     theme/          QSS-Stylesheet (rawblock.qss)
     icons/          labelwerk.svg (App-Icon: Starter, Fenster; ab 16 px erkennbar), labelwerk-v2.svg (mit Schnittmarken, nur groß: README/Über-Dialog)

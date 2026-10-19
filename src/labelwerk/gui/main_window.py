@@ -181,6 +181,7 @@ class MainWindow(QMainWindow):
         start = self._start_tool()
         self.tool_actions[start].setChecked(True)
         self.panels.setCurrentWidget(self._panel_by_key[start])
+        self.apply_hidden_tools()
         self.panels.currentChanged.connect(self._remember_tool)    # erst nach dem Start-Reiter
         self._stored_tool = self.settings.last_tool   # zuletzt benutzter Reiter, wie in der Datei
         self.panel("image").set_defaults(self.settings.image_mode, self.settings.image_threshold)
@@ -428,16 +429,58 @@ class MainWindow(QMainWindow):
         if wanted == "last":
             wanted = self.settings.last_tool
         for key in (wanted, START_TOOL):
-            if key in self.tool_actions:
+            if key in self.tool_actions and key not in self.settings.hidden_tools:
                 return key
         return next(iter(self.tool_actions))
+
+    def apply_hidden_tools(self, fall_back: bool = True) -> None:
+        """Ausgeblendete Reiter (Einstellung ``hidden_tools``) aus der Leiste nehmen. Ihre Panels
+        bleiben: die Auswahl eines Objekts zeigt sie trotzdem (ohne hervorgehobenen Knopf).
+        ``fall_back``: ist der gezeigte Reiter jetzt ausgeblendet und gehört nicht zur Auswahl bzw.
+        zum Schreibmodus, geht es zum zuletzt benutzten sichtbaren Reiter (sonst PAPIER)."""
+        self._update_tool_buttons()
+        current = self._current_tool()
+        if fall_back and not self._tool_visible(current) and not self._panel_in_use(current):
+            self._show_visible_tool()
+
+    def _update_tool_buttons(self) -> None:
+        """Knöpfe der Leiste nach ``hidden_tools`` – SERIE erscheint trotzdem, solange sie
+        gebraucht wird (Serie im Etikett, Schnitt-Optionen des Druckers)."""
+        for key, action in self.tool_actions.items():
+            action.setVisible(self._tool_visible(key))
+
+    def _tool_visible(self, key: str) -> bool:
+        if key not in self.settings.hidden_tools:
+            return True
+        return key == "series" and (self.doc.series is not None
+                                    or not self.panel("series").driver_box.isHidden())
+
+    def _panel_in_use(self, key: str) -> bool:
+        """Gehört das Panel zur Auswahl (Objekt seiner Art zuletzt gewählt) bzw. zum Schreibmodus?"""
+        if key == "text" and self.edit_session.active:
+            return True
+        selection = self.canvas.selection()
+        return bool(selection) and 0 <= selection[-1] < len(self.doc.objects) \
+            and _panel_for(self.doc.objects[selection[-1]]) == key
+
+    def _show_visible_tool(self) -> None:
+        """Zum zuletzt benutzten sichtbaren Reiter (sonst PAPIER) – wie ein Klick auf ihn."""
+        key = self.settings.last_tool
+        if key not in self.tool_actions or not self._tool_visible(key):
+            key = START_TOOL
+        self._tool_triggered(key)
+        self.tool_actions[key].setChecked(True)
+
+    def _current_tool(self) -> str:
+        """Schlüssel des gezeigten Panels."""
+        return next((k for k, panel in self._panel_by_key.items()
+                     if panel is self.panels.currentWidget()), "")
 
     def _remember_tool(self, _index: int = 0) -> None:
         """Gezeigten Reiter als zuletzt benutzten merken (``last_tool``) – nur im Speicher: jeder
         Klick auf ein Objekt kann den Reiter wechseln; auf die Platte kommt er beim Schließen."""
-        key = next((k for k, panel in self._panel_by_key.items()
-                    if panel is self.panels.currentWidget()), "")
-        if key:
+        key = self._current_tool()
+        if key and key not in self.settings.hidden_tools:   # nur per Auswahl gezeigt: nicht merken
             self.settings.last_tool = key
 
     def _show_tool(self, key: str) -> None:
@@ -487,6 +530,8 @@ class MainWindow(QMainWindow):
         self.history.select(self.doc, indices)
         if indices:
             self._show_object_panel()
+        elif not self._tool_visible(self._current_tool()):
+            self._show_visible_tool()               # ausgeblendeter Reiter nur für die Auswahl
         self._sync_tool()
 
     def _drop_empty_frames(self, indices: list[int]) -> list[int]:
@@ -569,6 +614,7 @@ class MainWindow(QMainWindow):
 
     def render_now(self) -> None:
         self._timer.stop()
+        self._update_tool_buttons()                 # SERIE: Serie hinzugefügt/entfernt
         self.files.update_title()                   # „•“ bei ungespeicherten Änderungen
         if self.canvas.is_dragging():   # Ziehen nicht unterbrechen – nach dem Loslassen rendern
             self._timer.start()
@@ -1609,6 +1655,7 @@ class MainWindow(QMainWindow):
             panel.set_driver_cuts((zpl.cut_option(),), chosen)
         else:
             panel.set_cutter(capabilities(self.model).cutter)
+        self._update_tool_buttons()                 # SERIE: Schnitt-Optionen des Druckers
 
     def _options_key(self) -> str:
         """Unter diesem Schlüssel stehen die Druck-Optionen in den Einstellungen: das Modell
@@ -1708,6 +1755,7 @@ class MainWindow(QMainWindow):
             if saved.printer.startswith(("tcp://", "zpl+tcp://")) and saved.printer not in {
                     p.uri for p in network_printers(network_entries(saved))}:
                 saved.printer = ""                  # Netzwerkdrucker entfernt/geändert: automatisch
+            hidden_changed = saved.hidden_tools != self.settings.hidden_tools
             self.settings = saved
             self._save_settings()
             from PySide6.QtWidgets import QApplication
@@ -1715,6 +1763,7 @@ class MainWindow(QMainWindow):
             apply_theme(QApplication.instance(), self.settings.theme)
             self.apply_theme_icons()
             self.apply_font_list()
+            self.apply_hidden_tools(fall_back=hidden_changed)
             apply_shortcuts(self.shortcut_actions,
                             without_conflicts(effective(self.settings.shortcuts))[0])
             self.files.refresh_lists()                  # „Beim Start“ im Reiter Datei

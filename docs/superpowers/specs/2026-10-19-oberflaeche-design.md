@@ -25,6 +25,14 @@ Prüfung mit der Abnahme.
 - **Hauptfenster:** ausgeblendete Werkzeugknöpfe unsichtbar; Auswahl eines Objekts, dessen Reiter ausgeblendet ist,
   zeigt dessen Bereich trotzdem (kein Knopf hervorgehoben); Tastenkürzel (z. B. Barcode einfügen) wirken weiter;
   Reiter beim Start bzw. zuletzt benutzter ausgeblendet → PAPIER.
+- **SERIE erscheint trotzdem**, solange sie gebraucht wird: das Etikett hat eine Serie oder der Drucker bietet
+  Schnitt-Optionen im Reiter SERIE (CUPS-Treiber, Zebra-Modus); Erläuterung im Dialog unter den Häkchen.
+- **Zurückfallen:** nach SPEICHERN nur, wenn sich die ausgeblendeten Reiter geändert haben und das gezeigte Panel
+  weder zur Auswahl noch zum Schreibmodus gehört; wird die Auswahl leer und das gezeigte Panel ist ausgeblendet →
+  zuletzt benutzter sichtbarer Reiter (sonst PAPIER), danach Werkzeug wie üblich (kein „Text anlegen“ ohne Reiter).
+- **Reiter beim Start** im Dialog: ausgeblendete Reiter gesperrt (an die Häkchen gekoppelt); wird der gewählte gerade
+  ausgeblendet → „Zuletzt benutzter“.
+- Ohne LAYOUT sind Ausrichten/Größe angleichen nur über eigene Tastenkürzel erreichbar, die Farbe nicht (README).
 
 ## 2 – Dateiauswahl mit Vorschau
 

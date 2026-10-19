@@ -2068,6 +2068,10 @@ msgstr ""
 msgid "Series from a table or numbering"
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Series still appears when the label has a series or the printer offers cut options."
+msgstr ""
+
 #: src/labelwerk/gui/file_session.py
 #: src/labelwerk/gui/main_window.py
 #, python-brace-format
@@ -2266,6 +2270,10 @@ msgstr ""
 
 #: src/labelwerk/gui/main_window.py
 msgid "Tables (*.csv *.xlsx *.xlsm *.tsv *.txt);;All files (*)"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Tabs in the toolbar"
 msgstr ""
 
 #: src/labelwerk/zpl.py

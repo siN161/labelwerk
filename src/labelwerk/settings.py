@@ -26,8 +26,11 @@ THEMES = ("rawblock", "classic")
 RESTART_KEYS = ("language", "start_zoom", "start_tool")   # wirken erst nach einem Neustart (Hinweis)
 # Reiter beim Start: „last“ = zuletzt benutzter, sonst Schlüssel der Werkzeuge (gui/tools.py TOOLS)
 START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series")
+# Reiter, die sich ausblenden lassen (DATEI und PAPIER bleiben immer – dort wird das Etikett gewählt)
+HIDEABLE_TOOLS = tuple(key for key in START_TOOLS[1:] if key not in ("file", "paper"))
 SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")
-QUIET_KEYS = ("last_tool",)   # nur gemerkt, nicht vom Nutzer eingestellt: ungültig → Standard ohne Hinweis
+# ungültig → Standard ohne Hinweis: nur gemerkt (last_tool) bzw. nur Ein-/Ausblenden (hidden_tools)
+QUIET_KEYS = ("last_tool", "hidden_tools")
 
 
 @dataclass
@@ -42,6 +45,7 @@ class Settings:
     start_zoom: int = 200
     start_tool: str = "paper"              # Reiter beim Start (START_TOOLS; "last" = zuletzt benutzter)
     last_tool: str = ""                    # zuletzt benutzter Reiter (still gespeichert)
+    hidden_tools: list[str] = field(default_factory=list)   # ausgeblendete Reiter (HIDEABLE_TOOLS)
     theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
     image_crop: bool = True                # Bilder beim Einfügen auf den Inhalt zuschneiden
     image_rotate: bool = False             # Bilder drehen, wenn sie nur gedreht 1:1 passen
@@ -88,6 +92,7 @@ def _rules(model: str | None = None) -> dict:
         "image_threshold": lambda v: _is_int(v) and 0 <= v <= 255,
         "start_tool": lambda v: v in START_TOOLS,
         "last_tool": lambda v: v == "" or (v in START_TOOLS and v != "last"),
+        "hidden_tools": lambda v: isinstance(v, list),
         "symbols_recent": lambda v: isinstance(v, list),
         "symbols_favorites": lambda v: isinstance(v, list),
         "recent_files": lambda v: isinstance(v, list),
@@ -186,6 +191,8 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
                 value = _symbol_ids(key, value, settings.warnings)
             elif key == "recent_files":
                 value = _text_list(key, value, settings.warnings)[:RECENT_FILES]
+            elif key == "hidden_tools":            # still: DATEI/PAPIER und Unbekanntes fallen weg
+                value = list(dict.fromkeys(v for v in value if v in HIDEABLE_TOOLS))
             elif key == "network_printers":
                 value = _network(value, settings.warnings)
             elif key == "printer_options":

@@ -493,3 +493,33 @@ def test_update_settings_cleans_invalid_and_old_keys(tmp_path):
     assert data["theme"] == base.theme == "rawblock"
     assert data["zukunft"] == 1 and data["last_tool"] == "text"
     assert load_settings(path).warnings == []
+
+
+# --- Reiter ausblenden --------------------------------------------------------------
+def test_hidden_tools_default_and_roundtrip(tmp_path):
+    from labelwerk.settings import HIDEABLE_TOOLS
+    assert Settings().hidden_tools == [] and "file" not in HIDEABLE_TOOLS
+    path = tmp_path / "s.json"
+    save_settings(Settings(hidden_tools=["series", "barcode"]), path)
+    loaded = load_settings(path)
+    assert loaded.hidden_tools == ["series", "barcode"] and loaded.warnings == []
+
+
+@pytest.mark.parametrize("raw, expected", [
+    (["file", "paper", "series"], ["series"]),          # DATEI/PAPIER bleiben immer
+    (["druck", 3, None, "text", "text"], ["text"]),     # Unbekanntes, Doppeltes
+    ("series", []), (None, []), ({"a": 1}, []),
+])
+def test_invalid_hidden_tools_are_dropped_quietly(tmp_path, raw, expected):
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"hidden_tools": raw}))
+    s = load_settings(path)
+    assert s.hidden_tools == expected and s.warnings == []
+
+
+def test_update_settings_cleans_hidden_tools(tmp_path):
+    from labelwerk.settings import update_settings
+    path = tmp_path / "s.json"
+    path.write_text(json.dumps({"hidden_tools": ["paper", "layout"]}))
+    update_settings(path, Settings(), last_tool="text")
+    assert json.loads(path.read_text())["hidden_tools"] == ["layout"]

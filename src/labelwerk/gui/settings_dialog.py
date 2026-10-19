@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
-                               QDialogButtonBox, QFormLayout, QFrame, QGroupBox,
+                               QDialogButtonBox, QFormLayout, QFrame, QGridLayout, QGroupBox,
                                QHBoxLayout, QHeaderView, QKeySequenceEdit, QLabel, QPushButton,
                                QScrollArea, QStyledItemDelegate, QTableWidget, QTableWidgetItem,
                                QTabWidget,
@@ -22,8 +22,8 @@ from ..i18n import N_, _
 from ..labels import get_label, labels_for_model
 from ..printer import DEFAULT_MODEL
 from ..printers import SUPPORTED_MODELS, capabilities
-from ..settings import (Settings, restart_pending, save_settings, started_values,
-                        valid_host)
+from ..settings import (HIDEABLE_TOOLS, Settings, restart_pending, save_settings,
+                        started_values, valid_host)
 from .tools import TOOLS
 from .widgets import DoubleSpinBox, FontCombo, SpinBox
 
@@ -207,6 +207,26 @@ class SettingsDialog(QDialog):
             self.start_tool.addItem(_(tool.title), tool.key)
         self.start_tool.setCurrentIndex(max(0, self.start_tool.findData(settings.start_tool)))
         form.addRow(_("Tab at startup"), self.start_tool)
+        # Reiter in der Leiste: DATEI und PAPIER immer (dort wird das Etikett gewählt)
+        self.tool_boxes: dict[str, QCheckBox] = {}
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        for index, tool in enumerate(TOOLS):
+            box = QCheckBox(_(tool.title))
+            box.setChecked(tool.key not in settings.hidden_tools)
+            if tool.key not in HIDEABLE_TOOLS:
+                box.setChecked(True)
+                box.setEnabled(False)
+            self.tool_boxes[tool.key] = box
+            box.toggled.connect(lambda _on=False, key=tool.key: self._tool_box_toggled(key))
+            grid.addWidget(box, index // 2, index % 2)
+        form.addRow(_("Tabs in the toolbar"), grid)
+        self.tools_note = QLabel(_("Series still appears when the label has a series or the "
+                                   "printer offers cut options."))
+        self.tools_note.setObjectName("note")
+        self.tools_note.setWordWrap(True)
+        form.addRow(self.tools_note)
+        self._enable_start_tools()
         self.theme = QComboBox()
         self.theme.addItem("RawBlock", "rawblock")
         self.theme.addItem(_("Classic"), "classic")
@@ -424,6 +444,19 @@ class SettingsDialog(QDialog):
     def _family_changed(self, _family) -> None:
         self._family_touched = True
 
+    def _enable_start_tools(self) -> None:
+        """„Reiter beim Start“: ausgeblendete Reiter gesperrt (gekoppelt an die Häkchen)."""
+        model = self.start_tool.model()
+        for key, box in self.tool_boxes.items():
+            model.item(self.start_tool.findData(key)).setEnabled(box.isChecked())
+
+    def _tool_box_toggled(self, key: str) -> None:
+        """Häkchen eines Reiters: Start-Reiter mitsperren; der gewählte Start-Reiter ist gerade
+        ausgeblendet worden → „Zuletzt benutzter“."""
+        self._enable_start_tools()
+        if not self.tool_boxes[key].isChecked() and self.start_tool.currentData() == key:
+            self.start_tool.setCurrentIndex(self.start_tool.findData("last"))
+
     def restart_needed(self) -> bool:
         """Wirkt eine gewählte Einstellung erst nach einem Neustart anders als jetzt? (Liest nur die
         Felder der Neustart-Einstellungen – keine Prüfung anderer Felder.)"""
@@ -446,6 +479,8 @@ class SettingsDialog(QDialog):
             start_zoom=self.zoom.value(),
             start_tool=self.start_tool.currentData(),
             last_tool=self._last_tool,
+            hidden_tools=[key for key, box in self.tool_boxes.items()
+                          if key in HIDEABLE_TOOLS and not box.isChecked()],
             theme=self.theme.currentData(),
             image_crop=self.image_crop.isChecked(),
             image_rotate=self.image_rotate.isChecked(),
