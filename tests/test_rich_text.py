@@ -22,7 +22,7 @@ def _old_render(text: str, size: int | None = None) -> Image.Image:
 
     def fits(s):
         l, t, r, b = box(fonts.load(DEJAVU_BOLD, s))
-        return r - l <= 696 - 24 and b - t <= 11811 - 24
+        return r - l <= 696 and b - t <= 11811 - 24     # quer kein Rand: Drucker lässt 1,5 mm
 
     start = size or max(10, 696 // 5)
     best = start if fits(start) else max(s for s in range(8, start) if fits(s))
@@ -300,7 +300,7 @@ def test_aligned_ink_stays_inside_image():
 
 def test_too_large_message_names_largest_span_size():
     # Grundgröße 19 pt, aber das ganze Wort steht auf 72 pt: die Meldung nennt 72 pt
-    obj = TextObject([Paragraph([Span("Test", size_pt=72)])], size_pt=19)
+    obj = TextObject([Paragraph([Span("Tests", size_pt=72)])], size_pt=19)
     doc = Document(label_id="62", objects=[obj])
     with pytest.raises(TextTooLarge, match=r"bei Schriftgröße 72 pt \(höchstens (\d+) pt\)") as exc:
         render_document(doc)

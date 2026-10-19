@@ -75,7 +75,12 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     label = get_label(doc.label_id)
     min_len, max_len = length_limits(model)
     margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)
+    # später: Rand ringsum ab Papierkante (der unbedruckbare Streifen zählt mit)
+    side = max(0, margin - (label.total_width - label.width) // 2)
+    if label.height is not None:
+        margin = max(0, margin - (label.total_height - label.height) // 2)
     across = label.width                      # quer zum Band (fest)
+    side = min(side, max(0, (across - 2 * MARGIN) // 2))
     feed = label.height                       # in Bandlaufrichtung; None = automatisch
     if feed is None and doc.length_mm is not None:
         feed = min(max(round(doc.length_mm * DPI / 25.4), min_len), max_len)
@@ -87,7 +92,7 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
             raise ValueError(f"Unbekannte Textposition {para.align!r} – erlaubt: links, zentriert, "
                              "rechts, Blocksatz (left, center, right, justify)")
 
-    across_room = across - 2 * MARGIN
+    across_room = across - 2 * side
     feed_room = (feed if feed else max_len) - 2 * margin
     max_w, max_h = (feed_room, across_room) if horizontal else (across_room, feed_room)
     base = _fit(obj, max(10, across // 5), max_w, max_h, doc.label_id)
@@ -102,7 +107,7 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     x0 = (width - text_w) // 2 - l
     if any(para.align != "center" for para in obj.paragraphs):
         # Textrahmen über die volle Breite in Leserichtung: Absätze richten sich am Rahmen aus
-        start = margin if horizontal else MARGIN
+        start = margin if horizontal else side
         frame = width - 2 * start
         lines = _shape(obj, base, frame=frame)
         fl, ft, fr, fb = _block_box(lines)

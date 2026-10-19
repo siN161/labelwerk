@@ -5,13 +5,15 @@ from labelwerk import layout
 from labelwerk.document import FRAME_STYLES, Document, Frame, TextObject
 from labelwerk.render import Renderer, frame_box, label_size, render_document
 
-# 62x29 senkrecht: 696 × 271 Punkte, Ränder 12 (quer) und 12 (1 mm in Bandlaufrichtung) –
-# Außenkante des Rahmens: x 12 … 683, y 12 … 258; 0,5 mm = 6 Punkte
-LEFT, TOP, RIGHT, BOTTOM = 12, 12, 683, 258
+# 62x29 senkrecht: 696 × 271 Punkte; Rand 4 mm ab Papierkante (_image), davon liegen quer 18 und
+# längs 35 Punkte im unbedruckbaren Streifen → Ränder 29 (quer) und 12 (längs) –
+# Außenkante des Rahmens: x 29 … 666, y 12 … 258; 0,5 mm = 6 Punkte
+LEFT, TOP, RIGHT, BOTTOM = 29, 12, 666, 258
 LW = 6
 
 
 def _image(frame, label="62x29", objects=None, **kw):
+    kw.setdefault("margin_mm", 4.0)
     return render_document(Document(label, objects=objects or [], frame=frame, **kw))
 
 
@@ -95,8 +97,8 @@ def test_corners_frame_only_draws_the_corners():
 
 
 def test_corner_legs_are_at_most_a_quarter_of_the_shorter_side():
-    img = _image(Frame("corners"), label="23x23")      # 202 × 202, Rahmen 178 → Schenkel 44
-    assert _black(img, LEFT, TOP + 43) and not _black(img, LEFT, TOP + 44)
+    img = _image(Frame("corners"), label="23x23")      # 202 × 202, Ränder 12, Rahmen 178 → Schenkel 44
+    assert _black(img, 12, 12 + 43) and not _black(img, 12, 12 + 44)
 
 
 @pytest.mark.parametrize("style", ["single", "double", "thick_thin", "dashed", "dotted", "corners"])
@@ -107,7 +109,7 @@ def test_rounded_frames_leave_the_corner_free(style):
 
 
 def test_round_label_gets_a_circle():
-    img = _image(Frame("single"), label="d24")        # 236 × 236, Ränder 12
+    img = _image(Frame("single"), label="d24", margin_mm=3.05)   # 236 × 236, Ränder 36 − 24 = 12
     assert _black(img, 12, 118) and _black(img, 118, 12) and _black(img, 223, 118)
     assert not _black(img, 30, 30)                     # Ecke außerhalb des Kreises
     assert not _black(img, 118, 118)
@@ -125,7 +127,7 @@ def test_auto_length_grows_by_the_frame():
     plain = label_size(Document("62", objects=text))
     framed = label_size(Document("62", objects=text, frame=Frame("single")))
     assert framed == (plain[0], plain[1] + 2 * (LW + 12))        # Linie + 1 mm Innenabstand
-    img = _image(Frame("single"), label="62", objects=text)
+    img = _image(Frame("single"), label="62", objects=text, margin_mm=1)
     assert _black(img, 300, framed[1] - 13) and not _black(img, 300, framed[1] - 12)
 
 
@@ -192,19 +194,18 @@ def test_renderer_matches_the_print_image(style, orientation):
 
 
 def test_frame_box_is_the_inner_room():
-    doc = Document("62x29", frame=Frame("single"))
-    assert frame_box(doc, size=(696, 271)) == (30, 30, 696 - 60, 271 - 60)
+    doc = Document("62x29", frame=Frame("single"))     # Rand 1 mm liegt im unbedruckbaren Streifen
+    assert frame_box(doc, size=(696, 271)) == (18, 18, 696 - 36, 271 - 36)
     assert frame_box(Document("62x29"), size=(696, 271)) is None
     wide = Document("62x29", orientation="horizontal", margin_mm=3, frame=Frame("double"))
-    pad = 3 * LW + 12
-    assert frame_box(wide, size=(271, 696)) == (35 + pad, 35 + pad, 271 - 70 - 2 * pad,
-                                                696 - 70 - 2 * pad)        # Rand ringsum
+    pad = 3 * LW + 12                                  # Rand 35: längs 35 − 35 = 0, quer 35 − 18 = 17
+    assert frame_box(wide, size=(271, 696)) == (pad, 17 + pad, 271 - 2 * pad, 696 - 34 - 2 * pad)
 
 
 def test_frame_area_in_mm():
     doc = Document("62x29", frame=Frame("single"))
     area = layout.frame_area(doc, size=(696, 271))
-    assert area == layout.Rect(30 * 25.4 / 300, 30 * 25.4 / 300, 636 * 25.4 / 300, 211 * 25.4 / 300)
+    assert area == layout.Rect(18 * 25.4 / 300, 18 * 25.4 / 300, 660 * 25.4 / 300, 235 * 25.4 / 300)
     assert layout.frame_area(Document("62x29"), size=(696, 271)) is None
 
 
@@ -233,8 +234,8 @@ def test_dashes_are_three_line_widths_with_gaps_of_two():
     lw = 12                                            # 1 mm
     row = _row(_image(Frame("dashed", line_mm=1)), TOP + lw // 2, LEFT, RIGHT + 1)
     dashes, gaps = _lengths_of_runs(row)
-    assert all(abs(n - 3 * lw) <= 2 for n in dashes), dashes
-    assert all(abs(n - 2 * lw) <= 2 for n in gaps), gaps
+    assert all(abs(n - 3 * lw) <= 3 for n in dashes), dashes      # gleichmäßig auf die Seite
+    assert all(abs(n - 2 * lw) <= 3 for n in gaps), gaps          # verteilt
 
 
 def test_dots_are_two_line_widths_apart():
@@ -255,9 +256,10 @@ def test_corner_radius_is_two_millimetres():
 
 
 def test_corner_radius_is_at_most_a_quarter_of_the_shorter_side():
-    doc = Document("12", objects=[TextObject("A", size_pt=6)], frame=Frame("single", rounded=True))
+    doc = Document("12", objects=[TextObject("A", size_pt=6)], frame=Frame("single", rounded=True),
+                   margin_mm=2.5)                      # 30 Punkte: quer 30 − 18 = 12, längs 30
     img = render_document(doc)                         # quer 82 Punkte → Radius 20
-    assert _first_black(img, 12, 12) == 12 + 16
+    assert _first_black(img, 12, 30) == 30 + 16
 
 
 def test_double_rounded_lines_stay_concentric():
@@ -269,7 +271,8 @@ def test_double_rounded_lines_stay_concentric():
 
 def test_round_label_inner_room_is_the_square_in_the_circle():
     # Ø 212, Linie 6, Innenabstand 12 → Radius 88 → Quadrat 124
-    assert frame_box(Document("d24", frame=Frame()), size=(236, 236)) == (56, 56, 124, 124)
+    doc = Document("d24", frame=Frame(), margin_mm=3.05)          # Ränder 36 − 24 = 12
+    assert frame_box(doc, size=(236, 236)) == (56, 56, 124, 124)
 
 
 def test_corners_without_room_give_a_message():
@@ -294,7 +297,7 @@ def test_frame_check_only_on_the_render_path():
     die GUI ruft sie außerhalb des Renderns auf."""
     from labelwerk.render import label_margins
     doc = Document("d12", objects=[TextObject("A")], frame=Frame("single", inset_mm=10))
-    assert label_margins(doc) == (12, 12)
+    assert label_margins(doc) == (0, 0)                # 1 mm liegt im unbedruckbaren Streifen
     assert layout.printable_area(doc, size=(94, 94)).w > 0
     with pytest.raises(ValueError, match="Rahmen passt nicht"):
         Renderer().render(doc)

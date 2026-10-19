@@ -364,11 +364,15 @@ def _sheet(doc: Document, model: str) -> _Sheet:
         raise ValueError(f"Unbekannte Ausrichtung {doc.orientation!r} – erlaubt: horizontal, vertical")
     label = get_label(doc.label_id)
     min_len, max_len = length_limits(model)
-    margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)   # gilt rundum
+    # Rand ringsum ab Papierkante: der Streifen, den der Drucker dort nicht bedruckt, zählt mit
+    margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)
+    side = max(0, margin - (label.total_width - label.width) // 2)
+    if label.height is not None and label.total_height is not None:
+        margin = max(0, margin - (label.total_height - label.height) // 2)
     feed = label.height
     if feed is None and doc.length_mm is not None:
         feed = min(max(_dots(doc.length_mm), min_len), max_len)
-    side = min(margin, max(0, (label.width - 2 * MARGIN) // 2))   # Rand darf nicht alles
+    side = min(side, max(0, (label.width - 2 * MARGIN) // 2))      # Rand darf nicht alles
     if feed is not None:                                            # aufbrauchen (quer, feste Länge)
         margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
     if doc.frame is not None:

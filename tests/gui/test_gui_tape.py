@@ -8,6 +8,7 @@ from labelwerk.document import Document, TextObject
 from labelwerk.gui.canvas import MM
 from labelwerk.gui.main_window import MainWindow
 from labelwerk.gui.settings_dialog import SettingsDialog
+from labelwerk.labels import get_label
 from labelwerk.render import render_document
 from labelwerk.settings import Settings
 
@@ -74,7 +75,12 @@ def test_canvas_draws_all_four_margins(qtbot, label, orientation):
     # Fläche in Leserichtung → Szene: gleiche Größe wie der Bereich, Rand in Bandrichtung sichtbar
     along = (area.y, win._shown_size[1] * 25.4 / 300 - area.bottom) if orientation == "vertical" \
         else (area.x, win._shown_size[0] * 25.4 / 300 - area.right)
-    assert along[0] == pytest.approx(3, abs=0.1) and along[1] == pytest.approx(3, abs=0.1)
+    # Rand 3 mm ab Papierkante: bei gestanzten Etiketten zählt der unbedruckbare Streifen mit
+    label_ = get_label(label)
+    edge = 0 if label_.height is None else (label_.total_height - label_.height) // 2
+    expected = max(0, round(3 * 300 / 25.4) - edge) * 25.4 / 300
+    assert along[0] == pytest.approx(expected, abs=0.1)
+    assert along[1] == pytest.approx(expected, abs=0.1)
     assert drawn.width() * drawn.height() == pytest.approx(area.w * area.h * MM * MM, rel=0.01)
     assert sheet.contains(drawn)
 

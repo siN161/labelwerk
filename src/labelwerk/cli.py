@@ -79,7 +79,7 @@ def _parser() -> argparse.ArgumentParser:
     pr.add_argument("--orientation", choices=ORIENTATIONS,
                     help="vertical: Hochformat (Leserichtung quer zum Band), horizontal: Querformat (längs zum Band); Standard aus den Einstellungen")
     pr.add_argument("--margin", type=_margin, metavar="MM",
-                    help="Rand ringsum in mm (Standard aus den Einstellungen)")
+                    help="Rand ringsum ab Papierkante in mm (Standard aus den Einstellungen)")
     _add_output_options(pr)
 
     pf = sub.add_parser("print-file", help="PDF/Bild 1:1 drucken")

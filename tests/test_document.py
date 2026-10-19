@@ -140,10 +140,12 @@ def test_margin_larger_than_die_cut_label_is_limited():
 
 def test_margin_applies_on_every_side():
     from labelwerk.render import label_margins
-    assert label_margins(Document("62x29")) == (12, 12)            # Standard 1 mm wie bisher
-    assert label_margins(Document("62x29", margin_mm=3)) == (35, 35)
-    assert label_margins(Document("62", orientation="horizontal", margin_mm=2)) == (24, 24)
-    assert label_margins(Document("62x29", margin_mm=0)) == (0, 0)
+    # ab Papierkante: quer lässt der Drucker 18 Punkte (1,5 mm) frei, gestanzt 62x29 längs 35
+    assert label_margins(Document("62")) == (0, 12)                # 1 mm: quer schon im Streifen
+    assert label_margins(Document("62", margin_mm=3)) == (35 - 18, 35)
+    assert label_margins(Document("62", orientation="horizontal", margin_mm=2)) == (24, 6)
+    assert label_margins(Document("62x29", margin_mm=4)) == (47 - 18, 47 - 35)
+    assert label_margins(Document("62x29")) == (0, 0)
 
 
 def test_margin_across_leaves_room_on_a_narrow_band():

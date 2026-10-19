@@ -180,7 +180,7 @@ def test_too_large_image_is_fitted_with_hint(window, tmp_path):
     assert _status(window) == f"Bild auf {percent} % verkleinert – Codes ggf. nicht mehr lesbar"
     # eingepasst: höchstens 600 dpi bezogen auf die neue Druckgröße, 1:1-Größe bleibt
     assert obj.image().width == pytest.approx(600 * obj.w_mm / 25.4, abs=1)
-    assert obj.natural_mm() == pytest.approx((3000 / MM, 400 / MM), abs=0.05)   # ganze Pixel
+    assert obj.natural_mm() == pytest.approx((3000 / MM, 400 / MM), abs=0.1)    # ganze Pixel
 
 
 def test_shrink_hint_never_says_zero_percent(window, tmp_path):

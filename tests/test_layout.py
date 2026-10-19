@@ -68,10 +68,9 @@ def test_label_rect_matches_render_document(doc):
 def test_printable_area_vertical_margins():
     doc = Document("62x29", margin_mm=2)
     label = layout.label_rect(doc)
-    feed = _mm(round(2 * DPI / 25.4))
     area = layout.printable_area(doc)
-    assert _t(area) == _approx(Rect(feed, feed, label.w - 2 * feed,      # Rand ringsum
-                                      label.h - 2 * feed))
+    side = _mm(round(2 * DPI / 25.4) - 18)        # Rand 2 mm ab Papierkante: quer 18 Punkte unbedruckbar
+    assert _t(area) == _approx(Rect(side, 0, label.w - 2 * side, label.h))   # längs 35: alles im Streifen
 
 
 def test_printable_area_from_known_size_renders_nothing(monkeypatch):
@@ -84,9 +83,9 @@ def test_printable_area_from_known_size_renders_nothing(monkeypatch):
 def test_printable_area_horizontal_swaps_margins():
     doc = Document("62x29", margin_mm=2, orientation="horizontal")
     label = layout.label_rect(doc)
-    feed = _mm(round(2 * DPI / 25.4))
+    side = _mm(round(2 * DPI / 25.4) - 18)
     area = layout.printable_area(doc)
-    assert _t(area) == _approx(Rect(feed, feed, label.w - 2 * feed, label.h - 2 * feed))
+    assert _t(area) == _approx(Rect(0, side, label.w, label.h - 2 * side))
 
 
 def test_printable_area_is_centered_on_label():
