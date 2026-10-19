@@ -353,6 +353,9 @@ def check_render(files: dict[str, bytes]) -> list[str]:
 def licences_md(entries: list[dict], tabler_licence: str) -> str:
     lines = ["# Lizenzen der Symbole", "",
              "Automatisch erzeugt von `tools/fetch_clipart.py` – nicht von Hand ändern.", "",
+             "Namen: deutsch aus `tools/clipart/de.json` bzw. der Commons-Beschreibung, englisch aus "
+             "`tools/clipart/en.json` – eigene Übersetzungen bzw. Kurztitel der Normen, keine Texte aus "
+             "Commons oder Wikipedia übernommen.", "",
              f"## Tabler Icons {TABLER_VERSION} (MIT)", "", "https://tabler.io/icons", "",
              "```", tabler_licence.strip(), "```", "",
              "## Wikimedia Commons (gemeinfrei bzw. CC0)", "",

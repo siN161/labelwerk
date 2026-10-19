@@ -2637,6 +2637,10 @@ msgstr "kursiv"
 msgid "label, e.g. 62, or auto (roll loaded in the printer); default from the settings"
 msgstr "Etikett, z. B. 62, oder auto (eingelegte Rolle vom Drucker); Standard aus den Einstellungen"
 
+#: src/labelwerk/clipart.py
+msgid "labelwerk (own drawing)"
+msgstr "labelwerk (eigene Zeichnung)"
+
 #: src/labelwerk/gui/file_session.py
 #, python-brace-format
 msgid "labelwerk labels (*{suffix})"
@@ -3207,6 +3211,3 @@ msgstr "Nummer"
 msgctxt "text panel"
 msgid "Font"
 msgstr "Schrift"
-
-#~ msgid "Restart needed"
-#~ msgstr "Neustart nötig"

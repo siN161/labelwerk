@@ -26,7 +26,6 @@ from ..labels import DPI
 SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".pdf")
 ALLOWED = "PNG, JPG, GIF, BMP, WebP, SVG, PDF"  # für Meldungen
 _PATTERNS = " ".join(f"*{s} *{s.upper()}" for s in SUFFIXES)   # Großschreibung: Kameras, Windows
-FILE_FILTER = f"Images and PDF ({_PATTERNS});;All files (*)"    # englisch; Dialoge: file_filter()
 # Quelle eines eingefügten Bilds: wird mit dem Etikett gespeichert und verglichen – deshalb fest
 # (deutsch, wie in älteren Dateien) und nur beim Anzeigen übersetzt (``source_title``)
 CLIPBOARD = "Zwischenablage"

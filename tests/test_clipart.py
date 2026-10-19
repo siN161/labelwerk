@@ -235,3 +235,11 @@ def test_every_symbol_has_both_languages():
     for e in entries:
         assert set(e["names"]) == {"de", "en"} and all(e["names"].values()), e["id"]
         assert set(e["subgroups"]) == {"de", "en"} and all(e["subgroups"].values()), e["id"]
+
+
+def test_own_drawings_show_their_source_in_the_language():
+    from labelwerk import i18n
+    i18n.set_language("en")
+    assert clipart.find("labelwerk/erde").source == "labelwerk (own drawing)"
+    i18n.set_language("de")
+    assert clipart.find("labelwerk/erde").source == "labelwerk (eigene Zeichnung)"

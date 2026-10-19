@@ -2,6 +2,8 @@
 
 Automatisch erzeugt von `tools/fetch_clipart.py` – nicht von Hand ändern.
 
+Namen: deutsch aus `tools/clipart/de.json` bzw. der Commons-Beschreibung, englisch aus `tools/clipart/en.json` – eigene Übersetzungen bzw. Kurztitel der Normen, keine Texte aus Commons oder Wikipedia übernommen.
+
 ## Tabler Icons 3.49.0 (MIT)
 
 https://tabler.io/icons

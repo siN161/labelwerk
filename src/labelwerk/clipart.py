@@ -28,6 +28,8 @@ ALLOWED_LICENSES = frozenset({"MIT", "Public domain", "CC0"})
 OWN_SUFFIXES = (".svg", ".png")
 OWN_LICENSE = N_("your own file")       # übersetzt in ``own_symbols``
 OWN_SUBGROUP = N_("My symbols")
+OWN_DRAWING = N_("labelwerk (own drawing)")   # Quelle der eigenen Zeichnungen (Anzeige)
+_OWN_DRAWING_STORED = "labelwerk (eigene Zeichnung)"   # so im Katalog
 RECENT_LIMIT = 24
 _UMLAUTS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 _WORD = re.compile(r"\w+")
@@ -75,7 +77,8 @@ def _catalog(language: str) -> tuple[Symbol, ...]:
         return entry.get(key + "s", {}).get(language) or entry[key]
     return tuple(Symbol(id=e["id"], group=e["group"], subgroup=pick(e, "subgroup"),
                         name=pick(e, "name"), keywords=tuple(e["keywords"]), file=e["file"],
-                        source=e["source"], url=e["url"], author=e["author"], license=e["license"],
+                        source=_(OWN_DRAWING) if e["source"] == _OWN_DRAWING_STORED else e["source"],
+                        url=e["url"], author=e["author"], license=e["license"],
                         names=tuple(dict.fromkeys([*e.get("names", {}).values(), e["name"]])),
                         subgroups=tuple(dict.fromkeys([*e.get("subgroups", {}).values(),
                                                        e["subgroup"]])))

@@ -2616,6 +2616,10 @@ msgstr ""
 msgid "label, e.g. 62, or auto (roll loaded in the printer); default from the settings"
 msgstr ""
 
+#: src/labelwerk/clipart.py
+msgid "labelwerk (own drawing)"
+msgstr ""
+
 #: src/labelwerk/gui/file_session.py
 #, python-brace-format
 msgid "labelwerk labels (*{suffix})"

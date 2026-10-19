@@ -56,7 +56,7 @@ def _localized(text: str) -> list[tuple[str, str]]:
         if code == i18n.SOURCE:
             continue
         try:
-            catalog = i18n.parse_po((i18n.PO_DIR / f"{code}.po").read_text(encoding="utf-8"), code)
+            catalog = i18n.parse_po((i18n.PO_DIR / f"{code}.po").read_text(encoding="utf-8-sig"), code)
         except (OSError, ValueError):
             continue
         forms = catalog.messages.get(("", text))

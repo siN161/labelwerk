@@ -13,7 +13,8 @@ bearbeitet.
 3. In `src/labelwerk/i18n.py` den Namen der Sprache in ihr selbst (`NAMES`, z. B. `"fr": "Français"`) und, falls
    sie ein Dezimalkomma hat, `DECIMAL` ergänzen.
 4. Prüfen: `python tools/i18n.py check` (fehlende Übersetzungen, falsche Platzhalter, Zahl der Mehrzahlformen).
-   Die Sprache erscheint danach in Einstellungen → Ansicht → Sprache und bei `labelwerk --lang <code>`.
+   Die Sprache erscheint in Einstellungen → Ansicht → Sprache und bei `labelwerk --lang <code>`, sobald die
+   Datei da ist – auch unvollständig (fehlende Texte bleiben englisch).
 
 Hinweise für Übersetzer stehen als `#.`-Kommentar über dem Text (z. B. was `{where}` enthält); eigene Notizen
 als `# …` und unsichere Übersetzungen (`#, fuzzy`) bleiben bei `tools/i18n.py update` erhalten.

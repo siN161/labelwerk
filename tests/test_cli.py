@@ -581,3 +581,17 @@ def test_cli_speaks_english_with_lang(capsys):
     assert "Unknown label" in err or "unknown" in err.lower()
     assert main(["print", "X", "-l", "999"]) == 2                 # ohne --lang: Deutsch (conftest)
     assert "Unbekanntes Etikett" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv, code", [(["--lang=en", "labels"], "en"), (["-m", "QL-600", "--lang", "en", "labels"], "en"),
+                                        (["labels", "--lang", "en"], "de"), (["print", "--", "--lang"], "de")])
+def test_language_option_before_the_command(argv, code):
+    from labelwerk.cli import _language
+    assert (_language(argv) or "de") == code
+
+
+def test_argparse_texts_are_translated(capsys):
+    with pytest.raises(SystemExit):
+        main(["print"])
+    err = capsys.readouterr().err
+    assert "Aufruf: labelwerk print" in err and "Fehler: diese Angaben fehlen: text" in err

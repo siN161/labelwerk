@@ -49,7 +49,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   CLI `--lang` (auch argparse-Texte); Zahlen mit dem Dezimaltrenner der Sprache (Eingabe Komma und Punkt),
   Excel-Zahlen im Etikett nach der Region des Systems; `{Nummer}`/`{Number}` und „Spalte n“/„Column n“ in
   jeder Sprache; Symbole mit deutschen und englischen Namen (Suche in beiden); Layout-Test je Sprache.
-- 2529 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 2536 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -85,7 +85,7 @@ src/labelwerk/
               EAN-13/8 mit Prüfziffer ergänzt/geprüft – Tabellen aus den Normen; QR über segno, boost_error aus),
               check(obj), modules(obj), size(obj) (Druckpunkte, ungedreht), draw(obj) (L, ganze Punkte je Modul, Klartext
               DejaVu Sans ~9 Module, EAN mit verlängerten Randzeichen), quiet_mm, TITLES/SAMPLES/INSERT_MODULE;
-              BarcodeError (ValueError, deutsch); Tests lesen jede Art mit zxing-cpp (nur [dev], Python ≥ 3.12)
+              BarcodeError (ValueError, übersetzt); Tests lesen jede Art mit zxing-cpp (nur [dev], Python ≥ 3.12)
   i18n.py     Übersetzungen ohne Qt: _/N_/NP_/ngettext/pgettext, set_language ("" = System wie GNU: Gebiets-
               schema LC_ALL › LC_MESSAGES › LANG, „C“ = Englisch, sonst LANGUAGE-Liste), available/NAMES/DECIMAL,
               eigener .po-Leser (parse_po, unquote mit C-Escapes; Kontext, Mehrzahl über gettext.c2py,
@@ -151,7 +151,7 @@ src/labelwerk/
               „BxHmm@dpi“; ob es zum Drucker passt, prüfen GUI und CLI)
   storage.py  Etiketten als Datei (*.labelwerk, JSON versioniert, Bilder Base64): to_dict/from_dict, save (atomar), load;
               Schemata SPAN/PARAGRAPH/TEXT/IMAGE/BARCODE/DOCUMENT (jedes Dataclass-Feld, Test hält gleich); Dateien sind fremde Eingabe:
-              Prüfung je Feld nach Art, Wertebereich (endlich, Grenzen) und Struktur → StorageError (deutsch, mit Dateiname),
+              Prüfung je Feld nach Art, Wertebereich (endlich, Grenzen) und Struktur → StorageError (übersetzt, mit Dateiname),
               Bilddaten nur PNG (ganz dekodiert, höchstens MAX_PIXELS), Rahmen als eigener Eintrag „frame“ (Schema FRAME, null = keiner), Serie „series“ (SERIES/NUMBERING,
               genau Tabelle oder Nummerierung; Tabelle im Ordner der Datei wird relativ gespeichert: to_dict/from_dict(base)), Etikett bekannt; Grenzen: Datei ≤ 32 MB und regulär (kein FIFO),
               ≤ 500 Objekte, Rahmenflächen ≤ 100 Mio. Druckpunkte (Barcodes: echte Größe, mit Platzhalter/ungültig barcodes.max_size;
@@ -161,7 +161,7 @@ src/labelwerk/
   series.py   Serien ohne Qt: load_table(path, sheet) -> Table(columns, rows) (CSV: Kodierung inkl. UTF-16, Trennzeichen aus den
               ersten 20 Zeilen; XLSX über openpyxl + defusedxml aus einmal gelesenen Bytes, nur Arbeitsblätter, erstes sichtbares,
               Zahlenformate 000/%/0,00; fremde Eingabe: Größe, ausgepackte Größe, Zeilen/Spalten/Zelllänge begrenzt, gestreamt,
-              leere Zeilen und leere Zellen am Zeilenende entfallen → SeriesError deutsch), sheet_names, numbering_table
+              leere Zeilen und leere Zellen am Zeilenende entfallen → SeriesError übersetzt), sheet_names, numbering_table
               (Spalte „Nummer“), check, table_for(series, base); Endungen .csv/.tsv/.txt bzw. .xlsx/.xlsm; Excel höchstens
               MAX_RAW_ROWS Zeilen samt leeren; Table.sheet/sheets (gelesenes Blatt, alle Arbeitsblätter);
               Platzhalter {Spalte} in Text und Barcode-Inhalt (Leerzeichen in den Klammern egal):

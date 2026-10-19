@@ -409,7 +409,7 @@ class Canvas(QGraphicsView):
     def set_tool(self, tool: str) -> None:
         """Werkzeug wählen: Auswahl-Pfeil oder „Text anlegen“ (Klick aufs Etikett legt Text an)."""
         if tool not in TOOL_MODES:
-            raise ValueError(f"Unbekanntes Werkzeug {tool!r}")
+            raise ValueError(f"unknown tool {tool!r}")          # Programmierfehler, keine Meldung
         if tool != self._tool:
             self._tool = tool
             if tool == "text":

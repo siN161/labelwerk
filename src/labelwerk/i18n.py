@@ -8,7 +8,6 @@ Reihenfolge wählen kann. ``set_language`` gilt für alles danach (CLI und GUI s
 """
 from __future__ import annotations
 
-import ast
 import gettext
 import os
 import re

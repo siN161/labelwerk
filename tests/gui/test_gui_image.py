@@ -355,9 +355,24 @@ def test_unsupported_type_message_lists_all_image_types(window, tmp_path):
 
 
 def test_file_dialog_filter_accepts_uppercase_names():
-    from labelwerk.gui.image_import import FILE_FILTER
+    from labelwerk.gui.image_import import file_filter
     for pattern in ("*.png", "*.PNG", "*.jpeg", "*.JPEG", "*.svg", "*.SVG", "*.PDF"):
-        assert f" {pattern}" in FILE_FILTER or f"({pattern}" in FILE_FILTER
+        assert f" {pattern}" in file_filter() or f"({pattern}" in file_filter()
+
+
+def test_file_dialog_filter_in_the_language(qtbot, monkeypatch):
+    """Der Dialog „Bild einfügen“ bekommt den Filter in der Sprache der Oberfläche."""
+    from labelwerk import i18n
+    from labelwerk.gui import main_window
+    seen = []
+    monkeypatch.setattr(main_window.QFileDialog, "getOpenFileName",
+                        lambda parent, title, folder, filter_: seen.append((title, filter_)) or ("", ""))
+    win = _window(qtbot)
+    win.ask_image_file()
+    assert seen[-1][0] == "Bild einfügen" and seen[-1][1].startswith("Bilder und PDF (")
+    i18n.set_language("en")
+    win.ask_image_file()
+    assert seen[-1][1].startswith("Images and PDF (")
 
 
 def test_missing_file_and_missing_page_show_a_message(window, tmp_path):

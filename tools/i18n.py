@@ -246,8 +246,12 @@ def problems(messages: dict | None = None) -> list[str]:
         found.append("labelwerk.pot veraltet – python tools/i18n.py extract")
     for language in languages():
         catalog = _load(language)
-        nplurals = int(re.search(r"nplurals\s*=\s*(\d+)", (PO_DIR / f"{language}.po").read_text(
-            encoding="utf-8-sig"))[1])
+        header = re.search(r"nplurals\s*=\s*(\d+)", (PO_DIR / f"{language}.po").read_text(
+            encoding="utf-8-sig"))
+        if header is None:
+            found.append(f"{language}: Kopf ohne „Plural-Forms: nplurals=…“")
+            continue
+        nplurals = int(header[1])
         for key, m in sorted(messages.items()):
             forms = catalog.messages.get(key)
             if not forms:

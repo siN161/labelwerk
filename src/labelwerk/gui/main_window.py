@@ -1119,7 +1119,7 @@ class MainWindow(QMainWindow):
     def ask_image_file(self) -> str | None:
         """Dateidialog „Bilder und PDF“ (in Tests ersetzbar); None = abgebrochen."""
         path, _filter = QFileDialog.getOpenFileName(self, _("Insert image"), self._image_dir,
-                                              image_import.FILE_FILTER)
+                                              image_import.file_filter())
         if path:
             self._image_dir = str(Path(path).parent)
         return path or None
