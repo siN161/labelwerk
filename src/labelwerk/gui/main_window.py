@@ -210,7 +210,7 @@ class MainWindow(QMainWindow):
         self.app_bar.addAction(self.print_action)
         self.app_bar.widgetForAction(self.print_action).setObjectName("print")
         self.tool_bar = toolbar
-        QTimer.singleShot(0, self.fit_toolbars)     # erst mit dem Design (apply_theme) messen
+        QTimer.singleShot(0, self, self.fit_toolbars)     # erst mit dem Design (apply_theme) messen
 
         # Arbeitsfläche
         self.canvas = Canvas(self.model)
@@ -345,10 +345,10 @@ class MainWindow(QMainWindow):
     def panel(self, key: str):
         return self._panel_by_key[key]
 
-    def fit_toolbars(self) -> None:
+    def fit_toolbars(self, resize: bool = True) -> None:
         """Mit dem Design gemessen: die Leiste EINSTELLUNGEN/DRUCKEN nie schmaler als ihre Knöpfe
-        (die Reiterknöpfe laufen bei Platzmangel über), das Fenster beim Start so breit, dass
-        alles passt – höchstens so breit wie der Bildschirm."""
+        (die Reiterknöpfe laufen bei Platzmangel über); ``resize`` (Start): das Fenster so breit,
+        dass alles passt – höchstens so breit wie der Bildschirm."""
         ext = self.tool_bar.findChild(QToolButton, "qt_toolbar_ext_button")
         if ext is not None:                         # Überlauf-Knopf sichtbar beschriften
             ext.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -357,6 +357,9 @@ class MainWindow(QMainWindow):
         buttons = sum(self.app_bar.widgetForAction(a).sizeHint().width()
                       for a in (self.settings_action, self.print_action))
         self.app_bar.setMinimumWidth(buttons + 24)
+        self._mark_overflow()
+        if not resize:
+            return
         screen = self.screen().availableGeometry().width() if self.screen() else 0
         wanted = self.tool_bar.sizeHint().width() + buttons + 48
         if screen:
@@ -501,6 +504,34 @@ class MainWindow(QMainWindow):
         gebraucht wird (Serie im Etikett, Schnitt-Optionen des Druckers)."""
         for key, action in self.tool_actions.items():
             action.setVisible(self._tool_visible(key))
+        QTimer.singleShot(0, self, self._mark_overflow)    # nach dem Neuordnen der Leiste
+
+    def _mark_overflow(self) -> None:
+        """Liegt der aktive Reiter im Überlauf der Leiste, ist der Knopf „»“ hervorgehoben."""
+        ext = self.tool_bar.findChild(QToolButton, "qt_toolbar_ext_button")
+        if ext is None:
+            return
+        hidden = any(action.isChecked() and action.isVisible()
+                     and not self.tool_bar.widgetForAction(action).isVisible()
+                     for action in self.tool_actions.values())
+        if ext.property("active") != hidden:
+            ext.setProperty("active", hidden)
+            ext.style().unpolish(ext)
+            ext.style().polish(ext)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self, self._mark_overflow)    # Überlauf ändert sich mit der Breite
+
+    def createPopupMenu(self):
+        """Kein Kontextmenü zum Ausblenden der Leisten (Aktionen/Werkzeuge gehören immer dazu)."""
+        menu = super().createPopupMenu()
+        if menu is not None:
+            for bar in (self.tool_bar, self.app_bar):
+                menu.removeAction(bar.toggleViewAction())
+            if menu.isEmpty():
+                return None
+        return menu
 
     def _tool_needed(self, key: str) -> bool:
         """Knopf gehört in die Leiste: nicht ausgeblendet – oder SERIE wird gebraucht (Serie im
@@ -665,9 +696,11 @@ class MainWindow(QMainWindow):
                     action.setEnabled(False)
                     self._parcel_disabled.add(entry.id)
             return
-        for key in self._parcel_disabled:           # wieder wie vorher, Rest regelt das Folgende
-            self.shortcut_actions[key].setEnabled(True)
-        self._parcel_disabled.clear()
+        if self._parcel_disabled:                   # wieder wie vorher, Rest regelt das Folgende
+            for key in self._parcel_disabled:
+                self.shortcut_actions[key].setEnabled(True)
+            self._parcel_disabled.clear()
+            self.panel("layout").set_selection(self.canvas.selection())   # Ausrichten nach Auswahl
         if self.edit_session.update_actions(self.shortcut_actions):   # wirken auf den Editor
             return
         self.shortcut_actions["text.end_edit"].setEnabled(False)
@@ -2027,6 +2060,7 @@ class MainWindow(QMainWindow):
             from .app import apply_theme
             apply_theme(QApplication.instance(), self.settings.theme)
             self.apply_theme_icons()
+            QTimer.singleShot(0, self, lambda: self.fit_toolbars(resize=False))   # neues Design messen
             self.apply_font_list()
             self.apply_hidden_tools(fall_back=hidden_changed)
             apply_shortcuts(self.shortcut_actions,

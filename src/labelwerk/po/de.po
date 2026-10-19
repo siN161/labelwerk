@@ -1120,6 +1120,16 @@ msgstr "Name für den Favoriten ungültig: „{name}“ (nicht leer, nicht zu la
 
 #: src/labelwerk/parcel.py
 #, python-brace-format
+msgid "Invalid parcel label type: area {number} is too small (at least {size} mm)."
+msgstr "Ungültiger Markentyp: Bereich {number} ist zu klein (mindestens {size} mm)."
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Invalid parcel label type: area {number} reaches beyond the page."
+msgstr "Ungültiger Markentyp: Bereich {number} ragt über die Seite."
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
 msgid "Invalid parcel label type: {what}"
 msgstr "Ungültiger Markentyp: {what}"
 
@@ -2410,7 +2420,7 @@ msgstr "Einstellungen gespeichert – gelten für neue Etiketten."
 #: src/labelwerk/gui/panels/parcel.py
 #, python-brace-format
 msgid "Several types fit equally well ({types}) – choose one in the list."
-msgstr "Mehrere Arten passen gleich gut ({types}) – bitte in der Liste wählen."
+msgstr "Mehrere Typen passen gleich gut ({types}) – bitte in der Liste wählen."
 
 #: src/labelwerk/gui/panels/parcel.py
 msgid "Several types fit equally well – please check the choice."
@@ -2603,7 +2613,7 @@ msgid "Text editing"
 msgstr "Schreibmodus"
 
 #: src/labelwerk/gui/parcel_editor.py
-msgid "Text that is on every such label – labelwerk then recognises the type when opening (several words: separate with commas)"
+msgid "Text that is on every such label – labelwerk then recognizes the type when opening (several words: separate with commas)"
 msgstr "Text, der auf jeder solchen Marke steht – labelwerk erkennt den Typ dann beim Öffnen (mehrere Wörter mit Komma trennen)"
 
 #: src/labelwerk/layout.py
@@ -2648,6 +2658,11 @@ msgstr "Eingelegte Rolle passt nicht zum Etikett {label!r} – Rolle prüfen ode
 #, python-brace-format
 msgid "The parcel label ({width} × {height} mm) does not fit the type {name}."
 msgstr "Die Paketmarke ({width} × {height} mm) passt nicht zum Typ {name}."
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The parcel label can no longer be read ({reason}) – open it again."
+msgstr "Die Paketmarke lässt sich nicht mehr lesen ({reason}) – bitte neu öffnen."
 
 #: src/labelwerk/parcel.py
 #, python-brace-format
@@ -2705,7 +2720,7 @@ msgid "Type"
 msgstr "Art"
 
 #: src/labelwerk/gui/panels/parcel.py
-msgid "Type not recognised – choose it in the list."
+msgid "Type not recognized – choose it in the list."
 msgstr "Typ nicht erkannt – in der Liste wählen."
 
 #: src/labelwerk/gui/panels/barcode.py
@@ -3195,6 +3210,11 @@ msgstr "eigener"
 msgid "page sizes"
 msgstr "Seitengrößen"
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "page {page} is missing"
+msgstr "Seite {page} fehlt"
+
 #: src/labelwerk/cli.py
 msgid "parcel label as PDF, PNG, JPG or GIF"
 msgstr "Paketmarke als PDF, PNG, JPG oder GIF"
@@ -3311,6 +3331,11 @@ msgstr[1] "{count} Zeilen"
 #, python-brace-format
 msgid "{degrees}° clockwise"
 msgstr "{degrees}° im Uhrzeigersinn"
+
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "{error} – the previous parcel label stays loaded."
+msgstr "{error} – die vorige Paketmarke bleibt geladen."
 
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/settings_dialog.py

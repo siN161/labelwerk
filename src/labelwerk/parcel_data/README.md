@@ -23,7 +23,7 @@ an der echten Marke bis zum nächsten weißen Rand (höchstens 3 mm).
  "types": [{
    "id": "dhl-privat-1", "country": "DE", "carrier": "dhl",
    "names": {"de": "…", "en": "…"}, "verified": true,
-   "source": {"sizes_mm": [[210, 297]], "raster": {"dpi": 300, "x_mm": 0, "y_mm": 0}},
+   "source": {"sizes_mm": [[210, 297]], "raster": {"dpi": 300, "x_mm": 0, "y_mm": 0, "px": [1800, 1200]}},
    "detect": {"all": ["DHL"], "any": ["Online Frankierung"], "none": ["Warenpost"]},
    "layouts": {"62": [{"size_mm": [180, 62], "pieces": [
        {"page": 1, "src": [x0, y0, x1, y1], "rotation": 90, "dst": [x0, y0, x1, y1], "kind": "barcode"}]}]}
@@ -31,7 +31,8 @@ an der echten Marke bis zum nächsten weißen Rand (höchstens 3 mm).
 ```
 
 - **source**: mögliche Seitengrößen der Marke in mm (± 4 mm, auch quer); `raster` nur für Marken, die als
-  Bild kommen (z. B. GIF): in dieser Auflösung an diese Stelle der Seite gelegt.
+  Bild kommen (z. B. GIF): in dieser Auflösung (`dpi`) an diese Stelle der Seite gelegt (`x_mm`, `y_mm`); `px`
+  ist die erwartete Pixelgröße (Breite, Höhe) – nur Bilder mit diesem Seitenverhältnis gelten als dieser Typ.
 - **detect**: Begriffe im Text der PDF – `all` müssen vorkommen, `any` zählen dafür, `none` dagegen.
 - **layouts**: `"62"` = Referenz 62 mm endlos (Seite quer: x längs des Bands, y quer), `"100x150"` =
   Etikett 100 × 150 mm (hochkant). Je Layout ein oder mehrere Ausgabe-Etiketten (Retoure: zwei).

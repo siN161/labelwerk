@@ -25,6 +25,7 @@ PREVIEW_W = 420                     # Breite der Ergebnis-Vorschau in Pixeln
 PREVIEW_H = 220
 PREVIEW_DELAY_MS = 250              # Vorschau erst, wenn das Ziehen kurz ruht (beim Loslassen sofort)
 NAME_MAX = 200
+SNAP_MM = 0.5                       # so nah am Seitenrand zählt als Rand
 ROTATIONS = (0, 90, 180, 270)
 
 
@@ -150,7 +151,7 @@ class ParcelTypeEditor(QDialog):
         self.name.setPlaceholderText(_("e.g. Returns of my shop"))
         self.words = QLineEdit()
         self.words.setPlaceholderText(_("optional, e.g. a company name on the label"))
-        self.words.setToolTip(_("Text that is on every such label – labelwerk then recognises "
+        self.words.setToolTip(_("Text that is on every such label – labelwerk then recognizes "
                                 "the type when opening (several words: separate with commas)"))
         self.list = QListWidget()
         self.list.currentRowChanged.connect(self._row_chosen)
@@ -287,8 +288,16 @@ class ParcelTypeEditor(QDialog):
         self.list.blockSignals(False)
 
     def _mm(self, area: _Area) -> tuple[float, float, float, float]:
+        """Bereich in mm auf seiner Seite – auf die Seitengröße begrenzt (Rundung am Rand)."""
         r = area.scene_rect()
-        return tuple(round(v / self._k, 1) for v in (r.left(), r.top(), r.right(), r.bottom()))
+        page = next((p for p, areas in self._areas.items() if area in areas), self._page)
+        w, h = (round(v, 1) for v in self.source.sizes_mm[page - 1])
+
+        def edge(value: float, size: float) -> float:   # Pixel-Rundung am Seitenrand: genau der Rand
+            value = min(max(value, 0.0), size)
+            return 0.0 if value < SNAP_MM else size if value > size - SNAP_MM else value
+        x0, y0, x1, y1 = (round(v / self._k, 1) for v in (r.left(), r.top(), r.right(), r.bottom()))
+        return edge(x0, w), edge(y0, h), edge(x1, w), edge(y1, h)
 
     def _current_area(self) -> _Area | None:
         areas = self._areas.get(self._page, [])

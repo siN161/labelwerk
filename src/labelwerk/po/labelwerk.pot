@@ -1111,6 +1111,16 @@ msgstr ""
 
 #: src/labelwerk/parcel.py
 #, python-brace-format
+msgid "Invalid parcel label type: area {number} is too small (at least {size} mm)."
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "Invalid parcel label type: area {number} reaches beyond the page."
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
 msgid "Invalid parcel label type: {what}"
 msgstr ""
 
@@ -2582,7 +2592,7 @@ msgid "Text editing"
 msgstr ""
 
 #: src/labelwerk/gui/parcel_editor.py
-msgid "Text that is on every such label – labelwerk then recognises the type when opening (several words: separate with commas)"
+msgid "Text that is on every such label – labelwerk then recognizes the type when opening (several words: separate with commas)"
 msgstr ""
 
 #: src/labelwerk/layout.py
@@ -2626,6 +2636,11 @@ msgstr ""
 #: src/labelwerk/parcel.py
 #, python-brace-format
 msgid "The parcel label ({width} × {height} mm) does not fit the type {name}."
+msgstr ""
+
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "The parcel label can no longer be read ({reason}) – open it again."
 msgstr ""
 
 #: src/labelwerk/parcel.py
@@ -2684,7 +2699,7 @@ msgid "Type"
 msgstr ""
 
 #: src/labelwerk/gui/panels/parcel.py
-msgid "Type not recognised – choose it in the list."
+msgid "Type not recognized – choose it in the list."
 msgstr ""
 
 #: src/labelwerk/gui/panels/barcode.py
@@ -3174,6 +3189,11 @@ msgstr ""
 msgid "page sizes"
 msgstr ""
 
+#: src/labelwerk/parcel.py
+#, python-brace-format
+msgid "page {page} is missing"
+msgstr ""
+
 #: src/labelwerk/cli.py
 msgid "parcel label as PDF, PNG, JPG or GIF"
 msgstr ""
@@ -3289,6 +3309,11 @@ msgstr[1] ""
 #: src/labelwerk/gui/parcel_editor.py
 #, python-brace-format
 msgid "{degrees}° clockwise"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "{error} – the previous parcel label stays loaded."
 msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py

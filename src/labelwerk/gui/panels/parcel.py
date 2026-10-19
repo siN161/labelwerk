@@ -182,7 +182,10 @@ class ParcelPanel(Panel):
         try:
             source = parcel.load(path)
         except parcel.ParcelError as e:
-            self._show_error(str(e))
+            message = str(e)
+            if self.source is not None:            # die vorige Marke bleibt
+                message = _("{error} – the previous parcel label stays loaded.").format(error=e)
+            self._show_error(message)
             return False
         self.source, self.path = source, Path(path)
         self._detect(keep=False)
@@ -358,7 +361,7 @@ class ParcelPanel(Panel):
                 notes.insert(0, _("Several types fit equally well ({types}) – choose one in the "
                                   "list.").format(types=names))
             elif not self._scores:
-                notes.insert(0, _("Type not recognised – choose it in the list."))
+                notes.insert(0, _("Type not recognized – choose it in the list."))
             else:
                 notes.insert(0, _("Choose the type in the list."))
         notes += parcel.own_warnings()          # beschädigte eigene Typen

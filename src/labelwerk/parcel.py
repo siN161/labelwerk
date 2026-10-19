@@ -28,7 +28,7 @@ from PIL import Image
 from . import i18n
 from .document import Document, ImageObject
 from .files import PDFIUM_LOCK, _checked, _readable, load_image
-from .i18n import N_, _
+from .i18n import N_, _, number as number_text
 from .labels import get_label, length_limits
 
 CATALOG = Path(__file__).with_name("parcel_data") / "catalog.json"
@@ -40,6 +40,7 @@ MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_PAGES = 20
 MAX_DPI = 600
 MIN_PIECE_MM = 1.0                 # eigene Bereiche: Kanten mindestens so lang
+EDGE_TOLERANCE_MM = 0.5            # eigene Bereiche dürfen so weit über den Seitenrand (Rundung)
 SNAP_MM = 3.0                      # Kante höchstens so weit nach außen bis zum weißen Rand
 SIZE_TOLERANCE_MM = 4.0
 WIDE_MM = 95.0                     # ab dieser bedruckbaren Breite gilt ein 100×150-Layout
@@ -250,15 +251,21 @@ def own_from_dict(data) -> ParcelType:
         raise bad(N_("areas"))
     width, height = max(s[0] for s in sizes), max(s[1] for s in sizes)
     pieces = []
-    for p in raw:
+    for number, p in enumerate(raw, start=1):
         if not isinstance(p, dict) or p.get("rotation") not in (0, 90, 180, 270) \
                 or p.get("kind", "text") not in KINDS or not isinstance(p.get("page", 1), int) \
                 or isinstance(p.get("page", 1), bool) or not 1 <= p.get("page", 1) <= MAX_PAGES \
                 or not _numbers(p.get("src"), 4, 0, max(width, height) + 1):
             raise bad(N_("areas"))
         x0, y0, x1, y1 = p["src"]
-        if not (x1 - x0 >= MIN_PIECE_MM and y1 - y0 >= MIN_PIECE_MM and x1 <= width and y1 <= height):
-            raise bad(N_("areas"))
+        if x1 > width + EDGE_TOLERANCE_MM or y1 > height + EDGE_TOLERANCE_MM:
+            raise ParcelError(_("Invalid parcel label type: area {number} reaches beyond the "
+                                "page.").format(number=number))
+        x1, y1 = min(x1, width), min(y1, height)          # Rundung am Rand: auf die Seite
+        if not (x1 - x0 >= MIN_PIECE_MM and y1 - y0 >= MIN_PIECE_MM):
+            raise ParcelError(_("Invalid parcel label type: area {number} is too small (at least "
+                                "{size} mm).").format(number=number,
+                                                      size=number_text(MIN_PIECE_MM)))
         pieces.append(Piece(p.get("page", 1), (float(x0), float(y0), float(x1), float(y1)),
                             p["rotation"], kind=p.get("kind", "text")))
     return ParcelType(type_id, dict(names), "", "own", tuple(tuple(map(float, s)) for s in sizes),
@@ -429,13 +436,21 @@ def _turn(source: Source, ptype: ParcelType, number: int) -> int:
 
 
 def _render_pdf(path: Path, number: int, dpi: float) -> Image.Image:
+    """Seite rendern; die Datei kann seit dem Laden gelöscht, verschoben oder ersetzt sein →
+    ``ParcelError`` (übersetzt)."""
     import pypdfium2 as pdfium
-    with _readable(path), PDFIUM_LOCK:
-        pdf = pdfium.PdfDocument(path)
-        try:
-            return pdf[number - 1].render(scale=dpi / 72, grayscale=True).to_pil().convert("L")
-        finally:
-            pdf.close()
+    try:
+        with _readable(path), PDFIUM_LOCK:
+            pdf = pdfium.PdfDocument(path)
+            try:
+                return pdf[number - 1].render(scale=dpi / 72, grayscale=True).to_pil().convert("L")
+            finally:
+                pdf.close()
+    except (ValueError, FileNotFoundError, IndexError) as e:
+        reason = (_("page {page} is missing").format(page=number) if isinstance(e, IndexError)
+                  else str(e))
+        raise ParcelError(_("The parcel label can no longer be read ({reason}) – open it "
+                            "again.").format(reason=reason)) from e
 
 
 def all_pieces(ptype: ParcelType) -> tuple[Piece, ...]:

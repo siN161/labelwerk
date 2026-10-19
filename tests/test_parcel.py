@@ -521,7 +521,7 @@ def test_ambiguous_marks_ties_without_a_tested_winner(tmp_path):
 @pytest.mark.parametrize("src", [[10, 10, 10.5, 50], [10, 10, 50, 10.5], [10, 10, 211, 50],
                                  [10, 10, 50, 298]])
 def test_own_areas_need_size_and_must_lie_on_the_page(src):
-    with pytest.raises(parcel.ParcelError, match="Bereiche"):
+    with pytest.raises(parcel.ParcelError, match="Bereich"):
         parcel.own_from_dict(_own(pieces=[{"page": 1, "src": src, "rotation": 0, "kind": "text"}]))
 
 
@@ -567,3 +567,33 @@ def test_own_id_is_a_free_slug():
     assert parcel.own_id("!!!", set()) == "eigen-typ"
     slug = parcel.own_id("x" * 200, set())
     assert len(slug) <= 64 and parcel.own_from_dict(_own(id=slug)).id == slug
+
+
+# --- Gesamtreview: Marke verschwunden, Bereiche am Rand -------------------------------------
+def test_mark_deleted_after_loading_is_a_friendly_error(tmp_path):
+    path = make_pdf(tmp_path / "weg.pdf", texts=[(20, 20, "DHL Online Frankierung")])
+    source = parcel.load(path)
+    path.unlink()
+    with pytest.raises(parcel.ParcelError, match="nicht mehr lesen"):
+        source.page(1, 100)
+    path.write_bytes(b"kein PDF mehr")                          # durch etwas anderes ersetzt
+    with pytest.raises(parcel.ParcelError, match="nicht mehr lesen"):
+        source.page(1, 100)
+
+
+@pytest.mark.parametrize("size", [(210, 297), (148, 210), (100, 150)])
+def test_own_area_up_to_the_page_edge_is_clamped(size):
+    w, h = size
+    data = _own(source={"sizes_mm": [list(size)]},
+                pieces=[{"page": 1, "src": [0, 0, w + 0.4, h + 0.4], "rotation": 0, "kind": "text"}])
+    assert parcel.own_from_dict(data).pieces[0].src == (0, 0, w, h)
+    data["pieces"][0]["src"] = [0, 0, w + 0.6, h]
+    with pytest.raises(parcel.ParcelError, match="Bereich 1 ragt über die Seite"):
+        parcel.own_from_dict(data)
+
+
+def test_own_area_too_small_names_the_area():
+    pieces = [{"page": 1, "src": [10, 10, 60, 60], "rotation": 0, "kind": "text"},
+              {"page": 1, "src": [10, 10, 10.5, 60], "rotation": 0, "kind": "text"}]
+    with pytest.raises(parcel.ParcelError, match="Bereich 2 ist zu klein"):
+        parcel.own_from_dict(_own(pieces=pieces))

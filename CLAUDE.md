@@ -84,8 +84,10 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   (Bearbeiten gesperrt mit Hinweis, ohne Umwandlung leer, DRUCKEN druckt dann nicht); IM EDITOR ÖFFNEN gilt als
   geändert; eigener Typ: SPEICHERN nur gültig, Bereiche auf der Seite, Überlappung gemeldet, Vorschau entprellt.
 - Werkzeugleiste: EINSTELLUNGEN/DRUCKEN in eigener Leiste rechts (appBar, nie im Überlauf – nur Reiterknöpfe laufen
-  über); Fenster beim Start so breit, dass alles passt (fit_toolbars nach dem Design, höchstens Bildschirmbreite).
-- 2938 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+  über, „»“ hervorgehoben, solange der aktive Reiter dort liegt – _mark_overflow; Leisten nicht über das Kontextmenü
+  ausblendbar); Fenster beim Start so breit, dass alles passt (fit_toolbars nach dem Design und nach jedem
+  Designwechsel ohne Größenänderung, höchstens Bildschirmbreite).
+- 2952 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```

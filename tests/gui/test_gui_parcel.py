@@ -569,3 +569,96 @@ def test_editor_preview_waits_while_moving_and_name_does_not_render(qtbot, tmp_p
     assert calls == [] and editor._preview_timer.isActive()
     editor._preview_now()                                       # Loslassen: sofort
     assert calls == [1] and not editor._preview_timer.isActive()
+
+
+# --- Gesamtreview proto-pk-final -------------------------------------------------------------
+def test_deleted_mark_resets_the_result(qtbot, tmp_path, workers):  # noqa: F811
+    win = _window(qtbot)
+    path = _dhl(tmp_path)
+    panel = _open(win, path)
+    assert panel.documents()
+    path.unlink()
+    panel.source._cache.clear()                                 # anderes Etikett: Seite neu lesen
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "dhl-privat-2")
+    panel.types.setCurrentItem(item)
+    win.render_now()
+    assert panel.documents() == [] and not panel.print_button.isEnabled()
+    assert panel.page_label.text() == "–" and "nicht mehr lesen" in panel.notes.text()
+    assert win.canvas.read_only and win.canvas.objects == []
+    win.print_label()
+    assert workers == []
+
+
+def test_failed_second_load_keeps_the_previous_mark(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    bad = tmp_path / "kaputt.pdf"
+    bad.write_bytes(b"kein PDF")
+    assert not panel.load(bad)
+    assert panel.path.name == "dhl.pdf" and panel.documents()
+    assert "vorige Paketmarke bleibt geladen" in panel.notes.text()
+
+
+@pytest.mark.parametrize("size", [(210, 297), (148, 210), (100, 150)])
+def test_editor_area_to_the_page_edge_is_valid(qtbot, tmp_path, size):
+    source = parcel.load(make_pdf(tmp_path / "m.pdf", size_mm=size, rects=[(5, 5, 50, 50)]))
+    editor = ParcelTypeEditor(None, source, "62", "QL-600", set())
+    qtbot.addWidget(editor)
+    editor.add_area((0, 0, size[0] + 1, size[1] + 1))           # bis über den Rand gezogen
+    editor.name.setText("Rand")
+    assert editor.pieces()[0]["src"] == [0, 0, size[0], size[1]]
+    assert editor.problem() is None and editor.result_type()
+
+
+def test_layout_actions_follow_the_selection_after_the_parcel_view(qtbot, tmp_path):
+    win = _window(qtbot)
+    win.canvas.set_selection([0])
+    assert win.shortcut_actions["align.paper_left"].isEnabled()     # vorher: Auswahl da
+    _open(win, _dhl(tmp_path))
+    win._tool_triggered("layout")
+    win.render_now()
+    assert win.canvas.selection() == []
+    assert not win.shortcut_actions["align.paper_left"].isEnabled()   # ohne Auswahl nichts
+
+
+def test_fit_toolbars_after_a_theme_change_keeps_the_window_width(qtbot):
+    win = _window(qtbot)
+    win.resize(900, 700)
+    win.fit_toolbars(resize=False)
+    assert win.width() == 900 and win.app_bar.minimumWidth() > 0
+
+
+def test_toolbars_cannot_be_hidden_by_the_context_menu(qtbot):
+    win = _window(qtbot)
+    menu = win.createPopupMenu()
+    actions = menu.actions() if menu is not None else []
+    assert win.tool_bar.toggleViewAction() not in actions
+    assert win.app_bar.toggleViewAction() not in actions
+
+
+def test_overflow_button_is_highlighted_for_a_hidden_active_tab(qtbot):
+    from PySide6.QtWidgets import QToolButton
+    from labelwerk.gui.app import load_theme
+    app = QApplication.instance()
+    app.setStyleSheet(load_theme())
+    try:
+        win = _window(qtbot)
+        win.fit_toolbars(resize=False)
+        win.resize(760, 700)
+        for _ in range(3):
+            QApplication.processEvents()
+        ext = win.tool_bar.findChild(QToolButton, "qt_toolbar_ext_button")
+        hidden = [k for k, a in win.tool_actions.items()
+                  if not win.tool_bar.widgetForAction(a).isVisible()]
+        assert ext is not None and ext.isVisible() and hidden
+        win._tool_triggered(hidden[-1])
+        win.tool_actions[hidden[-1]].setChecked(True)
+        win._mark_overflow()
+        assert ext.property("active") is True
+        win._tool_triggered("paper")
+        win.tool_actions["paper"].setChecked(True)
+        win._mark_overflow()
+        assert ext.property("active") is False
+    finally:
+        app.setStyleSheet("")

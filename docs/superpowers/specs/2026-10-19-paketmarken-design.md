@@ -96,8 +96,10 @@ Beispiele), Briefmarken/Internetmarke (geht schon über `print-file`), Texterken
 
 ## 3 – Oberfläche: Reiter PAKET (Panel-Überschrift „Paketmarke“)
 
-Der Reiter heißt kurz „PAKET“ (Tooltip „Paketmarke …“), damit die Werkzeugleiste auf Deutsch nicht überläuft;
-EINSTELLUNGEN und DRUCKEN stehen in einer eigenen Leiste rechts und laufen nie über (nur Reiterknöpfe dürfen es).
+Der Reiter heißt kurz „PAKET“ (Tooltip „Paketmarke …“), damit möglichst alle Reiter in die Leiste passen.
+EINSTELLUNGEN und DRUCKEN stehen in einer eigenen Leiste rechts und laufen nie über; reicht der Platz nicht, liegen
+die letzten Reiterknöpfe hinter „»“ – hervorgehoben, solange der aktive Reiter dort liegt. Die Leisten lassen
+sich nicht über das Kontextmenü ausblenden.
 
 - **Werkzeug** `parcel` in `gui/tools.py` (auch `START_TOOLS`/`HIDEABLE_TOOLS`); Panel `panels/parcel.py`:
   Land (Auswahl, Standard aus der Region, nur Länder mit Typen + „Nur eigene Typen“), MARKE ÖFFNEN … (Dateidialog mit
