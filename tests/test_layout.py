@@ -5,7 +5,7 @@ from labelwerk import layout, render
 from labelwerk.document import MAX_PT, MIN_PT, Document, ImageObject, Paragraph, Span, TextObject
 from labelwerk.labels import DPI
 from labelwerk.layout import Rect, Snap
-from labelwerk.render import MARGIN, RenderedObject, render_document, render_object
+from labelwerk.render import RenderedObject, render_document, render_object
 
 
 def _mm(dots):
@@ -70,7 +70,7 @@ def test_printable_area_vertical_margins():
     label = layout.label_rect(doc)
     feed = _mm(round(2 * DPI / 25.4))
     area = layout.printable_area(doc)
-    assert _t(area) == _approx(Rect(_mm(MARGIN), feed, label.w - 2 * _mm(MARGIN),
+    assert _t(area) == _approx(Rect(feed, feed, label.w - 2 * feed,      # Rand ringsum
                                       label.h - 2 * feed))
 
 
@@ -86,8 +86,7 @@ def test_printable_area_horizontal_swaps_margins():
     label = layout.label_rect(doc)
     feed = _mm(round(2 * DPI / 25.4))
     area = layout.printable_area(doc)
-    assert _t(area) == _approx(Rect(feed, _mm(MARGIN), label.w - 2 * feed,
-                                      label.h - 2 * _mm(MARGIN)))
+    assert _t(area) == _approx(Rect(feed, feed, label.w - 2 * feed, label.h - 2 * feed))
 
 
 def test_printable_area_is_centered_on_label():

@@ -321,6 +321,7 @@ class _Sheet:
     across: int                # quer zum Band (fest)
     feed: int | None           # in Bandlaufrichtung
     margin: int                # Rand in Bandlaufrichtung
+    side: int                  # Rand quer zum Band (derselbe Wert, auf schmalem Band begrenzt)
     min_len: int
     max_len: int
     frame: Frame | None = None
@@ -328,7 +329,7 @@ class _Sheet:
 
     def margins(self) -> tuple[int, int]:
         """Ränder (links/rechts, oben/unten) in Leserichtung."""
-        return (self.margin, MARGIN) if self.horizontal else (MARGIN, self.margin)
+        return (self.margin, self.side) if self.horizontal else (self.side, self.margin)
 
     def inset(self) -> tuple[int, int]:
         """Abstand des Innenraums vom Etikettrand (links/rechts, oben/unten) in Leserichtung:
@@ -363,15 +364,16 @@ def _sheet(doc: Document, model: str) -> _Sheet:
         raise ValueError(f"Unbekannte Ausrichtung {doc.orientation!r} – erlaubt: horizontal, vertical")
     label = get_label(doc.label_id)
     min_len, max_len = length_limits(model)
-    margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)
+    margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)   # gilt rundum
     feed = label.height
     if feed is None and doc.length_mm is not None:
         feed = min(max(_dots(doc.length_mm), min_len), max_len)
-    if feed is not None:                      # feste Länge: Rand darf nicht alles aufbrauchen
+    side = min(margin, max(0, (label.width - 2 * MARGIN) // 2))   # Rand darf nicht alles
+    if feed is not None:                                            # aufbrauchen (quer, feste Länge)
         margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
     if doc.frame is not None:
         _check_frame(doc.frame)
-    return _Sheet(doc.label_id, doc.orientation == "horizontal", label.width, feed, margin,
+    return _Sheet(doc.label_id, doc.orientation == "horizontal", label.width, feed, margin, side,
                   min_len, max_len, doc.frame, label.shape == "round")
 
 

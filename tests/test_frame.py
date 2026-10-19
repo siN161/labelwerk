@@ -197,8 +197,8 @@ def test_frame_box_is_the_inner_room():
     assert frame_box(Document("62x29"), size=(696, 271)) is None
     wide = Document("62x29", orientation="horizontal", margin_mm=3, frame=Frame("double"))
     pad = 3 * LW + 12
-    assert frame_box(wide, size=(271, 696)) == (35 + pad, 12 + pad, 271 - 70 - 2 * pad,
-                                                696 - 24 - 2 * pad)
+    assert frame_box(wide, size=(271, 696)) == (35 + pad, 35 + pad, 271 - 70 - 2 * pad,
+                                                696 - 70 - 2 * pad)        # Rand ringsum
 
 
 def test_frame_area_in_mm():

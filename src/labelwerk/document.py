@@ -227,7 +227,7 @@ class Document:
     label_id: str = "62"
     length_mm: float | None = None    # nur Endlosband; None = automatisch
     orientation: str = "vertical"     # "vertical" (Text quer zum Band) | "horizontal" (längs)
-    margin_mm: float = 1.0            # Rand in Bandlaufrichtung (vorne/hinten)
+    margin_mm: float = 1.0            # Rand ringsum (quer zum Band begrenzt, damit Platz bleibt)
     objects: list[TextObject | ImageObject] = field(default_factory=list)
     frame: Frame | None = None        # Zierrahmen; None = keiner
     series: Series | None = None      # Serie aus Tabelle oder Nummerierung; None = Einzeletikett

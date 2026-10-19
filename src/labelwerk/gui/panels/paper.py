@@ -111,7 +111,7 @@ class PaperPanel(Panel):
         self.margin.setDecimals(1)
         self.margin.setSingleStep(0.5)
         self.margin.setRange(0.0, MAX_MARGIN_MM)
-        self.margin.setToolTip("Abstand vorne/hinten in Bandlaufrichtung")
+        self.margin.setToolTip("Abstand zum Etikettrand ringsum")
         self.layout_.addWidget(self.margin)
 
         self.section("Rahmen")
