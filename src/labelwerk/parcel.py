@@ -161,6 +161,33 @@ def find(type_id: str) -> ParcelType:
     raise ParcelError(_("Unknown parcel label type: {id}").format(id=type_id))
 
 
+def default_country() -> str:
+    """Land der Region (Gebietsschema ``LC_ALL`` › ``LC_MESSAGES`` › ``LANG``, z. B. „de_DE“ → DE),
+    wenn es Typen dafür gibt – sonst das erste Land des Katalogs."""
+    codes = [code for code, _name in countries()]
+    for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(key, "")
+        if value:
+            region = value.split(".")[0].split("@")[0].partition("_")[2].upper()
+            if region in codes:
+                return region
+            break                                     # gesetzt, aber ohne passendes Land
+    return codes[0] if codes else ""
+
+
+_UMLAUTS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+
+
+def own_id(name: str, taken) -> str:
+    """Kennung für einen neuen eigenen Typ aus seinem Namen („eigen-…“, frei, gültig)."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.casefold().translate(_UMLAUTS)).strip("-")
+    base = ("eigen-" + (slug or "typ"))[:58].rstrip("-")
+    candidate, number = base, 2
+    while candidate in taken or candidate in {t.id for t in _builtin()}:
+        candidate, number = f"{base}-{number}", number + 1
+    return candidate
+
+
 # --- Eigene Typen ----------------------------------------------------------------------
 def own_dir() -> Path:
     """Ordner der eigenen Markentypen (``$XDG_DATA_HOME/labelwerk/paketmarken``)."""

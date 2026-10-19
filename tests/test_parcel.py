@@ -536,3 +536,34 @@ def test_version_mark_decides_between_hermes_labels(tmp_path):
     source = parcel.load(make_pdf(tmp_path / "h.pdf", texts=[(20, 20, "Hermes Paketschein V4.2.000")]))
     found = parcel.detect(source, "DE")
     assert found[0][0].id == "hermes-2" and parcel.ambiguous(found) == []
+
+
+# --- Hilfen für die Oberfläche ----------------------------------------------------------
+@pytest.mark.parametrize("env, expected", [
+    ({"LC_ALL": "de_DE.UTF-8"}, "DE"), ({"LANG": "de_AT.UTF-8"}, "DE"),
+    ({"LC_ALL": "", "LC_MESSAGES": "", "LANG": "C"}, "DE"), ({"LANG": "fr_FR.UTF-8"}, "DE")])
+def test_default_country_follows_the_region_or_takes_the_first(monkeypatch, env, expected):
+    for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    assert parcel.default_country() == expected     # nur DE im Katalog: sonst das erste Land
+
+
+def test_default_country_prefers_a_matching_region(monkeypatch):
+    monkeypatch.setattr(parcel, "countries", lambda: [("AT", "Österreich"), ("DE", "Deutschland")])
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    assert parcel.default_country() == "DE"
+    monkeypatch.setenv("LC_ALL", "C")
+    monkeypatch.setenv("LANG", "")
+    assert parcel.default_country() == "AT"
+
+
+def test_own_id_is_a_free_slug():
+    assert parcel.own_id("Mein Lager – Retoure", set()) == "eigen-mein-lager-retoure"
+    assert parcel.own_id("Mein Lager – Retoure", {"eigen-mein-lager-retoure"}) \
+        == "eigen-mein-lager-retoure-2"
+    assert parcel.own_id("äöü ß", set()) == "eigen-aeoeue-ss"
+    assert parcel.own_id("!!!", set()) == "eigen-typ"
+    slug = parcel.own_id("x" * 200, set())
+    assert len(slug) <= 64 and parcel.own_from_dict(_own(id=slug)).id == slug

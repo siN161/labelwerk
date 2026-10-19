@@ -63,7 +63,7 @@ def printed(monkeypatch):
 
 # --- Reiter und Quelle -------------------------------------------------------------------------
 def test_series_tab_follows_layout(qtbot):
-    assert [tool.key for tool in TOOLS][-1] == "series"
+    assert [tool.key for tool in TOOLS][-2:] == ["series", "parcel"]   # Paketmarke ganz hinten
     panel = _window(qtbot).panel("series")
     assert panel.source_label.text() == "Keine Serie"
     assert not panel.remove_button.isEnabled()

@@ -159,6 +159,7 @@ class Canvas(QGraphicsView):
         self._handle_offset = QPointF()
         self._handle_cursor = False
         self._tool = "select"
+        self.read_only = False                             # nur Ansicht (Paketmarke): keine Klicks
         self._editing: int | None = None                   # Objekt im Schreibmodus
         self._edit_frame = QRectF()                        # Rahmen, Schreibmarke, Markierung
         self._caret: QLineF | None = None                  # (Druckpunkte in Leserichtung)
@@ -266,6 +267,7 @@ class Canvas(QGraphicsView):
             self.handle.setCursor(Qt.CursorShape.SizeHorCursor if self.orientation == "horizontal"
                                   else Qt.CursorShape.SizeVerCursor)
             self.handle.setToolTip(_("Drag: set the length · Double-click: automatic"))
+            self.handle.setVisible(not self.read_only)
         self._caption = self._caption_for(th)
         margin = _MARGIN_MM * self.mm
         scene.setSceneRect(-margin, -margin, tw + 2 * margin, th + 2 * margin)
@@ -315,7 +317,8 @@ class Canvas(QGraphicsView):
         return list(self._selection)
 
     def set_selection(self, indices: list[int]) -> None:
-        chosen = list(dict.fromkeys(i for i in indices if self._selectable(i)))
+        chosen = [] if self.read_only else list(dict.fromkeys(i for i in indices
+                                                              if self._selectable(i)))
         if chosen != self._selection:
             self._selection = chosen
             if self._drag not in ("move", "resize"):
@@ -531,7 +534,19 @@ class Canvas(QGraphicsView):
         feed = 2 * self.label.feed_margin / self.mm if self.label is not None else 0.0
         return min(max(mm, self.min_mm + feed), self.max_mm + feed)
 
+    def set_read_only(self, read_only: bool) -> None:
+        """Nur Ansicht (Umwandlung einer Paketmarke): Klicks, Ziehen und Doppelklick wirken
+        nicht, der Längen-Anfasser ist ausgeblendet; Ablegen und Zoom gehen weiter."""
+        self.read_only = read_only
+        if read_only:
+            self.cancel_object_drag()
+            self.set_selection([])
+        if self.handle is not None:
+            self.handle.setVisible(not read_only)
+
     def mousePressEvent(self, event) -> None:
+        if self.read_only:
+            return
         if event.button() != Qt.MouseButton.LeftButton:
             super().mousePressEvent(event)
             return
@@ -684,6 +699,8 @@ class Canvas(QGraphicsView):
             self.viewport().update()
 
     def mouseDoubleClickEvent(self, event) -> None:
+        if self.read_only:
+            return
         if self._on_handle(event):
             self.length_changed.emit(None)
             return

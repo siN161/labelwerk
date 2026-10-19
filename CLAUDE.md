@@ -74,7 +74,18 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Typen → `--type` verlangt), schneidet/dreht/skaliert die Stücke (Barcodes 1:1, verdeckte Teile weiß), quer
   liegende Marken gedreht, breiteres Band → größer, 100×150-Layout ab 95 mm (fehlt das Layout: neu angeordnet);
   eigene Typen in `$XDG_DATA_HOME/labelwerk/paketmarken`.
-- 2886 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+  GUI: Reiter PAKET (Land aus der Region / „Nur eigene Typen“, MARKE ÖFFNEN … mit Vorschau-Dialog oder Ablegen auf
+  Panel/Arbeitsfläche, Typliste nach Dienst mit ✓ erkannt/„ungeprüft“, Hinweise, Arbeitsfläche zeigt die Umwandlung
+  nur zur Ansicht ◀ n/N ▶, DRUCKEN – auch in der Werkzeugleiste – alle Etiketten in einem Auftrag, IM EDITOR ÖFFNEN
+  als normales Etikett; EIGENER TYP …: Fenster mit der Marke, Bereiche aufziehen/verschieben/Entf, Drehung,
+  „Barcode – nicht verkleinern“, Name, „Erkennen an“, Vorschau; Umbenennen/Löschen im Kontextmenü); Umwandlung
+  folgt Etikett (Reiter PAPIER) und Drucker; Gleichstand ungeprüfter Typen und „nicht erkannt“: kein Typ
+  vorgewählt, Hinweis nennt die Kandidaten; ✓ nur an den Besten; mit Marke ist die Arbeitsfläche nur Ansicht
+  (Bearbeiten gesperrt mit Hinweis, ohne Umwandlung leer, DRUCKEN druckt dann nicht); IM EDITOR ÖFFNEN gilt als
+  geändert; eigener Typ: SPEICHERN nur gültig, Bereiche auf der Seite, Überlappung gemeldet, Vorschau entprellt.
+- Werkzeugleiste: EINSTELLUNGEN/DRUCKEN in eigener Leiste rechts (appBar, nie im Überlauf – nur Reiterknöpfe laufen
+  über); Fenster beim Start so breit, dass alles passt (fit_toolbars nach dem Design, höchstens Bildschirmbreite).
+- 2938 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -245,7 +256,9 @@ src/labelwerk/
               Breite füllt das Band; fest: passt hinein, bessere Lage; fehlt das Layout fürs Format: arrange;
               Hinweis bei Barcodes < 97 %; rund → Fehler); arrange (Spalten längs des Bands, Barcodes 1:1);
               own_dir/own_types/own_warnings (beschädigt …)/own_from_dict (geprüft, Kanten ≥ 1 mm in der Seite)/
-              own_to_dict/save_own/remove_own
+              own_to_dict/save_own/remove_own;
+              default_country (Region aus LC_ALL › LC_MESSAGES › LANG, sonst erstes Land), own_id(name, taken)
+              („eigen-…“, frei)
   layout.py   Platzier-Logik ohne Qt (mm-Rechtecke): snap, align, match_size, maximize, scale_text, outside_indices/objects_outside,
               growing_axis (Endlosband wächst mit; align_objects am Papier: Anfang des Bereichs, auf Mindestlänge mittig –
               min_length –, nur wenn auch mit den übrigen Objekten (others) das Etikett dort klemmt), to_grid (0,1 mm nach Ziehen), Objekte: move/resize/set_frame/rotate/*_objects
@@ -298,7 +311,22 @@ src/labelwerk/
                     current_row), Schnitt (Brother: set_cutter; CUPS/Zebra: set_driver_cuts mit den Optionen des Treibers bzw.
                     dem Modus, Signal driver_cut_chosen → Einstellungen je Modell); liest nur bei geänderter Quelle/Blatt/Nummerierung, check_file (Datei geändert, vor dem
                     Drucken), reload (Öffnen); Fehler und unbekannte Platzhalter als Hinweis
-    tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Barcode, Layout, Serie; neue Werkzeuge als Eintrag; START_TOOL = Papier)
+    tools.py        Werkzeug-Registry (Datei, Papier, Text, Bild, Barcode, Layout, Serie, Paket; neue Werkzeuge als Eintrag; START_TOOL = Papier)
+    panels/parcel.py Reiter PAKET (ParcelPanel): Land, MARKE ÖFFNEN (Signal open_requested → MainWindow.ask_parcel_file),
+                    load(path) → parcel.load/detect/convert, Typliste (TYPE_ROLE; Überschriften nicht wählbar; eigene
+                    Typen mit Kontextmenü → rename_requested/remove_requested), set_target(label_id, model) (Umwandlung
+                    neu), documents/current_document (◀ ▶), print_requested(list), editor_requested(doc), own_requested,
+                    view_changed; Ablegen von PDF/PNG/JPG/GIF; ✓ nur an den Besten (_top), Gleichstand (_tied, ambiguous)
+                    ohne Vorwahl, „bitte Auswahl prüfen“ (_check_choice), error/show_render_error, Knöpfe UMBENENNEN/
+                    LÖSCHEN bei eigenem Typ (own_row), parcel.own_warnings als Hinweis
+                    MainWindow: _parcel_locked (Reiter PAKET mit Marke = nur Ansicht: Aktionen gesperrt, _parcel_blocks
+                    mit Hinweis in paste/undo/redo/Einfügen/Ablegen von Bilddaten, leeres Etikett ohne Umwandlung,
+                    print_label druckt nur die Umwandlung), app_bar + fit_toolbars (EINSTELLUNGEN/DRUCKEN nie im Überlauf)
+    parcel_editor.py ParcelTypeEditor (Fenster „Eigener Markentyp“): Seite der Marke (EDIT_DPI), Bereiche ziehen/verschieben/
+                    Entf (add_area, remove_selected), je Bereich Drehung und Barcode, Name, „Erkennen an“ (detect all),
+                    Vorschau über parcel.convert (entprellt PREVIEW_DELAY_MS, beim Loslassen sofort); type_data/result_type
+                    → parcel.own_from_dict; problem() (SPEICHERN nur gültig, accept prüft), Bereiche auf der Seite,
+                    overlapping() → Hinweis; Splitter Marke/Einstellungen
     file_session.py FileSession: Neu/Öffnen/Speichern, modified/update_title („•“), maybe_save (Rückfrage), Dokument an Ort und
                     Stelle ersetzen (Verlauf neu), Etikett muss zum Drucker passen, origin new|file|favorite (nur „new“ folgt
                     der geprüften Rolle, may_follow_roll; Speichern macht daraus „file“; modified() ohne leere Textrahmen; Neu nimmt die eingelegte Rolle), Favoriten (Vorlage öffnen, drucken über
@@ -324,7 +352,8 @@ src/labelwerk/
     panels/position.py PositionSection: Bereich Position (X/Y/B/H in mm), show_frame(rect, editable_size), Signal edited(key, wert)
     panels/layout.py Reiter Layout: Ausrichten, Größe angleichen, Drehen, Reihenfolge (Knöpfe = Aktionen), Farbe (SCHWARZ immer,
                     ROT nur 62red auf einem Zweifarb-Modell: set_red_available; Signal color_chosen)
-    canvas.py       Etikett in echter Größe (Endlosband: Stück mit Vorschub, Länge ziehen = Stück), unbedruckbare Streifen
+    canvas.py       read_only/set_read_only (Umwandlung einer Paketmarke: keine Klicks, keine Auswahl, Anfasser
+                    aus; Ablegen und Zoom gehen); Etikett in echter Größe (Endlosband: Stück mit Vorschub, Länge ziehen = Stück), unbedruckbare Streifen
                     hellgrau (unprintable, keine Klicks), Objekte (Auswahl, Ziehen, Einrasten, Anfasser), Lineale, Zug-Anfasser, Zoom;
                     Zierrahmen (frame_item unter den Objekten, keine Klicks; Einrasten am Innenraum);
                     Ablegen von Dateien/Bilddaten (Daten im dropEvent kopiert, Signal dropped danach, mm) und Symbolen (symbol_dropped); Anfasser-Vorschau mit

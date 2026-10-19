@@ -15,6 +15,7 @@ from .panels.file import FilePanel
 from .panels.image import ImagePanel
 from .panels.layout import LayoutPanel
 from .panels.paper import PaperPanel
+from .panels.parcel import ParcelPanel
 from .panels.series import SeriesPanel
 from .panels.text import TextPanel
 
@@ -39,4 +40,6 @@ TOOLS = [
     Tool("layout", N_("Layout"), "align-horizontal-left", LayoutPanel),
     Tool("series", N_("Series"), "view-list-text", SeriesPanel,
          N_("Series from a table or numbering")),
+    Tool("parcel", N_("Parcel"), "mail-send", ParcelPanel,
+         N_("Convert a parcel label (DHL, Hermes …) for the label printer")),
 ]

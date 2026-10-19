@@ -47,7 +47,7 @@ class FileSession(QObject):
         super().__init__(window)
         self.window = window
         self.path: Path | None = None               # gespeicherte Datei; None = unbenannt
-        self.origin = "new"                         # „new“ | „file“ | „favorite“ (Herkunft)
+        self.origin = "new"                         # „new“ | „file“ | „favorite“ | „parcel“ (Herkunft)
         self._template: str | None = None           # Name des Favoriten, solange unbenannt
         self._saved = copy.deepcopy(window.doc)     # Stand beim Öffnen/Speichern
         self._dir = ""                              # Ordner des letzten Öffnens/Speicherns
@@ -206,6 +206,17 @@ class FileSession(QObject):
                 self.window._set_result(
                     _("Label “{label}” does not fit the {model} – using {new}").format(
                         label=wanted, model=self.window.model, new=doc.label_id), "warn")
+
+    def open_document(self, doc: Document) -> bool:
+        """Fertiges Etikett (z. B. Umwandlung einer Paketmarke) als neues, ungespeichertes
+        öffnen – Rückfrage bei Änderungen wie bei Neu; folgt nicht der Rolle; gilt als geändert
+        (Rückfrage beim Schließen/Neu). False = abgebrochen."""
+        if not self.maybe_save():
+            return False
+        self._replace(doc, None, origin="parcel")
+        self._saved = Document(doc.label_id)      # nirgends gespeichert: gilt als geändert
+        self.update_title()
+        return True
 
     def fitting_label(self, label_id: str) -> str:
         """``label_id``, wenn es zum Drucker passt, sonst die eingelegte Rolle, sonst 62 mm endlos

@@ -25,7 +25,7 @@ from .storage import RECENT_FILES
 THEMES = ("rawblock", "classic")
 RESTART_KEYS = ("language", "start_zoom", "start_tool", "system_file_dialog")   # erst nach Neustart (Hinweis)
 # Reiter beim Start: „last“ = zuletzt benutzter, sonst Schlüssel der Werkzeuge (gui/tools.py TOOLS)
-START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series")
+START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series", "parcel")
 # Reiter, die sich ausblenden lassen (DATEI und PAPIER bleiben immer – dort wird das Etikett gewählt)
 HIDEABLE_TOOLS = tuple(key for key in START_TOOLS[1:] if key not in ("file", "paper"))
 SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")

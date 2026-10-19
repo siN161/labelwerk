@@ -61,6 +61,10 @@ msgstr ""
 msgid "Action"
 msgstr ""
 
+#: src/labelwerk/gui/main_window.py
+msgid "Actions"
+msgstr ""
+
 #: src/labelwerk/shortcuts.py
 msgid "Actual size (100%)"
 msgstr ""
@@ -167,6 +171,14 @@ msgstr ""
 msgid "An object extends beyond the label and will be cut off. Print anyway?"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Areas"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Areas overlap – their content then appears twice on the label."
+msgstr ""
+
 #: src/labelwerk/zpl.py
 msgid "As set on the printer"
 msgstr ""
@@ -213,6 +225,10 @@ msgstr ""
 
 #: src/labelwerk/barcodes.py
 msgid "Barcode without content"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Barcode – do not shrink"
 msgstr ""
 
 #: src/labelwerk/gui/tools.py
@@ -403,6 +419,14 @@ msgstr ""
 msgid "Choose printer"
 msgstr ""
 
+#: src/labelwerk/gui/main_window.py
+msgid "Choose the parcel label type first."
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Choose the type in the list."
+msgstr ""
+
 #: src/labelwerk/cli.py
 #, python-brace-format
 msgid "Chosen printer {printer} not found – switch it on or specify it with -p."
@@ -488,6 +512,10 @@ msgstr ""
 msgid "Conversion of new images (symbols stay line art)"
 msgstr ""
 
+#: src/labelwerk/gui/tools.py
+msgid "Convert a parcel label (DHL, Hermes …) for the label printer"
+msgstr ""
+
 #: src/labelwerk/shortcuts.py
 msgid "Copy"
 msgstr ""
@@ -498,6 +526,10 @@ msgstr ""
 
 #: src/labelwerk/gui/panels/series.py
 msgid "Count"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Country"
 msgstr ""
 
 #: src/labelwerk/printer.py
@@ -546,6 +578,10 @@ msgstr ""
 msgid "Cutting is set by the printer driver (system printer settings)"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "DELETE"
+msgstr ""
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "Dashed"
 msgstr ""
@@ -559,6 +595,7 @@ msgstr ""
 msgid "Default: {keys}"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
 #: src/labelwerk/shortcuts.py
 msgid "Delete"
 msgstr ""
@@ -570,6 +607,15 @@ msgstr ""
 #: src/labelwerk/gui/file_session.py
 #, python-brace-format
 msgid "Delete favorite “{name}”?"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Delete own type"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Delete the own type “{name}”?"
 msgstr ""
 
 #: src/labelwerk/gui/panels/file.py
@@ -643,8 +689,16 @@ msgstr ""
 msgid "Double-click: as {{column}} into the selected text object or as new text"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Drag on the label to mark an area, drag an area to move it, Del removes the chosen one. Areas are placed on the tape in this order."
+msgstr ""
+
 #: src/labelwerk/gui/canvas.py
 msgid "Drag: set the length · Double-click: automatic"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Draw the areas on the open parcel label and save them as your own type"
 msgstr ""
 
 #: src/labelwerk/gui/image_import.py
@@ -657,6 +711,10 @@ msgstr ""
 
 #: src/labelwerk/gui/main_window.py
 msgid "Edit"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Edit the shown label like any other label (pieces as images)"
 msgstr ""
 
 #: src/labelwerk/cli.py
@@ -675,6 +733,10 @@ msgstr ""
 
 #: src/labelwerk/shortcuts.py
 msgid "End text editing"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Enter a name."
 msgstr ""
 
 #. Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
@@ -753,6 +815,7 @@ msgid "Favorites folder not created ({reason})"
 msgstr ""
 
 #: src/labelwerk/gui/panels/file.py
+#: src/labelwerk/gui/panels/parcel.py
 #: src/labelwerk/gui/tools.py
 msgid "File"
 msgstr ""
@@ -1134,6 +1197,11 @@ msgstr ""
 msgid "Label too large ({count} objects, at most {limit})"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "Label {current}/{total}"
+msgstr ""
+
 #: src/labelwerk/printer.py
 #, python-brace-format
 msgid "Label {label!r} does not fit the printer ({model})."
@@ -1251,6 +1319,10 @@ msgstr ""
 msgid "Margins"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Mark at least one area."
+msgstr ""
+
 #: src/labelwerk/shortcuts.py
 msgid "Maximize on paper"
 msgstr ""
@@ -1275,6 +1347,10 @@ msgstr ""
 #: src/labelwerk/barcodes.py
 #, python-brace-format
 msgid "Module width {module!r} invalid – allowed: 1–{limit} dots"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "More tabs"
 msgstr ""
 
 #: src/labelwerk/shortcuts.py
@@ -1317,6 +1393,10 @@ msgstr ""
 msgid "NEW"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "NEW OWN TYPE …"
+msgstr ""
+
 #: src/labelwerk/gui/panels/series.py
 msgid "NONE"
 msgstr ""
@@ -1325,12 +1405,17 @@ msgstr ""
 msgid "NUMBERING"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Name"
 msgstr ""
 
 #: src/labelwerk/gui/file_session.py
 msgid "Name of the favorite:"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Name:"
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
@@ -1350,6 +1435,14 @@ msgstr ""
 #: src/labelwerk/gui/settings_dialog.py
 #: src/labelwerk/shortcuts.py
 msgid "New label"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "New own parcel label type"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Next label on the canvas"
 msgstr ""
 
 #: src/labelwerk/gui/panels/series.py
@@ -1397,6 +1490,10 @@ msgstr ""
 msgid "No labels to print"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "No layout for this label – the pieces were arranged anew."
+msgstr ""
+
 #: src/labelwerk/cli.py
 msgid ""
 "No network printer configured (GUI settings).\n"
@@ -1408,6 +1505,10 @@ msgstr ""
 msgid ""
 "No own symbols yet. Put SVG or PNG files into this folder (subfolders are not read):\n"
 "{path}"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "No parcel label open – open one or drop the file here."
 msgstr ""
 
 #: src/labelwerk/media.py
@@ -1509,6 +1610,14 @@ msgstr ""
 msgid "OPEN FOLDER"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "OPEN IN EDITOR"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "OPEN PARCEL LABEL …"
+msgstr ""
+
 #: src/labelwerk/gui/panels/file.py
 msgid "OPEN …"
 msgstr ""
@@ -1575,6 +1684,10 @@ msgstr ""
 msgid "Open label"
 msgstr ""
 
+#: src/labelwerk/gui/main_window.py
+msgid "Open parcel label"
+msgstr ""
+
 #: src/labelwerk/gui/symbol_dialog.py
 msgid "Open the folder for your own symbols (created if needed)"
 msgstr ""
@@ -1607,8 +1720,30 @@ msgstr ""
 msgid "Own parcel label type {name} not readable: {reason}"
 msgstr ""
 
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Own type not saved: {error}"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+#, python-brace-format
+msgid "Own type “{name}” saved"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Own types"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Own types only"
+msgstr ""
+
 #: src/labelwerk/files.py
 msgid "PDF is encrypted"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "PDF or image of a parcel label (DHL, Hermes …) – or drop the file here"
 msgstr ""
 
 #: src/labelwerk/cli.py
@@ -1620,6 +1755,7 @@ msgid "PDF, PNG or JPG"
 msgstr ""
 
 #: src/labelwerk/gui/main_window.py
+#: src/labelwerk/gui/panels/parcel.py
 msgid "PRINT"
 msgstr ""
 
@@ -1634,6 +1770,10 @@ msgstr ""
 #: src/labelwerk/render.py
 #, python-brace-format
 msgid "Padding of the border must be between {low} and {high} mm"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Page "
 msgstr ""
 
 #: src/labelwerk/files.py
@@ -1652,6 +1792,14 @@ msgstr ""
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/tools.py
 msgid "Paper"
+msgstr ""
+
+#: src/labelwerk/gui/tools.py
+msgid "Parcel"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Parcel label"
 msgstr ""
 
 #: src/labelwerk/parcel.py
@@ -1687,9 +1835,17 @@ msgstr ""
 msgid "Parcel label type not unique – choose one with --type: {ids}"
 msgstr ""
 
+#: src/labelwerk/gui/main_window.py
+msgid "Parcel label: view only – to edit, use OPEN IN EDITOR or choose another tab."
+msgstr ""
+
 #: src/labelwerk/cli.py
 #, python-brace-format
 msgid "Parcel label: {name} ({id})"
+msgstr ""
+
+#: src/labelwerk/gui/main_window.py
+msgid "Parcel labels (*.pdf *.png *.jpg *.jpeg *.gif);;All files (*)"
 msgstr ""
 
 #: src/labelwerk/shortcuts.py
@@ -1730,6 +1886,10 @@ msgstr ""
 msgid "Preview: {path} ({width} × {height} mm)"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Previous label on the canvas"
+msgstr ""
+
 #: src/labelwerk/gui/panels/series.py
 msgid "Previous row on the canvas"
 msgstr ""
@@ -1737,6 +1897,10 @@ msgstr ""
 #: src/labelwerk/gui/panels/file.py
 #: src/labelwerk/shortcuts.py
 msgid "Print"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Print all labels of the parcel label in one job"
 msgstr ""
 
 #: src/labelwerk/gui/main_window.py
@@ -1862,12 +2026,20 @@ msgstr ""
 msgid "REMOVE"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "RENAME …"
+msgstr ""
+
 #: src/labelwerk/gui/panels/file.py
 msgid "Recently opened"
 msgstr ""
 
 #: src/labelwerk/gui/symbol_dialog.py
 msgid "Recently used"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Recognise by"
 msgstr ""
 
 #: src/labelwerk/gui/panels/layout.py
@@ -1891,7 +2063,12 @@ msgstr ""
 msgid "Removed: {path}"
 msgstr ""
 
+#: src/labelwerk/gui/main_window.py
+msgid "Rename own type"
+msgstr ""
+
 #: src/labelwerk/gui/panels/file.py
+#: src/labelwerk/gui/panels/parcel.py
 msgid "Rename …"
 msgstr ""
 
@@ -1913,6 +2090,11 @@ msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Resolution of Zebra printers on USB, in case labelwerk does not detect it correctly (otherwise 203 dpi)"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Result"
 msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py
@@ -1955,6 +2137,10 @@ msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Rotate if the image only fits 1:1 when rotated"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Rotation"
 msgstr ""
 
 #: src/labelwerk/files.py
@@ -2200,6 +2386,15 @@ msgstr ""
 msgid "Settings saved – they apply to new labels."
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "Several types fit equally well ({types}) – choose one in the list."
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Several types fit equally well – please check the choice."
+msgstr ""
+
 #: src/labelwerk/gui/panels/series.py
 msgid "Sheet of the Excel file"
 msgstr ""
@@ -2386,6 +2581,10 @@ msgstr ""
 msgid "Text editing"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Text that is on every such label – labelwerk then recognises the type when opening (several words: separate with commas)"
+msgstr ""
+
 #: src/labelwerk/layout.py
 msgid "Text with automatic font size needs the effective base size (base_pt) for scaling."
 msgstr ""
@@ -2482,6 +2681,10 @@ msgstr ""
 
 #: src/labelwerk/gui/panels/barcode.py
 msgid "Type"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Type not recognised – choose it in the list."
 msgstr ""
 
 #: src/labelwerk/gui/panels/barcode.py
@@ -2766,6 +2969,10 @@ msgstr ""
 msgid "auto (default: rotate only if needed) or degrees clockwise"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "barcode"
+msgstr ""
+
 #: src/labelwerk/cli.py
 msgid "bold (default) or --no-bold"
 msgstr ""
@@ -2792,6 +2999,10 @@ msgstr ""
 
 #: src/labelwerk/cli.py
 msgid "do not cut (Brother; for CUPS/Zebra the driver or the mode in the GUI settings decides)"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "e.g. Returns of my shop"
 msgstr ""
 
 #: src/labelwerk/files.py
@@ -2951,6 +3162,10 @@ msgstr ""
 msgid "only save a preview, do not print"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "optional, e.g. a company name on the label"
+msgstr ""
+
 #: src/labelwerk/cli.py
 msgid "own"
 msgstr ""
@@ -3028,6 +3243,10 @@ msgstr ""
 msgid "untested – feedback welcome"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "unverified"
+msgstr ""
+
 #: src/labelwerk/cli.py
 msgid "vertical: portrait (reading direction across the tape), horizontal: landscape (along the tape); default from the settings"
 msgstr ""
@@ -3066,6 +3285,11 @@ msgid "{count} row"
 msgid_plural "{count} rows"
 msgstr[0] ""
 msgstr[1] ""
+
+#: src/labelwerk/gui/parcel_editor.py
+#, python-brace-format
+msgid "{degrees}° clockwise"
+msgstr ""
 
 #: src/labelwerk/gui/panels/paper.py
 #: src/labelwerk/gui/settings_dialog.py
@@ -3136,6 +3360,11 @@ msgstr ""
 #: src/labelwerk/printers.py
 #, python-brace-format
 msgid "{name} · Network"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "{name} · {unverified}"
 msgstr ""
 
 #: src/labelwerk/gui/main_window.py
@@ -3254,6 +3483,11 @@ msgstr ""
 msgid ""
 "{not_found}\n"
 "Specify manually with -p file:///dev/usb/lpN"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+#, python-brace-format
+msgid "{number}: {w} × {h} mm"
 msgstr ""
 
 #: src/labelwerk/zpl.py
@@ -3450,6 +3684,11 @@ msgstr ""
 #: src/labelwerk/cli.py
 msgctxt "argparse"
 msgid "usage: "
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgctxt "parcel"
+msgid "Type"
 msgstr ""
 
 #. Translators: column without a name in the table header: "Column 3"

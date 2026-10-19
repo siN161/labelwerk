@@ -27,7 +27,7 @@ von paketikett wird kein Code übernommen. Originale des Nutzers kommen nicht in
    (Layout auf die bedruckbare Breite skaliert).
 3. **b – Ausgabe je Drucker:** 62 mm endlos (Brother) bzw. 100 × 150 mm (4×6-Etiketten, Zebra/CUPS); allgemein das
    Etikett des gewählten Druckers.
-4. **b – Reiter PAKETMARKE** in der GUI **und** CLI `labelwerk parcel`.
+4. **b – Reiter PAKET** (Überschrift „Paketmarke“) in der GUI **und** CLI `labelwerk parcel`.
 5. **a – Typ automatisch erkennen** (Text, Seitengröße), von Hand änderbar.
 6. **a – Kanten an die echte Marke anpassen:** Bereiche rücken nach außen bis zum nächsten weißen Rand.
 7. **b – eigene Typen gleich mit:** Bereiche auf einer Marke aufziehen, als eigenen Typ speichern.
@@ -94,19 +94,32 @@ Beispiele), Briefmarken/Internetmarke (geht schon über `print-file`), Texterken
   höchstens so verkleinert, dass sie quer passen, Barcodes 1:1 (nur zu breite kleiner); eigene Typen werden nie
   vergrößert.
 
-## 3 – Oberfläche: Reiter PAKETMARKE
+## 3 – Oberfläche: Reiter PAKET (Panel-Überschrift „Paketmarke“)
 
-- **Werkzeug** `parcel` in `gui/tools.py` (auch `START_TOOLS`); Panel `panels/parcel.py`:
-  Land (Auswahl, Standard aus der Sprache/Region, nur Länder mit Typen + „Eigene“), MARKE ÖFFNEN … (PDF/PNG/JPG/GIF,
-  Ablegen auf das Panel), erkannter Typ vorgewählt (Liste nach Dienst gruppiert, „ungeprüft“-Kennzeichen), Vorschau
-  auf der Arbeitsfläche (erstes Etikett; mehrere: ◀ n/N ▶ wie Serie), DRUCKEN (alle Etiketten in einem Auftrag, Schnitt
-  nach jedem), IM EDITOR ÖFFNEN (Etikett als normales Dokument, Stücke verschiebbar; Rückfrage bei Änderungen wie
-  Neu).
-- **Eigener Typ:** EIGENEN TYP ANLEGEN … öffnet die Marke groß in einem Fenster; Bereiche aufziehen (Rechteck, Drehung
-  0/90/180/270, Häkchen „Barcode – nicht verkleinern“), Name, Speichern → `arrange` ordnet an; Umbenennen/Löschen in
-  der Liste. Eigene Typen erscheinen unter „Eigene“ und werden auch erkannt (Seitengröße + optional Textmuster aus
-  dem Fenster).
-- Nichts wird gedruckt, solange kein Typ gewählt ist; Fehler als Hinweis im Panel.
+Der Reiter heißt kurz „PAKET“ (Tooltip „Paketmarke …“), damit die Werkzeugleiste auf Deutsch nicht überläuft;
+EINSTELLUNGEN und DRUCKEN stehen in einer eigenen Leiste rechts und laufen nie über (nur Reiterknöpfe dürfen es).
+
+- **Werkzeug** `parcel` in `gui/tools.py` (auch `START_TOOLS`/`HIDEABLE_TOOLS`); Panel `panels/parcel.py`:
+  Land (Auswahl, Standard aus der Region, nur Länder mit Typen + „Nur eigene Typen“), MARKE ÖFFNEN … (Dateidialog mit
+  Vorschau; PDF/PNG/JPG/GIF, Ablegen auf Panel oder Arbeitsfläche), Typliste nach Dienst gruppiert (etwa 7 Einträge
+  sichtbar), ✓ an den Typen mit der höchsten Punktzahl, „ungeprüft“-Kennzeichen; vorgewählt der beste – bei
+  Gleichstand ohne geprüften Sieger (`parcel.ambiguous`) oder ohne Treffer nichts (Hinweis nennt die Kandidaten),
+  bei Gleichstand mit Sieger Hinweis „bitte Auswahl prüfen“; Hinweise aus der Umwandlung, Fehler (`ParcelError`,
+  Renderfehler) und beschädigte eigene Typen im Panel.
+- **Nur Ansicht:** Mit geladener Marke zeigt die Arbeitsfläche das gewählte Etikett der Umwandlung (◀ n/N ▶) bzw. –
+  ohne Umwandlung – ein leeres Etikett; Aktionen des Bereichs Arbeitsfläche und Rückgängig/Wiederherstellen sind
+  gesperrt, Einfügen/Symbol/Bild/Ablegen von Bilddaten ändern nichts (Hinweis „nur Ansicht – IM EDITOR ÖFFNEN oder
+  anderen Reiter wählen“); eine abgelegte Datei lädt die Marke. Anderer Reiter: wieder das Dokument.
+- **DRUCKEN** (Panel, Werkzeugleiste, Strg+P): alle Etiketten in einem Auftrag, Schnitt nach jedem; ohne Umwandlung
+  nichts, Meldung „Erst den Markentyp wählen“ bzw. der Fehler. **IM EDITOR ÖFFNEN:** Etikett als normales Dokument
+  (Stücke verschiebbar), gilt als geändert (Rückfrage beim Schließen/Neu); Rückfrage bei Änderungen wie Neu.
+- **Eigener Typ:** EIGENER TYP … öffnet die Marke groß in einem Fenster (Splitter Marke/Einstellungen); Bereiche
+  aufziehen, verschieben (auf der Seite begrenzt), Entf löscht; Drehung 0/90/180/270, „Barcode – nicht verkleinern“,
+  Name (höchstens 200 Zeichen), „Erkennen an“; Hinweis bei überlappenden Bereichen; Vorschau des Ergebnisses
+  (entprellt, beim Loslassen sofort; der Name ändert sie nicht); SPEICHERN nur mit gültigem Typ
+  (`own_from_dict`), sonst der Grund in der Vorschau. Gewählter eigener Typ: Knöpfe UMBENENNEN …/LÖSCHEN unter der
+  Liste (auch Kontextmenü); Umbenennen behält die aktuelle Wahl. Eigene Typen erscheinen am Ende der Liste und
+  werden auch erkannt (Seitengröße + optional Textmuster).
 
 ## 4 – Kommandozeile
 

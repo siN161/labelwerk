@@ -1,0 +1,571 @@
+"""Reiter PAKET (Panel „Paketmarke“): Marke öffnen, Typ erkennen, Umwandlung ansehen (nur Ansicht), drucken, im
+Editor öffnen, eigene Typen anlegen/umbenennen/löschen. Nur erzeugte Testmarken (parcelmark)."""
+import pytest
+from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
+from PySide6.QtGui import QDropEvent
+from PySide6.QtWidgets import QApplication
+
+from labelwerk import parcel
+from labelwerk.document import Document, ImageObject, TextObject
+from labelwerk.gui import main_window
+from labelwerk.gui.parcel_editor import ParcelTypeEditor
+from labelwerk.gui.panels.parcel import OWN, TYPE_ROLE
+from labelwerk.settings import Settings
+from parcelmark import make_pdf
+
+from test_gui_printers import workers  # noqa: F401  (Fixture: Druck ersetzt)
+
+
+@pytest.fixture(autouse=True)
+def own_folder(tmp_path, monkeypatch):
+    """Eigene Typen in einem leeren Ordner (nie die echten Daten)."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+
+
+def _window(qtbot, doc=None, **settings):
+    win = main_window.MainWindow(doc=doc or Document("62", objects=[TextObject("A")]),
+                                 settings=Settings(check_media_on_start=False, **settings))
+    qtbot.addWidget(win)
+    win.show()
+    win.render_now()
+    return win
+
+
+def _dhl(tmp_path, name="dhl.pdf"):
+    return make_pdf(tmp_path / name, texts=[(20, 20, "DHL Online Frankierung"),
+                                            (20, 40, "Sendungsnummer")],
+                    rects=[(15, 30, 120, 34), (140, 40, 190, 100)])
+
+
+def _amazon(tmp_path):
+    return make_pdf(tmp_path / "amazon.pdf", texts=[(20, 20, "Amazon Rücksendung DHL Retoure")],
+                    rects=[(40, 120, 150, 160), (60, 240, 150, 270)])
+
+
+def _open(win, path):
+    win.ask_parcel_file = lambda: str(path)
+    win._tool_triggered("parcel")
+    win.tool_actions["parcel"].setChecked(True)
+    win.panel("parcel").open_button.click()
+    win.render_now()
+    return win.panel("parcel")
+
+
+def _type_ids(panel) -> list[str]:
+    return [panel.types.item(i).data(TYPE_ROLE) for i in range(panel.types.count())
+            if panel.types.item(i).data(TYPE_ROLE)]
+
+
+def test_parcel_tool_is_in_the_toolbar(qtbot):
+    win = _window(qtbot)
+    assert "parcel" in win.tool_actions
+    assert win.tool_actions["parcel"].text() == "PAKET"
+    assert win.tool_actions["parcel"].toolTip() == ("Paketmarke (DHL, Hermes …) für den "
+                                                    "Etikettendrucker umwandeln")
+    panel = win.panel("parcel")
+    assert panel.country.currentData() == "DE"
+    assert {"dhl-privat-1", "hermes-2"} <= set(_type_ids(panel))
+    assert not panel.print_button.isEnabled() and not panel.editor_button.isEnabled()
+    assert not panel.own_button.isEnabled()                     # erst mit geöffneter Marke
+
+
+def test_open_detects_the_type_and_shows_the_conversion(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    assert panel.chosen_type().id == "dhl-privat-1"             # 62 mm: Layout „62“ gewinnt
+    assert panel.types.currentItem().text().startswith("✓ ")
+    assert panel.file_label.text() == "dhl.pdf"
+    docs = panel.documents()
+    assert len(docs) == 1 and docs[0].label_id == "62"
+    assert win.canvas.read_only and len(win.canvas.objects) == len(docs[0].objects) == 7
+    assert win.canvas.handle is None or not win.canvas.handle.isVisible()
+    assert panel.print_button.isEnabled() and panel.editor_button.isEnabled()
+    assert win.doc.objects == [TextObject("A")]                 # Dokument unangetastet
+
+
+def test_other_tab_shows_the_document_again(qtbot, tmp_path):
+    win = _window(qtbot)
+    _open(win, _dhl(tmp_path))
+    win._tool_triggered("paper")
+    assert not win.canvas.read_only and len(win.canvas.objects) == 1
+    win._tool_triggered("parcel")
+    assert win.canvas.read_only and len(win.canvas.objects) == 7
+
+
+def test_canvas_ignores_clicks_on_the_conversion(qtbot, tmp_path):
+    win = _window(qtbot)
+    _open(win, _dhl(tmp_path))
+    center = win.canvas.mapFromScene(win.canvas.objects[0].sceneBoundingRect().center())
+    qtbot.mouseClick(win.canvas.viewport(), Qt.MouseButton.LeftButton, pos=center)
+    qtbot.mouseDClick(win.canvas.viewport(), Qt.MouseButton.LeftButton, pos=center)
+    assert win.canvas.selection() == [] and win.edit_session.active is False
+    win.shortcut_actions["edit.select_all"].trigger()          # nichts wählbar: Entf löscht nichts
+    win.shortcut_actions["edit.delete"].trigger()
+    assert win.canvas.selection() == [] and win.doc.objects == [TextObject("A")]
+
+
+def test_choosing_another_type_converts_again(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "dhl-privat-2")
+    panel.types.setCurrentItem(item)
+    assert panel.chosen_type().id == "dhl-privat-2"
+    assert len(win.canvas.objects) == len(panel.documents()[0].objects)
+    assert "ungeprüft" in item.text()
+
+
+def test_unrecognised_mark_asks_for_the_type(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "x.pdf", size_mm=(50, 50), texts=[(5, 5, "Hallo")]))
+    assert panel.chosen_type() is None and panel.documents() == []
+    assert panel.notes.isVisibleTo(panel) and "nicht erkannt" in panel.notes.text()
+    assert win.canvas.read_only and win.canvas.objects == []    # leer, nur Ansicht
+
+
+def test_unreadable_file_is_a_notice(qtbot, tmp_path):
+    win = _window(qtbot)
+    bad = tmp_path / "kaputt.pdf"
+    bad.write_bytes(b"kein PDF")
+    panel = _open(win, bad)
+    assert panel.source is None and panel.notes.isVisibleTo(panel) and panel.notes.text()
+
+
+def test_print_sends_every_label_in_one_job(qtbot, tmp_path, workers):  # noqa: F811
+    win = _window(qtbot)
+    panel = _open(win, _amazon(tmp_path))
+    assert len(panel.documents()) == 2 and panel.page_label.text() == "Etikett 1/2"
+    panel.print_button.click()
+    assert len(workers) == 1
+    job = workers[0]
+    assert isinstance(job.image, list) and len(job.image) == 2
+    assert job.label_id == "62" and job.cut_every == 1
+
+
+def test_toolbar_print_prints_the_conversion(qtbot, tmp_path, workers):  # noqa: F811
+    win = _window(qtbot)
+    _open(win, _dhl(tmp_path))
+    win.print_label()
+    assert len(workers) == 1 and not isinstance(workers[0].image, list)
+    assert workers[0].image.size[1] > 1000                     # Umwandlung, nicht das Etikett „A“
+
+
+def test_arrows_show_the_second_label(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _amazon(tmp_path))
+    first = len(win.canvas.objects)
+    panel.next_button.click()
+    assert panel.page_label.text() == "Etikett 2/2" and not panel.next_button.isEnabled()
+    assert len(win.canvas.objects) == len(panel.documents()[1].objects) != 0
+    panel.prev_button.click()
+    assert len(win.canvas.objects) == first
+
+
+def test_open_in_editor_replaces_the_document(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    panel.editor_button.click()
+    assert len(win.doc.objects) == 7 and all(isinstance(o, ImageObject) for o in win.doc.objects)
+    assert win.panels.currentWidget() is win.panel("paper") and not win.canvas.read_only
+    assert len(win.canvas.objects) == 7
+    assert win.files.origin == "parcel" and not win.files.may_follow_roll()
+    win.undo()                                                  # Verlauf neu: nichts zurück
+    assert len(win.doc.objects) == 7
+
+
+def test_open_in_editor_respects_the_save_question(qtbot, tmp_path, monkeypatch):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    monkeypatch.setattr(win.files, "maybe_save", lambda: False)   # „Abbrechen“
+    panel.editor_button.click()
+    assert win.doc.objects == [TextObject("A")] and win.panels.currentWidget() is panel
+
+
+def test_conversion_follows_the_label_of_the_document(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    win.doc.label_id = "62x100"                                 # gestanzt, zu kurz
+    win.render_now()
+    assert panel.documents()[0].label_id == "62x100"
+    assert panel.notes.isVisibleTo(panel) and "Barcodes" in panel.notes.text()
+
+
+def test_drop_on_the_canvas_loads_the_mark(qtbot, tmp_path):
+    win = _window(qtbot)
+    win._tool_triggered("parcel")
+    win._dropped([_dhl(tmp_path)], None, 10, 10)
+    assert win.panel("parcel").chosen_type().id == "dhl-privat-1"
+    assert win.doc.objects == [TextObject("A")]                 # kein Bild eingefügt
+
+
+def test_drop_on_the_panel_loads_the_mark(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = win.panel("parcel")
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(_dhl(tmp_path)))])
+    event = QDropEvent(QPointF(5, 5), Qt.DropAction.CopyAction, mime, Qt.MouseButton.NoButton,
+                       Qt.KeyboardModifier.NoModifier)
+    panel.dropEvent(event)
+    assert panel.chosen_type().id == "dhl-privat-1"
+
+
+def test_country_own_only_lists_own_types(qtbot, tmp_path):
+    parcel.save_own(parcel.own_from_dict(_own_data()))
+    win = _window(qtbot)
+    panel = win.panel("parcel")
+    panel.country.setCurrentIndex(panel.country.findData(OWN))
+    assert _type_ids(panel) == ["eigen-lager"]
+    panel.country.setCurrentIndex(panel.country.findData("DE"))
+    assert _type_ids(panel)[-1] == "eigen-lager" and "dhl-privat-1" in _type_ids(panel)
+
+
+def _own_data(**changes):
+    data = {"id": "eigen-lager", "names": {"de": "Lager"}, "source": {"sizes_mm": [[210, 297]]},
+            "detect": {"all": ["Mein Lager"]},
+            "pieces": [{"page": 1, "src": [10, 10, 110, 60], "rotation": 90, "kind": "text"},
+                       {"page": 1, "src": [10, 100, 60, 130], "rotation": 0, "kind": "barcode"}]}
+    data.update(changes)
+    return data
+
+
+def test_new_own_type_is_saved_and_chosen(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "lager.pdf", texts=[(20, 20, "Mein Lager GmbH")],
+                                rects=[(15, 15, 100, 50)]))
+    assert panel.chosen_type() is None
+    seen = []
+
+    def fill(editor):
+        seen.append(editor)
+        editor.add_area((10, 10, 110, 60), rotation=90)
+        editor.add_area((10, 100, 60, 130), barcode=True)
+        editor.name.setText("Mein Lager")
+        editor.words.setText("Mein Lager")
+        return True
+    win.exec_parcel_editor = fill
+    panel.own_button.click()
+    assert seen and parcel.own_types()[0].names == {"de": "Mein Lager"}
+    assert panel.chosen_type().id == "eigen-mein-lager"
+    assert panel.documents() and len(panel.documents()[0].objects) == 2
+    assert win.canvas.read_only and len(win.canvas.objects) == 2
+    assert "gespeichert" in win.result.text()
+
+
+def test_cancelled_editor_saves_nothing(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    win.exec_parcel_editor = lambda editor: False
+    panel.own_button.click()
+    assert parcel.own_types() == []
+
+
+def test_rename_and_remove_own_type(qtbot, tmp_path):
+    parcel.save_own(parcel.own_from_dict(_own_data()))
+    win = _window(qtbot)
+    win.ask_parcel_type_name = lambda current: "Lager Nord"
+    win.rename_own_parcel_type("eigen-lager")
+    assert parcel.find("eigen-lager").name == "Lager Nord"
+    assert any("Lager Nord" in win.panel("parcel").types.item(i).text()
+               for i in range(win.panel("parcel").types.count()))
+    win.ask_remove_parcel_type = lambda name: False
+    win.remove_own_parcel_type("eigen-lager")
+    assert parcel.own_types()
+    win.ask_remove_parcel_type = lambda name: True
+    win.remove_own_parcel_type("eigen-lager")
+    assert parcel.own_types() == [] and "eigen-lager" not in _type_ids(win.panel("parcel"))
+
+
+# --- Fenster „Eigener Markentyp“ ----------------------------------------------------------
+def _editor(qtbot, tmp_path):
+    source = parcel.load(make_pdf(tmp_path / "m.pdf", texts=[(20, 20, "Firma")],
+                                  rects=[(15, 15, 100, 50)]))
+    editor = ParcelTypeEditor(None, source, "62", "QL-600", {"eigen-test"})
+    qtbot.addWidget(editor)
+    editor.show()
+    return editor
+
+
+def test_editor_builds_a_checked_type(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    save = editor.buttons.button(editor.buttons.StandardButton.Save)
+    assert not save.isEnabled()
+    editor.add_area((10, 10, 110, 60))
+    editor.add_area((1, 1, 2, 2))                               # zu klein: zählt nicht
+    editor.list.setCurrentRow(0)
+    editor.rotation.setCurrentIndex(1)                          # 90°
+    editor.barcode.setChecked(True)
+    editor.name.setText("Test")
+    assert save.isEnabled()
+    ptype = editor.result_type()
+    assert ptype.id == "eigen-test-2" and ptype.own              # „eigen-test“ ist vergeben
+    assert ptype.pieces[0].rotation == 90 and ptype.pieces[0].kind == "barcode"
+    assert ptype.pieces[0].src == pytest.approx((10, 10, 110, 60), abs=0.3)
+    assert len(ptype.pieces) == 1 and ptype.source_sizes == ((210.0, 297.0),)
+    assert not editor.preview.pixmap().isNull()
+
+
+def test_editor_draws_and_removes_areas_with_the_mouse(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    view = editor.view
+    start = view.mapFromScene(QPointF(50, 50))
+    end = view.mapFromScene(QPointF(300, 200))
+    qtbot.mousePress(view.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    qtbot.mouseMove(view.viewport(), end)
+    qtbot.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, pos=end)
+    assert len(editor.pieces()) == 1 and editor.list.count() == 1
+    editor.list.setCurrentRow(0)
+    editor.view.setFocus()
+    qtbot.keyClick(editor, Qt.Key.Key_Delete)
+    assert editor.pieces() == [] and editor.list.count() == 0
+
+
+def test_editor_words_become_recognition(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 110, 60))
+    editor.name.setText("Firma")
+    editor.words.setText("Firma, Lager ")
+    assert editor.result_type().detect == {"all": ["Firma", "Lager"]}
+    QApplication.processEvents()
+
+
+# --- Gleichstand, nicht erkannt, neu angeordnet ------------------------------------------
+def test_tie_between_unverified_types_lets_the_user_choose(qtbot, tmp_path):
+    """Hermes 2 und 3 lassen sich am Text nicht unterscheiden: kein Typ vorgewählt, nichts
+    gedruckt, der Hinweis nennt beide; die Wahl entscheidet."""
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "h.pdf", texts=[(20, 20, "Hermes Paketschein")]))
+    assert panel.chosen_type() is None and panel.documents() == []
+    assert not panel.print_button.isEnabled()
+    text = panel.notes.text()
+    assert "gleich gut" in text
+    assert parcel.find("hermes-2").name in text and parcel.find("hermes-3").name in text
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "hermes-3")
+    panel.types.setCurrentItem(item)
+    assert panel.chosen_type().id == "hermes-3" and panel.documents()
+    assert "gleich gut" not in panel.notes.text()
+
+
+def test_image_of_unknown_shape_is_not_recognised(qtbot, tmp_path):
+    from PIL import Image
+    Image.new("RGB", (1000, 1000), "white").save(tmp_path / "q.png")
+    win = _window(qtbot)
+    panel = _open(win, tmp_path / "q.png")
+    assert panel.chosen_type() is None and panel.documents() == []
+    assert "nicht erkannt" in panel.notes.text()
+    assert len(_type_ids(panel)) >= 19                          # Liste bleibt wählbar
+
+
+def test_wrong_size_for_the_chosen_type_is_a_notice(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "gross.pdf", size_mm=(400, 400)))
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "dhl-privat-1")
+    panel.types.setCurrentItem(item)
+    assert panel.documents() == [] and "passt nicht" in panel.notes.text()
+
+
+def test_arranged_layout_says_so(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "m.pdf", size_mm=(100, 150),
+                                texts=[(10, 10, "DHL Online Frankierung")]))
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "dhl-privat-1a-100x150")
+    panel.types.setCurrentItem(item)
+    assert panel.conversion.layout == "arranged"
+    assert "neu angeordnet" in panel.notes.text()
+
+
+# --- Review 559ac76: nur Ansicht, Drucken ohne Umwandlung, ✓, Leiste, Editor ----------------
+VIEW_ONLY = "nur Ansicht"
+
+
+def _view_only(win):
+    return VIEW_ONLY in win.result.text()
+
+
+def test_edit_actions_are_disabled_while_the_parcel_view_is_shown(qtbot, tmp_path):
+    win = _window(qtbot)
+    win.insert_barcode()                                        # ein Schritt im Verlauf
+    _open(win, _dhl(tmp_path))
+    actions = win.shortcut_actions
+    for key in ("edit.paste", "edit.undo", "edit.redo", "edit.select_all", "tool.text",
+                "image.insert", "barcode.insert", "align.left"):
+        assert not actions[key].isEnabled(), key
+    win._tool_triggered("paper")
+    win.render_now()
+    assert actions["edit.undo"].isEnabled() and actions["edit.select_all"].isEnabled()
+
+
+def test_every_way_of_changing_the_document_is_refused_in_the_parcel_view(qtbot, tmp_path):
+    from PIL import Image
+    from labelwerk import clipart
+    win = _window(qtbot)
+    win.insert_barcode()
+    before = list(win.doc.objects)
+    _open(win, _dhl(tmp_path))
+    QApplication.clipboard().setText("Eingefügt")
+    picture = Image.new("RGB", (60, 40), "black")
+    png = tmp_path / "bild.png"
+    picture.save(png)
+    ways = [win.paste, win.undo, win.redo, win.insert_barcode,
+            lambda: win.insert_symbol(clipart.symbols("allgemein")[0]),
+            lambda: win.insert_image_files([png]),
+            lambda: win._insert_picture(picture, "Test"),
+            lambda: win._dropped([], picture, 10, 10),
+            lambda: win.create_text(5, 5)]
+    for way in ways:
+        win._set_result("", "")
+        way()
+        assert win.doc.objects == before, way
+        assert _view_only(win), way
+    win._dropped([_amazon(tmp_path)], None, 10, 10)              # Datei: lädt die Marke
+    assert win.panel("parcel").path.name == "amazon.pdf" and win.doc.objects == before
+
+
+def test_without_a_conversion_nothing_is_printed(qtbot, tmp_path, workers):  # noqa: F811
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "h.pdf", texts=[(20, 20, "Hermes Paketschein")]))
+    assert panel.documents() == [] and win.canvas.read_only and win.canvas.objects == []
+    win.print_label()
+    assert workers == [] and "Markentyp" in win.result.text()
+    win.shortcut_actions["file.print"].trigger()
+    assert workers == []
+
+
+def test_wrong_size_error_is_shown_when_printing(qtbot, tmp_path, workers):  # noqa: F811
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "gross.pdf", size_mm=(400, 400)))
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "dhl-privat-1")
+    panel.types.setCurrentItem(item)
+    win.print_label()
+    assert workers == [] and "passt nicht" in win.result.text()
+
+
+def test_check_mark_only_at_the_best_types_and_tie_hint(qtbot, tmp_path, monkeypatch):
+    first, second, third = (parcel.find(i) for i in ("dhl-privat-1", "dhl-privat-2", "hermes-2"))
+    monkeypatch.setattr(parcel, "detect", lambda *a, **k: [(first, 5.0), (second, 5.0),
+                                                          (third, 1.0)])
+    monkeypatch.setattr(parcel, "ambiguous", lambda found: [])      # geprüfter Sieger
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    marked = {panel.types.item(i).data(TYPE_ROLE) for i in range(panel.types.count())
+              if panel.types.item(i).text().startswith("✓ ")}
+    assert marked == {"dhl-privat-1", "dhl-privat-2"}
+    assert panel.chosen_type().id == "dhl-privat-1"
+    assert "bitte Auswahl prüfen" in panel.notes.text()
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "dhl-privat-2")
+    panel.types.setCurrentItem(item)
+    assert "bitte Auswahl prüfen" not in panel.notes.text()
+
+
+def test_type_list_shows_about_seven_entries(qtbot):
+    win = _window(qtbot)
+    assert win.panel("parcel").types.minimumHeight() >= 220
+
+
+def test_open_in_editor_counts_as_changed(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    panel.editor_button.click()
+    assert win.files.modified() and "•" in win.windowTitle()
+
+
+def test_own_type_buttons_and_rename_keeps_the_choice(qtbot, tmp_path):
+    parcel.save_own(parcel.own_from_dict(_own_data()))
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    assert panel.chosen_type().id == "dhl-privat-1" and not panel.own_row.isVisibleTo(panel)
+    win.ask_parcel_type_name = lambda current: "Lager Nord"
+    win.rename_own_parcel_type("eigen-lager")
+    assert panel.chosen_type().id == "dhl-privat-1"             # Wahl bleibt
+    item = next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == "eigen-lager")
+    panel.types.setCurrentItem(item)
+    assert panel.own_row.isVisibleTo(panel)
+    renamed = []
+    panel.rename_requested.connect(renamed.append)
+    panel.rename_button.click()
+    assert renamed == ["eigen-lager"]
+    win.ask_remove_parcel_type = lambda name: True
+    panel.remove_button.click()
+    assert parcel.own_types() == []
+
+
+def test_damaged_own_types_are_shown_as_a_hint(qtbot, tmp_path):
+    parcel.own_dir().mkdir(parents=True)
+    (parcel.own_dir() / "kaputt.json").write_text("{nicht json")
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    assert "beschädigt" in panel.notes.text()
+
+
+@pytest.mark.parametrize("lang", ["de", "en"])
+def test_print_and_settings_never_overflow(qtbot, lang):
+    from PySide6.QtCore import QLocale
+    from labelwerk import i18n
+    from labelwerk.gui.app import load_theme
+    app = QApplication.instance()
+    i18n.set_language(lang)
+    app.setStyleSheet(load_theme())
+    try:
+        win = _window(qtbot)
+        win.fit_toolbars()
+        win.resize(1100, 800)
+        for _ in range(3):
+            QApplication.processEvents()
+        for action in (win.print_action, win.settings_action):
+            button = win.app_bar.widgetForAction(action)
+            assert button.isVisible(), action.text()
+            right = button.mapTo(win, button.rect().topRight()).x()
+            assert right <= win.width(), action.text()
+    finally:
+        app.setStyleSheet("")
+        i18n.set_language("de")
+        QLocale.setDefault(QLocale("de"))
+
+
+# --- Fenster „Eigener Markentyp“: Prüfung, Grenzen, Vorschau ------------------------------
+def test_editor_save_needs_a_valid_type_and_accept_checks(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    save = editor.buttons.button(editor.buttons.StandardButton.Save)
+    editor.add_area((10, 10, 110, 60))
+    assert not save.isEnabled()                                 # ohne Namen
+    editor.accept()
+    assert editor.result() == 0 and "Namen" in editor.preview.text()
+    editor.name.setText("Test")
+    assert save.isEnabled()
+    assert editor.name.maxLength() == 200
+
+
+def test_editor_areas_stay_on_the_page(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 60, 40))
+    area = editor._areas[1][0]
+    area.setPos(QPointF(-500, 99999))
+    rect, page = area.scene_rect(), editor.view.scene().sceneRect()
+    assert page.contains(rect)
+
+
+def test_editor_warns_about_overlapping_areas(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 60, 40))
+    assert not editor.overlap.isVisibleTo(editor)
+    editor.add_area((50, 30, 90, 70))
+    assert editor.overlap.isVisibleTo(editor)
+
+
+def test_editor_preview_waits_while_moving_and_name_does_not_render(qtbot, tmp_path, monkeypatch):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 60, 40))
+    calls = []
+    monkeypatch.setattr(editor, "_render_preview", lambda: calls.append(1))
+    editor.name.setText("Neu")
+    assert calls == []                                          # Name: keine neue Vorschau
+    area = editor._areas[1][0]
+    area.setPos(area.pos() + QPointF(5, 5))
+    assert calls == [] and editor._preview_timer.isActive()
+    editor._preview_now()                                       # Loslassen: sofort
+    assert calls == [1] and not editor._preview_timer.isActive()

@@ -34,6 +34,8 @@ QToolBar#editBar { padding: 4px 6px; }
 QToolBar#editBar QToolButton { padding: 3px 10px; letter-spacing: 1px; }
 QToolBar#editBar::separator { background: #000000; width: 3px; margin: 2px 8px 5px 8px; }
 QToolBar QToolButton#print { background: #000000; color: #FFFFFF; }
+/* Überlauf der Reiterknöpfe: schmaler Knopf „»“ (Qt gibt ihm eine feste kleine Breite) */
+QToolBar QToolButton#qt_toolbar_ext_button { border: none; padding: 0; margin: 0; letter-spacing: 0; }
 QToolBar QToolButton#print:hover { background: #FFFFFF; color: #000000; }
 QToolBar QToolButton:disabled, QToolBar QToolButton#print:disabled {
     background: #F0F0F0;

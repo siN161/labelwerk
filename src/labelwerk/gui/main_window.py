@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import QMimeData, Qt, QThreadPool, QTimer
+from PySide6.QtCore import QMimeData, QSignalBlocker, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
 from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame,
                                QHBoxLayout, QInputDialog, QLineEdit,
@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
-from .. import barcodes, clipart, favorites, fonts, series
+from .. import barcodes, clipart, favorites, fonts, parcel, series
 from ..desktop import APP_NAME
 from ..detect import brother_busy
 from .. import cups, zpl
@@ -27,7 +27,7 @@ from ..printers import (UNTESTED_HINT, Printer, capabilities, choose, cups_print
 from ..document import MAX_BARCODE_DATA, BarcodeObject, Document, ImageObject, Series, TextObject
 from ..files import NOT_WHITE, crop_box
 from ..fonts import DEFAULT_FAMILY
-from ..i18n import N_, _, ngettext
+from ..i18n import N_, _, language, ngettext
 from ..labels import DPI, get_label, labels_for_model, length_limits
 from ..layout import (ALIGN_MODES, SIZE_MODES, Rect, align_objects, change_label, exact_rect,
                       fill_anchored, frame_area, growing_axis, insert_placement, match_objects,
@@ -38,13 +38,14 @@ from ..render import (Renderer, RenderedObject, font_warnings, render_document,
                       set_svg_rasterizer)
 from ..settings import (Settings, load_settings, network_entries, new_document, save_settings,
                         started_values, update_settings)
-from ..shortcuts import effective, without_conflicts
+from ..shortcuts import ACTIONS, effective, without_conflicts
 from .actions import apply_shortcuts, build_actions
 from .canvas import Canvas
 from .history import History, restore
 from . import file_dialog, image_import
 from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS, SCREENSHOT, SYMBOL_SOURCE
 from .media_worker import MediaWorker
+from .parcel_editor import ParcelTypeEditor
 from .panels.image import CROP_FAILED
 from .panels.text import DEFAULT_PT
 from .file_session import FileSession
@@ -84,6 +85,8 @@ _SELECTION_ACTIONS = ("edit.cut", "edit.copy", "edit.duplicate", "edit.delete")
 OBJECT_PANELS = ("text", "image", "barcode")   # Panel je Objektart (Text, Bild, Barcode)
 CHECKING_ROLL = N_("Checking the roll – please print again in a moment.")
 PRINTING_WAIT = N_("Printing – please wait.")
+PARCEL_VIEW_ONLY = N_("Parcel label: view only – to edit, use OPEN IN EDITOR or choose another tab.")
+PARCEL_CHOOSE_TYPE = N_("Choose the parcel label type first.")
 
 
 def shrunk_hint(factor: float, mode: str) -> str:
@@ -135,6 +138,9 @@ class MainWindow(QMainWindow):
         self._text_pastes = 0                       # Text eingefügt seit dem letzten Ändern
         self._notice: str | None = None             # Meldung zum Einfügen von Bildern
         self._image_dir = ""                        # Ordner des zuletzt eingefügten Bilds
+        self._parcel_dir = ""                       # Ordner der zuletzt geöffneten Paketmarke
+        self._parcel_renderer = Renderer()          # Umwandlung einer Paketmarke (nur Ansicht)
+        self._parcel_disabled: set[str] = set()     # in der Ansicht der Paketmarke gesperrt
         self._portal: ScreenshotPortal | None = None   # Bildschirmfoto (beim ersten Gebrauch)
         self.symbol_window: SymbolDialog | None = None  # „Symbol einfügen“ (beim ersten Gebrauch)
         self._symbols_were_open = False             # Bildschirmfoto: Symbol-Fenster mit ausgeblendet
@@ -186,16 +192,25 @@ class MainWindow(QMainWindow):
         self.panels.currentChanged.connect(self._update_tool_buttons)   # SERIE: Knopf bis zum Wechsel
         self._stored_tool = self.settings.last_tool   # zuletzt benutzter Reiter, wie in der Datei
         self.panel("image").set_defaults(self.settings.image_mode, self.settings.image_threshold)
+        # EINSTELLUNGEN und DRUCKEN in einer eigenen Leiste rechts daneben: nie im Überlauf –
+        # überlaufen dürfen nur die Reiterknöpfe
+        self.app_bar = QToolBar(_("Actions"))
+        self.app_bar.setObjectName("appBar")
+        self.app_bar.setMovable(False)
+        self.app_bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        self.addToolBar(self.app_bar)
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        toolbar.addWidget(spacer)
+        self.app_bar.addWidget(spacer)
         self.settings_action = self._toolbar_action("app.settings", "preferences-system",
                                                     _("SETTINGS"), self.open_settings)
-        toolbar.addAction(self.settings_action)
+        self.app_bar.addAction(self.settings_action)
         self.print_action = self._toolbar_action("file.print", "document-print", _("PRINT"),
                                                  self.print_label)
-        toolbar.addAction(self.print_action)
-        toolbar.widgetForAction(self.print_action).setObjectName("print")
+        self.app_bar.addAction(self.print_action)
+        self.app_bar.widgetForAction(self.print_action).setObjectName("print")
+        self.tool_bar = toolbar
+        QTimer.singleShot(0, self.fit_toolbars)     # erst mit dem Design (apply_theme) messen
 
         # Arbeitsfläche
         self.canvas = Canvas(self.model)
@@ -320,6 +335,7 @@ class MainWindow(QMainWindow):
         self.panel("series").table_requested.connect(self.choose_series_table)
         self.panel("series").insert_column.connect(self.insert_column)
         self.panel("barcode").fill_preview = self._filled_barcode
+        self._connect_parcel()
         self._clipboard_changed()
         self.refresh_printer()
         self._fit_label()                           # Standard-Etikett eines anderen Druckers
@@ -328,6 +344,39 @@ class MainWindow(QMainWindow):
 
     def panel(self, key: str):
         return self._panel_by_key[key]
+
+    def fit_toolbars(self) -> None:
+        """Mit dem Design gemessen: die Leiste EINSTELLUNGEN/DRUCKEN nie schmaler als ihre Knöpfe
+        (die Reiterknöpfe laufen bei Platzmangel über), das Fenster beim Start so breit, dass
+        alles passt – höchstens so breit wie der Bildschirm."""
+        ext = self.tool_bar.findChild(QToolButton, "qt_toolbar_ext_button")
+        if ext is not None:                         # Überlauf-Knopf sichtbar beschriften
+            ext.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            ext.setText("»")
+            ext.setToolTip(_("More tabs"))
+        buttons = sum(self.app_bar.widgetForAction(a).sizeHint().width()
+                      for a in (self.settings_action, self.print_action))
+        self.app_bar.setMinimumWidth(buttons + 24)
+        screen = self.screen().availableGeometry().width() if self.screen() else 0
+        wanted = self.tool_bar.sizeHint().width() + buttons + 48
+        if screen:
+            wanted = min(wanted, screen)
+        if wanted > self.width():
+            self.resize(wanted, self.height())
+
+    def _connect_parcel(self) -> None:
+        """Reiter PAKET: Umwandlung auf der Arbeitsfläche, Drucken, Editor, eigene Typen."""
+        if "parcel" not in self._panel_by_key:
+            return
+        panel = self.panel("parcel")
+        panel.view_changed.connect(self.render_now)
+        panel.open_requested.connect(self.open_parcel_file)
+        panel.print_requested.connect(self.print_documents)
+        panel.editor_requested.connect(self.open_parcel_in_editor)
+        panel.own_requested.connect(self.new_own_parcel_type)
+        panel.rename_requested.connect(self.rename_own_parcel_type)
+        panel.remove_requested.connect(self.remove_own_parcel_type)
+        self.panels.currentChanged.connect(self._parcel_view_switched)
 
     def _toolbar_action(self, key: str, icon: str, text: str, handler) -> QAction:
         """Aktion aus dem Verzeichnis als Knopf der Werkzeugleiste (Kürzel bleibt änderbar)."""
@@ -608,6 +657,17 @@ class MainWindow(QMainWindow):
                 panel.show_frame(exact_rect(self.doc.objects[index], self.rendered[index]))
 
     def _update_edit_actions(self) -> None:
+        if self._parcel_locked():                   # Paketmarke: nur Ansicht
+            for entry in ACTIONS:
+                action = self.shortcut_actions[entry.id]
+                if (entry.scope == "canvas" or entry.id in ("edit.undo", "edit.redo")) \
+                        and action.isEnabled():
+                    action.setEnabled(False)
+                    self._parcel_disabled.add(entry.id)
+            return
+        for key in self._parcel_disabled:           # wieder wie vorher, Rest regelt das Folgende
+            self.shortcut_actions[key].setEnabled(True)
+        self._parcel_disabled.clear()
         if self.edit_session.update_actions(self.shortcut_actions):   # wirken auf den Editor
             return
         self.shortcut_actions["text.end_edit"].setEnabled(False)
@@ -633,6 +693,11 @@ class MainWindow(QMainWindow):
         if self.canvas.is_dragging():   # Ziehen nicht unterbrechen – nach dem Loslassen rendern
             self._timer.start()
             return
+        if self._render_parcel():                   # Reiter PAKET mit Marke: nur Ansicht
+            return
+        if self.canvas.read_only:
+            self.canvas.set_read_only(False)
+            self._update_edit_actions()             # Bearbeiten wieder möglich
         view = self._view_doc()
         try:
             # jedes Objekt höchstens einmal messen und zeichnen; Fläche und „ragt hinaus“
@@ -694,6 +759,167 @@ class MainWindow(QMainWindow):
         self.panel("barcode").update_check()        # Serie: Prüfhinweis zur Vorschau-Zeile
         self.edit_session.update_marks()            # Schreibmarke zum neuen Zeilensatz
 
+    # --- Paketmarke (Reiter PAKET) ------------------------------------------------
+    def _parcel_shown(self) -> bool:
+        """Reiter PAKET ist zu sehen."""
+        return ("parcel" in self._panel_by_key
+                and self.panels.currentWidget() is self.panel("parcel"))
+
+    def _parcel_locked(self) -> bool:
+        """Reiter PAKET mit geladener Marke: Arbeitsfläche ist nur Ansicht (mit oder ohne
+        Umwandlung) – nichts ändert das Dokument."""
+        return self._parcel_shown() and self.panel("parcel").source is not None
+
+    def _parcel_blocks(self) -> bool:
+        """Bearbeiten im Reiter PAKET mit Marke: Hinweis statt Änderung (True = gesperrt)."""
+        if not self._parcel_locked():
+            return False
+        self._set_result(_(PARCEL_VIEW_ONLY), "error")
+        return True
+
+    def _render_parcel(self) -> bool:
+        """Reiter PAKET mit geladener Marke: die Arbeitsfläche zeigt das gewählte Etikett der
+        Umwandlung bzw. – ohne Umwandlung (nicht erkannt, Typ nicht gewählt, Fehler) – ein leeres
+        Etikett, immer nur zur Ansicht (True); ohne Marke das Dokument (False). Die Umwandlung
+        folgt dem Etikett des Dokuments und dem Drucker."""
+        if not self._parcel_shown():
+            return False
+        panel = self.panel("parcel")
+        blocker = QSignalBlocker(panel)             # Umwandlung neu – gezeigt wird hier gleich
+        panel.set_target(self.doc.label_id, self.model)
+        del blocker
+        if panel.source is None:
+            return False
+        self.finish_editing()
+        self.canvas.set_selection([])
+        doc = panel.current_document()
+        try:
+            if doc is None:
+                raise ValueError(None)
+            result = self._parcel_renderer.render(doc, self.model)
+        except ValueError as e:
+            if e.args and e.args[0]:
+                panel.show_render_error(str(e))
+            doc = Document(self.doc.label_id, length_mm=self.doc.length_mm,
+                           orientation=self.doc.orientation)   # leer: nichts zu sehen
+            result = self._parcel_renderer.render(doc, self.model)
+        size = result.size
+        count = len(result.objects)
+        self.canvas.set_read_only(True)
+        self.canvas.set_document(get_label(doc.label_id), size, result.objects, doc.orientation,
+                                 printable_area(doc, self.model, size), keep_ratio=[False] * count,
+                                 grow=None, keep_aspect=[False] * count, frame=result.frame)
+        self._update_edit_actions()
+        return True
+
+    def _parcel_view_switched(self, _index: int = 0) -> None:
+        """Reiterwechsel: Arbeitsfläche zeigt die Umwandlung bzw. wieder das Dokument."""
+        self.render_now()
+
+    def ask_parcel_file(self) -> str | None:
+        """Dateidialog „Paketmarke öffnen“ mit Vorschau (in Tests ersetzbar); None = abgebrochen."""
+        path = file_dialog.ask_open(self, _("Open parcel label"), self._parcel_dir,
+                                    _("Parcel labels (*.pdf *.png *.jpg *.jpeg *.gif);;"
+                                      "All files (*)"),
+                                    system=self.system_dialog, model=self.model)
+        if path:
+            self._parcel_dir = str(Path(path).parent)
+        return str(path) if path else None
+
+    def open_parcel_file(self) -> None:
+        """MARKE ÖFFNEN …: Datei wählen, laden, Typ erkennen, umwandeln (Fehler im Panel)."""
+        path = self.ask_parcel_file()
+        if path:
+            self.panel("parcel").load(path)
+
+    def print_documents(self, docs: list[Document]) -> None:
+        """Mehrere Etiketten (Umwandlung einer Paketmarke) in einem Auftrag drucken, Schnitt nach
+        jedem – gleiche Prüfungen und Rückfragen wie sonst."""
+        if not docs:
+            return
+        if self.is_printing():
+            self._set_result(_(PRINTING_WAIT), "error")
+            return
+        if not self._can_print(docs[0]):
+            return
+        red = get_label(docs[0].label_id).two_color and capabilities(self.model).two_color
+        images, outside = [], []
+        try:
+            for number, doc in enumerate(docs, start=1):
+                images.append(to_print_mode(render_document(doc, self.model), red))
+                if objects_outside(doc, self.model):
+                    outside.append(number)
+        except ValueError as e:
+            self._set_result(str(e), "error")
+            return
+        self._print(images if len(images) > 1 else images[0], docs[0], outside)
+
+    def open_parcel_in_editor(self, doc: Document) -> None:
+        """Gezeigtes Etikett der Umwandlung als gewöhnliches Etikett öffnen (Rückfrage bei
+        Änderungen wie bei Neu); danach zeigt die Arbeitsfläche wieder den Editor."""
+        if self.files.open_document(copy.deepcopy(doc)):
+            self._tool_triggered("paper")
+            self.tool_actions["paper"].setChecked(True)
+
+    def exec_parcel_editor(self, editor: ParcelTypeEditor) -> bool:
+        """Fenster „Eigener Markentyp“ zeigen (in Tests ersetzbar); True = gespeichert."""
+        return editor.exec() == ParcelTypeEditor.DialogCode.Accepted
+
+    def new_own_parcel_type(self) -> None:
+        """EIGENEN TYP ANLEGEN …: Bereiche auf der geöffneten Marke festlegen, speichern."""
+        panel = self.panel("parcel")
+        if panel.source is None:
+            return
+        taken = {t.id for t in parcel.own_types()}
+        editor = ParcelTypeEditor(self, panel.source, self.doc.label_id, self.model, taken)
+        try:
+            if not self.exec_parcel_editor(editor):
+                return
+            ptype = editor.result_type()
+            parcel.save_own(ptype)
+        except (parcel.ParcelError, OSError) as e:
+            self._set_result(_("Own type not saved: {error}").format(error=e), "error")
+            return
+        finally:
+            editor.deleteLater()
+        panel.refresh_types(ptype.id)
+        self._set_result(_("Own type “{name}” saved").format(name=ptype.name), "ok")
+
+    def ask_parcel_type_name(self, current: str) -> str | None:
+        """Neuer Name eines eigenen Typs (in Tests ersetzbar); None = abgebrochen."""
+        name, ok = QInputDialog.getText(self, _("Rename own type"), _("Name:"), text=current)
+        return name.strip() if ok and name.strip() else None
+
+    def ask_remove_parcel_type(self, name: str) -> bool:
+        """Rückfrage vor dem Löschen eines eigenen Typs (in Tests ersetzbar)."""
+        return QMessageBox.question(
+            self, _("Delete own type"), _("Delete the own type “{name}”?").format(name=name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+
+    def rename_own_parcel_type(self, type_id: str) -> None:
+        try:
+            ptype = parcel.find(type_id)
+            name = self.ask_parcel_type_name(ptype.name)
+            if name is None:
+                return
+            parcel.save_own(replace(ptype, names={language() or "en": name}))
+        except (parcel.ParcelError, OSError) as e:
+            self._set_result(str(e), "error")
+            return
+        self.panel("parcel").refresh_types()            # gewählter Typ bleibt gewählt
+
+    def remove_own_parcel_type(self, type_id: str) -> None:
+        try:
+            ptype = parcel.find(type_id)
+            if not self.ask_remove_parcel_type(ptype.name):
+                return
+            parcel.remove_own(type_id)
+        except (parcel.ParcelError, OSError) as e:
+            self._set_result(str(e), "error")
+            return
+        self.panel("parcel").refresh_types()
+
     def _drop_stale_view(self) -> None:
         """Nach einem Renderfehler: Objektbilder, die nicht mehr zu ``doc.objects`` passen
         (gelöscht, eingefügt, umsortiert – ``_structure_changing``), von der Arbeitsfläche
@@ -724,12 +950,16 @@ class MainWindow(QMainWindow):
     def undo(self) -> None:
         """Rückgängig – im Schreibmodus erst innerhalb der Bearbeitung (``TextEditSession.undo``),
         dann im Dokument (Knopf und Strg+Z gleich)."""
+        if self._parcel_blocks():
+            return
         self.accept_pending_input()                 # eben Getipptes ist der letzte Schritt
         if not self.edit_session.undo():
             self._restore(self.history.undo(self.doc, self.canvas.selection()))
 
     def redo(self) -> None:
         """Wiederherstellen – im Schreibmodus erst im Editor, dann im Dokument (wie ``undo``)."""
+        if self._parcel_blocks():
+            return
         self.accept_pending_input()
         if not self.edit_session.redo():
             self._restore(self.history.redo(self.doc, self.canvas.selection()))
@@ -801,6 +1031,8 @@ class MainWindow(QMainWindow):
 
         Schrift aus den Einstellungen (automatische Größe → 19 pt). Andere leere Texte sind
         unsichtbar und drucken nicht – sie entfallen dabei."""
+        if self._parcel_blocks():
+            return
         self.finish_editing()
         self._structure_changing()
         self._commit()
@@ -1134,6 +1366,8 @@ class MainWindow(QMainWindow):
         Zwischenablage“ erreichbar) › Bild (Mitte des bedruckbaren Bereichs). Eingefügtes ist
         ausgewählt. Im Schreibmodus Text in den Text (als reiner Text). Nur hier werden die
         Daten der Zwischenablage gelesen."""
+        if self._parcel_blocks():
+            return
         if self.edit_session.paste():
             return
         if self._owns_clipboard() or (self._clipboard and self._system.empty):
@@ -1235,6 +1469,8 @@ class MainWindow(QMainWindow):
         bedruckbaren Bereichs. Bei einem PDF mit mehreren Seiten wird die Seite erfragt
         (``page`` gibt sie vor). Fehler stehen verständlich in der Statusleiste; was sich
         laden ließ, wird eingefügt (ein Schritt)."""
+        if self._parcel_blocks():
+            return
         objects, notes, failed = [], [], False
         for path in map(Path, paths):
             pdf = path.suffix.lower() == ".pdf"
@@ -1370,6 +1606,8 @@ class MainWindow(QMainWindow):
         """Symbol als Bild-Objekt einfügen: längere Seite ``SYMBOL_MM`` (höchstens quer zum
         Band bedruckbar), auf den Inhalt zugeschnitten, Strich, Vektor wenn SVG; Platzierung wie
         Bilder; danach „Zuletzt verwendet“."""
+        if self._parcel_blocks():
+            return
         if self._timer.isActive():
             self.render_now()                       # aktueller bedruckbarer Bereich
         try:
@@ -1401,6 +1639,8 @@ class MainWindow(QMainWindow):
         mittig im Innenraum bzw. bedruckbaren Bereich, lieber gedreht als kleiner; auf einem
         Endlosband hinter den vorhandenen Objekten) – ausgewählt, der Inhalt markiert im Fokus:
         Tippen ersetzt das Beispiel."""
+        if self._parcel_blocks():
+            return
         self.finish_editing()
         if self._timer.isActive():
             self.render_now()                       # aktueller bedruckbarer Bereich
@@ -1456,7 +1696,13 @@ class MainWindow(QMainWindow):
     def _dropped(self, paths: list[Path], image: Image.Image | None, x_mm: float,
                  y_mm: float) -> None:
         """Bilddateien oder Bilddaten auf die Arbeitsfläche abgelegt: an der Ablagestelle
-        (kommt nach dem Ablegen, ``Canvas.dropped`` – ein PDF-Seitendialog ist dann möglich)."""
+        (kommt nach dem Ablegen, ``Canvas.dropped`` – ein PDF-Seitendialog ist dann möglich).
+        Im Reiter PAKET lädt eine abgelegte Datei die Marke, Bilddaten ändern nichts."""
+        if self._parcel_shown() and paths:
+            self.panel("parcel").load(paths[0])
+            return
+        if self._parcel_blocks():
+            return
         if paths:
             self.insert_image_files(paths, at=(x_mm, y_mm))
         elif image is not None:
@@ -1466,6 +1712,8 @@ class MainWindow(QMainWindow):
                         at: tuple[float, float] | None = None, dpi: float = DPI) -> None:
         """Bild ohne Auflösungsangabe (Zwischenablage, Bilddaten, Bildschirmfoto) einfügen –
         300 dpi, also 1 Pixel = 1 Druckpunkt."""
+        if self._parcel_blocks():
+            return
         notes: list[str] = []
         self._insert_images([self._new_image(image, dpi, source, None, notes)], at, notes)
 
@@ -1871,6 +2119,13 @@ class MainWindow(QMainWindow):
 
     def print_label(self) -> None:
         self.accept_pending_input()
+        if self._parcel_locked():                   # Reiter PAKET mit Marke: nur sie drucken
+            panel = self.panel("parcel")
+            if panel.documents():
+                self.print_documents(panel.documents())   # was die Arbeitsfläche zeigt
+            else:
+                self._set_result(panel.error or _(PARCEL_CHOOSE_TYPE), "error")
+            return
         if self._timer.isActive():
             self.render_now()
         if self.doc.series is not None:             # rendert jede Zeile selbst (Fehler: „Zeile n“)

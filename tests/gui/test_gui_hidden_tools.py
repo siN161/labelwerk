@@ -34,7 +34,7 @@ def test_hidden_tools_have_no_button(qtbot):
     win = _window(qtbot, hidden_tools=["barcode", "series"])
     visible = {key: action.isVisible() for key, action in win.tool_actions.items()}
     assert visible == {"file": True, "paper": True, "text": True, "image": True,
-                       "barcode": False, "layout": True, "series": False}
+                       "barcode": False, "layout": True, "series": False, "parcel": True}
 
 
 def test_selecting_an_object_of_a_hidden_tool_shows_its_panel(qtbot):

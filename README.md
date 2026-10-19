@@ -129,6 +129,14 @@ Auf 62 mm endlos ergibt das ein 15–28 cm langes Etikett, auf breiteren Bänder
 („ungeprüft“; ihre Kanten rücken an der Marke bis zum nächsten weißen Rand). Eigene Typen und neue Länder:
 `src/labelwerk/parcel_data/README.md`. Vor dem Versand prüfen, ob die Barcodes lesbar sind.
 
+In der Oberfläche: Reiter **PAKET** → MARKE ÖFFNEN … (oder die Datei aufs Panel bzw. die Arbeitsfläche ziehen). Der
+erkannte Typ ist mit ✓ gewählt, die Arbeitsfläche zeigt das Ergebnis für das Etikett aus dem Reiter PAPIER (nur
+Ansicht, ◀ ▶ bei mehreren Etiketten). DRUCKEN druckt alle Etiketten in einem Auftrag, IM EDITOR ÖFFNEN macht daraus
+ein normales Etikett (die Stücke sind Bilder). EIGENER TYP … öffnet die Marke groß: Bereiche mit der Maus aufziehen,
+je Bereich Drehung und „Barcode – nicht verkleinern“ wählen, Namen und optional einen Text zum Erkennen eintragen –
+labelwerk ordnet die Stücke selbst auf dem Band an. Eigene Typen lassen sich in der Liste umbenennen und löschen
+(rechte Maustaste).
+
 ## Architektur
 
 ```

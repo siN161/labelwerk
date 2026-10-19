@@ -430,7 +430,7 @@ def test_dialog_start_tool_choice(qtbot, tmp_path):
     combo = dialog.start_tool
     assert combo.currentData() == "series"
     assert [combo.itemData(i) for i in range(combo.count())] == [
-        "last", "file", "paper", "text", "image", "barcode", "layout", "series"]
+        "last", "file", "paper", "text", "image", "barcode", "layout", "series", "parcel"]
     assert combo.itemText(0) == "Zuletzt benutzter" and combo.itemText(2) == "Papier"
     assert dialog.restart_hint.isHidden()
     combo.setCurrentIndex(combo.findData("last"))
