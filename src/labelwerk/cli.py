@@ -141,7 +141,9 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("media", help=_("query the roll loaded in the printer (prints nothing)"))
     sub.add_parser("printers", help=_("list found printers and supported models"))
-    sub.add_parser("fonts", help=_("list installed font families"))
+    fo = sub.add_parser("fonts", help=_("list installed font families with German characters"))
+    fo.add_argument("--all", action="store_true",
+                    help=_("all font families, also copies, symbol fonts and other scripts"))
 
     di = sub.add_parser("install-desktop",
                         help=_("add labelwerk-gui to the launcher (Super key)"))
@@ -406,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "printers":
         return _show_printers(args.model)
     if args.cmd == "fonts":
-        print("\n".join(families()))
+        print("\n".join(families(all=args.all)))
         return 0
 
     if args.cmd == "print" and args.font and args.font_family:

@@ -344,3 +344,13 @@ def test_one_bad_printer_option_keeps_the_others(tmp_path):
         "cups:Dymo": {"CutMedia": "EndOfJob", "X": "a b"}, "zpl:203": "kaputt"}}))
     s = load_settings(path)
     assert s.printer_options == {"cups:Dymo": {"CutMedia": "EndOfJob"}} and s.warnings
+
+
+def test_fonts_all_default_and_validation(tmp_path):
+    path = tmp_path / "s.json"
+    assert load_settings(path).fonts_all is False              # kurze Schriftliste
+    save_settings(Settings(fonts_all=True), path)
+    assert load_settings(path).fonts_all is True
+    path.write_text(json.dumps({"fonts_all": "ja"}))
+    s = load_settings(path)
+    assert s.fonts_all is False and s.warnings

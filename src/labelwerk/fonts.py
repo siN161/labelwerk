@@ -4,6 +4,7 @@ Ohne fontconfig (fc-list/fc-match) wird auf DejaVu Sans zurückgefallen.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -37,15 +38,55 @@ def _run(*args: str) -> str | None:
         return None
 
 
-@lru_cache(maxsize=1)
-def families() -> list[str]:
-    """Installierte Schriftfamilien, sortiert."""
+# Kurze Liste: keine Kopien (Powerline/Nerd Fonts sind nachgerüstete Programmierschriften), keine
+# reinen Symbolschriften (Zeichen auf lateinischen Plätzen), keine Regionsvarianten der CJK-Schriften
+# (für deutschen Text gleich)
+_HIDDEN = re.compile(
+    r"powerline|nerd font"
+    r"|^(d050000l|standard symbols (ps|l)|dingbats|symbol|opensymbol|symbola|webdings"
+    r"|wingdings( \d)?|font awesome.*|material (icons|symbols).*|noto sans symbols.*)$"
+    r"|\b(cjk|ukai|uming)\b.*\b(cn|hk|tw|jp|kr|sc|tc|mbe)$", re.IGNORECASE)
+
+
+def families(all: bool = False) -> list[str]:
+    """Installierte Schriftfamilien, sortiert. Standard ist die kurze Liste: nur Schriften mit
+    allen deutschen Zeichen (fontconfig ``:lang=de``), ohne Farb-/Emoji-Schriften, Kopien,
+    Symbolschriften und CJK-Regionsvarianten; ``all``: jede Familie. Gemerkt (je Liste einmal,
+    gleich wie aufgerufen; Tests leeren ``_families.cache_clear()``)."""
+    return list(_families(bool(all)))
+
+
+@lru_cache(maxsize=None)
+def _families(all: bool) -> tuple[str, ...]:
     # %{family[0]}: erster Familienname je Schrift, ohne fontconfig-Maskierung
-    out = _run("fc-list", "-f", "%{family[0]}\\n", ":")
-    if not out:
-        return [DEFAULT_FAMILY]
-    names = {line.strip() for line in out.splitlines() if line.strip()}
-    return sorted(names, key=str.casefold)
+    if all:
+        out = _run("fc-list", "-f", "%{family[0]}\\n", ":")
+        names = {line.strip() for line in (out or "").splitlines() if line.strip()}
+    else:
+        out = _run("fc-list", "-f", "%{family[0]}|%{color}\\n", ":lang=de")
+        rows = [line.rsplit("|", 1) for line in (out or "").splitlines() if "|" in line]
+        color = {name.strip() for name, flag in rows if flag.strip() == "True"}
+        names = {name.strip() for name, __ in rows if name.strip()} - color
+        names = {name for name in names if not _HIDDEN.search(name)}
+    if not names:
+        return (DEFAULT_FAMILY,)
+    return tuple(sorted(names, key=str.casefold))
+
+
+# Qt (QFontComboBox) nannte gleichnamige Schriften „Name [Hersteller]“ – so steht es in älteren
+# Dateien, Favoriten und Einstellungen
+_FOUNDRY = re.compile(r"(.+?) \[[^\[\]]+\]")
+
+
+def canonical(family: str | None) -> str | None:
+    """Familienname ohne Qts Herstellerzusatz („C059 [UKWN]“ → „C059“), wenn es die Familie so
+    gibt (und nicht wirklich mit Klammer heißt); sonst unverändert – auch Qt-Sammelnamen wie
+    „Sans Serif“ (die bleiben fremd und werden ersetzt)."""
+    m = _FOUNDRY.fullmatch(family) if family else None
+    if m is None:
+        return family
+    installed = families(all=True)
+    return m[1] if m[1] in installed and family not in installed else family
 
 
 def _escape(name: str) -> str:
@@ -56,7 +97,7 @@ def _escape(name: str) -> str:
 @lru_cache(maxsize=256)
 def resolve(family: str | None, bold: bool, italic: bool) -> FontMatch:
     """Datei zu Familie + fett/kursiv; fontconfig ersetzt Fehlendes durch Ähnliches."""
-    family = family or DEFAULT_FAMILY
+    family = canonical(family) or DEFAULT_FAMILY
     # maskiert; ein führendes "-" wird zu "\\-" und ist so keine Option
     pattern = _escape(family) + (":bold" if bold else ":weight=regular") + (":italic" if italic else ":roman")
     out = _run("fc-match", "-f", "%{file}|%{family}|%{style}", pattern)

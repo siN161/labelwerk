@@ -72,12 +72,11 @@ def test_qt_dialog_buttons_are_german(qapp):
 
 
 def test_dialog_font_family_roundtrip(qtbot, tmp_path):
-    from PySide6.QtGui import QFont
     path = tmp_path / "settings.json"
     dialog = SettingsDialog(Settings(font_family="Liberation Sans"), path=path)
     qtbot.addWidget(dialog)
     assert dialog.values().font_family == "Liberation Sans"
-    dialog.font_family.setCurrentFont(QFont("DejaVu Sans"))
+    dialog.font_family.set_current_family("DejaVu Sans")
     dialog.accept()
     assert load_settings(path).font_family == "DejaVu Sans"
 
@@ -89,12 +88,39 @@ def test_unknown_font_family_survives_unchanged_dialog(qtbot):
 
 
 def test_changed_font_family_is_taken_over(qtbot):
-    from PySide6.QtGui import QFont
     dlg = SettingsDialog(Settings(font_family="GibtsGarNicht 4711"))
     qtbot.addWidget(dlg)
     dlg.font_family.setCurrentIndex(0)
     dlg.font_family.setCurrentIndex(1)
-    assert dlg.values().font_family == dlg.font_family.currentFont().family() != "GibtsGarNicht 4711"
+    assert dlg.values().font_family == dlg.font_family.current_family() != "GibtsGarNicht 4711"
+
+
+def test_all_fonts_option_fills_the_list_at_once(qtbot, monkeypatch):
+    from labelwerk import fonts
+    monkeypatch.setattr(fonts, "families",
+                        lambda all=False: ["DejaVu Sans", "Zapf X"] if all else ["DejaVu Sans"])
+    dlg = SettingsDialog(Settings(font_family="DejaVu Sans"))
+    qtbot.addWidget(dlg)
+    assert not dlg.fonts_all.isChecked() and dlg.font_family.count() == 1
+    dlg.fonts_all.setChecked(True)                               # sofort in der Liste
+    assert dlg.font_family.count() == 2 and dlg.font_family.current_family() == "DejaVu Sans"
+    assert dlg.values().fonts_all is True and dlg.values().font_family == "DejaVu Sans"
+    assert not dlg.restart_needed()                              # wirkt ohne Neustart
+
+
+def test_saved_all_fonts_option_applies_to_text_panel(qtbot, monkeypatch):
+    from labelwerk import fonts
+    monkeypatch.setattr(fonts, "families",
+                        lambda all=False: ["DejaVu Sans", "Zapf X"] if all else ["DejaVu Sans"])
+    win = MainWindow(settings=Settings(check_media_on_start=False, fonts_all=True))
+    qtbot.addWidget(win)
+    family = win.panel("text").family
+    assert [family.itemText(i) for i in range(family.count())] == ["DejaVu Sans", "Zapf X"]
+    monkeypatch.setattr(SettingsDialog, "exec", lambda self: (
+        self.fonts_all.setChecked(False), self.accept(), QDialog.DialogCode.Accepted)[-1])
+    win.open_settings()
+    assert win.settings.fonts_all is False
+    assert [family.itemText(i) for i in range(family.count())] == ["DejaVu Sans"]
 
 
 def test_dialog_keeps_fractional_font_size(qtbot):

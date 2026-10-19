@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFileD
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
 
-from .. import barcodes, clipart, favorites, series
+from .. import barcodes, clipart, favorites, fonts, series
 from ..desktop import APP_NAME
 from ..detect import brother_busy
 from .. import cups, zpl
@@ -220,6 +220,7 @@ class MainWindow(QMainWindow):
         for panel in self._panel_by_key.values():
             panel.use_actions(self.shortcut_actions)
         self.apply_theme_icons()
+        self.apply_font_list()
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1643,6 +1644,11 @@ class MainWindow(QMainWindow):
             if entry is not None:
                 self.shortcut_actions[entry[0]].setIcon(line_icon(entry[1], dark, hover=True))
 
+    def apply_font_list(self) -> None:
+        """Schriftauswahl im Reiter Text: kurze Liste oder alle (Einstellung „Alle Schriften“)."""
+        if "text" in self._panel_by_key:
+            self._panel_by_key["text"].family.set_families(fonts.families(all=self.settings.fonts_all))
+
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, model=self.model, parent=self, started=self._started)
         accepted = dialog.exec() == SettingsDialog.DialogCode.Accepted
@@ -1661,6 +1667,7 @@ class MainWindow(QMainWindow):
             from .app import apply_theme
             apply_theme(QApplication.instance(), self.settings.theme)
             self.apply_theme_icons()
+            self.apply_font_list()
             apply_shortcuts(self.shortcut_actions,
                             without_conflicts(effective(self.settings.shortcuts))[0])
             self.files.refresh_lists()                  # „Beim Start“ im Reiter Datei

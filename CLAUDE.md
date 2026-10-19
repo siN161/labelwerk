@@ -98,7 +98,10 @@ src/labelwerk/
               po/<code>.po im Paket, po/labelwerk.pot erzeugt von tools/i18n.py (extract mit „# Translators:“-
               Hinweisen und python-brace-format, update behält Kommentare/fuzzy/veraltete, check prüft auch
               Mehrzahlformen, german_leftovers); Anleitung po/README.md
-  fonts.py    Schriften über fontconfig (families, resolve, load), Ersatzkursive bei fehlender Kursiv-Datei
+  fonts.py    Schriften über fontconfig (families, resolve, load), Ersatzkursive bei fehlender Kursiv-Datei;
+              families() = kurze Liste (:lang=de, ohne Farbschriften, Powerline/Nerd-Font-Kopien, Symbolschriften,
+              CJK-Regionsvarianten), families(all=True) alle (Einstellung `fonts_all`, CLI fonts --all); canonical:
+              alte Qt-Namen „Name [Hersteller]“ → „Name“ (resolve, font_warnings, FontCombo)
   files.py    load_file(path, page) -> PIL.Image (PDF via pypdfium2 / PNG / JPG, 300 dpi)
               crop(img) -> auf Inhalt, ohne Schnittmarken/Leerraum; fit_to_label(img, label_id, fit, rotate) -> 1:1, auto/feste Drehung
               load_image(path, page, dpi=None) -> (RGB-Bild, dpi) für Bild-Objekte (PNG/JPG/GIF/BMP/WebP/PDF, Transparenz → weiß, EXIF-Lage; dpi gesetzt: Dateiauflösung gilt nicht, quadratisch diese dpi);
@@ -267,6 +270,10 @@ src/labelwerk/
                     Befehle im Schreibmodus (undo/redo/copy/cut/paste/update_actions -> bool „erledigt“), MainWindow delegiert
     actions.py      QActions aus shortcuts.ACTIONS – jedes Kürzel der App läuft hierüber (apply_shortcuts)
     history.py      Rückgängig/Wiederherstellen: Dokument-Schnappschüsse samt Auswahl, höchstens 100; amend (ohne eigenen Schritt)
+    widgets.py      SpinBox/DoubleSpinBox (Dezimaltrenner der Sprache), FontCombo (Schriftauswahl aus fonts.families,
+                    jede Schrift in ihrer Schrift, fremde Schrift bleibt oben gewählt, None = leer bei gemischten Schriften;
+                    Breite unabhängig von den Namen; Signal family_chosen) – Reiter Text
+                    und Einstellungen
     symbols.py      Liniensymbole (gui/icons) je Design, weiß beim Darüberfahren in RawBlock
     print_worker.py Drucken im Hintergrund-Thread (cancel(): threading.Event; Signale progress, cancelled)
     media_worker.py  Medium prüfen im Hintergrund (MediaWorker(model, printer): URI des gewählten USB-Druckers; Ergebnis eines

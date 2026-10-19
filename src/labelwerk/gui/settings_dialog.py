@@ -8,15 +8,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QFont, QKeySequence
+from PySide6.QtGui import QColor, QKeySequence
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
-                               QDialogButtonBox, QFontComboBox, QFormLayout, QFrame, QGroupBox,
+                               QDialogButtonBox, QFormLayout, QFrame, QGroupBox,
                                QHBoxLayout, QHeaderView, QKeySequenceEdit, QLabel, QPushButton,
                                QScrollArea, QStyledItemDelegate, QTableWidget, QTableWidgetItem,
                                QTabWidget,
                                QVBoxLayout, QWidget)
 
-from .. import favorites, i18n, shortcuts, zpl
+from .. import favorites, fonts, i18n, shortcuts, zpl
 from ..document import MAX_MARGIN_MM, MAX_PT, MIN_PT
 from ..i18n import N_, _
 from ..labels import get_label, labels_for_model
@@ -24,7 +24,7 @@ from ..printer import DEFAULT_MODEL
 from ..printers import SUPPORTED_MODELS, capabilities
 from ..settings import (Settings, restart_pending, save_settings, started_values,
                         valid_host)
-from .widgets import DoubleSpinBox, SpinBox
+from .widgets import DoubleSpinBox, FontCombo, SpinBox
 
 # englisch (N_), angezeigt wird _(…)
 SCOPE_NAMES = {"global": N_("Global"), "canvas": N_("Canvas"), "edit": N_("Text editing")}
@@ -102,12 +102,12 @@ class SettingsDialog(QDialog):
         row.addWidget(self.font_auto)
         row.addWidget(self.font_size)
         form.addRow(_("Font size"), row)
-        self.font_family = QFontComboBox()
-        self.font_family.setCurrentFont(QFont(settings.font_family))
+        self.font_family = FontCombo(fonts.families(all=settings.fonts_all))
+        self.font_family.set_current_family(settings.font_family)
         # Nicht installierte Schrift nicht stillschweigend durch Ersatz überschreiben
         self._orig_family = settings.font_family
         self._family_touched = False
-        self.font_family.currentFontChanged.connect(self._family_changed)
+        self.font_family.family_chosen.connect(self._family_changed)
         form.addRow(_("Font"), self.font_family)
         self.start_favorite = QComboBox()
         self.start_favorite.addItem(_("Empty label"), None)
@@ -189,6 +189,13 @@ class SettingsDialog(QDialog):
             self.language.addItem(i18n.NAMES.get(code, code), code)
         self.language.setCurrentIndex(max(0, self.language.findData(settings.language)))
         form.addRow(_("Language"), self.language)
+        self.fonts_all = QCheckBox(_("Show all fonts"))
+        self.fonts_all.setToolTip(_("Also copies, symbol fonts and fonts without German characters "
+                                    "– otherwise only fonts that can write German"))
+        self.fonts_all.setChecked(settings.fonts_all)
+        self.fonts_all.toggled.connect(
+            lambda on: self.font_family.set_families(fonts.families(all=on)))
+        form.addRow(self.fonts_all)
         # Einstellungen, die erst nach einem Neustart wirken: farbiger Hinweis neben SPEICHERN
         # (unten im Fenster – sichtbar in jedem Reiter), sobald eine davon geändert ist
         self._started = started if started is not None else started_values(settings)
@@ -389,7 +396,7 @@ class SettingsDialog(QDialog):
                             "model": self.network.cellWidget(row, 2).currentData()})
         return entries
 
-    def _family_changed(self, _font) -> None:
+    def _family_changed(self, _family) -> None:
         self._family_touched = True
 
     def restart_needed(self) -> bool:
@@ -406,8 +413,9 @@ class SettingsDialog(QDialog):
             orientation=self.orientation.currentData(),
             margin_mm=self.margin.value(),
             font_size_pt=None if self.font_auto.isChecked() else self.font_size.value(),
-            font_family=(self.font_family.currentFont().family() if self._family_touched
+            font_family=(self.font_family.current_family() if self._family_touched
                          else self._orig_family),
+            fonts_all=self.fonts_all.isChecked(),
             check_media_on_start=self.check_media.isChecked(),
             start_zoom=self.zoom.value(),
             theme=self.theme.currentData(),

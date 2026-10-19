@@ -16,16 +16,17 @@ import math
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import (QAction, QFont, QIcon, QTextCharFormat, QTextCursor, QTextFormat,
                            QTextOption)
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFontComboBox, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QHBoxLayout, QLabel,
                                QPushButton, QTextEdit)
 
 from ...document import MAX_PT, MIN_PT, Document, Paragraph, Span, TextObject
 from ...fonts import DEFAULT_FAMILY
-from ... import i18n
+from ... import fonts, i18n
 from ...i18n import N_, _, pgettext
 from ...layout import Rect
 from ...render import REF_PT
 from ..symbols import line_icon
+from ..widgets import FontCombo
 from . import Panel
 from .position import PositionSection
 
@@ -120,7 +121,7 @@ class TextPanel(Panel):
         self.edit.document().setDefaultTextOption(option)
 
         self.section(pgettext("text panel", "Font"))
-        self.family = QFontComboBox()
+        self.family = FontCombo()        # kurze Liste; MainWindow.apply_font_list nach Einstellung
         self.layout_.addWidget(self.family)
         row = QHBoxLayout()
         self.size = QComboBox()
@@ -186,8 +187,7 @@ class TextPanel(Panel):
         self.edit.cursorPositionChanged.connect(self._sync_buttons)
         self.edit.selectionChanged.connect(self._sync_buttons)
         step = self._step     # Knöpfe und Felder: jede Änderung ein eigener Schritt
-        self.family.currentFontChanged.connect(
-            lambda font: step(self._format, family=font.family()))
+        self.family.family_chosen.connect(lambda family: step(self._format, family=family))
         self.size.activated.connect(lambda _index: step(self._size_entered))
         self.size.lineEdit().editingFinished.connect(lambda: step(self._size_entered))
         self.grow.clicked.connect(lambda: step(self._step_size, +1))
@@ -519,8 +519,8 @@ class TextPanel(Panel):
             document.clear()
             document.setUndoRedoEnabled(True)
             self.fit.setChecked(False)
-            # keine Schrift anzeigen, die nicht gilt – ohne blockierte Signale, sonst hält
-            # QFontComboBox die alte Schrift intern fest und zeigt sie beim Wiederwählen nicht
+            # keine Schrift anzeigen, die nicht gilt – ohne blockierte Signale: die Felder merken
+            # sich „leer“ und zeigen beim Wiederwählen dieselbe Schrift wieder an
             for combo in (self.family, self.size):
                 combo.setCurrentIndex(-1)
                 combo.setEditText("")
@@ -550,12 +550,14 @@ class TextPanel(Panel):
         """Knöpfe zeigen die Formatierung an der Schreibmarke."""
         props = self._props(self.edit.currentCharFormat())
         mixed = self._selection_sizes()
+        mixed_families = len({fonts.canonical(f) for f in self._selection_values("family")}) > 1
         self._shown_pt = None if len(mixed) > 1 else props["pt"]
         widgets = (self.family, self.size, self.bold, self.italic, self.underline,
                    *self.align_buttons.values())
         for w in widgets:
             w.blockSignals(True)
-        self.family.setCurrentFont(QFont(props["family"]))
+        # gemischte Schriften: Feld leer (wie die Größe); eine Wahl setzt dann alle auf sie
+        self.family.set_current_family(None if mixed_families else props["family"])
         self.size.setEditText("" if len(mixed) > 1 else i18n.number(props["pt"]))
         self.bold.setChecked(props["bold"])
         self.italic.setChecked(props["italic"])
@@ -580,11 +582,16 @@ class TextPanel(Panel):
 
     def _selection_sizes(self) -> set[float]:
         """Verschiedene Größen innerhalb der Markierung (leer ohne Markierung)."""
+        return {round(pt, 2) for pt in self._selection_values("pt")}
+
+    def _selection_values(self, key: str) -> set:
+        """Verschiedene Werte einer Formatierung (``_props``-Schlüssel) innerhalb der Markierung
+        (leer ohne Markierung)."""
         cursor = self.edit.textCursor()
         if not cursor.hasSelection():
             return set()
         start, end = cursor.selectionStart(), cursor.selectionEnd()
-        sizes = set()
+        values = set()
         block = self.edit.document().findBlock(start)
         while block.isValid() and block.position() < end:
             it = block.begin()
@@ -592,10 +599,10 @@ class TextPanel(Panel):
                 fragment = it.fragment()
                 if (fragment.isValid() and fragment.position() < end
                         and fragment.position() + fragment.length() > start):
-                    sizes.add(round(self._props(fragment.charFormat())["pt"], 2))
+                    values.add(self._props(fragment.charFormat())[key])
                 it += 1
             block = block.next()
-        return sizes
+        return values
 
     def show_error(self, message: str | None) -> None:
         self.error.setText(message or "")

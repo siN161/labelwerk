@@ -154,6 +154,10 @@ msgstr ""
 msgid "Along the tape the printer leaves {mm} mm free."
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Also copies, symbol fonts and fonts without German characters – otherwise only fonts that can write German"
+msgstr ""
+
 #: src/labelwerk/gui/main_window.py
 msgid "An object extends beyond the label and will be cut off. Print anyway?"
 msgstr ""
@@ -2134,6 +2138,10 @@ msgstr ""
 msgid "Shortcuts assigned twice – change one to save:"
 msgstr ""
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "Show all fonts"
+msgstr ""
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "Single"
 msgstr ""
@@ -2574,6 +2582,10 @@ msgid "add labelwerk-gui to the launcher (Super key)"
 msgstr ""
 
 #: src/labelwerk/cli.py
+msgid "all font families, also copies, symbol fonts and other scripts"
+msgstr ""
+
+#: src/labelwerk/cli.py
 msgid "auto (default), file:///dev/usb/lpN, usb://0x04f9:0xPID, tcp://IP, cups:NAME (queue, see 'labelwerk printers'), zpl+file:///dev/usb/lpN or zpl+tcp://IP (Zebra, with -m zpl:203/300/600)"
 msgstr ""
 
@@ -2663,7 +2675,7 @@ msgid "list found printers and supported models"
 msgstr ""
 
 #: src/labelwerk/cli.py
-msgid "list installed font families"
+msgid "list installed font families with German characters"
 msgstr ""
 
 #: src/labelwerk/cli.py

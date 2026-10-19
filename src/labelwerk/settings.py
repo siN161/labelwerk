@@ -33,6 +33,7 @@ class Settings:
     margin_mm: float = 1.0
     font_size_pt: float | None = None      # None = automatisch
     font_family: str = DEFAULT_FAMILY
+    fonts_all: bool = False                # Schriftauswahl: alle Familien statt der kurzen Liste
     check_media_on_start: bool = True
     start_zoom: int = 200
     theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
@@ -68,6 +69,7 @@ def _rules(model: str | None = None) -> dict:
         "font_size_pt": lambda v: v is None or ((_is_int(v) or isinstance(v, float))
                                                 and MIN_PT <= v <= MAX_PT),
         "font_family": lambda v: isinstance(v, str) and bool(v.strip()),
+        "fonts_all": lambda v: isinstance(v, bool),
         "check_media_on_start": lambda v: isinstance(v, bool),
         "start_zoom": lambda v: _is_int(v) and 25 <= v <= 400,
         "theme": lambda v: v in THEMES,

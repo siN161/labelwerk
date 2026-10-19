@@ -117,7 +117,7 @@ def test_start_uses_settings_family_and_size(qtbot):
     win.canvas.set_selection([0])
     panel = win.panel("text")
     assert panel.size.currentText() == "24"
-    assert panel.family.currentFont().family() == "Liberation Sans"
+    assert panel.family.current_family() == "Liberation Sans"
     assert not panel.fit.isChecked()
 
 
@@ -129,7 +129,7 @@ def test_unformatted_text_uses_base_format_not_widget_font(window):
     span = window.doc.objects[0].paragraphs[0].spans[0]
     assert span.family is None and span.size_pt is None and span.bold
     assert panel.size.currentText() == "19"
-    assert panel.family.currentFont().family() == "DejaVu Sans"
+    assert panel.family.current_family() == "DejaVu Sans"
     window.render_now()
     assert window.panel("text").error.isHidden()
 
@@ -347,3 +347,38 @@ def test_style_buttons_show_their_style_without_stylesheet(qtbot):
     assert panel.bold.font().bold()
     assert panel.italic.font().italic()
     assert panel.underline.font().underline()
+
+
+# --- Schriftliste (Abnahme-Korrekturen) ------------------------------------------
+def _families(window):
+    return [(s.text, s.family) for s in window.doc.objects[0].paragraphs[0].spans if s.text.strip()]
+
+
+def test_mixed_fonts_in_selection_leave_font_field_empty_and_choice_sets_all(window):
+    panel = window.panel("text")
+    panel.edit.setPlainText("aaa bbb")
+    _select(panel, 4, 7)
+    panel.family.set_current_family("DejaVu Serif")             # wie eine Wahl in der Liste
+    assert _families(window) == [("aaa ", None), ("bbb", "DejaVu Serif")]
+    _select(panel, 0, 7)
+    assert panel.family.currentText() == "" and panel.family.current_family() is None
+    document = panel.edit.document()
+    document.clearUndoRedoStacks()
+    panel.family.set_current_family("DejaVu Serif")
+    assert {family for __, family in _families(window)} == {"DejaVu Serif"}
+    assert panel.family.current_family() == "DejaVu Serif"
+    steps = 0
+    while document.isUndoAvailable():
+        document.undo()
+        steps += 1
+    assert steps == 1
+
+
+def test_same_font_in_selection_is_shown(window):
+    panel = window.panel("text")
+    panel.edit.setPlainText("aaa bbb")
+    _select(panel, 0, 7)
+    panel.family.set_current_family("DejaVu Serif")
+    _select(panel, 0, 3)
+    _select(panel, 0, 7)
+    assert panel.family.current_family() == "DejaVu Serif"

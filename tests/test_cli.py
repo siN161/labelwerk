@@ -323,6 +323,15 @@ def test_fonts_command_lists_families(capsys):
     assert "DejaVu Sans" in capsys.readouterr().out.splitlines()
 
 
+def test_fonts_command_short_list_and_all(monkeypatch, capsys):
+    from labelwerk import cli
+    monkeypatch.setattr(cli, "families", lambda all=False: ["A", "B"] if all else ["A"])
+    assert main(["fonts"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["A"]
+    assert main(["fonts", "--all"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["A", "B"]
+
+
 def test_align_invalid_is_argparse_error():
     with pytest.raises(SystemExit) as e:
         main(["print", "X", "--align", "mittig"])

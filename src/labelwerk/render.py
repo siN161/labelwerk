@@ -78,7 +78,8 @@ def font_warnings(doc: Document) -> list[str]:
                 match = fonts.resolve(span.family, span.bold, span.italic)
                 text = _("Font “{family}” not found – replaced by “{replacement}”.").format(
                     family=span.family, replacement=match.family)
-                if match.family.casefold() != span.family.casefold() and text not in warnings:
+                if (match.family.casefold() != fonts.canonical(span.family).casefold()
+                        and text not in warnings):
                     warnings.append(text)
     return warnings
 
