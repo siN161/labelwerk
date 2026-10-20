@@ -43,6 +43,7 @@ MAX_PAGES = 20
 MAX_DPI = 600
 MIN_PIECE_MM = 1.0                 # eigene Bereiche: Kanten mindestens so lang
 EDGE_TOLERANCE_MM = 0.5            # eigene Bereiche dürfen so weit über den Seitenrand (Rundung)
+MAX_SPACE_MM = 500.0               # Freiraum nach einem Bereich höchstens so lang
 SNAP_MM = 3.0                      # Kante höchstens so weit nach außen bis zum weißen Rand
 SIZE_TOLERANCE_MM = 4.0
 WIDE_MM = 95.0                     # ab dieser bedruckbaren Breite gilt ein 100×150-Layout
@@ -72,6 +73,7 @@ class Piece:
     rotation: int
     dst: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     kind: str = "text"
+    space_after: float = 0.0          # eigene Typen: Freiraum danach in mm (leeres Band, 0 = keiner)
 
     def turned_mm(self) -> tuple[float, float]:
         """Größe des Ausschnitts nach dem Drehen (Breite, Höhe) in mm."""
@@ -312,7 +314,8 @@ def own_from_dict(data) -> ParcelType:
                 or p.get("kind", "text") not in KINDS or not isinstance(p.get("page", 1), int) \
                 or isinstance(p.get("page", 1), bool) or not 1 <= p.get("page", 1) <= MAX_PAGES \
                 or (pages and p.get("page", 1) > len(pages)) \
-                or not _numbers(p.get("src"), 4, 0, 2001):
+                or not _numbers(p.get("src"), 4, 0, 2001) \
+                or not _numbers([p.get("space_after_mm", 0)], 1, 0, MAX_SPACE_MM):
             raise bad(N_("areas"))
         # Bereiche gegen ihre Seite (ohne Größe je Seite: gegen die größte Seitengröße)
         width, height = (pages[p.get("page", 1) - 1] if pages else
@@ -327,7 +330,8 @@ def own_from_dict(data) -> ParcelType:
                                 "{size} mm).").format(number=number,
                                                       size=number_text(MIN_PIECE_MM)))
         pieces.append(Piece(p.get("page", 1), (float(x0), float(y0), float(x1), float(y1)),
-                            p["rotation"], kind=p.get("kind", "text")))
+                            p["rotation"], kind=p.get("kind", "text"),
+                            space_after=float(p.get("space_after_mm", 0))))
     return ParcelType(type_id, dict(names), "", "own", tuple(tuple(map(float, s)) for s in sizes),
                       None, {k: list(v) for k, v in detect.items()}, {}, tuple(pieces), False, True,
                       tuple(tuple(map(float, s)) for s in pages))
@@ -344,8 +348,24 @@ def own_to_dict(ptype: ParcelType) -> dict:
             "source": {"sizes_mm": [list(s) for s in ptype.source_sizes],
                        **({"pages_mm": [list(s) for s in ptype.page_sizes]} if ptype.page_sizes else {})},
             "detect": {k: list(v) for k, v in ptype.detect.items() if v},
-            "pieces": [{"page": p.page, "src": list(p.src), "rotation": p.rotation, "kind": p.kind}
+            "pieces": [{"page": p.page, "src": list(p.src), "rotation": p.rotation, "kind": p.kind,
+                        **({"space_after_mm": p.space_after} if p.space_after else {})}
                        for p in ptype.pieces]}
+
+
+def spaces(ptype: ParcelType) -> list[tuple[int, float]]:
+    """Wirksame Freiräume eines eigenen Typs: (Index des Stücks davor, Länge in mm) – einer nach
+    dem letzten Stück zählt nicht (nur zwischen den Teilen)."""
+    return [(n, p.space_after) for n, p in enumerate(ptype.pieces[:-1]) if p.space_after > 0]
+
+
+def with_spaces(ptype: ParcelType, lengths) -> ParcelType:
+    """Typ mit anderen Längen für die Freiräume aus ``spaces`` (gleiche Reihenfolge; nicht
+    gespeichert – Reiter PAKET, je Marke)."""
+    pieces = list(ptype.pieces)
+    for (n, _length), length in zip(spaces(ptype), lengths):
+        pieces[n] = replace(pieces[n], space_after=min(MAX_SPACE_MM, max(0.0, float(length))))
+    return replace(ptype, pieces=tuple(pieces))
 
 
 def save_own(ptype: ParcelType) -> Path:
@@ -681,17 +701,19 @@ def snap(img: Image.Image, box_mm, dpi: float, limit_mm: float = SNAP_MM):
 def arrange(pieces, across_mm: float, gap_mm: float = 1.0) -> Sheet:
     """Stücke nacheinander in Spalten längs des Bands, je Spalte bis zur Breite ``across_mm``:
     Barcodes 1:1 (nur wenn sie quer nicht passen, kleiner), Texte höchstens so verkleinert, dass sie
-    quer passen."""
-    placed, x, y, column = [], 0.0, 0.0, 0.0
+    quer passen. Nach einem Stück mit Freiraum (``space_after``) beginnt eine neue Spalte in diesem
+    Abstand (statt ``gap_mm``); nach dem letzten Stück zählt er nicht."""
+    placed, x, y, column, space = [], 0.0, 0.0, 0.0, 0.0
     for piece in pieces:
         w, h = piece.turned_mm()
         s = min(1.0, across_mm / h)
         w, h = w * s, h * s
-        if y > 0 and y + h > across_mm + 1e-6:            # neue Spalte
-            x, y, column = x + column + gap_mm, 0.0, 0.0
+        if space > 0 or (y > 0 and y + h > across_mm + 1e-6):   # neue Spalte
+            x, y, column = x + column + max(gap_mm, space), 0.0, 0.0
         placed.append(replace(piece, dst=(x, y, x + w, y + h)))
         y += h + gap_mm
         column = max(column, w)
+        space = piece.space_after
     return Sheet((x + column, across_mm), tuple(placed))
 
 

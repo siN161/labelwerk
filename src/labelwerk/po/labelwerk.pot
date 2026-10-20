@@ -85,6 +85,11 @@ msgstr ""
 msgid "Address"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "After area {number}"
+msgstr ""
+
 #: src/labelwerk/gui/panels/series.py
 msgid "After each label"
 msgstr ""
@@ -238,6 +243,14 @@ msgstr ""
 #: src/labelwerk/parcel.py
 #, python-brace-format
 msgid "Barcodes shrunk to {percent} % – check before shipping that they can be read."
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Blank tape between this area and the next one"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Blank tape for this parcel label – the type keeps its value"
 msgstr ""
 
 #: src/labelwerk/gui/panels/text.py
@@ -2476,6 +2489,14 @@ msgstr ""
 msgid "Source"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Space"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Space after"
+msgstr ""
+
 #: src/labelwerk/gui/panels/series.py
 msgid "Start"
 msgstr ""
@@ -3162,6 +3183,10 @@ msgstr ""
 msgid "no space left on the disk"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "none"
+msgstr ""
+
 #: src/labelwerk/settings.py
 msgid "not a JSON object"
 msgstr ""
@@ -3243,6 +3268,11 @@ msgstr ""
 
 #: src/labelwerk/cli.py
 msgid "shrink if too large (codes may no longer be readable)"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+#, python-brace-format
+msgid "space {length} mm"
 msgstr ""
 
 #: src/labelwerk/cli.py

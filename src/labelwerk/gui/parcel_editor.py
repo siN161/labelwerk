@@ -2,8 +2,8 @@
 Typ speichern (``parcel.own_from_dict`` prüft, ``parcel.arrange`` ordnet beim Umwandeln an).
 
 Rechtecke auf der Marke ziehen (leere Stelle), verschieben (Rechteck ziehen), löschen (Entf); je
-Bereich Drehung im Uhrzeigersinn und „Barcode – nicht verkleinern“. Die Vorschau zeigt das Ergebnis
-auf dem Etikett des Hauptfensters.
+Bereich Drehung im Uhrzeigersinn, „Barcode – nicht verkleinern“ und „Freiraum danach“ (leeres Band
+bis zum nächsten Bereich). Die Vorschau zeigt das Ergebnis auf dem Etikett des Hauptfensters.
 """
 from __future__ import annotations
 
@@ -16,8 +16,9 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QWidget)
 
 from .. import parcel
-from ..i18n import _, language
+from ..i18n import _, language, number
 from ..render import render_document
+from .widgets import DoubleSpinBox
 
 EDIT_DPI = 100                      # Auflösung der Marke im Fenster
 MIN_MM = 3.0                        # kleinere Rechtecke zählen nicht (Klick statt Ziehen)
@@ -44,6 +45,7 @@ class _Area(QGraphicsRectItem):
         self.setPos(rect.topLeft())
         self.rotation_ = 0
         self.barcode = False
+        self.space = 0.0                     # Freiraum danach (mm, 0 = keiner)
         self._moved = moved
         pen = QPen(QColor("#E00000"), 2)
         pen.setCosmetic(True)
@@ -161,6 +163,13 @@ class ParcelTypeEditor(QDialog):
         self.rotation.currentIndexChanged.connect(self._area_changed)
         self.barcode = QCheckBox(_("Barcode – do not shrink"))
         self.barcode.toggled.connect(self._area_changed)
+        self.space = DoubleSpinBox()
+        self.space.setRange(0, parcel.MAX_SPACE_MM)
+        self.space.setDecimals(1)
+        self.space.setSuffix(" mm")
+        self.space.setSpecialValueText(_("none"))
+        self.space.setToolTip(_("Blank tape between this area and the next one"))
+        self.space.valueChanged.connect(self._area_changed)
         self.preview = QLabel()
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(PREVIEW_W, PREVIEW_H)
@@ -188,6 +197,7 @@ class ParcelTypeEditor(QDialog):
         form.addRow(_("Areas"), self.list)
         form.addRow(_("Rotation"), self.rotation)
         form.addRow(self.barcode)
+        form.addRow(_("Space after"), self.space)
         form.addRow(self.overlap)
         form.addRow(_("Result"), self.preview)
         left = QWidget()
@@ -234,20 +244,21 @@ class ParcelTypeEditor(QDialog):
         super().showEvent(event)
         self.view.fitInView(self.view.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
-    def add_area(self, rect_mm, rotation: int = 0, barcode: bool = False) -> None:
+    def add_area(self, rect_mm, rotation: int = 0, barcode: bool = False, space: float = 0.0) -> None:
         """Bereich (x0, y0, x1, y1 in mm auf der gezeigten Seite) hinzufügen."""
         x0, y0, x1, y1 = rect_mm
         self._drawn(QRectF(x0 * self._k, y0 * self._k, (x1 - x0) * self._k, (y1 - y0) * self._k),
-                    rotation, barcode)
+                    rotation, barcode, space)
 
-    def _drawn(self, rect: QRectF, rotation: int = 0, barcode: bool = False) -> None:
+    def _drawn(self, rect: QRectF, rotation: int = 0, barcode: bool = False,
+               space: float = 0.0) -> None:
         bounds = self.view.scene().sceneRect()
         rect = rect.intersected(bounds) if not bounds.isEmpty() else rect
         if rect.width() < MIN_MM * self._k or rect.height() < MIN_MM * self._k:
             return
         areas = self._areas.setdefault(self._page, [])
         area = _Area(rect, self._number(len(areas)), self._schedule_preview)
-        area.rotation_, area.barcode = rotation, barcode
+        area.rotation_, area.barcode, area.space = rotation, barcode, space
         areas.append(area)
         self.view.scene().addItem(area)
         self._fill_list()
@@ -284,6 +295,8 @@ class ParcelTypeEditor(QDialog):
                                                      w=round(x1 - x0), h=round(y1 - y0))
             if area.barcode:
                 text += " · " + _("barcode")
+            if area.space and not self._is_last(area):
+                text += " · " + _("space {length} mm").format(length=number(area.space))
             self.list.addItem(text)
         self.list.blockSignals(False)
 
@@ -299,6 +312,11 @@ class ParcelTypeEditor(QDialog):
         x0, y0, x1, y1 = (round(v / self._k, 1) for v in (r.left(), r.top(), r.right(), r.bottom()))
         return edge(x0, w), edge(y0, h), edge(x1, w), edge(y1, h)
 
+    def _is_last(self, area: _Area) -> bool:
+        """Letzter Bereich auf dem Band (danach zählt kein Freiraum)."""
+        pages = [p for p in sorted(self._areas) if self._areas[p]]
+        return bool(pages) and self._areas[pages[-1]][-1] is area
+
     def _current_area(self) -> _Area | None:
         areas = self._areas.get(self._page, [])
         row = self.list.currentRow()
@@ -308,16 +326,19 @@ class ParcelTypeEditor(QDialog):
         area = self._current_area()
         for widget in (self.rotation, self.barcode):
             widget.setEnabled(area is not None)
+        self.space.setEnabled(area is not None and not self._is_last(area))
         if area is None:
             return
         self.view.scene().blockSignals(True)
         self.view.scene().clearSelection()
         area.setSelected(True)
         self.view.scene().blockSignals(False)
-        for widget, value in ((self.rotation, ROTATIONS.index(area.rotation_)),
-                              (self.barcode, area.barcode)):
+        for widget in (self.rotation, self.barcode, self.space):
             widget.blockSignals(True)
-            widget.setCurrentIndex(value) if widget is self.rotation else widget.setChecked(value)
+        self.rotation.setCurrentIndex(ROTATIONS.index(area.rotation_))
+        self.barcode.setChecked(area.barcode)
+        self.space.setValue(area.space)
+        for widget in (self.rotation, self.barcode, self.space):
             widget.blockSignals(False)
 
     def _selection_changed(self) -> None:
@@ -335,6 +356,7 @@ class ParcelTypeEditor(QDialog):
             return
         area.rotation_ = self.rotation.currentData()
         area.barcode = self.barcode.isChecked()
+        area.space = self.space.value()
         row = self.list.currentRow()
         self._fill_list()
         self.list.setCurrentRow(row)
@@ -360,7 +382,8 @@ class ParcelTypeEditor(QDialog):
         for page in sorted(self._areas):
             for area in self._areas[page]:
                 out.append({"page": page, "src": list(self._mm(area)), "rotation": area.rotation_,
-                            "kind": "barcode" if area.barcode else "text"})
+                            "kind": "barcode" if area.barcode else "text",
+                            **({"space_after_mm": area.space} if area.space else {})})
         return out
 
     def type_data(self) -> dict:

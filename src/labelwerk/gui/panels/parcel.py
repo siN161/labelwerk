@@ -1,5 +1,6 @@
 """Panel des Reiters PAKET (Überschrift „Paketmarke“): Marke öffnen, Typ wählen (erkannt), Umwandlung ansehen, drucken oder als
-Etikett in den Editor holen; eigene Typen anlegen, umbenennen, löschen.
+Etikett in den Editor holen; eigene Typen anlegen, umbenennen, löschen; Freiräume eigener Typen
+für diese Marke ändern (nicht gespeichert).
 
 Die Logik steckt in ``labelwerk.parcel``; das Panel hält nur die geladene Marke, den gewählten
 Typ und die Umwandlung für das Etikett des Hauptfensters (``set_target``). Die Arbeitsfläche zeigt
@@ -11,12 +12,13 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMenu,
-                               QPushButton, QToolButton, QWidget)
+from PySide6.QtWidgets import (QComboBox, QFormLayout, QHBoxLayout, QLabel, QListWidget,
+                               QListWidgetItem, QMenu, QPushButton, QToolButton, QWidget)
 
 from ... import parcel
 from ...document import Document
 from ...i18n import N_, _, pgettext
+from ..widgets import DoubleSpinBox
 from . import Panel
 
 OWN = "own"                                   # Eintrag „Eigene Typen“ in der Länderauswahl
@@ -46,6 +48,7 @@ class ParcelPanel(Panel):
         self._tied: list[str] = []             # Gleichstand ohne geprüften Sieger: Nutzer wählt
         self._top: list[str] = []              # Typen mit der höchsten Punktzahl (✓)
         self._check_choice = False             # vorgewählt, aber andere gleich gut: prüfen
+        self._spaces_for: str | None = None    # Typ, dessen Freiräume die Felder zeigen
         self.setAcceptDrops(True)
 
         self.section(_("Country"))
@@ -88,6 +91,15 @@ class ParcelPanel(Panel):
         self.own_button.setToolTip(_("Draw the areas on the open parcel label and save them as "
                                      "your own type"))
         self.layout_.addWidget(self.own_button)
+
+        self.spaces_title = self.section(_("Space"))
+        self.spaces_box = QWidget()                    # je Freiraum des eigenen Typs ein Feld
+        self._spaces_form = QFormLayout(self.spaces_box)
+        self._spaces_form.setContentsMargins(0, 0, 0, 0)
+        self.space_boxes: list[DoubleSpinBox] = []
+        self.layout_.addWidget(self.spaces_box)
+        self.spaces_title.hide()
+        self.spaces_box.hide()
 
         self.notes = QLabel()
         self.notes.setObjectName("hint")
@@ -188,6 +200,7 @@ class ParcelPanel(Panel):
             self._show_error(message)
             return False
         self.source, self.path = source, Path(path)
+        self._spaces_for = None                    # neue Marke: Freiräume wie im Typ
         self._detect(keep=False)
         self._convert()
         return True
@@ -223,6 +236,9 @@ class ParcelPanel(Panel):
         """Umwandlung für das Etikett des Hauptfensters (Fehler: Hinweis, keine Umwandlung)."""
         self.conversion, self._current, self._error = None, 0, None
         ptype = self.chosen_type()
+        self._show_spaces(ptype)
+        if ptype is not None and self.space_boxes:
+            ptype = parcel.with_spaces(ptype, [box.value() for box in self.space_boxes])
         if self.source is not None and ptype is not None:
             try:
                 self.conversion = parcel.convert(self.source, ptype, self._label_id, self._model)
@@ -230,6 +246,30 @@ class ParcelPanel(Panel):
                 self._error = str(e)
         self._update()
         self.view_changed.emit()
+
+    def _show_spaces(self, ptype: parcel.ParcelType | None) -> None:
+        """Felder für die Freiräume des gewählten Typs – vorbelegt aus dem Typ, wenn ein anderer
+        Typ oder eine neue Marke kommt; sonst bleiben die geänderten Werte."""
+        type_id = ptype.id if ptype is not None else None
+        if type_id == self._spaces_for and type_id is not None:
+            return
+        self._spaces_for = type_id
+        while self._spaces_form.rowCount():
+            self._spaces_form.removeRow(0)
+        self.space_boxes = []
+        for index, length in (parcel.spaces(ptype) if ptype is not None else []):
+            box = DoubleSpinBox()
+            box.setRange(0, parcel.MAX_SPACE_MM)
+            box.setDecimals(1)
+            box.setSuffix(" mm")
+            box.setKeyboardTracking(False)            # erst nach der Eingabe neu umwandeln
+            box.setValue(length)
+            box.setToolTip(_("Blank tape for this parcel label – the type keeps its value"))
+            box.valueChanged.connect(self._convert)
+            self._spaces_form.addRow(_("After area {number}").format(number=index + 1), box)
+            self.space_boxes.append(box)
+        self.spaces_title.setVisible(bool(self.space_boxes))
+        self.spaces_box.setVisible(bool(self.space_boxes))
 
     def _show_error(self, message: str) -> None:
         self._error = message

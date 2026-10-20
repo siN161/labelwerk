@@ -746,3 +746,67 @@ def test_pieces_of_one_column_stay_aligned_after_snapping(tmp_path):
     doc = parcel.convert(parcel.load(tmp_path / "m.png"), ptype, "62", "QL-600").documents[0]
     spans = {(round(doc.objects[n].x_mm, 6), round(doc.objects[n].w_mm, 6)) for n in column}
     assert len(spans) == 1
+
+
+# --- Freiraum zwischen den Stücken eigener Typen -----------------------------------------------
+def _spaced(*spaces):
+    pieces = [dict(p) for p in _own()["pieces"]]
+    for piece, space in zip(pieces, spaces):
+        if space:
+            piece["space_after_mm"] = space
+    return parcel.own_from_dict(_own(pieces=pieces))
+
+
+def test_space_after_a_piece_round_trips():
+    ptype = _spaced(12.5)
+    assert ptype.pieces[0].space_after == 12.5 and ptype.pieces[1].space_after == 0
+    data = parcel.own_to_dict(ptype)
+    assert data["pieces"][0]["space_after_mm"] == 12.5
+    assert "space_after_mm" not in data["pieces"][1]               # nur, wenn es einen gibt
+    assert parcel.own_from_dict(data).pieces[0].space_after == 12.5
+
+
+@pytest.mark.parametrize("space", [-1, parcel.MAX_SPACE_MM + 1, "10", True])
+def test_space_is_checked(space):
+    pieces = [dict(p) for p in _own()["pieces"]]
+    pieces[0]["space_after_mm"] = space
+    with pytest.raises(parcel.ParcelError):
+        parcel.own_from_dict(_own(pieces=pieces))
+
+
+def test_space_starts_a_new_column_at_its_distance():
+    plain = parcel.arrange(_spaced().pieces, 100)
+    spaced = parcel.arrange(_spaced(0, 20).pieces, 100)
+    # 100 mm Band: Text und Barcode übereinander in Spalte 1, das gedrehte Stück in Spalte 2
+    assert plain.pieces[1].dst[0] == plain.pieces[0].dst[0]
+    # Freiraum nach dem Barcode: das gedrehte Stück 20 mm hinter dem Ende der ersten Spalte
+    first_column_end = max(p.dst[2] for p in spaced.pieces[:2])
+    assert spaced.pieces[2].dst[0] == pytest.approx(first_column_end + 20)
+    assert spaced.size_mm[0] == pytest.approx(plain.size_mm[0] + 19)   # statt 1 mm Abstand
+
+
+def test_space_between_pieces_of_one_column_splits_it():
+    spaced = parcel.arrange(_spaced(15).pieces, 100)
+    text, code, _turned = spaced.pieces
+    assert code.dst[0] == pytest.approx(text.dst[2] + 15)
+    assert code.dst[1] == 0                                         # neue Spalte, oben
+
+
+def test_space_after_the_last_piece_does_not_count():
+    def targets(ptype):
+        return [p.dst for p in parcel.arrange(ptype.pieces, 100).pieces]
+    assert targets(_spaced(0, 0, 30)) == targets(_spaced())
+
+
+def test_spaces_lists_and_changes_the_effective_spaces():
+    ptype = _spaced(10, 0, 30)                                      # 30 nach dem letzten: zählt nicht
+    assert parcel.spaces(ptype) == [(0, 10.0)]
+    changed = parcel.with_spaces(ptype, [25])
+    assert parcel.spaces(changed) == [(0, 25.0)] and parcel.spaces(ptype) == [(0, 10.0)]
+
+
+def test_space_has_its_length_on_endless_tape(tmp_path):
+    source = parcel.load(make_pdf(tmp_path / "m.pdf", texts=[(20, 20, "Meine Firma")]))
+    plain = parcel.convert(source, _spaced(), "62", "QL-600").documents[0]
+    spaced = parcel.convert(source, _spaced(0, 20), "62", "QL-600").documents[0]
+    assert spaced.length_mm == pytest.approx(plain.length_mm + 19, abs=0.1)

@@ -689,3 +689,57 @@ def test_overflow_highlight_shows_without_a_stylesheet(qtbot):
     win.tool_actions["paper"].setChecked(True)
     win._mark_overflow()
     assert ext.text() == "»" and not ext.font().bold()
+
+
+# --- Freiraum zwischen den Stücken ------------------------------------------------------------
+def test_editor_sets_a_space_after_an_area(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 110, 60))
+    editor.add_area((10, 100, 60, 130), barcode=True)
+    editor.name.setText("Test")
+    editor.list.setCurrentRow(0)
+    assert editor.space.isEnabled() and editor.space.value() == 0
+    editor.space.setValue(20)
+    assert editor.pieces()[0]["space_after_mm"] == 20 and "space_after_mm" not in editor.pieces()[1]
+    assert "20 mm" in editor.list.item(0).text()
+    assert editor.result_type().pieces[0].space_after == 20
+    editor.list.setCurrentRow(1)                                # letzter Bereich: kein Freiraum danach
+    assert not editor.space.isEnabled()
+    editor.list.setCurrentRow(0)
+    assert editor.space.value() == 20                           # Feld zeigt den gewählten Bereich
+
+
+def test_editor_space_shows_in_the_preview(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 60, 40))
+    editor.add_area((10, 100, 60, 130))
+    editor.list.setCurrentRow(0)
+    before = editor.preview.pixmap().width() / editor.preview.pixmap().height()
+    editor.space.setValue(80)
+    after = editor.preview.pixmap().width() / editor.preview.pixmap().height()
+    assert after > before * 1.3                                 # das Etikett wird deutlich länger
+
+
+def test_panel_changes_the_spaces_for_this_label_only(qtbot, tmp_path):
+    pieces = [dict(p) for p in _own_data()["pieces"]]
+    pieces[0]["space_after_mm"] = 15
+    parcel.save_own(parcel.own_from_dict(_own_data(pieces=pieces)))
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "lager.pdf", texts=[(20, 20, "Mein Lager GmbH")],
+                                rects=[(15, 15, 100, 50)]))
+    assert panel.chosen_type().id == "eigen-lager"
+    assert panel.spaces_box.isVisible() and [b.value() for b in panel.space_boxes] == [15]
+    length = panel.documents()[0].length_mm
+    panel.space_boxes[0].setValue(40)
+    assert panel.documents()[0].length_mm == pytest.approx(length + 25, abs=0.1)
+    assert parcel.find("eigen-lager").pieces[0].space_after == 15     # Typ bleibt, wie er ist
+    win.render_now()
+    assert len(win.canvas.objects) == 2                              # Arbeitsfläche folgt
+    panel.load(tmp_path / "lager.pdf")                                # neue Marke: Werte des Typs
+    assert [b.value() for b in panel.space_boxes] == [15]
+
+
+def test_panel_hides_spaces_for_types_without(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    assert panel.chosen_type() is not None and not panel.spaces_box.isVisible()

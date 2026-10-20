@@ -79,7 +79,9 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   Panel/Arbeitsfläche, Typliste nach Dienst mit ✓ erkannt/„ungeprüft“, Hinweise, Arbeitsfläche zeigt die Umwandlung
   nur zur Ansicht ◀ n/N ▶, DRUCKEN – auch in der Werkzeugleiste – alle Etiketten in einem Auftrag, IM EDITOR ÖFFNEN
   als normales Etikett; EIGENER TYP …: Fenster mit der Marke, Bereiche aufziehen/verschieben/Entf, Drehung,
-  „Barcode – nicht verkleinern“, Name, „Erkennen an“, Vorschau; Umbenennen/Löschen im Kontextmenü); Umwandlung
+  „Barcode – nicht verkleinern“, „Freiraum danach“ (leeres Band bis zum nächsten Bereich, nicht nach dem letzten), Name,
+  „Erkennen an“, Vorschau; Umbenennen/Löschen im Kontextmenü; Reiter PAKET: Bereich Freiraum je Freiraum ein Feld, gilt nur
+  für diese Marke); Umwandlung
   folgt Etikett (Reiter PAPIER) und Drucker; Gleichstand ungeprüfter Typen und „nicht erkannt“: kein Typ
   vorgewählt, Hinweis nennt die Kandidaten; ✓ nur an den Besten; mit Marke ist die Arbeitsfläche nur Ansicht
   (Bearbeiten gesperrt mit Hinweis, ohne Umwandlung leer, DRUCKEN druckt dann nicht); IM EDITOR ÖFFNEN gilt als
@@ -88,7 +90,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   über, „»“ hervorgehoben, solange der aktive Reiter dort liegt – _mark_overflow; Leisten nicht über das Kontextmenü
   ausblendbar); Fenster beim Start so breit, dass alles passt (fit_toolbars nach dem Design und nach jedem
   Designwechsel ohne Größenänderung, höchstens Bildschirmbreite).
-- 3000 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 3014 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -261,7 +263,8 @@ src/labelwerk/
               ein Maßstab je Umwandlung – _common_fit: Referenz-Layouts quer nach ihrer Etiketthöhe 60/62 mm
               (_frame), endlos Länge = Inhalt auf ganze Druckpunkte + Vorschub, fest: passt hinein, bessere Lage;
               _inside: Rahmen auf ganze Druckpunkte im Etikett; eigene/„arranged“: erst _adjusted (snap), dann
-              arrange; Hinweis bei Barcodes < 94 %; rund → Fehler); arrange (Spalten längs des Bands, Barcodes 1:1);
+              arrange; Hinweis bei Barcodes < 94 %; rund → Fehler); arrange (Spalten längs des Bands, Barcodes 1:1; Piece.space_after → neue Spalte in diesem Abstand); spaces(ptype)/with_spaces
+              (Freiräume eigener Typen, Reiter PAKET je Marke; JSON space_after_mm ≤ MAX_SPACE_MM);
               own_dir/own_types/own_warnings (beschädigt, auch zu tief verschachtelt/falsch kodiert; Dateiname =
               Kennung, doppelte übergangen)/own_from_dict (geprüft, Kanten ≥ 1 mm in ihrer Seite – pages_mm =
               Größe je Seite, placement nimmt sie)/
