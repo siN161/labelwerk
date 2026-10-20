@@ -1,6 +1,39 @@
-# labelwerk
+<p align="center">
+  <img src="src/labelwerk/gui/icons/labelwerk-v2.svg" width="128" alt="labelwerk logo">
+</p>
 
-Design and print labels on **Brother QL label printers under Linux** – no P-touch Editor, no Wine.
+<h1 align="center">labelwerk</h1>
+
+<p align="center">
+  <b>Design and print labels on Brother QL label printers under Linux.</b><br>
+  Text, images, symbols, barcodes and series on a label shown in real size – plus parcel labels
+  converted for the label printer. No P-touch Editor, no Wine.
+</p>
+
+<p align="center">
+  <a href="https://github.com/siN161/labelwerk/releases/latest"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-E95420?style=for-the-badge&logo=linux&logoColor=white"></a>
+  <a href="https://github.com/siN161/labelwerk/releases/latest"><img alt="Flatpak download" src="https://img.shields.io/badge/Flatpak-Download-4A90D9?style=for-the-badge&logo=flatpak&logoColor=white"></a>
+  <a href="#installation"><img alt="Install with pip" src="https://img.shields.io/badge/Python-pip%20install-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/siN161/labelwerk/releases/latest">Download</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#printers">Printers</a> ·
+  <a href="#parcel-labels">Parcel labels</a> ·
+  <a href="#translations">Translations</a> ·
+  <a href="https://github.com/siN161/labelwerk/issues">Report a printer</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/siN161/labelwerk/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/siN161/labelwerk/actions/workflows/tests.yml/badge.svg"></a>
+  <a href="https://github.com/siN161/labelwerk/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/siN161/labelwerk?include_prereleases"></a>
+  <a href="LICENSE"><img alt="License GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB">
+  <img alt="Platform Linux" src="https://img.shields.io/badge/platform-Linux-555555">
+</p>
+
+---
 
 - Text with per-character formatting, images (PNG, JPG, SVG, PDF pages, screenshots), symbols, barcodes and QR
   codes, decorative frames – placed freely on a label shown in real size
