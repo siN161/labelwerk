@@ -16,7 +16,7 @@ from . import file_dialog
 from .main_window import MainWindow
 
 
-def load_theme(name: str = "rawblock") -> str:
+def load_theme(name: str = "blackwerk") -> str:
     """Stylesheet from labelwerk/gui/theme/<name>.qss; @THEME@ becomes the theme folder (for graphics)."""
     folder = resources.files("labelwerk.gui") / "theme"
     qss = (folder / f"{name}.qss").read_text(encoding="utf-8")
@@ -25,8 +25,8 @@ def load_theme(name: str = "rawblock") -> str:
 
 
 def apply_theme(app: QApplication, name: str) -> None:
-    """“rawblock” = own stylesheet, “classic” = plain Qt system style (no stylesheet)."""
-    app.setStyleSheet(load_theme() if name == "rawblock" else "")
+    """“blackwerk” = own stylesheet, “classic” = plain Qt system style (no stylesheet)."""
+    app.setStyleSheet(load_theme() if name == "blackwerk" else "")
 
 
 def apply_identity(app: QApplication) -> None:

@@ -138,8 +138,8 @@ def test_last_tool_on_close_keeps_settings_saved_by_another_instance(qtbot):
     """A second instance (double-click on a file) changes the theme and saves; if the first one
     closes afterwards, the theme stays – only the tab is added."""
     from labelwerk.settings import save_settings
-    save_settings(Settings(theme="rawblock"))
-    win = _window(qtbot, theme="rawblock")
+    save_settings(Settings(theme="blackwerk"))
+    win = _window(qtbot, theme="blackwerk")
     win.tool_actions["layout"].trigger()
     save_settings(Settings(theme="classic"))                       # second instance
     win.close()
@@ -150,7 +150,7 @@ def test_last_tool_on_close_keeps_settings_saved_by_another_instance(qtbot):
 def test_silent_saves_keep_settings_saved_by_another_instance(qtbot, tmp_path):
     """Silent saving (Recently opened, printer chosen) writes only its field."""
     from labelwerk.settings import save_settings
-    win = _window(qtbot, theme="rawblock")
+    win = _window(qtbot, theme="blackwerk")
     save_settings(Settings(theme="classic"))                       # second instance
     win.choose_printer("tcp://192.0.2.1")
     s = load_settings()

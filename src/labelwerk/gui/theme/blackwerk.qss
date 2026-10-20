@@ -1,4 +1,4 @@
-/* labelwerk – modelled on RawBlock: black/white, strong borders, square.
+/* labelwerk – BlackWerk: black/white, strong borders, square.
    Replaceable: load another .qss file or none at all (system look). */
 
 * {

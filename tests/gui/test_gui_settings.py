@@ -145,8 +145,8 @@ def test_dialog_theme_roundtrip(qtbot):
     qtbot.addWidget(dialog)
     assert dialog.theme.currentText() == "Klassisch"
     assert dialog.values().theme == "classic"
-    dialog.theme.setCurrentIndex(dialog.theme.findData("rawblock"))
-    assert dialog.values().theme == "rawblock"
+    dialog.theme.setCurrentIndex(dialog.theme.findData("blackwerk"))
+    assert dialog.values().theme == "blackwerk"
 
 
 def test_dialog_image_import_roundtrip(qtbot):
@@ -162,7 +162,7 @@ def test_dialog_image_import_roundtrip(qtbot):
 def test_apply_theme_sets_and_clears_stylesheet(qapp):
     from labelwerk.gui.app import apply_theme
     try:
-        apply_theme(qapp, "rawblock")
+        apply_theme(qapp, "blackwerk")
         assert qapp.styleSheet() != ""
         apply_theme(qapp, "classic")
         assert qapp.styleSheet() == ""

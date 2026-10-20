@@ -116,7 +116,7 @@ def _ink(icon, mode=QIcon.Mode.Normal, state=QIcon.State.Off):
 
 
 def test_edit_bar_icons_follow_theme(qtbot):
-    win = _window(qtbot, settings=Settings(check_media_on_start=False, theme="rawblock"))
+    win = _window(qtbot, settings=Settings(check_media_on_start=False, theme="blackwerk"))
     icon = win.shortcut_actions["tool.select"].icon()
     assert _ink(icon) == {(0, 0, 0)}
     assert _ink(icon, state=QIcon.State.On) == {(255, 255, 255)}      # selected: white on black

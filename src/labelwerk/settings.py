@@ -22,7 +22,8 @@ from . import zpl
 from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
-THEMES = ("rawblock", "classic")
+THEMES = ("blackwerk", "classic")
+OLD_THEMES = {"rawblock": "blackwerk"}      # renamed designs: old saved name → new one
 RESTART_KEYS = ("language", "start_zoom", "start_tool", "system_file_dialog")   # only after a restart (hint)
 # tab at startup: "last" = last used, otherwise a tool key (gui/tools.py TOOLS)
 START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series", "parcel")
@@ -46,7 +47,7 @@ class Settings:
     start_tool: str = "paper"              # tab at startup (START_TOOLS; "last" = last used)
     last_tool: str = ""                    # last used tab (saved silently)
     hidden_tools: list[str] = field(default_factory=list)   # hidden tabs (HIDEABLE_TOOLS)
-    theme: str = "rawblock"                # "rawblock" or "classic" (Qt system style)
+    theme: str = "blackwerk"               # "blackwerk" or "classic" (Qt system style)
     system_file_dialog: bool = False       # desktop file dialog (portal) instead of our own with preview
     image_crop: bool = True                # crop images to their content when inserting
     image_rotate: bool = False             # rotate images if they only fit 1:1 when rotated
@@ -199,6 +200,8 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
                                  .format(path=path, error=e))
         return settings
     _migrate_font_size(raw, settings)
+    if raw.get("theme") in OLD_THEMES:                    # renamed design: silently the new name
+        raw["theme"] = OLD_THEMES[raw["theme"]]
     if model is None:
         model = _model_of(raw)
     for key, valid in _rules(model).items():

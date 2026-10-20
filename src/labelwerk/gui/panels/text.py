@@ -77,7 +77,7 @@ def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
 
 
 def _align_icon(key: str, dark_checked: bool = True) -> QIcon:
-    """Line icon of the text position; when selected white on black only in RawBlock."""
+    """Line icon of the text position; when selected white on black only in BlackWerk."""
     return line_icon(f"align-{key}", dark_checked)
 
 
@@ -86,7 +86,7 @@ class TextPanel(Panel):
     formatted = Signal()                # button/field has formatted (edit mode: focus back)
 
     def set_icon_style(self, dark_checked: bool) -> None:
-        """Adapt alignment icons to the theme (white on black only in RawBlock)."""
+        """Adapt alignment icons to the theme (white on black only in BlackWerk)."""
         self.dark_checked_icons = dark_checked
         for key, button in self.align_buttons.items():
             button.setIcon(_align_icon(key, dark_checked))

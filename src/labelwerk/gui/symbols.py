@@ -1,6 +1,6 @@
 """Own line symbols (``gui/icons/<name>-black.svg`` / ``-white.svg``, 16 × 16).
 
-Black in the normal state; in the RawBlock design white where the button has a black background
+Black in the normal state; in the BlackWerk design white where the button has a black background
 (selected or on hover). In the classic design the button stays light, hence black.
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ SIZE = QSize(16, 16)
 
 
 def line_icon(name: str, dark: bool = True, hover: bool = False) -> QIcon:
-    """Symbol ``name``; ``dark``: selected white on black (RawBlock).
+    """Symbol ``name``; ``dark``: selected white on black (BlackWerk).
 
     ``hover``: also white on hover – for buttons that then turn black and use the
     “Active” mode only on hover (QToolButton with autoRaise, toolbars).

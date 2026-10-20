@@ -1,4 +1,4 @@
-"""RawBlock: a locked but checked tick box (FILE/PAPER under "Tabs in the toolbar") looks
+"""BlackWerk: a locked but checked tick box (FILE/PAPER under "Tabs in the toolbar") looks
 checked – not like an empty box."""
 from PySide6.QtWidgets import QCheckBox, QStyle, QStyleOptionButton
 

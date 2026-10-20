@@ -46,4 +46,4 @@ class Panel(QWidget):
         """Take over actions of the main window (``gui.actions``) for own buttons."""
 
     def set_icon_style(self, dark_checked: bool) -> None:
-        """Adapt icons to the theme (white on black only in RawBlock)."""
+        """Adapt icons to the theme (white on black only in BlackWerk)."""

@@ -171,7 +171,7 @@ class SymbolDialog(QWidget):
         self.open_folder = QPushButton(_("OPEN FOLDER"))
         self.open_folder.setToolTip(_("Open the folder for your own symbols (created if needed)"))
         self.favorite = QPushButton(_(FAVORITE[0]))
-        self.favorite.setObjectName("formatButton")     # RawBlock: pressed is black
+        self.favorite.setObjectName("formatButton")     # BlackWerk: pressed is black
         self.favorite.setCheckable(True)
         self.insert = QPushButton(_("INSERT"))
         for button in (self.open_folder, self.favorite):

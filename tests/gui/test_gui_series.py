@@ -329,7 +329,7 @@ def test_preview_row_is_selected_in_the_table(qtbot, tmp_path):
     assert panel.rows.currentRow() == 1
 
 
-@pytest.mark.parametrize("theme", ["rawblock", "classic"])
+@pytest.mark.parametrize("theme", ["blackwerk", "classic"])
 def test_series_panel_fits_its_width(qtbot, tmp_path, theme):
     from PySide6.QtWidgets import QApplication
     from labelwerk.gui.app import apply_theme

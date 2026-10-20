@@ -229,7 +229,7 @@ class SettingsDialog(QDialog):
         form.addRow(self.tools_note)
         self._enable_start_tools()
         self.theme = QComboBox()
-        self.theme.addItem("RawBlock", "rawblock")
+        self.theme.addItem("BlackWerk", "blackwerk")
         self.theme.addItem(_("Classic"), "classic")
         self.theme.setCurrentIndex(max(0, self.theme.findData(settings.theme)))
         form.addRow(_("Theme"), self.theme)

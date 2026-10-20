@@ -220,7 +220,7 @@ def test_canvas_frame_is_smoothed_and_reused(qtbot):
     assert win.canvas.frame_item.pixmap().cacheKey() == pixmap
 
 
-@pytest.mark.parametrize("theme", ["rawblock", "classic"])
+@pytest.mark.parametrize("theme", ["blackwerk", "classic"])
 def test_frame_fields_are_not_cut_off(qtbot, theme):
     apply_theme(QApplication.instance(), theme)
     try:

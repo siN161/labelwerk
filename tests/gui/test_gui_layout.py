@@ -315,7 +315,7 @@ def _color(icon: QIcon, mode=QIcon.Mode.Normal, state=QIcon.State.Off):
     return {(c.red(), c.green(), c.blue()) for c in ink}
 
 
-def test_icons_turn_white_on_hover_only_in_rawblock(window):
+def test_icons_turn_white_on_hover_only_in_blackwerk(window):
     button = _panel(window).buttons["align.left"]
     assert _color(button.icon()) == {(0, 0, 0)}
     assert _color(button.icon(), QIcon.Mode.Active) == {(255, 255, 255)}

@@ -48,7 +48,7 @@ def language(request, qapp):
     i18n.set_language(request.param)
     QLocale.setDefault(QLocale(request.param))
     translator = install_translations(qapp)                # Qt buttons ("Save") as in the program
-    qapp.setStyleSheet(load_theme())                       # RawBlock: default theme
+    qapp.setStyleSheet(load_theme())                       # BlackWerk: default theme
     yield request.param
     QLocale.setDefault(QLocale("de"))
     qapp.setStyleSheet("")

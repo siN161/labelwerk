@@ -127,7 +127,7 @@ def test_font_family_is_stripped(tmp_path):
 
 
 def test_theme_default_and_roundtrip(tmp_path):
-    assert Settings().theme == "rawblock"
+    assert Settings().theme == "blackwerk"
     path = tmp_path / "s.json"
     save_settings(Settings(theme="classic"), path)
     assert load_settings(path).theme == "classic"
@@ -137,7 +137,7 @@ def test_invalid_theme_falls_back_with_warning(tmp_path):
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"theme": "neon"}))
     s = load_settings(path)
-    assert s.theme == "rawblock" and any("theme" in w for w in s.warnings)
+    assert s.theme == "blackwerk" and any("theme" in w for w in s.warnings)
 
 
 # --- Shortcuts -------------------------------------------------------------------
@@ -460,7 +460,7 @@ def test_update_settings_keeps_what_another_instance_saved(tmp_path):
     A writes only its field and leaves B's change alone."""
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
-    save_settings(Settings(theme="rawblock"), path)
+    save_settings(Settings(theme="blackwerk"), path)
     a = load_settings(path)                                    # instance A starts
     save_settings(Settings(theme="classic"), path)              # instance B saves
     a.last_tool = "series"
@@ -516,7 +516,7 @@ def test_update_settings_cleans_invalid_and_old_keys(tmp_path):
     update_settings(path, base, last_tool="text")
     data = json.loads(path.read_text())
     assert "font_size" not in data and data["font_size_pt"] == 24
-    assert data["theme"] == base.theme == "rawblock"
+    assert data["theme"] == base.theme == "blackwerk"
     assert data["zukunft"] == 1 and data["last_tool"] == "text"
     assert load_settings(path).warnings == []
 
@@ -549,3 +549,14 @@ def test_update_settings_cleans_hidden_tools(tmp_path):
     path.write_text(json.dumps({"hidden_tools": ["paper", "layout"]}))
     update_settings(path, Settings(), last_tool="text")
     assert json.loads(path.read_text())["hidden_tools"] == ["layout"]
+
+
+def test_old_theme_name_becomes_blackwerk_silently(tmp_path):
+    """The default design was renamed: saved files keep their choice."""
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"theme": "rawblock"}))
+    settings = load_settings(path)
+    assert settings.theme == "blackwerk" and not settings.warnings
+    from labelwerk.settings import update_settings
+    update_settings(path, settings, last_tool="text")
+    assert json.loads(path.read_text())["theme"] == "blackwerk"

@@ -2032,8 +2032,8 @@ class MainWindow(QMainWindow):
 
     # --- Settings ---------------------------------------------------------
     def apply_theme_icons(self) -> None:
-        """Symbols that depend on the design (white on black only with RawBlock)."""
-        dark = self.settings.theme == "rawblock"
+        """Symbols that depend on the design (white on black only with BlackWerk)."""
+        dark = self.settings.theme == "blackwerk"
         for panel in self._panel_by_key.values():
             panel.set_icon_style(dark)
         for entry in EDIT_BAR:
