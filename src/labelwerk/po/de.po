@@ -648,6 +648,10 @@ msgstr "Löschen …"
 msgid "Design and print labels (Brother QL)"
 msgstr "Etiketten gestalten und drucken (Brother QL)"
 
+#: src/labelwerk/gui/panel_dock.py
+msgid "Detach as a window of its own"
+msgstr "Als eigenes Fenster lösen"
+
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Dialog of the desktop instead of the labelwerk dialog with preview (takes effect after a restart)"
 msgstr "Dialog des Desktops statt des labelwerk-Dialogs mit Vorschau (wirkt nach einem Neustart)"
@@ -699,6 +703,10 @@ msgstr "Abstand zum Rand des Rahmens muss zwischen {low} und {high} mm liegen"
 msgid "Distance of the border from the printable edge"
 msgstr "Abstand des Rahmens vom bedruckbaren Rand"
 
+#: src/labelwerk/gui/panel_dock.py
+msgid "Dock in the window"
+msgstr "Im Fenster andocken"
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "Dotted"
 msgstr "Gepunktet"
@@ -714,6 +722,10 @@ msgstr "Doppelklick: als {{Spalte}} ins gewählte Textobjekt bzw. als neuer Text
 #: src/labelwerk/gui/parcel_editor.py
 msgid "Drag on the label to mark an area, drag an area to move it, Del removes the chosen one. Areas are placed on the tape in this order."
 msgstr "Auf der Marke ziehen markiert einen Bereich, einen Bereich ziehen verschiebt ihn, Entf löscht den gewählten. Auf dem Band stehen die Bereiche in dieser Reihenfolge."
+
+#: src/labelwerk/gui/panel_dock.py
+msgid "Drag to the left or right edge to dock there"
+msgstr "Zum linken oder rechten Rand ziehen, um dort anzudocken"
 
 #: src/labelwerk/gui/canvas.py
 msgid "Drag: set the length · Double-click: automatic"
@@ -2526,10 +2538,6 @@ msgstr "Freiraum"
 msgid "Space after"
 msgstr "Freiraum danach"
 
-#: src/labelwerk/gui/panels/parcel.py
-msgid "Space between the pieces: set it per area when you create your own type (NEW OWN TYPE …)."
-msgstr "Freiraum zwischen den Stücken: beim Anlegen eines eigenen Typs je Bereich festlegen (EIGENER TYP …)."
-
 #: src/labelwerk/gui/panels/series.py
 msgid "Start"
 msgstr "Start"
@@ -3819,6 +3827,9 @@ msgstr "keiner"
 msgctxt "text panel"
 msgid "Font"
 msgstr "Schrift"
+
+#~ msgid "Space between the pieces: set it per area when you create your own type (NEW OWN TYPE …)."
+#~ msgstr "Freiraum zwischen den Stücken: beim Anlegen eines eigenen Typs je Bereich festlegen (EIGENER TYP …)."
 
 #~ msgid "none"
 #~ msgstr "keiner"

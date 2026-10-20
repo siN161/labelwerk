@@ -110,3 +110,47 @@ def test_toolbars_come_back_and_huge_widths_are_limited(qtbot):
     qtbot.wait(20)
     assert again.tool_bar.isVisible() and again.app_bar.isVisible()
     assert again.panel_dock.width() <= again.width() // 2 + 2
+
+
+# --- Dragging with visible feedback (Wayland: a floating window does not follow the mouse) -------
+def _drag_title(qtbot, win, to_x):
+    from PySide6.QtCore import QPoint
+    title = win.panel_dock.titleBarWidget()
+    start = QPoint(20, title.height() // 2)
+    qtbot.mousePress(title, Qt.MouseButton.LeftButton, pos=start)
+    target = title.mapFrom(win, QPoint(to_x, win.height() // 2))
+    qtbot.mouseMove(title, title.mapFrom(win, QPoint(win.width() // 2, win.height() // 2)))
+    qtbot.mouseMove(title, target)
+    return title, target
+
+
+def test_dragging_the_title_previews_and_docks_on_the_other_side(qtbot):
+    win = _window(qtbot)
+    title, target = _drag_title(qtbot, win, win.width() - 40)
+    preview = win.panel_dock.preview
+    assert preview.isVisible() and not win.panel_dock.isFloating()      # stays docked meanwhile
+    assert preview.geometry().right() >= win.width() - 2                 # right edge shown
+    qtbot.mouseRelease(title, Qt.MouseButton.LeftButton, pos=target)
+    assert not preview.isVisible()
+    assert win.dockWidgetArea(win.panel_dock) == Qt.DockWidgetArea.RightDockWidgetArea
+
+
+def test_preview_follows_the_half_of_the_window(qtbot):
+    win = _window(qtbot)
+    title, target = _drag_title(qtbot, win, win.width() - 40)
+    assert win.panel_dock.preview.geometry().right() >= win.width() - 2
+    from PySide6.QtCore import QPoint
+    qtbot.mouseMove(title, title.mapFrom(win, QPoint(40, win.height() // 2)))
+    assert win.panel_dock.preview.geometry().left() <= 2                 # now on the left
+    qtbot.mouseRelease(title, Qt.MouseButton.LeftButton,
+                       pos=title.mapFrom(win, QPoint(40, win.height() // 2)))
+    assert win.dockWidgetArea(win.panel_dock) == Qt.DockWidgetArea.LeftDockWidgetArea
+
+
+def test_float_button_detaches_and_docks_again(qtbot):
+    win = _window(qtbot)
+    button = win.panel_dock.titleBarWidget().float_button
+    button.click()
+    assert win.panel_dock.isFloating()
+    button.click()
+    assert not win.panel_dock.isFloating()

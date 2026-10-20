@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image
 from PySide6.QtCore import QByteArray, QMimeData, QSignalBlocker, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QDockWidget, QFrame,
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame,
                                QInputDialog, QLineEdit,
                                QLabel, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
@@ -46,6 +46,7 @@ from . import file_dialog, image_import
 from .image_import import CLIPBOARD, DROPPED, MIME_OBJECTS, SCREENSHOT, SYMBOL_SOURCE
 from .media_worker import MediaWorker
 from .parcel_editor import ParcelTypeEditor
+from .panel_dock import PanelDock
 from .panels.image import CROP_FAILED
 from .panels.text import DEFAULT_PT
 from .file_session import FileSession
@@ -252,12 +253,7 @@ class MainWindow(QMainWindow):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setMinimumWidth(PANEL_WIDTH + scroll.verticalScrollBar().sizeHint().width())
         # Side bar as a dock: left or right, wider by dragging, detachable – never closed
-        self.panel_dock = QDockWidget(_("Properties"), self)
-        self.panel_dock.setObjectName("panelDock")
-        self.panel_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable
-                                    | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
-        self.panel_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea
-                                        | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.panel_dock = PanelDock(_("Properties"), self)
         self.panel_dock.setWidget(scroll)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.panel_dock)
         self.setCentralWidget(self.canvas)

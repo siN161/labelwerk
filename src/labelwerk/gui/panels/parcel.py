@@ -193,13 +193,8 @@ class ParcelPanel(Panel):
         self._spaces_form.setContentsMargins(0, 0, 0, 0)
         self.space_boxes: list[DoubleSpinBox] = []
         self.layout_.addWidget(self.spaces_box)
-        self.spaces_hint = QLabel(_("Space between the pieces: set it per area when you create "
-                                    "your own type (NEW OWN TYPE …)."))
-        self.spaces_hint.setObjectName("note")
-        self.spaces_hint.setWordWrap(True)
-        self.layout_.addWidget(self.spaces_hint)
-        for widget in (self.spaces_title, self.spaces_box, self.spaces_hint):
-            widget.hide()
+        self.spaces_title.hide()
+        self.spaces_box.hide()
 
         self.notes = QLabel()
         self.notes.setObjectName("hint")
@@ -372,10 +367,8 @@ class ParcelPanel(Panel):
             box.valueChanged.connect(self._convert)
             self._spaces_form.addRow(_("After area {number}").format(number=index + 1), box)
             self.space_boxes.append(box)
-        hint = ptype is not None and not ptype.own           # built-in: fixed layout, no space
-        self.spaces_title.setVisible(bool(self.space_boxes) or hint)
+        self.spaces_title.setVisible(bool(self.space_boxes))
         self.spaces_box.setVisible(bool(self.space_boxes))
-        self.spaces_hint.setVisible(hint)
 
     def _show_error(self, message: str) -> None:
         self._error = message

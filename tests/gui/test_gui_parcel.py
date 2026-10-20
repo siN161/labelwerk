@@ -822,17 +822,10 @@ def test_type_rows_are_two_even_lines_without_wrapping(qtbot):
     assert item.toolTip().startswith("DHL national")                 # full name in the tooltip
 
 
-def test_space_hint_for_types_without_space(qtbot, tmp_path):
-    win = _window(qtbot)
-    panel = _open(win, _dhl(tmp_path))
-    assert panel.chosen_type() is not None and not panel.space_boxes
-    assert panel.spaces_hint.isVisible() and "eigenen Typ" in panel.spaces_hint.text()
-
-
-def test_own_type_without_space_shows_no_space_section(qtbot, tmp_path):
+def test_type_without_space_shows_no_space_section(qtbot, tmp_path):
     parcel.save_own(parcel.own_from_dict(_own_data()))
     win = _window(qtbot)
     panel = _open(win, make_pdf(tmp_path / "lager.pdf", texts=[(20, 20, "Mein Lager GmbH")],
                                 rects=[(15, 15, 100, 50)]))
     assert panel.chosen_type().own
-    assert not panel.spaces_title.isVisible() and not panel.spaces_hint.isVisible()
+    assert not panel.spaces_title.isVisible()

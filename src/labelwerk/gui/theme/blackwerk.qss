@@ -48,12 +48,9 @@ QToolBar QToolButton:disabled, QToolBar QToolButton#print:disabled {
 /* Side bar dock: the edge to the canvas is the black resize handle (left or right) */
 QMainWindow::separator { background: #000000; width: 3px; height: 3px; }
 QMainWindow::separator:hover { background: #555555; }
-QDockWidget#panelDock::title {
-    text-align: left;
-    padding: 4px 8px;
-    background: #FFFFFF;
-    border-bottom: 1px solid #CCCCCC;
-}
+QWidget#dockTitle { border-bottom: 1px solid #CCCCCC; }
+QToolButton#dockFloat { border: none; padding: 2px 6px; font-size: 16px; }
+QToolButton#dockFloat:hover { background: #000000; color: #FFFFFF; }
 QLabel#note { color: #666666; }
 QLabel#panelTitle { font-size: 22px; font-weight: 900; padding: 4px 0 8px 0; }
 QLabel[role="section"] { font-weight: 900; letter-spacing: 1px; padding-top: 10px; }

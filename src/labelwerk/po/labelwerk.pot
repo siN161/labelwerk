@@ -639,6 +639,10 @@ msgstr ""
 msgid "Design and print labels (Brother QL)"
 msgstr ""
 
+#: src/labelwerk/gui/panel_dock.py
+msgid "Detach as a window of its own"
+msgstr ""
+
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Dialog of the desktop instead of the labelwerk dialog with preview (takes effect after a restart)"
 msgstr ""
@@ -690,6 +694,10 @@ msgstr ""
 msgid "Distance of the border from the printable edge"
 msgstr ""
 
+#: src/labelwerk/gui/panel_dock.py
+msgid "Dock in the window"
+msgstr ""
+
 #: src/labelwerk/gui/panels/paper.py
 msgid "Dotted"
 msgstr ""
@@ -704,6 +712,10 @@ msgstr ""
 
 #: src/labelwerk/gui/parcel_editor.py
 msgid "Drag on the label to mark an area, drag an area to move it, Del removes the chosen one. Areas are placed on the tape in this order."
+msgstr ""
+
+#: src/labelwerk/gui/panel_dock.py
+msgid "Drag to the left or right edge to dock there"
 msgstr ""
 
 #: src/labelwerk/gui/canvas.py
@@ -2503,10 +2515,6 @@ msgstr ""
 
 #: src/labelwerk/gui/parcel_editor.py
 msgid "Space after"
-msgstr ""
-
-#: src/labelwerk/gui/panels/parcel.py
-msgid "Space between the pieces: set it per area when you create your own type (NEW OWN TYPE …)."
 msgstr ""
 
 #: src/labelwerk/gui/panels/series.py
