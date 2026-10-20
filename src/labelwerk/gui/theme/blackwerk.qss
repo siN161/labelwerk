@@ -193,5 +193,6 @@ QListWidget#symbolGroups, QListView#symbolGrid {
     selection-color: #FFFFFF;
 }
 QListWidget#symbolGroups::item { padding: 4px 6px; }
+QListWidget#parcelTypes { selection-background-color: #000000; selection-color: #FFFFFF; }
 QListWidget#parcelTypes::item:selected { background: #000000; color: #FFFFFF; }
 QListWidget#symbolGroups::item:selected, QListView#symbolGrid::item:selected { background: #000000; color: #FFFFFF; }

@@ -261,8 +261,12 @@ class MainWindow(QMainWindow):
         self.panel_dock.setWidget(scroll)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.panel_dock)
         self.setCentralWidget(self.canvas)
-        if self.settings.window_state:              # place and width as last time
-            self.restoreState(QByteArray.fromBase64(self.settings.window_state.encode("ascii")))
+        state = self.settings.window_state
+        if state and self.restoreState(QByteArray.fromBase64(state.encode("ascii"))):
+            for bar in (self.tool_bar, self.app_bar, self.findChild(QToolBar, "editBar")):
+                if bar is not None:
+                    bar.show()                      # the state may have hidden a tool bar
+            QTimer.singleShot(0, self, self._limit_dock)
         else:                                       # first start: as narrow as the panels allow
             self.resizeDocks([self.panel_dock], [scroll.minimumWidth()], Qt.Orientation.Horizontal)
         self._stored_state = self.settings.window_state
@@ -2020,6 +2024,15 @@ class MainWindow(QMainWindow):
             else:
                 self.files.open_favorite(favorite)
 
+    def _window_state(self) -> str:
+        return bytes(self.saveState().toBase64()).decode("ascii")
+
+    def _limit_dock(self) -> None:
+        """A side bar from a bigger window takes at most half of this one (canvas stays usable)."""
+        if not self.panel_dock.isFloating() and self.panel_dock.width() > self.width() // 2:
+            self.resizeDocks([self.panel_dock], [max(self.panel_dock.minimumWidth(), self.width() // 2)],
+                             Qt.Orientation.Horizontal)
+
     def closeEvent(self, event) -> None:
         if not self.files.maybe_save():
             event.ignore()                          # Cancel: window stays open
@@ -2031,7 +2044,7 @@ class MainWindow(QMainWindow):
         self._shot_pending = False                  # no selection and no inserting any more
         if self._shooting:
             self._end_shooting()
-        self.settings.window_state = bytes(self.saveState().toBase64()).decode("ascii")
+        self.settings.window_state = self._window_state()
         changed = {key: getattr(self.settings, key) for key, stored in
                    (("last_tool", self._stored_tool), ("window_state", self._stored_state))
                    if getattr(self.settings, key) != stored}
@@ -2069,6 +2082,8 @@ class MainWindow(QMainWindow):
             saved.printer, saved.last_model = self.settings.printer, self.settings.last_model
             saved.printer_options = self.settings.printer_options
             saved.last_tool = self.settings.last_tool
+            saved.window_state = self._window_state()   # side bar as it is now (saved below)
+            self._stored_state = saved.window_state
             if saved.printer.startswith(("tcp://", "zpl+tcp://")) and saved.printer not in {
                     p.uri for p in network_printers(network_entries(saved))}:
                 saved.printer = ""                  # network printer removed/changed: automatic

@@ -31,8 +31,6 @@ NAME_ROLE = Qt.ItemDataRole.UserRole + 1      # shown name: without the carrier 
 DETAIL_ROLE = Qt.ItemDataRole.UserRole + 2    # second line: addition in brackets, status
 BEST_ROLE = Qt.ItemDataRole.UserRole + 3      # ✓: among the best recognized
 _PAD = 6                                      # type rows: padding in pixels
-_SEPARATOR = QColor("#DDDDDD")                # subtle line between the type rows
-_DETAIL = QColor("#777777")
 
 
 def split_name(name: str, carrier: str) -> tuple[str, str]:
@@ -43,9 +41,16 @@ def split_name(name: str, carrier: str) -> tuple[str, str]:
     if match:
         name, extra = match.group(1), match.group(2)
     if carrier and name.lower().startswith(carrier.lower() + " "):
-        name = name[len(carrier) + 1:]
+        name = name[len(carrier) + 1:].lstrip()
         name = name[:1].upper() + name[1:]
     return name, extra
+
+
+def _mix(fore: QColor, back: QColor, share: float) -> QColor:
+    """``share`` of the text colour on the background – greys that follow the palette (dark too)."""
+    return QColor(round(back.red() + (fore.red() - back.red()) * share),
+                  round(back.green() + (fore.green() - back.green()) * share),
+                  round(back.blue() + (fore.blue() - back.blue()) * share))
 
 
 class TypeDelegate(QStyledItemDelegate):
@@ -102,13 +107,14 @@ class TypeDelegate(QStyledItemDelegate):
                          painter.fontMetrics().elidedText(name, Qt.TextElideMode.ElideRight,
                                                           inner.width()))
         painter.setFont(detail_font)
-        painter.setPen(text if selected else _DETAIL)
+        painter.setPen(text if selected else _mix(option.palette.text().color(),
+                                                  option.palette.base().color(), 0.62))
         painter.drawText(QRect(inner.left(), inner.top() + line, inner.width(),
                                painter.fontMetrics().height()),
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                          painter.fontMetrics().elidedText(index.data(DETAIL_ROLE) or "",
                                                           Qt.TextElideMode.ElideRight, inner.width()))
-        painter.setPen(QPen(_SEPARATOR, 1))
+        painter.setPen(QPen(_mix(option.palette.text().color(), option.palette.base().color(), 0.15), 1))
         painter.drawLine(rect.left() + _PAD, rect.bottom(), rect.right() - _PAD, rect.bottom())
         painter.restore()
 
@@ -366,9 +372,10 @@ class ParcelPanel(Panel):
             box.valueChanged.connect(self._convert)
             self._spaces_form.addRow(_("After area {number}").format(number=index + 1), box)
             self.space_boxes.append(box)
-        self.spaces_title.setVisible(ptype is not None)
+        hint = ptype is not None and not ptype.own           # built-in: fixed layout, no space
+        self.spaces_title.setVisible(bool(self.space_boxes) or hint)
         self.spaces_box.setVisible(bool(self.space_boxes))
-        self.spaces_hint.setVisible(ptype is not None and not self.space_boxes)
+        self.spaces_hint.setVisible(hint)
 
     def _show_error(self, message: str) -> None:
         self._error = message

@@ -66,3 +66,47 @@ def test_first_start_is_as_narrow_as_before(qtbot):
     win = _window(qtbot)
     qtbot.wait(20)
     assert win.panel_dock.widget().width() == win.panel_dock.widget().minimumWidth()
+
+
+def test_settings_dialog_keeps_the_dock_state(qtbot, monkeypatch):
+    """SAVE in the settings dialog must not forget where the side bar is (review 2026-10-20)."""
+    from labelwerk.gui import main_window as mw
+    save_settings(Settings(check_media_on_start=False))
+    win = _window(qtbot, load_settings())
+    win.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, win.panel_dock)
+    qtbot.wait(20)
+
+    real = mw.SettingsDialog
+
+    class Dialog:
+        DialogCode = real.DialogCode
+
+        def __init__(self, settings, **_kw):
+            dialog = real(settings, model=win.model)
+            qtbot.addWidget(dialog)
+            self.saved = dialog.values()
+
+        def exec(self):
+            return self.DialogCode.Accepted
+
+        def deleteLater(self):
+            pass
+    monkeypatch.setattr(mw, "SettingsDialog", Dialog)
+    win.open_settings()
+    assert load_settings().window_state == win.settings.window_state != ""
+    win.close()
+    again = _window(qtbot, load_settings())
+    assert again.dockWidgetArea(again.panel_dock) == Qt.DockWidgetArea.RightDockWidgetArea
+
+
+def test_toolbars_come_back_and_huge_widths_are_limited(qtbot):
+    win = _window(qtbot)
+    win.tool_bar.hide()
+    win.resizeDocks([win.panel_dock], [1400], Qt.Orientation.Horizontal)
+    qtbot.wait(20)
+    win.close()
+    from labelwerk.settings import Settings as S
+    again = _window(qtbot, S(check_media_on_start=False, window_state=win.settings.window_state))
+    qtbot.wait(20)
+    assert again.tool_bar.isVisible() and again.app_bar.isVisible()
+    assert again.panel_dock.width() <= again.width() // 2 + 2

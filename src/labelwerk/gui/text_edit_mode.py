@@ -82,7 +82,7 @@ class TextEditSession(QObject):
         else:
             cursor.setPosition(position)
         self._editor.setTextCursor(cursor)
-        self._canvas.set_caret_focus(self._editor.hasFocus())
+        self._canvas.set_caret_focus(QApplication.focusWidget() in (self._editor, self._canvas))
         self.update_marks()
 
     def end(self) -> int | None:
@@ -352,8 +352,9 @@ class TextEditSession(QObject):
             self._return_focus()
 
     def _focus_changed(self, _old, new) -> None:
-        if self.active:
-            self._canvas.set_caret_focus(new is self._editor)
+        if self.active:                           # side bar detached: the editor is in another
+            self._canvas.set_caret_focus(new is self._editor     # window, the canvas forwards
+                                         or new is self._canvas)  # the keys (focus proxy)
 
     def eventFilter(self, watched, event) -> bool:
         if watched in self._popups and event.type() == QEvent.Type.Hide:

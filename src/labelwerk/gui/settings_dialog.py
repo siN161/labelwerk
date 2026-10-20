@@ -59,6 +59,7 @@ class SettingsDialog(QDialog):
         self._printer, self._last_model = settings.printer, settings.last_model   # only passed through
         self._printer_options = settings.printer_options                          # only passed through
         self._last_tool = settings.last_tool                                      # only passed through
+        self._window_state = settings.window_state                                # only passed through
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
@@ -499,6 +500,7 @@ class SettingsDialog(QDialog):
             start_zoom=self.zoom.value(),
             start_tool=start_tool_for(self.start_tool.currentData(), self._hidden_tools()),
             last_tool=self._last_tool,
+            window_state=self._window_state,
             hidden_tools=self._hidden_tools(),
             theme=self.theme.currentData(),
             system_file_dialog=self.system_file_dialog.isChecked(),

@@ -776,3 +776,25 @@ def test_font_is_shown_again_after_deselect_and_reselect(qtbot):
     assert panel.family.currentText() == ""
     win.canvas.set_selection([0])
     assert panel.family.currentText() == "DejaVu Sans"
+
+
+def test_caret_shows_with_a_detached_side_bar(qtbot):
+    """Side bar as its own window: the input buffer (text panel) is in another window – the caret
+    still shows while the canvas has the focus (review 2026-10-20)."""
+    win = _window(qtbot)
+    qtbot.waitExposed(win)
+    win.panel_dock.setFloating(True)
+    qtbot.wait(50)
+    win.activateWindow()
+    qtbot.wait(50)
+    win.render_now()
+    _double_click(win.canvas, _char_point(win, 0, 2))
+    qtbot.waitUntil(lambda: _session(win).active, timeout=1000)
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QGuiApplication, QKeyEvent
+    target = QGuiApplication.focusWindow()
+    for kind in (QEvent.Type.KeyPress, QEvent.Type.KeyRelease):
+        QGuiApplication.sendEvent(target, QKeyEvent(kind, ord("X"), Qt.KeyboardModifier.ShiftModifier, "X"))
+    qtbot.wait(50)
+    assert "X" in win.panel("text").edit.toPlainText()
+    assert win.canvas.caret_shown()
