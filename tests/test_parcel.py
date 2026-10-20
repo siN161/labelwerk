@@ -697,3 +697,52 @@ def test_own_file_name_must_match_its_identifier():
     (parcel.own_dir() / "own-b.json").write_text(json.dumps(_own(id="own-b")))
     assert [t.id for t in parcel.own_types()] == ["own-b"]
     assert any("anders.json" in w for w in parcel.own_warnings())
+
+
+# --- Schliff: Stücke desselben Barcodes fluchten ------------------------------------------
+def _spans(piece):
+    """Ausschnitt-Spanne, die auf Etikett-x bzw. -y fällt (je Drehung)."""
+    x, y = (piece.src[0], piece.src[2]), (piece.src[1], piece.src[3])
+    return (x, y) if piece.rotation in (0, 180) else (y, x)
+
+
+@pytest.mark.parametrize("ptype", parcel.types("DE"), ids=lambda t: t.id)
+def test_pieces_of_one_column_share_their_target_span(ptype):
+    """Layouts schneiden die Mitte langer Balken heraus und setzen die Teile aneinander – gleiche
+    Spanne im Ausschnitt an (fast) gleicher Stelle im Ziel muss genau dieselbe Spanne im Ziel haben,
+    sonst knicken die Balken. Weiter entfernt ist es ein anderer Platz (bleibt)."""
+    for sheets in ptype.layouts.values():
+        for sheet in sheets:
+            for axis in (0, 1):
+                for a in sheet.pieces:
+                    for b in sheet.pieces:
+                        if (a.page, a.rotation, _spans(a)[axis]) != (b.page, b.rotation, _spans(b)[axis]):
+                            continue
+                        ta, tb = (a.dst[axis], a.dst[axis + 2]), (b.dst[axis], b.dst[axis + 2])
+                        near = all(abs(u - v) <= parcel.ALIGN_MM for u, v in zip(ta, tb))
+                        assert ta == tb or not near, (ptype.id, ta, tb)
+
+
+def test_pieces_of_one_column_stay_aligned_after_snapping(tmp_path):
+    """DHL Retoure Amazon: Leitcode und Identcode liegen je auf zwei Stücken derselben Spalte.
+    Rückt das Anpassen der Kanten (ungeprüfter Typ) eine gemeinsame Kante nur bei einem Stück,
+    bleibt sie bei allen – sonst bekämen die Stücke verschiedene Maßstäbe (Knick in den Balken)."""
+    ptype = parcel.find("dhl-retour-3")
+    pieces = ptype.layouts["62"][0].pieces
+    column = [1, 3, 4]
+    assert len({pieces[n].src[1::2] for n in column}) == 1   # dieselbe Spanne (gedreht: Etikett-x)
+    k = 300 / 25.4
+    x, y = ptype.raster["x_mm"], ptype.raster["y_mm"]
+    img = Image.new("L", (1800, 1200), 255)
+    draw = ImageDraw.Draw(img)
+    for n in column:                                      # Inhalt in jedem Stück
+        x0, y0, x1, y1 = pieces[n].src
+        draw.rectangle([round((x0 + 2 - x) * k), round((y0 + 5 - y) * k),
+                        round((x1 - 2 - x) * k), round((y1 - 5 - y) * k)], 0)
+    x0, y0, x1, y1 = pieces[4].src                        # nur Stück 4 ragt über die Unterkante
+    draw.rectangle([round((x0 + 2 - x) * k), round((y1 - 6 - y) * k),
+                    round((x1 - 2 - x) * k), round((y1 + 1 - y) * k)], 0)
+    img.save(tmp_path / "m.png", dpi=(300, 300))
+    doc = parcel.convert(parcel.load(tmp_path / "m.png"), ptype, "62", "QL-600").documents[0]
+    spans = {(round(doc.objects[n].x_mm, 6), round(doc.objects[n].w_mm, 6)) for n in column}
+    assert len(spans) == 1

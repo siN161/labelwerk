@@ -52,6 +52,7 @@ WHITE = 200                        # Grauwert ab dem ein Pixel als weiß gilt (K
 MAX_PAGE_PIXELS = 80_000_000       # Seite gerendert höchstens (A4 bei 600 dpi: 35 Mio.)
 MAX_IMAGE_PIXELS = 50_000_000      # Bildmarke höchstens (vor dem Dekodieren geprüft)
 DPI_PLAUSIBLE = (50, 1200)         # andere Angaben in Bildern gelten als fehlend
+ALIGN_MM = 0.5                     # Stücke einer Spalte: so nah gemessene Ziele sind dieselben
 ASPECT_TOLERANCE = 0.03            # Bild passt zur Seite/Regel, wenn das Seitenverhältnis ±3 % stimmt
 TURN_MARGIN = 1.15                 # quer liegende Marke: bessere Drehung muss so viel mehr Tinte treffen
 _ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
@@ -124,7 +125,7 @@ def _builtin() -> tuple[ParcelType, ...]:
 
 
 def _type(entry: dict, own: bool = False) -> ParcelType:
-    layouts = {key: tuple(Sheet(tuple(s["size_mm"]), tuple(_piece(p) for p in s["pieces"]))
+    layouts = {key: tuple(Sheet(tuple(s["size_mm"]), _aligned([_piece(p) for p in s["pieces"]]))
                           for s in sheets) for key, sheets in entry.get("layouts", {}).items()}
     source = entry.get("source", {})
     return ParcelType(entry["id"], dict(entry["names"]), entry.get("country", ""),
@@ -137,6 +138,43 @@ def _type(entry: dict, own: bool = False) -> ParcelType:
 def _piece(p: dict) -> Piece:
     return Piece(int(p.get("page", 1)), tuple(float(v) for v in p["src"]), int(p["rotation"]),
                  tuple(float(v) for v in p.get("dst", (0, 0, 0, 0))), p.get("kind", "text"))
+
+
+def _span_sides(piece: Piece, axis: int) -> tuple[int, int]:
+    """Kanten des Ausschnitts (Index in ``src``), die auf Etikett-x (0) bzw. -y (1) fallen."""
+    return (0, 2) if (piece.rotation in (0, 180)) == (axis == 0) else (1, 3)
+
+
+def _column_key(piece: Piece, axis: int):
+    a, b = _span_sides(piece, axis)
+    return piece.page, piece.rotation, piece.src[a], piece.src[b]
+
+
+def _aligned(pieces) -> tuple[Piece, ...]:
+    """Layouts schneiden die Mitte langer Balken heraus und setzen die Teile aneinander. Stücke mit
+    derselben Spanne im Ausschnitt, deren Ziele auf ``ALIGN_MM`` übereinstimmen (Messgenauigkeit),
+    bekommen genau dasselbe Ziel (Mittel) – sonst knicken die Balken an der Naht."""
+    pieces = list(pieces)
+    for axis in (0, 1):
+        done = set()
+        for n, piece in enumerate(pieces):
+            if n in done:
+                continue
+            start, end = piece.dst[axis], piece.dst[axis + 2]
+            group = [m for m, other in enumerate(pieces)
+                     if _column_key(other, axis) == _column_key(piece, axis)
+                     and abs(other.dst[axis] - start) <= ALIGN_MM
+                     and abs(other.dst[axis + 2] - end) <= ALIGN_MM]
+            done.update(group)
+            if len(group) < 2:
+                continue
+            start = sum(pieces[m].dst[axis] for m in group) / len(group)
+            end = sum(pieces[m].dst[axis + 2] for m in group) / len(group)
+            for m in group:
+                dst = list(pieces[m].dst)
+                dst[axis], dst[axis + 2] = start, end
+                pieces[m] = replace(pieces[m], dst=tuple(dst))
+    return tuple(pieces)
 
 
 def countries() -> list[tuple[str, str]]:
@@ -725,12 +763,21 @@ def _adjusted(source, ptype, pieces, dpi, grow: bool) -> tuple[Piece, ...]:
     (``arrange`` ordnet danach an)."""
     if ptype.verified:                                    # geprüfte Typen haben genaue Kanten
         return tuple(pieces)
-    out = []
-    for piece in pieces:
-        page = source.page(piece.page, dpi, ptype)
-        src = _alone(piece, snap(page, piece.src, dpi), pieces)
-        out.append(_grow(piece, src) if grow else replace(piece, src=tuple(src)))
-    return tuple(out)
+    srcs = [list(_alone(piece, snap(source.page(piece.page, dpi, ptype), piece.src, dpi), pieces))
+            for piece in pieces]
+    if grow:                                              # Stücke einer Spalte (``_aligned``):
+        for axis in (0, 1):                               # gemeinsame Kante nur gemeinsam rücken
+            for piece in pieces:
+                group = [n for n, other in enumerate(pieces)
+                         if _column_key(other, axis) == _column_key(piece, axis)
+                         and (other.dst[axis], other.dst[axis + 2])
+                         == (piece.dst[axis], piece.dst[axis + 2])]
+                for side in _span_sides(piece, axis):
+                    if len({srcs[n][side] for n in group}) > 1:
+                        for n in group:
+                            srcs[n][side] = pieces[n].src[side]
+    return tuple(_grow(piece, src) if grow else replace(piece, src=tuple(src))
+                 for piece, src in zip(pieces, srcs))
 
 
 def _frame(sheet: Sheet, reference: bool):

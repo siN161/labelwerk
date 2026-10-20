@@ -88,7 +88,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   über, „»“ hervorgehoben, solange der aktive Reiter dort liegt – _mark_overflow; Leisten nicht über das Kontextmenü
   ausblendbar); Fenster beim Start so breit, dass alles passt (fit_toolbars nach dem Design und nach jedem
   Designwechsel ohne Größenänderung, höchstens Bildschirmbreite).
-- 2979 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 3000 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -242,7 +242,9 @@ src/labelwerk/
   parcel.py   Paketmarken ohne Qt: Katalog parcel_data/catalog.json (Länder → Dienste → Typen; Format/Herkunft/
               eigene Typen/„Neuen Typ beisteuern“ in parcel_data/README.md, gepflegt mit tools/parcel/ – Arbeitsordner
               außerhalb des Repos Pflicht, workdir.py) – countries, carriers, types(country) (+ eigene), find;
-              ParcelType (names {de,en} → name, source_sizes – erste = Seitenfläche, raster-Regel für Bildmarken {dpi,
+              ParcelType (Layouts beim Laden _aligned: Stücke einer Spalte – gleiche Quellspanne, Ziel ±ALIGN_MM – bekommen
+              genau dasselbe Ziel, sonst knicken geteilte Balken an der Naht; _adjusted rückt gemeinsame Kanten nur gemeinsam;
+              names {de,en} → name, source_sizes – erste = Seitenfläche, raster-Regel für Bildmarken {dpi,
               x_mm, y_mm, px}, detect all/any/none, layouts "62"/"100x150" → Sheet(size_mm, pieces), verified, own),
               Piece(page, src mm, rotation im Uhrzeigersinn, dst-Rechteck mm, kind barcode|text), all_pieces;
               load(path) → Source (PDF: Größen + Text; Bild über files.load_image, Pixel vor dem Dekodieren begrenzt,
