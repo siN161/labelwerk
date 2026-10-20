@@ -1570,6 +1570,10 @@ msgstr ""
 msgid "No series"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "No space after the last area – it only goes between areas"
+msgstr ""
+
 #: src/labelwerk/zpl.py
 #, python-brace-format
 msgid "Not a Zebra address: {uri}"
@@ -3183,10 +3187,6 @@ msgstr ""
 msgid "no space left on the disk"
 msgstr ""
 
-#: src/labelwerk/gui/parcel_editor.py
-msgid "none"
-msgstr ""
-
 #: src/labelwerk/settings.py
 msgid "not a JSON object"
 msgstr ""
@@ -3766,6 +3766,11 @@ msgstr ""
 #: src/labelwerk/series.py
 msgctxt "series"
 msgid "Number"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgctxt "space"
+msgid "none"
 msgstr ""
 
 #: src/labelwerk/gui/panels/text.py

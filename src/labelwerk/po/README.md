@@ -1,28 +1,27 @@
-# Übersetzungen
+# Translations
 
-labelwerk ist auf Englisch geschrieben; jede andere Sprache ist eine Datei `<code>.po` in diesem Ordner
-(gettext-Format, UTF-8). `labelwerk.pot` ist die Vorlage mit allen Texten – sie wird erzeugt, nicht von Hand
-bearbeitet.
+labelwerk is written in English; every other language is a file `<code>.po` in this folder (gettext format,
+UTF-8). `labelwerk.pot` is the template with all texts – it is generated, not edited by hand.
 
-## Eine neue Sprache beisteuern
+## Contributing a new language
 
-1. `labelwerk.pot` nach `<code>.po` kopieren (z. B. `fr.po`) und im Kopf `Language: fr` sowie die
-   `Plural-Forms` der Sprache eintragen (Liste: GNU gettext, „Plural forms“).
-2. Jedes `msgstr` übersetzen – mit Poedit, Weblate oder einem Texteditor. Platzhalter in geschweiften
-   Klammern (`{label}`, `{count}` …) unverändert übernehmen; ihre Reihenfolge darf sich ändern.
-3. In `src/labelwerk/i18n.py` den Namen der Sprache in ihr selbst (`NAMES`, z. B. `"fr": "Français"`) und, falls
-   sie ein Dezimalkomma hat, `DECIMAL` ergänzen.
-4. Prüfen: `python tools/i18n.py check` (fehlende Übersetzungen, falsche Platzhalter, Zahl der Mehrzahlformen).
-   Die Sprache erscheint in Einstellungen → Ansicht → Sprache und bei `labelwerk --lang <code>`, sobald die
-   Datei da ist – auch unvollständig (fehlende Texte bleiben englisch).
+1. Copy `labelwerk.pot` to `<code>.po` (e.g. `fr.po`) and enter `Language: fr` and the `Plural-Forms` of the
+   language in the header (list: GNU gettext, "Plural forms").
+2. Translate every `msgstr` – with Poedit, Weblate or a text editor. Keep placeholders in curly braces
+   (`{label}`, `{count}` …) unchanged; their order may change.
+3. In `src/labelwerk/i18n.py` add the name of the language in itself (`NAMES`, e.g. `"fr": "Français"`) and, if it
+   uses a decimal comma, `DECIMAL`.
+4. Check: `python tools/i18n.py check` (missing translations, wrong placeholders, number of plural forms).
+   The language appears in Settings → View → Language and with `labelwerk --lang <code>` as soon as the file
+   exists – even when incomplete (missing texts stay English).
 
-Hinweise für Übersetzer stehen als `#.`-Kommentar über dem Text (z. B. was `{where}` enthält); eigene Notizen
-als `# …` und unsichere Übersetzungen (`#, fuzzy`) bleiben bei `tools/i18n.py update` erhalten.
+Notes for translators are `#.` comments above the text (e.g. what `{where}` contains); your own notes as `# …`
+and uncertain translations (`#, fuzzy`) are kept by `tools/i18n.py update`.
 
-## Für Entwickler
+## For developers
 
-- Texte für Nutzer immer englisch und mit `_("…")` (bzw. `ngettext`, `pgettext`; Tabellen auf Modulebene mit
-  `N_` markieren und beim Anzeigen `_()`), Platzhalter benannt: `_("… {name} …").format(name=…)`.
-- Nach Textänderungen: `python tools/i18n.py update` (Vorlage neu, neue Texte in jede `.po`), dann die
-  deutschen Übersetzungen in `de.po` ergänzen. Der Test `test_every_text_is_translated` hält alles vollständig,
-  `test_no_german_text_outside_the_translation` findet deutsche Texte, die nicht übersetzt werden.
+- Texts for users always in English and with `_("…")` (or `ngettext`, `pgettext`; mark tables at module level
+  with `N_` and call `_()` when displaying), named placeholders: `_("… {name} …").format(name=…)`.
+- After changing texts: `python tools/i18n.py update` (new template, new texts in every `.po`), then add the
+  German translations in `de.po`. The test `test_every_text_is_translated` keeps everything complete,
+  `test_no_german_text_outside_the_translation` finds German texts that are not translated.

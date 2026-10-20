@@ -48,7 +48,7 @@ class ParcelPanel(Panel):
         self._tied: list[str] = []             # Gleichstand ohne geprüften Sieger: Nutzer wählt
         self._top: list[str] = []              # Typen mit der höchsten Punktzahl (✓)
         self._check_choice = False             # vorgewählt, aber andere gleich gut: prüfen
-        self._spaces_for: str | None = None    # Typ, dessen Freiräume die Felder zeigen
+        self._spaces_for: tuple | None = None  # Typ und seine Freiräume, die die Felder zeigen
         self.setAcceptDrops(True)
 
         self.section(_("Country"))
@@ -250,12 +250,16 @@ class ParcelPanel(Panel):
     def _show_spaces(self, ptype: parcel.ParcelType | None) -> None:
         """Felder für die Freiräume des gewählten Typs – vorbelegt aus dem Typ, wenn ein anderer
         Typ oder eine neue Marke kommt; sonst bleiben die geänderten Werte."""
-        type_id = ptype.id if ptype is not None else None
-        if type_id == self._spaces_for and type_id is not None:
+        key = (ptype.id, tuple(parcel.spaces(ptype))) if ptype is not None else None
+        if key == self._spaces_for and key is not None:
             return
-        self._spaces_for = type_id
-        while self._spaces_form.rowCount():
-            self._spaces_form.removeRow(0)
+        self._spaces_for = key
+        while self._spaces_form.rowCount():           # takeRow + deleteLater: das Feld, dessen
+            row = self._spaces_form.takeRow(0)        # Signal gerade läuft, lebt bis danach
+            for item in (row.labelItem, row.fieldItem):
+                if item is not None and item.widget() is not None:
+                    item.widget().hide()
+                    item.widget().deleteLater()
         self.space_boxes = []
         for index, length in (parcel.spaces(ptype) if ptype is not None else []):
             box = DoubleSpinBox()

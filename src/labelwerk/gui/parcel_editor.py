@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QWidget)
 
 from .. import parcel
-from ..i18n import _, language, number
+from ..i18n import _, language, number, pgettext
 from ..render import render_document
 from .widgets import DoubleSpinBox
 
@@ -122,6 +122,7 @@ class _PageView(QGraphicsView):
 
 class ParcelTypeEditor(QDialog):
     """Bereiche einer Marke als eigenen Typ festlegen; ``result_type`` liefert den geprüften Typ."""
+    SPACE_TIP = _("Blank tape between this area and the next one")
 
     def __init__(self, parent, source: parcel.Source, label_id: str, model: str,
                  taken: set[str] | None = None):
@@ -167,9 +168,9 @@ class ParcelTypeEditor(QDialog):
         self.space.setRange(0, parcel.MAX_SPACE_MM)
         self.space.setDecimals(1)
         self.space.setSuffix(" mm")
-        self.space.setSpecialValueText(_("none"))
-        self.space.setToolTip(_("Blank tape between this area and the next one"))
-        self.space.valueChanged.connect(self._area_changed)
+        self.space.setSpecialValueText(pgettext("space", "none"))
+        self.space.setKeyboardTracking(False)          # erst nach der Eingabe (sonst setzt die Liste
+        self.space.valueChanged.connect(self._area_changed)   # das Feld beim Tippen neu)
         self.preview = QLabel()
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(PREVIEW_W, PREVIEW_H)
@@ -326,7 +327,10 @@ class ParcelTypeEditor(QDialog):
         area = self._current_area()
         for widget in (self.rotation, self.barcode):
             widget.setEnabled(area is not None)
-        self.space.setEnabled(area is not None and not self._is_last(area))
+        last = area is not None and self._is_last(area)
+        self.space.setEnabled(area is not None and not last)
+        self.space.setToolTip(_("No space after the last area – it only goes between areas")
+                              if last else self.SPACE_TIP)
         if area is None:
             return
         self.view.scene().blockSignals(True)
@@ -337,7 +341,8 @@ class ParcelTypeEditor(QDialog):
             widget.blockSignals(True)
         self.rotation.setCurrentIndex(ROTATIONS.index(area.rotation_))
         self.barcode.setChecked(area.barcode)
-        self.space.setValue(area.space)
+        if self.space.value() != area.space:
+            self.space.setValue(area.space)
         for widget in (self.rotation, self.barcode, self.space):
             widget.blockSignals(False)
 
@@ -381,9 +386,10 @@ class ParcelTypeEditor(QDialog):
         out = []
         for page in sorted(self._areas):
             for area in self._areas[page]:
+                space = area.space if not self._is_last(area) else 0   # nur zwischen den Bereichen
                 out.append({"page": page, "src": list(self._mm(area)), "rotation": area.rotation_,
                             "kind": "barcode" if area.barcode else "text",
-                            **({"space_after_mm": area.space} if area.space else {})})
+                            **({"space_after_mm": space} if space else {})})
         return out
 
     def type_data(self) -> dict:

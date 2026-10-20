@@ -1587,6 +1587,10 @@ msgstr "Keine Zeile gewählt – nichts gedruckt."
 msgid "No series"
 msgstr "Keine Serie"
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "No space after the last area – it only goes between areas"
+msgstr "Kein Freiraum nach dem letzten Bereich – er gehört nur zwischen die Bereiche"
+
 #: src/labelwerk/zpl.py
 #, python-brace-format
 msgid "Not a Zebra address: {uri}"
@@ -3204,10 +3208,6 @@ msgstr "kein Kürzel"
 msgid "no space left on the disk"
 msgstr "kein Platz auf dem Datenträger"
 
-#: src/labelwerk/gui/parcel_editor.py
-msgid "none"
-msgstr "keiner"
-
 #: src/labelwerk/settings.py
 msgid "not a JSON object"
 msgstr "kein JSON-Objekt"
@@ -3792,7 +3792,15 @@ msgctxt "series"
 msgid "Number"
 msgstr "Nummer"
 
+#: src/labelwerk/gui/parcel_editor.py
+msgctxt "space"
+msgid "none"
+msgstr "keiner"
+
 #: src/labelwerk/gui/panels/text.py
 msgctxt "text panel"
 msgid "Font"
 msgstr "Schrift"
+
+#~ msgid "none"
+#~ msgstr "keiner"

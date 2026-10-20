@@ -743,3 +743,54 @@ def test_panel_hides_spaces_for_types_without(qtbot, tmp_path):
     win = _window(qtbot)
     panel = _open(win, _dhl(tmp_path))
     assert panel.chosen_type() is not None and not panel.spaces_box.isVisible()
+
+
+def test_editor_space_takes_typed_decimals(qtbot, tmp_path):
+    """Tippen „12,5“: das Feld darf sich beim Tippen nicht selbst neu setzen (Review)."""
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 60, 40))
+    editor.add_area((10, 100, 60, 130))
+    editor.list.setCurrentRow(0)
+    editor.space.lineEdit().selectAll()
+    qtbot.keyClicks(editor.space.lineEdit(), "12,5")
+    qtbot.keyClick(editor.space.lineEdit(), Qt.Key.Key_Return)
+    assert editor.pieces()[0]["space_after_mm"] == 12.5
+
+
+def test_editor_drops_the_space_of_the_last_area(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 60, 40))
+    editor.add_area((10, 100, 60, 130))
+    editor.list.setCurrentRow(0)
+    editor.space.setValue(20)
+    editor.list.setCurrentRow(1)
+    editor.remove_selected()                                    # der erste ist jetzt der letzte
+    assert "space_after_mm" not in editor.pieces()[0]
+    editor.list.setCurrentRow(0)
+    assert not editor.space.isEnabled() and editor.space.toolTip() != editor.SPACE_TIP
+
+
+def test_panel_spaces_follow_a_changed_type(qtbot, tmp_path):
+    """Derselbe Typ mit anderen Freiräumen (zweite Instanz): Felder neu aus dem Typ."""
+    pieces = [dict(p) for p in _own_data()["pieces"]]
+    pieces[0]["space_after_mm"] = 15
+    parcel.save_own(parcel.own_from_dict(_own_data(pieces=pieces)))
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "lager.pdf", texts=[(20, 20, "Mein Lager GmbH")],
+                                rects=[(15, 15, 100, 50)]))
+    pieces[0]["space_after_mm"] = 33
+    parcel.save_own(parcel.own_from_dict(_own_data(pieces=pieces)))
+    panel.refresh_types()
+    assert [b.value() for b in panel.space_boxes] == [33]
+
+
+def test_panel_keeps_changed_spaces_for_another_label(qtbot, tmp_path):
+    pieces = [dict(p) for p in _own_data()["pieces"]]
+    pieces[0]["space_after_mm"] = 15
+    parcel.save_own(parcel.own_from_dict(_own_data(pieces=pieces)))
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "lager.pdf", texts=[(20, 20, "Mein Lager GmbH")],
+                                rects=[(15, 15, 100, 50)]))
+    panel.space_boxes[0].setValue(40)
+    panel.set_target("102", "QL-1100")
+    assert [b.value() for b in panel.space_boxes] == [40]
