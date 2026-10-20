@@ -16,7 +16,7 @@ from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPalette, QPen
 from PySide6.QtWidgets import (QComboBox, QFormLayout, QHBoxLayout, QLabel, QListWidget,
                                QListWidgetItem, QMenu, QPushButton, QStyle, QStyledItemDelegate,
-                               QToolButton, QWidget)
+                               QToolButton, QVBoxLayout, QWidget)
 
 from ... import parcel
 from ...document import Document
@@ -174,7 +174,7 @@ class ParcelPanel(Panel):
         self.types.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.layout_.addWidget(self.types)
         own_row = QWidget()                            # only with a custom type chosen
-        own_layout = QHBoxLayout(own_row)
+        own_layout = QVBoxLayout(own_row)              # one below the other: "UMBENENNEN …" is long
         own_layout.setContentsMargins(0, 0, 0, 0)
         self.rename_button = QPushButton(_("RENAME …"))
         self.remove_button = QPushButton(_("DELETE"))

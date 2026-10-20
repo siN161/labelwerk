@@ -133,3 +133,19 @@ def test_settings_dialog_fits(qtbot, language, tmp_path):
     QApplication.processEvents()
     assert _cut_off(dialog) == []
     _shot(dialog, f"{language}-einstellungen")
+
+
+def test_parcel_panel_with_an_own_type_fits(qtbot, language, tmp_path, monkeypatch):
+    """RENAME …/DELETE only show with an own type chosen – "UMBENENNEN …" was cut off."""
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    from labelwerk import parcel
+    parcel.save_own(parcel.own_from_dict({
+        "id": "eigen-x", "names": {"de": "Lager", "en": "Store"}, "source": {"sizes_mm": [[210, 297]]},
+        "pieces": [{"page": 1, "src": [10, 10, 110, 60], "rotation": 0, "kind": "text"}]}))
+    win = _window(qtbot, Document("62", objects=[TextObject("A")]))
+    win._show_tool("parcel")
+    panel = win.panel("parcel")
+    panel.refresh_types("eigen-x")
+    QApplication.processEvents()
+    assert panel.own_row.isVisible()
+    assert _cut_off(panel, PANEL_WIDTH) == []
