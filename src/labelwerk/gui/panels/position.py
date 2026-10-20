@@ -1,7 +1,7 @@
-"""Bereich „Position“ der Objekt-Panels: Lage (X/Y) und Größe (B/H) des Rahmens in mm.
+"""“Position” area of the object panels: position (X/Y) and size (W/H) of the frame in mm.
 
-Gemeinsames Widget für alle Objektarten; das Panel zeigt damit den Rahmen, wie ihn das
-Hauptfenster gerendert hat (``show_frame``), und meldet geänderte Felder (``edited``).
+Shared widget for all object kinds; the panel uses it to show the frame as the
+main window rendered it (``show_frame``) and reports changed fields (``edited``).
 """
 from __future__ import annotations
 
@@ -13,23 +13,23 @@ from ...i18n import N_, _
 from ...layout import Rect
 from ..widgets import DoubleSpinBox
 
-POSITION_MM = (-MAX_POSITION_MM, MAX_POSITION_MM)   # Lage darf auch neben dem Etikett liegen (ragt hinaus)
+POSITION_MM = (-MAX_POSITION_MM, MAX_POSITION_MM)   # position may also lie beside the label (sticks out)
 SIZE_MM = (1.0, 999.9)
 FRAME_ONLY = N_("Only changeable with a fixed frame size")
 _FIELDS = (("x", "X", N_("Distance from the left edge of the label")),
            ("y", "Y", N_("Distance from the top edge of the label")),
-           ("w", N_("W"), N_("Width of the frame")),         # B(reite)
+           ("w", N_("W"), N_("Width of the frame")),         # W(idth)
            ("h", N_("H"), N_("Height of the frame")))
 
 
 class PositionSection(QWidget):
-    """Vier Zahlenfelder X/Y/B/H (mm, 0,1 mm genau). Breite und Höhe lassen sich nur ändern,
-    wenn das Objekt eine änderbare Größe hat (``set_size_editable``) – sonst zeigen sie sie
-    nur an (Pfeile sichtbar, ohne Wirkung). Der Besitzer ruft ``set_size_editable`` (oder
-    ``show_frame``) jedes Mal auf, wenn sich bei seinem Objekt ändert, ob die Größe änderbar
-    ist (z. B. feste Rahmengröße an/aus) – sonst meldet der Bereich veraltet."""
+    """Four number fields X/Y/W/H (mm, 0.1 mm precision). Width and height can only be changed
+    if the object has a changeable size (``set_size_editable``) – otherwise they only
+    display it (arrows visible, no effect). The owner calls ``set_size_editable`` (or
+    ``show_frame``) every time it changes for its object whether the size is changeable
+    (e.g. fixed frame size on/off) – otherwise the area reports outdated values."""
 
-    edited = Signal(str, float)     # Feld ("x" | "y" | "w" | "h") und neuer Wert in mm
+    edited = Signal(str, float)     # field ("x" | "y" | "w" | "h") and new value in mm
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,7 +42,7 @@ class PositionSection(QWidget):
             spin.setDecimals(1)
             spin.setSingleStep(0.1)
             spin.setRange(*(POSITION_MM if key in "xy" else SIZE_MM))
-            spin.setKeyboardTracking(False)        # erst nach Enter/Fokuswechsel/Pfeil übernehmen
+            spin.setKeyboardTracking(False)        # accept only after Enter/focus change/arrow
             spin.setToolTip(_(tip))
             label = QLabel(text if key in "xy" else _(text))
             label.setToolTip(_(tip))
@@ -54,7 +54,7 @@ class PositionSection(QWidget):
         self.set_size_editable(False)
 
     def show_frame(self, rect: Rect | None, editable_size: bool) -> None:
-        """Rahmen in mm anzeigen (None = Nullen), ohne ``edited`` auszulösen."""
+        """Show the frame in mm (None = zeros) without triggering ``edited``."""
         for key, spin in self.spins.items():
             spin.blockSignals(True)
             spin.setValue(getattr(rect, key) if rect is not None else 0.0)
@@ -62,13 +62,13 @@ class PositionSection(QWidget):
         self.set_size_editable(editable_size)
 
     def set_size_editable(self, editable: bool) -> None:
-        """Breite/Höhe änderbar bzw. nur Anzeige der Größe."""
+        """Width/height changeable or display of the size only."""
         self._size_editable = editable
         for spin, tip in ((self.spins["w"], _("Width of the frame")),
                           (self.spins["h"], _("Height of the frame"))):
             if spin.isReadOnly() == editable:
-                spin.setReadOnly(not editable)       # Pfeile bleiben sichtbar, wirken aber nicht
-                spin.style().unpolish(spin)          # Stylesheet: [readOnly="true"] neu anwenden
+                spin.setReadOnly(not editable)       # arrows stay visible but have no effect
+                spin.style().unpolish(spin)          # stylesheet: re-apply [readOnly="true"]
                 spin.style().polish(spin)
             spin.setToolTip(tip if editable else f"{tip} – {_(FRAME_ONLY)}")
 

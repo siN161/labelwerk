@@ -1,4 +1,4 @@
-"""QActions aus dem Kürzel-Verzeichnis (Etappe 3d-1)."""
+"""QActions from the shortcut directory (stage 3d-1)."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QWidget
@@ -36,6 +36,6 @@ def test_main_window_keeps_qt_actions_method(qtbot):
     from labelwerk.settings import Settings
     win = MainWindow(settings=Settings(check_media_on_start=False))
     qtbot.addWidget(win)
-    assert callable(win.actions)                            # QWidget.actions() nicht verdeckt
+    assert callable(win.actions)                            # QWidget.actions() not hidden
     assert win.shortcut_actions["edit.undo"] in win.actions()
     assert list(win.shortcut_actions) == [a.id for a in shortcuts.ACTIONS]

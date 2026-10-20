@@ -1,5 +1,5 @@
-"""Starter-Eintrag (.desktop), Icon und Dateityp *.labelwerk für die Desktop-Umgebung (XDG,
-z. B. COSMIC/GNOME): Doppelklick auf eine Etikett-Datei öffnet sie in labelwerk."""
+"""Launcher entry (.desktop), icon and file type *.labelwerk for the desktop environment (XDG,
+e.g. COSMIC/GNOME): double-clicking a label file opens it in labelwerk."""
 from __future__ import annotations
 
 import os
@@ -12,12 +12,12 @@ from xml.sax.saxutils import escape
 from . import i18n
 from .i18n import N_, _
 
-APP_NAME = "labelwerk"  # angezeigter Name (Fenster, Starter, Hilfe) – Umbenennen: CLAUDE.md, Roadmap 7
-APP_ID = "labelwerk"    # technische ID; muss zu QGuiApplication.setDesktopFileName passen
-MIME_TYPE = "application/x-labelwerk"      # Etikett-Datei *.labelwerk
-MIME_ICON = MIME_TYPE.replace("/", "-")    # Icon-Name nach XDG (shared-mime-info leitet ihn ab)
-# Texte für Starter und Dateityp: englisch, dazu jede Übersetzung als eigener Eintrag (die Dateien
-# gelten für jede Sprache der Sitzung, nicht nur die von labelwerk)
+APP_NAME = "labelwerk"  # displayed name (window, launcher, help) – renaming: CLAUDE.md, roadmap 7
+APP_ID = "labelwerk"    # technical ID; must match QGuiApplication.setDesktopFileName
+MIME_TYPE = "application/x-labelwerk"      # label file *.labelwerk
+MIME_ICON = MIME_TYPE.replace("/", "-")    # icon name per XDG (shared-mime-info derives it)
+# Texts for launcher and file type: English, plus each translation as its own entry (the files
+# apply to every language of the session, not just labelwerk's own)
 MIME_COMMENT = N_("{app} label")
 GENERIC_NAME = N_("Label printing")
 COMMENT = N_("Design and print labels (Brother QL)")
@@ -29,7 +29,7 @@ def data_home() -> Path:
 
 
 def _targets(data: Path) -> tuple[Path, Path, Path, Path]:
-    """Starter-Eintrag, App-Icon, Dateityp (shared-mime-info), Icon des Dateityps."""
+    """Launcher entry, app icon, file type (shared-mime-info), icon of the file type."""
     icons = data / "icons" / "hicolor" / "scalable"
     return (data / "applications" / f"{APP_ID}.desktop", icons / "apps" / f"{APP_ID}.svg",
             data / "mime" / "packages" / f"{APP_ID}.xml", icons / "mimetypes" / f"{MIME_ICON}.svg")
@@ -50,7 +50,7 @@ def mime_xml() -> str:
 
 
 def _localized(text: str) -> list[tuple[str, str]]:
-    """``text`` englisch ("") und in jeder Sprache mit Übersetzung: [(Sprache, Text), …]."""
+    """``text`` in English ("") and in every language with a translation: [(language, text), …]."""
     found = [("", text)]
     for code in i18n.available():
         if code == i18n.SOURCE:
@@ -66,7 +66,7 @@ def _localized(text: str) -> list[tuple[str, str]]:
 
 
 def _entries(key: str, text: str) -> str:
-    """Schlüssel eines Starter-Eintrags mit Übersetzungen: ``Key=…``, ``Key[de]=…``."""
+    """Key of a launcher entry with translations: ``Key=…``, ``Key[de]=…``."""
     return "".join(f"{key}{f'[{code}]' if code else ''}={value}\n"
                    for code, value in _localized(text))
 
@@ -76,9 +76,9 @@ def icon_svg() -> str:
 
 
 def _exec_arg(path: Path) -> str:
-    """Pfad als Argument für ``Exec=`` (Desktop-Entry-Spezifikation): in Anführungszeichen,
-    \\ " ` $ mit Backslash maskiert, dann jeder Backslash für die Zeichenkette der Datei noch
-    einmal verdoppelt; % als %% (sonst ein Feldcode)."""
+    """Path as argument for ``Exec=`` (Desktop Entry specification): in quotation marks,
+    \\ " ` $ escaped with a backslash, then every backslash doubled once more for the file's
+    string; % as %% (otherwise a field code)."""
     text = str(path)
     for char in ("\\", '"', "`", "$"):
         text = text.replace(char, "\\" + char)
@@ -105,9 +105,9 @@ UPDATE_TIMEOUT_S = 20
 
 
 def update_databases(data: Path, which=None, run=None) -> list[str]:
-    """Datenbanken der Desktop-Umgebung auffrischen (falls die Werkzeuge da sind); gibt die
-    gescheiterten Werkzeuge zurück – spätestens nach neuer Anmeldung gilt der Eintrag trotzdem.
-    ``which``/``run`` erst hier aufgelöst (in Tests ersetzbar, auch über das Modul)."""
+    """Refresh the desktop environment's databases (if the tools are there); returns the
+    failed tools – the entry applies after the next login at the latest anyway.
+    ``which``/``run`` are resolved only here (replaceable in tests, also via the module)."""
     which, run = which or shutil.which, run or subprocess.run
     failed = []
     for tool, folder in (("update-mime-database", data / "mime"),
@@ -124,8 +124,8 @@ def update_databases(data: Path, which=None, run=None) -> list[str]:
 
 def install(gui_exe: Path, data: Path | None = None, which=None, run=None,
             update: bool = True) -> list[Path]:
-    """Starter-Eintrag, Icon und Dateityp schreiben; vorhandene werden überschrieben. Danach
-    (``update``) die Datenbanken auffrischen (``update_databases``). Schreibfehler: ``OSError``."""
+    """Write launcher entry, icon and file type; existing ones are overwritten. Then refresh
+    the databases (``update``, ``update_databases``). Write errors: ``OSError``."""
     gui_exe = Path(gui_exe)
     if not gui_exe.exists():
         raise ValueError(_("labelwerk-gui not found ({path}) – GUI installed? "
@@ -143,7 +143,7 @@ def install(gui_exe: Path, data: Path | None = None, which=None, run=None,
 
 
 def uninstall(data: Path | None = None, which=None, run=None, update: bool = True) -> list[Path]:
-    """Starter-Eintrag, Icon und Dateityp entfernen; gibt die entfernten Dateien zurück."""
+    """Remove launcher entry, icon and file type; returns the removed files."""
     data = data or data_home()
     removed = []
     for path in _targets(data):

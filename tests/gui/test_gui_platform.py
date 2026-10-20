@@ -1,3 +1,3 @@
 def test_gui_tests_never_open_real_windows(qapp):
-    # GUI-Tests laufen immer offscreen – auch wenn die Sitzung QT_QPA_PLATFORM=wayland setzt
+    # GUI tests always run offscreen – even if the session sets QT_QPA_PLATFORM=wayland
     assert qapp.platformName() == "offscreen"

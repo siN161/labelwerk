@@ -1,13 +1,13 @@
-"""Drucker über CUPS (das Drucksystem von Linux) – ohne Qt und ohne zusätzliche Bibliothek: nur die
-Befehle ``lpstat``, ``lpoptions`` und ``lp``.
+"""Printers via CUPS (the Linux print system) – without Qt and without an extra library: only the
+commands ``lpstat``, ``lpoptions`` and ``lp``.
 
-Etikettengrößen und Auflösung kommen aus dem Treiber (PPD: ``*PaperDimension``,
-``*DefaultResolution``), sonst aus den Namen der Größen (``lpoptions -l``: „62x29mm“, „w288h432“
-in Punkt), sonst aus einer Liste je Hersteller (Dymo, Zebra). Schnitt-Optionen sind die
-Treiber-Optionen mit „Cut“ im Namen. Bürodrucker (Papiergrößen A4, Letter …) erkennt die Liste der
-Warteschlangen, damit das Druckermenü sie ausblenden kann. Jeder Aufruf hat ein Zeitlimit, Meldungen kommen englisch
-(``LC_MESSAGES=C``, Namen bleiben UTF-8); Fehler werden zur übersetzten ``CupsError``. Die Liste
-der Warteschlangen fragt ein Hintergrund-Thread ab – die Oberfläche wartet nie auf CUPS.
+Label sizes and resolution come from the driver (PPD: ``*PaperDimension``,
+``*DefaultResolution``), otherwise from the size names (``lpoptions -l``: “62x29mm”, “w288h432”
+in points), otherwise from a per-manufacturer list (Dymo, Zebra). Cut options are the
+driver options with “Cut” in the name. Office printers (paper sizes A4, Letter …) are recognised from
+the queue list so that the printer menu can hide them. Every call has a time limit, messages come in
+English (``LC_MESSAGES=C``, names stay UTF-8); errors become the translated ``CupsError``. A background
+thread polls the queue list – the UI never waits for CUPS.
 """
 from __future__ import annotations
 
@@ -26,42 +26,42 @@ from .i18n import _
 from .labels import DPI, DPI_RANGE, SIZE_MM, sized_id
 
 PREFIX = "cups:"
-PPD_DIR = Path("/etc/cups/ppd")            # Tests setzen ein leeres Verzeichnis
+PPD_DIR = Path("/etc/cups/ppd")            # tests set an empty directory
 TIMEOUT_S = 5
-PRINT_TIMEOUT_S = 120                      # lp lädt eine ganze Serie hoch
-QUEUE_MAX_AGE_S = 30                       # Liste der Warteschlangen so lange wiederverwenden
-INFO_MAX_AGE_S = 300                       # Treiber-Angaben einer Warteschlange ebenso
-FAILED_MAX_AGE_S = 30                      # … ohne Antwort von CUPS nur kurz (nicht jedes Mal warten)
-BACKGROUND = True                          # Liste im Hintergrund lesen (Tests: sofort)
-# Name einer Warteschlange (CUPS: druckbar, ohne Leerzeichen, /, \, #, Anführungszeichen)
+PRINT_TIMEOUT_S = 120                      # lp uploads a whole series
+QUEUE_MAX_AGE_S = 30                       # reuse the queue list for this long
+INFO_MAX_AGE_S = 300                       # driver information of a queue likewise
+FAILED_MAX_AGE_S = 30                      # … without an answer from CUPS only briefly (no waiting each time)
+BACKGROUND = True                          # read the list in the background (tests: immediately)
+# Name of a queue (CUPS: printable, no spaces, /, \, #, quotation marks)
 _QUEUE_NAME = re.compile(r"[^\s/\\#'\"-][^\s/\\#'\"]{0,126}")
-# Schnitt-Option: „Cut…“ als Wort oder in CamelCase („DymoCutOptions“), „Schneiden“/„Schnitt…“ –
-# nicht „Execute“, nicht „Schnittstelle“
+# Cut option: “Cut…” as a word or in CamelCase (“DymoCutOptions”), “Schneiden”/“Schnitt…” –
+# not “Execute”, not “Schnittstelle”
 _CUT = re.compile(r"(?:\b[Cc]ut|(?<=[a-z])Cut|\b[Ss]chn(?:itt|eid))(?!stelle)")
-# Papiergröße eines Bürodruckers (``PageSize``): A3–A5, B5, Letter, Legal, Executive, Tabloid/Ledger,
-# auch als IPP-Name („iso_a4_210x297mm“, „na_letter_8.5x11in“) und mit Zusatz („A4.Borderless“,
-# „A4Small“) – nicht A6 (Versandetikett) und nicht „A40“
+# Paper size of an office printer (``PageSize``): A3–A5, B5, Letter, Legal, Executive, Tabloid/Ledger,
+# also as IPP name (“iso_a4_210x297mm”, “na_letter_8.5x11in”) and with a suffix (“A4.Borderless”,
+# “A4Small”) – not A6 (shipping label) and not “A40”
 _OFFICE = re.compile(r"(?:iso_|na_|jis_)?(?:a[345]|b5|letter|legal|executive|tabloid|ledger)(?!\d)",
                      re.I)
 PT_MM = 25.4 / 72
-# Rückfall: gängige Etiketten je Hersteller (Breite, Höhe in mm)
+# Fallback: common labels per manufacturer (width, height in mm)
 MEDIA_LISTS = {
     "dymo": ((89, 28), (89, 36), (54, 25), (54, 101), (57, 32), (59, 102), (25, 25), (19, 51),
              (32, 57), (36, 89)),
     "zebra": ((51, 25), (57, 32), (76, 51), (102, 51), (102, 76), (102, 102), (102, 152),
               (38, 25), (60, 40)),
 }
-COMMON = ((57, 32), (54, 25), (89, 36), (102, 51), (102, 152), (51, 25))   # unbekannter Hersteller
+COMMON = ((57, 32), (54, 25), (89, 36), (102, 51), (102, 152), (51, 25))   # unknown manufacturer
 
 
 class CupsError(Exception):
-    """CUPS-Befehl gescheitert (Meldung für Nutzer)."""
+    """CUPS command failed (message for the user)."""
 
 
 @dataclass(frozen=True)
 class Queue:
-    """Eine Warteschlange: Name und Geräte-URI (z. B. usb://DYMO/LabelWriter%20450);
-    ``office``: Bürodrucker (Papiergrößen wie A4/Letter), None = unbekannt (CUPS ohne Antwort)."""
+    """A queue: name and device URI (e.g. usb://DYMO/LabelWriter%20450);
+    ``office``: office printer (paper sizes like A4/Letter), None = unknown (CUPS gave no answer)."""
     name: str
     device: str = ""
     office: bool | None = None
@@ -69,8 +69,8 @@ class Queue:
 
 @dataclass(frozen=True)
 class CutOption:
-    """Schnitt-Option des Treibers: Schlüssel, Titel und Werte (wie ``lpoptions -l``);
-    ``labels``: Anzeige der Werte (sonst die Werte selbst)."""
+    """Driver cut option: key, title and values (like ``lpoptions -l``);
+    ``labels``: display of the values (otherwise the values themselves)."""
     key: str
     title: str
     choices: tuple[str, ...]
@@ -80,8 +80,8 @@ class CutOption:
 
 @dataclass(frozen=True)
 class QueueInfo:
-    """Was der Treiber über Etiketten sagt: Größen (Schlüssel für ``lp``, Breite, Höhe in mm),
-    Auflösung, Schnitt-Optionen; ``source`` woher die Größen stammen (ppd, options, list)."""
+    """What the driver says about labels: sizes (key for ``lp``, width, height in mm),
+    resolution, cut options; ``source`` where the sizes come from (ppd, options, list)."""
     media: tuple[tuple[str, float, float], ...]
     dpi: int
     cut_options: tuple[CutOption, ...] = ()
@@ -96,7 +96,7 @@ class QueueInfo:
         return ids
 
     def media_key(self, w_mm: float, h_mm: float) -> str:
-        """Größen-Schlüssel des Treibers zu einem Etikett, sonst eine eigene Größe."""
+        """Driver size key for a label, otherwise a custom size."""
         for key, w, h in self.media:
             if abs(w - w_mm) <= 0.15 and abs(h - h_mm) <= 0.15:
                 return key
@@ -104,12 +104,12 @@ class QueueInfo:
 
 
 def valid_name(name) -> bool:
-    """Gültiger Name einer Warteschlange (auch Schutz vor Pfaden und Optionen in Aufrufen)."""
+    """Valid queue name (also protects against paths and options in calls)."""
     return isinstance(name, str) and _QUEUE_NAME.fullmatch(name) is not None
 
 
 def _environment() -> dict[str, str]:
-    """Umgebung für CUPS-Befehle: Meldungen englisch (gleich zu lesen), Zeichensatz bleibt."""
+    """Environment for CUPS commands: messages in English (readable the same way), charset stays."""
     env = {k: v for k, v in os.environ.items() if k not in ("LC_ALL", "LANGUAGE")}
     if "UTF-8" not in (env.get("LC_CTYPE") or env.get("LANG") or "").upper().replace("UTF8", "UTF-8"):
         env["LC_CTYPE"] = "C.UTF-8"
@@ -118,7 +118,7 @@ def _environment() -> dict[str, str]:
 
 
 def _run(*args: str, timeout: float = TIMEOUT_S) -> str:
-    """CUPS-Befehl mit Zeitlimit; Ausgabe als Text."""
+    """CUPS command with time limit; output as text."""
     try:
         done = subprocess.run(args, capture_output=True, text=True, timeout=timeout,
                               check=False, env=_environment())
@@ -137,14 +137,14 @@ _lock = threading.Lock()
 _queues_cache: tuple[float | None, list[Queue]] = (None, [])
 _queues_thread: threading.Thread | None = None
 _info_cache: dict[str, tuple[float, QueueInfo]] = {}
-# Zeit, Bürodrucker, je geantwortet, letzte Frage beantwortet
+# time, office printer, whether it answered, last question answered
 _office_cache: dict[str, tuple[float, bool | None, bool, bool]] = {}
 
 
 def read_queues(classify: bool = True) -> list[Queue]:
-    """Eingerichtete Warteschlangen (``lpstat -e``, Geräte aus ``lpstat -v``; ``classify``:
-    Bürodrucker einordnen, ``office``) – wartet auf CUPS; ohne CUPS keine, ohne Geräteliste ohne
-    Geräte."""
+    """Configured queues (``lpstat -e``, devices from ``lpstat -v``; ``classify``:
+    classify office printers, ``office``) – waits for CUPS; without CUPS none, without a device list
+    without devices."""
     try:
         names = [n.strip() for n in _run("lpstat", "-e").splitlines() if valid_name(n.strip())]
     except CupsError:
@@ -152,7 +152,7 @@ def read_queues(classify: bool = True) -> list[Queue]:
     devices = {}
     try:
         for line in _run("lpstat", "-v").splitlines():
-            m = re.search(r"(\S+):\s+(\S+:/\S*)\s*$", line)      # „device for X:“, „Gerät für X:“
+            m = re.search(r"(\S+):\s+(\S+:/\S*)\s*$", line)      # "device for X:", "Gerät für X:"
             if m:
                 devices[m[1]] = m[2]
     except CupsError:
@@ -162,33 +162,33 @@ def read_queues(classify: bool = True) -> list[Queue]:
 
 
 def is_office(default: str) -> bool | None:
-    """Bürodrucker nach der Standard-Papiergröße des Treibers: A4, Letter … (auch wenn ein
-    Etikettendrucker A4 in der Liste hat, z. B. der Zebra-Treiber von CUPS, ist sein Standard ein
-    Etikett); ohne Standard unbekannt (None)."""
+    """Office printer by the driver's default paper size: A4, Letter … (even if a label printer
+    has A4 in its list, e.g. the Zebra driver of CUPS, its default is a label); unknown (None)
+    without a default."""
     return bool(_OFFICE.match(default)) if default else None
 
 
 def _default_size(name: str) -> str:
-    """Standard-Papiergröße einer Warteschlange: aus der PPD (``*DefaultPageSize``), sonst
-    ``lpoptions`` (Wert mit „*“); ohne Antwort ``CupsError``."""
+    """Default paper size of a queue: from the PPD (``*DefaultPageSize``), otherwise
+    ``lpoptions`` (value with “*”); ``CupsError`` without an answer."""
     try:
         if not valid_name(name):
-            raise OSError("invalid queue name")      # intern, nie angezeigt
+            raise OSError("invalid queue name")      # internal, never shown
         m = re.search(r"^\*DefaultPageSize:\s*(\S+)", (PPD_DIR / f"{name}.ppd").read_text(
             errors="replace"), re.M)
         if m:
             return m[1]
-    except OSError:                                  # nicht lesbar (Rechte) oder ohne PPD
+    except OSError:                                  # not readable (permissions) or no PPD
         pass
     options = _options(name)
     return options["PageSize"][2] if _choices(options, "PageSize") else ""
 
 
 def _classify(names: list[str]) -> dict[str, bool | None]:
-    """``is_office`` je Warteschlange; gemerkt (``INFO_MAX_AGE_S``, ohne Antwort
-    ``FAILED_MAX_AGE_S``). Ungemerkte fragt je ein Thread, alle zusammen höchstens ``TIMEOUT_S``
-    lang – wer bis dahin nicht antwortet, ist unbekannt (None); seine Antwort zählt beim
-    nächsten Lesen."""
+    """``is_office`` per queue; remembered (``INFO_MAX_AGE_S``, without an answer
+    ``FAILED_MAX_AGE_S``). Unremembered ones are asked by one thread each, all together at most
+    ``TIMEOUT_S`` long – whoever has not answered by then is unknown (None); its answer counts on
+    the next read."""
     now, result, ask = time.monotonic(), {}, []
     with _lock:
         for name in names:
@@ -207,7 +207,7 @@ def _classify(names: list[str]) -> dict[str, bool | None]:
     with _lock:
         for name in ask:
             stamp, office, __, __ = _office_cache.get(name, (None, None, False, False))
-            if stamp is None or stamp < now:          # nicht rechtzeitig
+            if stamp is None or stamp < now:          # not in time
                 office = _unanswered(name, now)
             result[name] = office
     return result
@@ -225,9 +225,9 @@ def _classify_one(name: str) -> None:
 
 
 def _unanswered(name: str, now: float) -> bool | None:
-    """Keine Antwort (Zeitlimit, Fehler) – unter ``_lock``: ein früher bekannter Wert bleibt (ein
-    Bürodrucker taucht nicht kurz im Menü auf), gefragt wird wie ohne Antwort schon nach
-    ``FAILED_MAX_AGE_S`` wieder; ohne frühere Antwort unbekannt (None)."""
+    """No answer (time limit, error) – under ``_lock``: a previously known value stays (an
+    office printer does not briefly appear in the menu), it is asked again after
+    ``FAILED_MAX_AGE_S`` as with no answer; without an earlier answer unknown (None)."""
     __, office, answered, __ = _office_cache.get(name, (None, None, False, False))
     _office_cache[name] = (now, office if answered else None, answered, False)
     return office if answered else None
@@ -235,10 +235,10 @@ def _unanswered(name: str, now: float) -> bool | None:
 
 def queues(max_age: float = QUEUE_MAX_AGE_S, wait: bool = False,
            classify: bool = True) -> list[Queue]:
-    """Warteschlangen, wie zuletzt gelesen (höchstens ``max_age`` Sekunden alt); ist die Liste
-    älter, liest ein Hintergrund-Thread sie neu – ``queues()`` wartet nicht (die GUI fragt alle
-    2 s; der erste Aufruf liefert noch keine). ``wait``: neu lesen und warten (CLI);
-    ``classify``: Bürodrucker einordnen (der Hintergrund-Thread tut es immer)."""
+    """Queues as last read (at most ``max_age`` seconds old); if the list is
+    older, a background thread re-reads it – ``queues()`` does not wait (the GUI asks every
+    2 s; the first call returns none yet). ``wait``: re-read and wait (CLI);
+    ``classify``: classify office printers (the background thread always does)."""
     global _queues_cache, _queues_thread
     if wait or not BACKGROUND:
         found = read_queues(classify)
@@ -262,7 +262,7 @@ def _refresh_queues() -> None:
 
 
 def forget() -> None:
-    """Gemerkte Warteschlangen und Treiber-Angaben verwerfen (z. B. neue Warteschlange)."""
+    """Discard remembered queues and driver information (e.g. new queue)."""
     global _queues_cache
     with _lock:
         _queues_cache = (None, [])
@@ -271,9 +271,9 @@ def forget() -> None:
 
 
 def queue_info(name: str) -> QueueInfo:
-    """Etiketten, Auflösung und Schnitt-Optionen einer Warteschlange; gemerkt (``INFO_MAX_AGE_S``),
-    hat CUPS nicht geantwortet, gilt die Liste je Hersteller ``FAILED_MAX_AGE_S`` lang, dann wird
-    neu gefragt. Wartet auf CUPS – nur beim Wählen des Druckers."""
+    """Labels, resolution and cut options of a queue; remembered (``INFO_MAX_AGE_S``),
+    if CUPS did not answer, the per-manufacturer list applies for ``FAILED_MAX_AGE_S``, then
+    it is asked again. Waits for CUPS – only when choosing the printer."""
     with _lock:
         stamp, info = _info_cache.get(name, (None, None))
     if info is not None and time.monotonic() - stamp < (
@@ -285,7 +285,7 @@ def queue_info(name: str) -> QueueInfo:
     except CupsError:
         options, answered = {}, False
     info = _queue_info(name, options)
-    with _lock:                             # ohne Antwort: kurz merken, dann neu fragen
+    with _lock:                             # without an answer: remember briefly, then ask again
         _info_cache[name] = (time.monotonic(), info if answered else replace(info, source="failed"))
     return info
 
@@ -294,10 +294,10 @@ def _queue_info(name: str, options: dict) -> QueueInfo:
     dpi, media, source = DPI, (), "list"
     try:
         if not valid_name(name):
-            raise OSError("invalid queue name")      # intern, nie angezeigt
+            raise OSError("invalid queue name")      # internal, never shown
         dpi, media = _parse_ppd((PPD_DIR / f"{name}.ppd").read_text(errors="replace"))
         source = "ppd"
-    except OSError:                        # nicht lesbar (Rechte) oder ohne PPD
+    except OSError:                        # not readable (permissions) or no PPD
         dpi = _option_dpi(options) or DPI
         media = tuple(m for m in (_media_from_key(k) for k in _choices(options, "PageSize")) if m)
         source = "options" if media else "list"
@@ -311,7 +311,7 @@ def _queue_info(name: str, options: dict) -> QueueInfo:
 
 
 def _options(name: str) -> dict[str, tuple[str, list[str], str]]:
-    """``lpoptions -p NAME -l``: Schlüssel → (Titel, Werte, Standard); CUPS antwortet nicht →
+    """``lpoptions -p NAME -l``: key → (title, values, default); CUPS does not answer →
     ``CupsError``."""
     text = _run("lpoptions", "-p", name, "-l")
     out = {}
@@ -346,8 +346,8 @@ def _dpi(text: str) -> int | None:
 
 
 def _parse_ppd(text: str) -> tuple[int, tuple[tuple[str, float, float], ...]]:
-    """Auflösung (``*DefaultResolution``) und Größen (``*PaperDimension Name/Text: "w h"`` in Punkt)
-    einer PPD; nur feste Etiketten innerhalb der Grenzen."""
+    """Resolution (``*DefaultResolution``) and sizes (``*PaperDimension Name/Text: "w h"`` in points)
+    of a PPD; only fixed labels within the limits."""
     dpi = DPI
     m = re.search(r'^\*DefaultResolution:\s*(\S+)', text, re.M)
     if m:
@@ -362,7 +362,7 @@ def _parse_ppd(text: str) -> tuple[int, tuple[tuple[str, float, float], ...]]:
 
 
 def _media_from_key(key: str) -> tuple[str, float, float] | None:
-    """Größe aus einem Namen: „62x29mm“, „w288h432“ (Punkt), „4x6in“; sonst None."""
+    """Size from a name: “62x29mm”, “w288h432” (points), “4x6in”; otherwise None."""
     if (m := re.fullmatch(r"(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)mm", key)):
         w, h = float(m[1]), float(m[2])
     elif (m := re.fullmatch(r"w(\d+(?:\.\d+)?)h(\d+(?:\.\d+)?)", key)):
@@ -378,7 +378,7 @@ def _media_from_key(key: str) -> tuple[str, float, float] | None:
 
 
 def _cut_options(options: dict) -> list[CutOption]:
-    """Treiber-Optionen zum Schneiden (Name oder Titel enthält „cut“/„schnitt“)."""
+    """Driver options for cutting (name or title contains “cut”/“schnitt”)."""
     return [CutOption(key, title, tuple(choices), default)
             for key, (title, choices, default) in options.items()
             if key != "PageSize" and _CUT.search(f"{key} {title}") and choices]
@@ -386,16 +386,16 @@ def _cut_options(options: dict) -> list[CutOption]:
 
 @dataclass
 class Job:
-    """Übergebener Auftrag (``lp``): Kennung wie „Dymo-12“, Seiten (Etiketten)."""
+    """Submitted job (``lp``): ID like “Dymo-12”, pages (labels)."""
     id: str
     pages: int = field(default=1)
 
 
 def print_images(name: str, images: list[Image.Image], w_mm: float, h_mm: float, dpi: int,
                  options: dict[str, str] | None = None) -> Job:
-    """Etiketten als ein Auftrag an die Warteschlange ``name``: ein PDF mit einer Seite je Etikett
-    in ``dpi`` (Seite = Etikett, 1:1 – ohne Einpassen und Drehen), Größe des Treibers bzw.
-    eigene, dazu ``options`` (z. B. Schnitt). Zurück kommt die Auftrags-Kennung."""
+    """Labels as one job to the queue ``name``: a PDF with one page per label
+    at ``dpi`` (page = label, 1:1 – no fitting or rotating), driver size or
+    custom, plus ``options`` (e.g. cut). Returns the job ID."""
     if not valid_name(name):
         raise CupsError(_("Invalid queue name: {name!r}").format(name=name))
     info = queue_info(name)
@@ -406,10 +406,10 @@ def print_images(name: str, images: list[Image.Image], w_mm: float, h_mm: float,
         first.save(path, "PDF", resolution=dpi, save_all=True, append_images=rest)
         args = ["lp", "-d", name, "-o", f"media={key}", "-o", "print-scaling=none",
                 "-o", "orientation-requested=3", "-o", "fit-to-page=false"]
-        if not key.startswith("Custom."):                # Größe des Treibers: auch als PageSize
+        if not key.startswith("Custom."):                # driver size: also as PageSize
             args += ["-o", f"PageSize={key}"]
         for option, value in (options or {}).items():
             args += ["-o", f"{option}={value}"]
         answer = _run(*args, "--", str(path), timeout=PRINT_TIMEOUT_S)
-    m = re.search(r"\b(\S+-\d+)\b", answer)                   # „request id is X-12“, „Anfrage-ID ist X-12“
+    m = re.search(r"\b(\S+-\d+)\b", answer)                   # "request id is X-12", "Anfrage-ID ist X-12"
     return Job(m[1] if m else name, len(images))

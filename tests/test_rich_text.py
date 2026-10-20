@@ -1,4 +1,4 @@
-"""Zeichenweise Formatierung im Kern (Etappe 3a)."""
+"""Character-wise formatting in the core (stage 3a)."""
 import pytest
 from PIL import Image, ImageDraw
 
@@ -14,8 +14,8 @@ def _ink(img):
 
 
 def _old_render(text: str, size: int | None = None) -> Image.Image:
-    """Der Algorithmus vor Etappe 3a (Pillow multiline_text, zentriert), Etikett 62 vertikal;
-    Rand 1 mm: quer und längs ganz im Streifen, den der Drucker freilässt (kein eigener Rand)."""
+    """The algorithm before stage 3a (Pillow multiline_text, centred), label 62 vertical;
+    margin 1 mm: across and along entirely in the strip the printer leaves free (no margin of its own)."""
     def box(font):
         probe = ImageDraw.Draw(Image.new("1", (1, 1)))
         return tuple(round(v) for v in probe.multiline_textbbox((0, 0), text, font=font,
@@ -23,7 +23,7 @@ def _old_render(text: str, size: int | None = None) -> Image.Image:
 
     def fits(s):
         l, t, r, b = box(fonts.load(DEJAVU_BOLD, s))
-        return r - l <= 696 and b - t <= 11811     # kein Rand: Drucker lässt 1,5 mm bzw. 3 mm
+        return r - l <= 696 and b - t <= 11811     # no margin: the printer leaves 1.5 mm or 3 mm
 
     start = size or max(10, 696 // 5)
     best = start if fits(start) else max(s for s in range(8, start) if fits(s))
@@ -51,7 +51,7 @@ def test_plain_text_with_fixed_size_is_pixel_identical_to_before():
 def test_mixed_sizes_share_one_baseline():
     obj = TextObject([Paragraph([Span("H", size_pt=10), Span("H", size_pt=30)], "left")],
                      size_pt=20)
-    # beide „H“ haben keine Unterlänge: gleiche Unterkante = gemeinsame Grundlinie
+    # both „H“ have no descender: same bottom edge = common baseline
     h_boxes = _letter_boxes(_ink(render_document(Document("62", objects=[obj]))))
     assert len(h_boxes) == 2
     assert abs(h_boxes[0][3] - h_boxes[1][3]) <= 1
@@ -59,7 +59,7 @@ def test_mixed_sizes_share_one_baseline():
 
 
 def _letter_boxes(ink):
-    """Tintenboxen getrennter Buchstaben (spaltenweise getrennt)."""
+    """Ink boxes of separated letters (separated column by column)."""
     cols = [x for x in range(ink.width) if ink.crop((x, 0, x + 1, ink.height)).getbbox()]
     groups, current = [], [cols[0]]
     for x in cols[1:]:
@@ -77,7 +77,7 @@ def _letter_boxes(ink):
 
 
 def _line_boxes(ink):
-    """Tintenboxen der Zeilen (an leeren Pixelzeilen getrennt)."""
+    """Ink boxes of the lines (separated at empty pixel rows)."""
     rows = [y for y in range(ink.height) if ink.crop((0, y, ink.width, y + 1)).getbbox()]
     groups, current = [], [rows[0]]
     for y in rows[1:]:
@@ -132,7 +132,7 @@ def test_italic_without_real_italic_is_slanted():
                                                                        italic=True)]))
     assert upright.tobytes() != slanted.tobytes()
     a, b = _ink(upright).getbbox(), _ink(slanted).getbbox()
-    assert (b[2] - b[0]) > (a[2] - a[0])          # geschert = breiter
+    assert (b[2] - b[0]) > (a[2] - a[0])          # sheared = wider
 
 
 def test_regular_and_bold_differ():
@@ -173,12 +173,12 @@ def test_text_property_and_plain_roundtrip():
     assert [p.align for p in obj.paragraphs] == ["left", "left"]
 
 
-# --- Fix nach Review ---------------------------------------------------------
+# --- Fix after review ------------------------------------------------------
 def test_mixed_sizes_descenders_do_not_overlap_next_line():
-    obj = TextObject([Paragraph([Span("gpqy", size_pt=36)], "left"),   # ohne i-/j-Punkte
+    obj = TextObject([Paragraph([Span("gpqy", size_pt=36)], "left"),   # without i/j dots
                       Paragraph([Span("HHH", size_pt=8)], "left")], size_pt=20)
     lines = _line_boxes(_ink(render_document(Document("62", objects=[obj]))))
-    assert len(lines) == 2                       # Unterlängen berühren die nächste Zeile nicht
+    assert len(lines) == 2                       # descenders do not touch the next line
     assert lines[0][3] <= lines[1][1]
 
 
@@ -196,8 +196,8 @@ def _dark(ink):
 @pytest.mark.parametrize("text", ["j", "jjj"])
 def test_synthetic_italic_keeps_left_ink(text):
     upright, italic = _italic_pair(text)
-    assert _dark(italic) >= _dark(upright) * 0.99      # kein abgeschnittener Bogen
-    # Breite links der Mitte: Scherung schiebt die Unterlänge nach links, nichts abgeschnitten
+    assert _dark(italic) >= _dark(upright) * 0.99      # no clipped curve
+    # width left of the centre: shear pushes the descender to the left, nothing clipped
     up_l, it_l = upright.getbbox(), italic.getbbox()
     up_c, it_c = (up_l[0] + up_l[2]) / 2, (it_l[0] + it_l[2]) / 2
     assert (it_c - it_l[0]) >= (up_c - up_l[0])
@@ -226,7 +226,7 @@ def test_italic_with_font_path_is_slanted():
 
 
 def test_fit_scales_relative_to_base_size():
-    """Feste Rahmengröße mit Grundgröße 20 pt: ein 10-pt-Stück bleibt halb so groß."""
+    """Fixed frame size with base size 20 pt: a 10 pt piece stays half as large."""
     obj = TextObject([Paragraph([Span("H", size_pt=10)], "left"),
                       Paragraph([Span("H")], "left")], size_pt=20, fit=True)
     top, bottom = _line_boxes(_ink(render_document(Document("62", objects=[obj]))))
@@ -237,10 +237,10 @@ def test_fit_scales_relative_to_base_size():
 def test_fit_never_raises_text_too_large():
     obj = TextObject.plain("Sehr langer Text", size_pt=60)
     obj.fit = True
-    render_document(Document("29", objects=[obj]))          # schrumpft statt Fehler
+    render_document(Document("29", objects=[obj]))          # shrinks instead of an error
 
 
-# --- Textrahmen über die volle Breite (Abnahme-Fix) ---------------------------
+# --- Text frame over the full width (acceptance fix) ---------------------------
 def _bbox(img):
     return _ink(img).getbbox()
 
@@ -285,7 +285,7 @@ def test_mixed_left_and_right_paragraphs_use_full_width():
 def test_horizontal_fixed_length_left_starts_at_label_start():
     obj = TextObject([Paragraph([Span("Test")], "left")], size_pt=12)
     img = render_document(Document("62", objects=[obj], orientation="horizontal", length_mm=100))
-    # gedreht um 90° im Uhrzeigersinn: Textanfang liegt oben
+    # rotated by 90° clockwise: text start is at the top
     assert _bbox(img)[1] <= 20
     obj = TextObject([Paragraph([Span("Test")], "right")], size_pt=12)
     img = render_document(Document("62", objects=[obj], orientation="horizontal", length_mm=100))
@@ -300,12 +300,12 @@ def test_aligned_ink_stays_inside_image():
 
 
 def test_too_large_message_names_largest_span_size():
-    # Grundgröße 19 pt, aber das ganze Wort steht auf 72 pt: die Meldung nennt 72 pt
+    # base size 19 pt, but the whole word is at 72 pt: the message names 72 pt
     obj = TextObject([Paragraph([Span("Tests", size_pt=72)])], size_pt=19)
     doc = Document(label_id="62", objects=[obj])
     with pytest.raises(TextTooLarge, match=r"bei Schriftgröße 72 pt \(höchstens (\d+) pt\)") as exc:
         render_document(doc)
     assert 40 < exc.value.max_pt < 72
-    # die genannte Höchstgröße passt wirklich
+    # the stated maximum size really fits
     obj.paragraphs[0].spans[0].size_pt = exc.value.max_pt
     render_document(doc)

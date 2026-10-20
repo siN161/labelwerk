@@ -14,7 +14,7 @@ def canvas(qtbot):
 
 
 def show(canvas, doc):
-    """Dokument so anzeigen, wie das Hauptfenster es tut (Objekte einzeln gerendert)."""
+    """Show the document the way the main window does (objects rendered individually)."""
     canvas.set_document(get_label(doc.label_id), label_size(doc),
                         [render_object(obj, doc) for obj in doc.objects], doc.orientation)
 
@@ -34,8 +34,8 @@ def test_round_label_is_a_circle(canvas):
     from PySide6.QtCore import QPointF
     _show(canvas, "d24")
     path = canvas.outline.path()
-    assert path.contains(QPointF(142, 142))           # Mitte
-    assert not path.contains(QPointF(5, 5))           # Ecke liegt außerhalb
+    assert path.contains(QPointF(142, 142))           # centre
+    assert not path.contains(QPointF(5, 5))           # corner lies outside
 
 
 def test_endless_label_has_length_handle(canvas):
@@ -102,8 +102,8 @@ def test_length_handle_does_not_jump_when_grabbed(qtbot, canvas):
     send(QEvent.Type.MouseButtonRelease, QPointF(center.x(), center.y() + 10 * MM),
          left, Qt.MouseButton.NoButton)
     assert emitted
-    # Schnittkante wandert um 10 mm (nicht zum Cursor, der ~2 mm tiefer liegt);
-    # Toleranz = ein Rasterschritt, weil Mauskoordinaten ganze Pixel sind
+    # cut edge moves by 10 mm (not to the cursor, which is ~2 mm lower);
+    # tolerance = one grid step, because mouse coordinates are whole pixels
     assert abs(emitted[-1] - (start_mm + 10)) <= 0.5
 
 

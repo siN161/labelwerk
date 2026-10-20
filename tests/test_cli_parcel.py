@@ -1,4 +1,4 @@
-"""labelwerk parcel: Markentypen auflisten, Marke erkennen, Vorschau, Drucken (ersetzt)."""
+"""labelwerk parcel: list label types, detect label, preview, print (replaced)."""
 from PIL import Image
 
 from labelwerk.cli import main
@@ -18,7 +18,7 @@ def test_preview_of_a_detected_label(tmp_path, capsys):
     text = capsys.readouterr().out
     assert "dhl-privat-1" in text
     img = Image.open(out)
-    assert img.width == 696                                  # quer: ganzes 62-mm-Band
+    assert img.width == 696                                  # landscape: whole 62 mm tape
 
 
 def test_preview_of_two_labels(tmp_path):
@@ -72,7 +72,7 @@ def test_tie_between_untested_types_asks_for_the_type(tmp_path, capsys):
 
 
 def test_image_needs_a_type(tmp_path, capsys):
-    Image.new("RGB", (800, 1131), "white").save(tmp_path / "foto.png")   # A4-Verhältnis, ohne Text
+    Image.new("RGB", (800, 1131), "white").save(tmp_path / "foto.png")   # A4 ratio, without text
     assert main(["parcel", str(tmp_path / "foto.png"), "-l", "62"]) == 2
     assert "nicht erkannt" in capsys.readouterr().err
     assert main(["parcel", str(tmp_path / "foto.png"), "--type", "dhl-privat-1", "-l", "62",

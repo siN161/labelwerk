@@ -1,9 +1,9 @@
-"""Fenster „Eigener Markentyp“: Bereiche auf einer geöffneten Paketmarke aufziehen und als eigenen
-Typ speichern (``parcel.own_from_dict`` prüft, ``parcel.arrange`` ordnet beim Umwandeln an).
+"""Window “New own parcel label type”: draw areas on an opened parcel label and save them as a custom
+type (``parcel.own_from_dict`` checks, ``parcel.arrange`` lays them out when converting).
 
-Rechtecke auf der Marke ziehen (leere Stelle), verschieben (Rechteck ziehen), löschen (Entf); je
-Bereich Drehung im Uhrzeigersinn, „Barcode – nicht verkleinern“ und „Freiraum danach“ (leeres Band
-bis zum nächsten Bereich). Die Vorschau zeigt das Ergebnis auf dem Etikett des Hauptfensters.
+Draw rectangles on the label (empty spot), move (drag a rectangle), delete (Del); per area
+rotation clockwise, “Barcode – do not shrink” and “Space after” (empty tape up to the next
+area). The preview shows the result on the label of the main window.
 """
 from __future__ import annotations
 
@@ -20,32 +20,32 @@ from ..i18n import _, language, number, pgettext
 from ..render import render_document
 from .widgets import DoubleSpinBox
 
-EDIT_DPI = 100                      # Auflösung der Marke im Fenster
-MIN_MM = 3.0                        # kleinere Rechtecke zählen nicht (Klick statt Ziehen)
-PREVIEW_W = 420                     # Breite der Ergebnis-Vorschau in Pixeln
+EDIT_DPI = 100                      # resolution of the label in the window
+MIN_MM = 3.0                        # smaller rectangles do not count (click instead of drag)
+PREVIEW_W = 420                     # width of the result preview in pixels
 PREVIEW_H = 220
-PREVIEW_DELAY_MS = 250              # Vorschau erst, wenn das Ziehen kurz ruht (beim Loslassen sofort)
+PREVIEW_DELAY_MS = 250              # preview only once dragging pauses briefly (immediately on release)
 NAME_MAX = 200
-SNAP_MM = 0.5                       # so nah am Seitenrand zählt als Rand
+SNAP_MM = 0.5                       # this close to the page edge counts as the edge
 ROTATIONS = (0, 90, 180, 270)
 
 
 def gray_pixmap(image) -> QPixmap:
-    """Graustufenbild (PIL) als Pixmap – Weiß bleibt weiß (Marke, Vorschau)."""
+    """Grayscale image (PIL) as pixmap – white stays white (label, preview)."""
     gray = image.convert("L")
     return QPixmap.fromImage(QImage(gray.tobytes(), gray.width, gray.height, gray.width,
                                     QImage.Format.Format_Grayscale8).copy())
 
 
 class _Area(QGraphicsRectItem):
-    """Ein Bereich auf der Marke (Szene in Pixeln bei ``EDIT_DPI``), verschiebbar, mit Nummer."""
+    """An area on the label (scene in pixels at ``EDIT_DPI``), movable, with a number."""
 
     def __init__(self, rect: QRectF, number: int, moved):
         super().__init__(QRectF(0, 0, rect.width(), rect.height()))
         self.setPos(rect.topLeft())
         self.rotation_ = 0
         self.barcode = False
-        self.space = 0.0                     # Freiraum danach (mm, 0 = keiner)
+        self.space = 0.0                     # space after it (mm, 0 = none)
         self._moved = moved
         pen = QPen(QColor("#E00000"), 2)
         pen.setCosmetic(True)
@@ -66,7 +66,7 @@ class _Area(QGraphicsRectItem):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange and self.scene():
-            bounds = self.scene().sceneRect()         # nie über den Rand der Seite hinaus
+            bounds = self.scene().sceneRect()         # never beyond the edge of the page
             if not bounds.isEmpty():
                 w, h = self.rect().width(), self.rect().height()
                 return QPointF(min(max(value.x(), bounds.left()), bounds.right() - w),
@@ -77,9 +77,9 @@ class _Area(QGraphicsRectItem):
 
 
 class _PageView(QGraphicsView):
-    """Seite der Marke; Ziehen auf freier Fläche zeichnet ein neues Rechteck."""
+    """Page of the label; dragging on free space draws a new rectangle."""
     drawn = Signal(QRectF)
-    released = Signal()                       # Maus losgelassen (Verschieben beendet)
+    released = Signal()                       # mouse released (moving finished)
 
     def __init__(self):
         super().__init__()
@@ -121,7 +121,7 @@ class _PageView(QGraphicsView):
 
 
 class ParcelTypeEditor(QDialog):
-    """Bereiche einer Marke als eigenen Typ festlegen; ``result_type`` liefert den geprüften Typ."""
+    """Define areas of a label as a custom type; ``result_type`` returns the checked type."""
     SPACE_TIP = _("Blank tape between this area and the next one")
 
     def __init__(self, parent, source: parcel.Source, label_id: str, model: str,
@@ -130,7 +130,7 @@ class ParcelTypeEditor(QDialog):
         self.setWindowTitle(_("New own parcel label type"))
         self.source, self.label_id, self.model = source, label_id, model
         self._taken = set(taken or ())
-        self._areas: dict[int, list[_Area]] = {}           # Seite → Bereiche
+        self._areas: dict[int, list[_Area]] = {}           # page → areas
         self._page = 1
         k = EDIT_DPI / 25.4
         self._k = k
@@ -169,8 +169,8 @@ class ParcelTypeEditor(QDialog):
         self.space.setDecimals(1)
         self.space.setSuffix(" mm")
         self.space.setSpecialValueText(pgettext("space", "none"))
-        self.space.setKeyboardTracking(False)          # erst nach der Eingabe (sonst setzt die Liste
-        self.space.valueChanged.connect(self._area_changed)   # das Feld beim Tippen neu)
+        self.space.setKeyboardTracking(False)          # only after the input (otherwise the list resets
+        self.space.valueChanged.connect(self._area_changed)   # the field while typing)
         self.preview = QLabel()
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(PREVIEW_W, PREVIEW_H)
@@ -184,7 +184,7 @@ class ParcelTypeEditor(QDialog):
                                         | QDialogButtonBox.StandardButton.Cancel)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
-        self.name.textChanged.connect(self._check)        # Name ändert die Vorschau nicht
+        self.name.textChanged.connect(self._check)        # name does not change the preview
 
         side = QWidget()
         form = QFormLayout(side)
@@ -215,11 +215,11 @@ class ParcelTypeEditor(QDialog):
         outer.addWidget(self.splitter, 1)
         outer.addWidget(self.buttons)
         self.resize(1100, 720)
-        self.splitter.setSizes([640, 440])          # Marke groß, Einstellungen daneben
+        self.splitter.setSizes([640, 440])          # label large, settings beside it
         self._show_page(1)
         self._update()
 
-    # --- Seite und Bereiche -------------------------------------------------------------
+    # --- Page and areas -----------------------------------------------------------------
     def _show_page(self, number: int) -> None:
         for area in self._areas.get(self._page, []):
             self.view.scene().removeItem(area)
@@ -246,7 +246,7 @@ class ParcelTypeEditor(QDialog):
         self.view.fitInView(self.view.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
     def add_area(self, rect_mm, rotation: int = 0, barcode: bool = False, space: float = 0.0) -> None:
-        """Bereich (x0, y0, x1, y1 in mm auf der gezeigten Seite) hinzufügen."""
+        """Add an area (x0, y0, x1, y1 in mm on the shown page)."""
         x0, y0, x1, y1 = rect_mm
         self._drawn(QRectF(x0 * self._k, y0 * self._k, (x1 - x0) * self._k, (y1 - y0) * self._k),
                     rotation, barcode, space)
@@ -267,7 +267,7 @@ class ParcelTypeEditor(QDialog):
         self._update()
 
     def _number(self, index: int) -> int:
-        """Laufende Nummer über alle Seiten (Reihenfolge auf dem Band)."""
+        """Running number across all pages (order on the tape)."""
         return sum(len(self._areas.get(p, [])) for p in range(1, self._page)) + index + 1
 
     def remove_selected(self) -> None:
@@ -302,19 +302,19 @@ class ParcelTypeEditor(QDialog):
         self.list.blockSignals(False)
 
     def _mm(self, area: _Area) -> tuple[float, float, float, float]:
-        """Bereich in mm auf seiner Seite – auf die Seitengröße begrenzt (Rundung am Rand)."""
+        """Area in mm on its page – limited to the page size (rounding at the edge)."""
         r = area.scene_rect()
         page = next((p for p, areas in self._areas.items() if area in areas), self._page)
         w, h = (round(v, 1) for v in self.source.sizes_mm[page - 1])
 
-        def edge(value: float, size: float) -> float:   # Pixel-Rundung am Seitenrand: genau der Rand
+        def edge(value: float, size: float) -> float:   # pixel rounding at the page edge: exactly the edge
             value = min(max(value, 0.0), size)
             return 0.0 if value < SNAP_MM else size if value > size - SNAP_MM else value
         x0, y0, x1, y1 = (round(v / self._k, 1) for v in (r.left(), r.top(), r.right(), r.bottom()))
         return edge(x0, w), edge(y0, h), edge(x1, w), edge(y1, h)
 
     def _is_last(self, area: _Area) -> bool:
-        """Letzter Bereich auf dem Band (danach zählt kein Freiraum)."""
+        """Last area on the tape (no space counts after it)."""
         pages = [p for p in sorted(self._areas) if self._areas[p]]
         return bool(pages) and self._areas[pages[-1]][-1] is area
 
@@ -350,7 +350,7 @@ class ParcelTypeEditor(QDialog):
         areas = self._areas.get(self._page, [])
         try:
             chosen = [i for i, a in enumerate(areas) if a.isSelected()]
-        except RuntimeError:                              # Fenster wird gerade abgebaut
+        except RuntimeError:                              # window is being torn down
             return
         if chosen and chosen[0] != self.list.currentRow():
             self.list.setCurrentRow(chosen[0])
@@ -368,7 +368,7 @@ class ParcelTypeEditor(QDialog):
         self._update()
 
     def _schedule_preview(self) -> None:
-        """Bereich wird verschoben: Liste und Prüfung sofort, Vorschau erst, wenn es ruht."""
+        """Area is being moved: list and check immediately, preview only once it pauses."""
         row = self.list.currentRow()
         self._fill_list()
         self.list.setCurrentRow(row)
@@ -380,13 +380,13 @@ class ParcelTypeEditor(QDialog):
             self._preview_timer.stop()
             self._render_preview()
 
-    # --- Ergebnis -----------------------------------------------------------------------
+    # --- Result -------------------------------------------------------------------------
     def pieces(self) -> list[dict]:
-        """Bereiche in Bandreihenfolge (Seite für Seite) für ``parcel.own_from_dict``."""
+        """Areas in tape order (page by page) for ``parcel.own_from_dict``."""
         out = []
         for page in sorted(self._areas):
             for area in self._areas[page]:
-                space = area.space if not self._is_last(area) else 0   # nur zwischen den Bereichen
+                space = area.space if not self._is_last(area) else 0   # only between the areas
                 out.append({"page": page, "src": list(self._mm(area)), "rotation": area.rotation_,
                             "kind": "barcode" if area.barcode else "text",
                             **({"space_after_mm": space} if space else {})})
@@ -396,17 +396,17 @@ class ParcelTypeEditor(QDialog):
         name = self.name.text().strip()
         words = [w.strip() for w in self.words.text().split(",") if w.strip()]
         sizes = sorted({(round(w, 1), round(h, 1)) for w, h in self.source.sizes_mm})
-        pages = [[round(w, 1), round(h, 1)] for w, h in self.source.sizes_mm]   # je Seite
+        pages = [[round(w, 1), round(h, 1)] for w, h in self.source.sizes_mm]   # per page
         return {"id": parcel.own_id(name, self._taken), "names": {language() or "en": name},
                 "source": {"sizes_mm": [list(s) for s in sizes], "pages_mm": pages},
                 "detect": {"all": words} if words else {}, "pieces": self.pieces()}
 
     def result_type(self) -> parcel.ParcelType:
-        """Geprüfter eigener Typ (``ParcelError``, wenn etwas fehlt)."""
+        """Checked custom type (``ParcelError`` if something is missing)."""
         return parcel.own_from_dict(self.type_data())
 
     def problem(self) -> str | None:
-        """Was dem Speichern noch fehlt (übersetzt) – None, wenn der Typ gültig ist."""
+        """What is still missing for saving (translated) – None if the type is valid."""
         if not self.name.text().strip():
             return _("Enter a name.")
         if not self.pieces():
@@ -418,7 +418,7 @@ class ParcelTypeEditor(QDialog):
         return None
 
     def overlapping(self) -> bool:
-        """Überlappen sich Bereiche derselben Seite?"""
+        """Do areas of the same page overlap?"""
         for areas in self._areas.values():
             rects = [a.scene_rect() for a in areas]
             for i, a in enumerate(rects):
@@ -427,7 +427,7 @@ class ParcelTypeEditor(QDialog):
         return False
 
     def _check(self) -> None:
-        """SPEICHERN nur mit gültigem Typ; Hinweis bei überlappenden Bereichen."""
+        """SAVE only with a valid type; note on overlapping areas."""
         self.buttons.button(QDialogButtonBox.StandardButton.Save).setEnabled(self.problem() is None)
         self.overlap.setVisible(self.overlapping())
 
@@ -437,7 +437,7 @@ class ParcelTypeEditor(QDialog):
         self._render_preview()
 
     def accept(self) -> None:
-        """Nur mit gültigem Typ schließen; sonst steht der Grund in der Vorschau."""
+        """Close only with a valid type; otherwise the reason is shown in the preview."""
         problem = self.problem()
         if problem is not None:
             self.preview.setPixmap(QPixmap())
@@ -446,7 +446,7 @@ class ParcelTypeEditor(QDialog):
         super().accept()
 
     def _render_preview(self) -> None:
-        """Ergebnis auf dem Etikett des Hauptfensters (erstes Etikett), verkleinert."""
+        """Result on the label of the main window (first label), scaled down."""
         if not self.pieces():
             self.preview.setPixmap(QPixmap())
             self.preview.setText(_("Mark at least one area."))
@@ -461,7 +461,7 @@ class ParcelTypeEditor(QDialog):
             self.preview.setPixmap(QPixmap())
             self.preview.setText(str(e))
             return
-        if docs[0].orientation == "horizontal":        # Druckbild → Leserichtung
+        if docs[0].orientation == "horizontal":        # print image → reading direction
             image = image.rotate(90, expand=True)
         pixmap = gray_pixmap(image)
         self.preview.setText("")

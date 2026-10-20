@@ -1,5 +1,5 @@
-"""Reiter BARCODE: einfügen, Art, Inhalt live, Prüfhinweise, Größe, Anfasser, Doppelklick,
-Spalte einfügen, Serie drucken, Rückgängig."""
+"""BARCODE tab: insert, kind, live content, check hints, size, handles, double-click,
+insert column, print series, undo."""
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QMouseEvent
@@ -62,14 +62,14 @@ def _double_click(canvas, pos):
 
 
 def _type(panel, text):
-    """Inhalt tippen und mit Enter abschließen (wie am Feld)."""
+    """Type the content and finish with Enter (as in the field)."""
     panel.data.setFocus()
     panel.data.selectAll()
     QTest.keyClicks(panel.data, text)
     QTest.keyClick(panel.data, Qt.Key.Key_Return)
 
 
-# --- Reiter und Einfügen -------------------------------------------------------------------------
+# --- Tab and insert -------------------------------------------------------------------------
 def test_barcode_tab_without_selection(qtbot):
     win = _window(qtbot)
     win.tool_actions["barcode"].trigger()
@@ -97,7 +97,7 @@ def test_insert_puts_the_sample_in_the_middle_and_selects_it(qtbot, kind):
     assert obj.data == barcodes.SAMPLES[kind]
     assert win.canvas.selection() == [0] and win.panels.currentWidget() is panel
     assert panel.index == 0 and panel.data.text() == obj.data
-    assert panel.data.selectedText() == obj.data              # Tippen ersetzt das Beispiel
+    assert panel.data.selectedText() == obj.data              # typing replaces the sample
     rect, area = barcode_rect(obj), win._paper_area()
     assert (rect.cx, rect.cy) == (pytest.approx(area.cx, abs=0.01), pytest.approx(area.cy, abs=0.01))
     assert len(win.rendered) == 1
@@ -109,13 +109,13 @@ def test_insert_is_one_undo_step(qtbot):
     assert win.doc.objects == []
 
 
-# --- Inhalt ------------------------------------------------------------------------------------
+# --- Content ------------------------------------------------------------------------------------
 def test_typing_changes_the_content_live_and_is_one_step(qtbot):
     win, panel = _with_barcode(qtbot, "code128")
     panel.data.setFocus()
     panel.data.selectAll()
     QTest.keyClicks(panel.data, "X1-")
-    assert win.doc.objects[0].data == "X1-"                   # schon vor Enter
+    assert win.doc.objects[0].data == "X1-"                   # already before Enter
     QTest.keyClicks(panel.data, "K3")
     QTest.keyClick(panel.data, Qt.Key.Key_Return)
     win.render_now()
@@ -131,7 +131,7 @@ def test_invalid_content_shows_the_reason_and_a_placeholder(qtbot, monkeypatch):
     win.render_now()
     assert panel.check.text() == "EAN-13 braucht 12 oder 13 Ziffern (4 eingegeben)"
     assert panel.check.isVisible()
-    shown = win.rendered[0]                                   # schraffierter Platzhalter
+    shown = win.rendered[0]                                   # hatched placeholder
     assert shown.image.tobytes() == barcodes.placeholder(shown.w, shown.h).tobytes()
     assert "EAN-13 braucht" in win.result.text()
     printed = []
@@ -154,7 +154,7 @@ def test_quiet_zone_hint(qtbot):
     assert qr.quiet.text() == "Ruhezone: ringsum 2,0 mm frei lassen"
 
 
-# --- Art und Größe -----------------------------------------------------------------------------
+# --- Kind and size -----------------------------------------------------------------------------
 def test_changing_the_kind_replaces_only_the_sample(qtbot):
     win, panel = _with_barcode(qtbot, "qr")
     panel.kind.setCurrentIndex(panel.kind.findData("code128"))
@@ -171,7 +171,7 @@ def test_changing_the_kind_replaces_only_the_sample(qtbot):
 
 def test_module_is_shown_in_millimetres(qtbot):
     win, panel = _with_barcode(qtbot, "code128")
-    assert panel.module.text() == "0,25 mm"                    # Deutsch: Komma
+    assert panel.module.text() == "0,25 mm"                    # German: comma
     panel.module.setValue(4)
     assert win.doc.objects[0].module == 4 and panel.module.text() == "0,34 mm"
     assert panel.module.valueFromText("0.5") == 6 and panel.module.valueFromText("0,5") == 6
@@ -195,7 +195,7 @@ def test_height_text_and_error_level(qtbot):
 def test_position_fields_snap_the_module(qtbot):
     win, panel = _with_barcode(qtbot, "qr")
     side = barcode_rect(win.doc.objects[0]).w
-    panel.position.spins["w"].setValue(round(side * 4 / 6, 1))   # Modul 6 → 4
+    panel.position.spins["w"].setValue(round(side * 4 / 6, 1))   # module 6 → 4
     assert win.doc.objects[0].module == 4
 
 
@@ -219,7 +219,7 @@ def test_bar_code_bottom_handle_changes_the_height(qtbot):
     assert obj.module == 3 and obj.h_mm == pytest.approx(13.0, abs=0.15)
 
 
-# --- Arbeitsfläche ------------------------------------------------------------------------------
+# --- Canvas ------------------------------------------------------------------------------
 def test_double_click_focuses_the_content(qtbot):
     win, panel = _with_barcode(qtbot, "code128")
     win.tool_actions["paper"].trigger()
@@ -236,7 +236,7 @@ def test_barcode_rotates_like_other_objects(qtbot):
     assert win.doc.objects[0].rotation == 90
 
 
-# --- Serie --------------------------------------------------------------------------------------
+# --- Series --------------------------------------------------------------------------------------
 def test_column_replaces_the_sample_or_is_appended(qtbot):
     win, panel = _with_barcode(qtbot, "code128",
                                Document("62x29", series=Series(numbering=Numbering(count=3))))
@@ -279,9 +279,9 @@ def test_invalid_row_names_the_row(qtbot, monkeypatch):
     assert "Zeile 1: EAN-8 braucht" in win.result.text()
 
 
-# --- Nachbesserungen nach dem Review ------------------------------------------------------------
+# --- Fixes after the review ------------------------------------------------------------
 def test_invalid_barcode_stays_selectable_after_opening(qtbot, tmp_path):
-    """Ein ungültiger Barcode legt die Arbeitsfläche nicht lahm (Platzhalter statt Fehler)."""
+    """An invalid barcode does not cripple the canvas (placeholder instead of error)."""
     doc = Document("62x29", objects=[TextObject.plain("Hallo", size_pt=12),
                                      BarcodeObject(kind="ean13", data="123", x_mm=3, y_mm=3)])
     win = _window(qtbot, doc)
@@ -304,7 +304,7 @@ def test_ctrl_z_in_the_content_field_undoes_the_label(qtbot):
     panel.data.setFocus()
     qtbot.waitUntil(panel.data.hasFocus, timeout=1000)
     QTest.keyClick(panel.data, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
-    assert win.doc.objects == []                               # Einfügen rückgängig
+    assert win.doc.objects == []                               # insertion undone
 
 
 def test_typing_then_ctrl_z_undoes_the_whole_edit(qtbot):
@@ -325,15 +325,15 @@ def test_series_handles_use_the_filled_content(qtbot):
     win = _window(qtbot, doc)
     win.panel("series").refresh()
     win.render_now()
-    before = win.rendered[0].w                                 # „X1“: 4 Werte + Stopp
+    before = win.rendered[0].w                                 # “X1”: 4 values + stop
     win.canvas.set_selection([0])
     point = win.canvas.handle_points(0)["r"]
     _drag(win.canvas, point, point + QPointF(1 * win.canvas.px_per_mm(), 0))
     obj = win.doc.objects[0]
-    assert obj.data == "X{Nummer}" and obj.module == 3          # 1 mm mehr: kein Sprung
+    assert obj.data == "X{Nummer}" and obj.module == 3          # 1 mm more: no jump
     assert win.rendered[0].w == before
     panel = win.panel("barcode")
-    panel.position.spins["w"].setValue(round(before * 2 / MM, 1))   # doppelt so breit
+    panel.position.spins["w"].setValue(round(before * 2 / MM, 1))   # twice as wide
     assert win.doc.objects[0].module == 6 and win.doc.objects[0].data == "X{Nummer}"
 
 

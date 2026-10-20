@@ -9,10 +9,10 @@ from labelwerk.media import (STATUS_REQUEST, Media, MediaError, label_for_media,
 
 
 def status(width=62, media_code=0x0A, length=0, error2=0):
-    """32-Byte-Statusantwort eines QL-600 (wie am echten Gerät gemessen)."""
+    """32-byte status response of a QL-600 (as measured on the real device)."""
     data = bytearray(32)
     data[0:3] = b"\x80\x20\x42"
-    data[3], data[4] = 0x34, 0x47          # Serie/Modell QL-600
+    data[3], data[4] = 0x34, 0x47          # series/model QL-600
     data[9] = error2
     data[10], data[11], data[17] = width, media_code, length
     return bytes(data)
@@ -55,7 +55,7 @@ def test_label_for_media():
 
 
 def _fake_printer(reply):
-    """Socket-Paar: unser Ende für query_status, am anderen Ende antwortet ein Fake-Drucker."""
+    """Socket pair: our end for query_status, a fake printer answers at the other end."""
     ours, theirs = socket.socketpair()
     received = []
 

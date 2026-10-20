@@ -1,7 +1,7 @@
-"""Eigene Liniensymbole (``gui/icons/<name>-black.svg`` / ``-white.svg``, 16 × 16).
+"""Own line symbols (``gui/icons/<name>-black.svg`` / ``-white.svg``, 16 × 16).
 
-Schwarz im Normalzustand; im Design RawBlock weiß, wo der Knopf schwarz hinterlegt ist
-(gewählt bzw. beim Darüberfahren). Im klassischen Design bleibt der Knopf hell, also schwarz.
+Black in the normal state; in the RawBlock design white where the button has a black background
+(selected or on hover). In the classic design the button stays light, hence black.
 """
 from __future__ import annotations
 
@@ -14,10 +14,11 @@ SIZE = QSize(16, 16)
 
 
 def line_icon(name: str, dark: bool = True, hover: bool = False) -> QIcon:
-    """Symbol ``name``; ``dark``: gewählt weiß auf schwarz (RawBlock).
+    """Symbol ``name``; ``dark``: selected white on black (RawBlock).
 
-    ``hover``: auch beim Darüberfahren weiß – für Knöpfe, die dann schwarz werden und den
-    Modus „Active“ nur beim Darüberfahren nutzen (QToolButton mit autoRaise, Werkzeugleisten).
+    ``hover``: also white on hover – for buttons that then turn black and use the
+    “Active” mode only on hover (QToolButton with autoRaise, toolbars).
+
     """
     folder = resources.files("labelwerk.gui") / "icons"
 

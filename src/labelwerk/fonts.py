@@ -1,6 +1,6 @@
-"""Schriften finden (fontconfig) und laden – UI-unabhängig.
+"""Find and load fonts (fontconfig) – independent of the UI.
 
-Ohne fontconfig (fc-list/fc-match) wird auf DejaVu Sans zurückgefallen.
+Without fontconfig (fc-list/fc-match) it falls back to DejaVu Sans.
 """
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ _DEJAVU_DIRS = ("/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/TTF",
 @dataclass(frozen=True)
 class FontMatch:
     path: str
-    family: str          # tatsächlich gefundene Familie
-    bold: bool           # Datei ist wirklich fett
-    italic: bool         # Datei ist wirklich kursiv/schräg
+    family: str          # family actually found
+    bold: bool           # file really is bold
+    italic: bool         # file really is italic/oblique
 
 
 def _run(*args: str) -> str | None:
@@ -38,9 +38,8 @@ def _run(*args: str) -> str | None:
         return None
 
 
-# Kurze Liste: keine Kopien (Powerline/Nerd Fonts sind nachgerüstete Programmierschriften), keine
-# reinen Symbolschriften (Zeichen auf lateinischen Plätzen), keine Regionsvarianten der CJK-Schriften
-# (für deutschen Text gleich)
+# Short list: no copies (Powerline/Nerd Fonts are patched programming fonts), no pure symbol fonts
+# (characters in Latin positions), no regional variants of the CJK fonts (identical for German text)
 _HIDDEN = re.compile(
     r"powerline|nerd font"
     r"|^(d050000l|standard symbols (ps|l)|dingbats|symbol|opensymbol|symbola|webdings"
@@ -49,16 +48,16 @@ _HIDDEN = re.compile(
 
 
 def families(all: bool = False) -> list[str]:
-    """Installierte Schriftfamilien, sortiert. Standard ist die kurze Liste: nur Schriften mit
-    allen deutschen Zeichen (fontconfig ``:lang=de``), ohne Farb-/Emoji-Schriften, Kopien,
-    Symbolschriften und CJK-Regionsvarianten; ``all``: jede Familie. Gemerkt (je Liste einmal,
-    gleich wie aufgerufen; Tests leeren ``_families.cache_clear()``)."""
+    """Installed font families, sorted. By default the short list: only fonts with all German
+    characters (fontconfig ``:lang=de``), without colour/emoji fonts, copies, symbol fonts and
+    CJK regional variants; ``all``: every family. Cached (once per list, as called; tests clear
+    ``_families.cache_clear()``)."""
     return list(_families(bool(all)))
 
 
 @lru_cache(maxsize=None)
 def _families(all: bool) -> tuple[str, ...]:
-    # %{family[0]}: erster Familienname je Schrift, ohne fontconfig-Maskierung
+    # %{family[0]}: first family name per font, without fontconfig escaping
     if all:
         out = _run("fc-list", "-f", "%{family[0]}\\n", ":")
         names = {line.strip() for line in (out or "").splitlines() if line.strip()}
@@ -73,15 +72,15 @@ def _families(all: bool) -> tuple[str, ...]:
     return tuple(sorted(names, key=str.casefold))
 
 
-# Qt (QFontComboBox) nannte gleichnamige Schriften „Name [Hersteller]“ – so steht es in älteren
-# Dateien, Favoriten und Einstellungen
+# Qt (QFontComboBox) named fonts of the same name “Name [Foundry]” – this is how older files,
+# favourites and settings store them
 _FOUNDRY = re.compile(r"(.+?) \[[^\[\]]+\]")
 
 
 def canonical(family: str | None) -> str | None:
-    """Familienname ohne Qts Herstellerzusatz („C059 [UKWN]“ → „C059“), wenn es die Familie so
-    gibt (und nicht wirklich mit Klammer heißt); sonst unverändert – auch Qt-Sammelnamen wie
-    „Sans Serif“ (die bleiben fremd und werden ersetzt)."""
+    """Family name without Qt's foundry suffix (“C059 [UKWN]” → “C059”) if the family exists that
+    way (and is not really named with brackets); otherwise unchanged – also Qt collective names
+    such as “Sans Serif” (they stay foreign and are replaced)."""
     m = _FOUNDRY.fullmatch(family) if family else None
     if m is None:
         return family
@@ -90,15 +89,15 @@ def canonical(family: str | None) -> str | None:
 
 
 def _escape(name: str) -> str:
-    """Sonderzeichen des fontconfig-Musters mit Backslash maskieren."""
+    """Escape special characters of the fontconfig pattern with a backslash."""
     return "".join("\\" + c if c in "\\-:,=" else c for c in name)
 
 
 @lru_cache(maxsize=256)
 def resolve(family: str | None, bold: bool, italic: bool) -> FontMatch:
-    """Datei zu Familie + fett/kursiv; fontconfig ersetzt Fehlendes durch Ähnliches."""
+    """File for family + bold/italic; fontconfig replaces what is missing with something similar."""
     family = canonical(family) or DEFAULT_FAMILY
-    # maskiert; ein führendes "-" wird zu "\\-" und ist so keine Option
+    # escaped; a leading "-" becomes "\\-" and so is not an option
     pattern = _escape(family) + (":bold" if bold else ":weight=regular") + (":italic" if italic else ":roman")
     out = _run("fc-match", "-f", "%{file}|%{family}|%{style}", pattern)
     if out and out.count("|") >= 2:
@@ -116,16 +115,17 @@ def _dejavu_fallback(bold: bool) -> FontMatch:
         path = Path(folder) / name
         if path.exists():
             return FontMatch(str(path), DEFAULT_FAMILY, bold=bold, italic=False)
-    return FontMatch("", DEFAULT_FAMILY, bold=False, italic=False)   # PIL-Standardschrift
+    return FontMatch("", DEFAULT_FAMILY, bold=False, italic=False)   # PIL default font
 
 
 class FontLoadError(ValueError):
-    """Schriftdatei lässt sich nicht laden (kaputt, keine Schrift, unbrauchbare Größe)."""
+    """Font file cannot be loaded (broken, not a font, unusable size)."""
 
 
 @lru_cache(maxsize=512)
 def load(path: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Schrift in Druckpunkten laden (gecacht; Fehler werden nicht gecacht)."""
+    """Load a font in dots (cached; errors are not cached)."""
+
     if path:
         try:
             return ImageFont.truetype(path, size)

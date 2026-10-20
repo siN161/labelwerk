@@ -1,14 +1,14 @@
-"""Panel „Text“: bearbeitet den ausgewählten Textrahmen – zeichenweise wie im P-touch Editor.
+"""Panel “Text”: edits the selected text frame – character by character as in the P-touch Editor.
 
-Regel wie bei einem ausgewählten Textrahmen in P-touch: Ist nichts markiert, wirkt eine
-Formatierung auf den ganzen Text; sonst nur auf die Markierung. Im Schreibmodus wirkt sie
-ohne Markierung aufs Weitertippen (Textposition: auf den Absatz der Schreibmarke) – außer
-der Rahmen ist noch leer. Bereich „Position“ (``panels.position``): Lage und (mit fester
-Rahmengröße) Größe des Rahmens in mm.
+Rule as with a selected text frame in P-touch: if nothing is selected, formatting applies to the
+whole text; otherwise only to the selection. In edit mode it applies to further typing when
+there is no selection (text position: to the paragraph of the caret) – unless the frame is
+still empty. Area “Position” (``panels.position``): position and (with a fixed frame size)
+size of the frame in mm.
 
-Geschrieben wird direkt auf dem Etikett (``gui.text_edit_mode``): Der Editor ``edit`` ist
-dafür ein unsichtbarer Eingabepuffer (Kind des Panels, Größe 0, nicht im Layout) – er behält
-im Schreibmodus den Tastaturfokus, damit tote Tasten, Compose und Eingabemethoden wirken.
+Writing happens directly on the label (``gui.text_edit_mode``): the editor ``edit`` is
+an invisible input buffer for that (child of the panel, size 0, not in the layout) – in edit
+mode it keeps the keyboard focus so that dead keys, compose and input methods work.
 """
 from __future__ import annotations
 
@@ -40,26 +40,26 @@ _ALIGN_TO_QT = {"left": Qt.AlignmentFlag.AlignLeft, "center": Qt.AlignmentFlag.A
 
 
 class PlainPasteEdit(QTextEdit):
-    """Rich-Text-Editor, der aus der Zwischenablage nur reinen Text übernimmt."""
+    """Rich-text editor that takes only plain text from the clipboard."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setTabChangesFocus(True)      # nie "\t" einfügen (im Schreibmodus fängt es
-                                           # zusätzlich ein Filter ab, Fokus bleibt im Text)
-        # eine Zeile je Absatz wie auf dem Etikett: Pos1/Ende gelten für den ganzen Absatz
+        self.setTabChangesFocus(True)      # never insert "\t" (in edit mode a filter
+                                           # also catches it, focus stays in the text)
+        # one line per paragraph as on the label: Home/End apply to the whole paragraph
         self.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
-        # Schreibmodus: Lage der Schreibmarke auf dem Etikett für Eingabemethoden (→ QRect)
+        # Edit mode: position of the caret on the label for input methods (→ QRect)
         self.caret_rect = None
 
     def inputMethodQuery(self, query):
         if query == Qt.InputMethodQuery.ImCursorRectangle and self.caret_rect is not None:
-            return self.caret_rect()           # Kandidatenfenster an der Schreibmarke
+            return self.caret_rect()           # candidate window at the caret
         return super().inputMethodQuery(query)
 
     def keyPressEvent(self, event) -> None:
         if (event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
                 and event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
-            self.textCursor().insertBlock()   # Umschalt+Enter = normaler Absatz, kein U+2028
+            self.textCursor().insertBlock()   # Shift+Enter = normal paragraph, no U+2028
             return
         super().keyPressEvent(event)
 
@@ -77,16 +77,16 @@ def _button(text: str, tip: str, checkable: bool = True) -> QPushButton:
 
 
 def _align_icon(key: str, dark_checked: bool = True) -> QIcon:
-    """Liniensymbol der Textposition; gewählt weiß auf schwarz nur bei RawBlock."""
+    """Line icon of the text position; when selected white on black only in RawBlock."""
     return line_icon(f"align-{key}", dark_checked)
 
 
 class TextPanel(Panel):
-    frame_edited = Signal(str, float)   # Feld im Bereich „Position“ ("x" | "y" | "w" | "h"), mm
-    formatted = Signal()                # Knopf/Feld hat formatiert (Schreibmodus: Fokus zurück)
+    frame_edited = Signal(str, float)   # field in the "Position" section ("x" | "y" | "w" | "h"), mm
+    formatted = Signal()                # button/field has formatted (edit mode: focus back)
 
     def set_icon_style(self, dark_checked: bool) -> None:
-        """Ausrichtungssymbole an das Design anpassen (weiß auf schwarz nur bei RawBlock)."""
+        """Adapt alignment icons to the theme (white on black only in RawBlock)."""
         self.dark_checked_icons = dark_checked
         for key, button in self.align_buttons.items():
             button.setIcon(_align_icon(key, dark_checked))
@@ -94,13 +94,13 @@ class TextPanel(Panel):
     def __init__(self, doc: Document):
         super().__init__(doc, _("Text"))
         self.dark_checked_icons = True
-        self.index: int | None = None   # bearbeitetes Objekt; None = kein Text ausgewählt
-        self._editing = False           # Schreibmodus (``set_editing``)
-        self._frame: Rect | None = None   # zuletzt angezeigter Rahmen (mm)
+        self.index: int | None = None   # object being edited; None = no text selected
+        self._editing = False           # edit mode (``set_editing``)
+        self._frame: Rect | None = None   # last frame shown (mm)
         self._updating = False
-        self._formatting = False        # während einer Formatierung: contentsChanged nicht doppelt anwenden
-        self._shown_pt: float | None = float(DEFAULT_PT)   # zuletzt angezeigte Größe; None = gemischt
-        # Grundformat: gilt für alles, was nicht ausdrücklich formatiert ist (nicht Qts Widget-Schrift)
+        self._formatting = False        # during a formatting: do not apply contentsChanged twice
+        self._shown_pt: float | None = float(DEFAULT_PT)   # last size shown; None = mixed
+        # Base format: applies to everything not explicitly formatted (not Qt's widget font)
         self._base = {"family": DEFAULT_FAMILY, "pt": float(DEFAULT_PT), "bold": True,
                       "italic": False, "underline": False}
 
@@ -109,24 +109,24 @@ class TextPanel(Panel):
         self.hint.setWordWrap(True)
         self.layout_.addWidget(self.hint)
 
-        # unsichtbarer Eingabepuffer des Schreibmodus: fokussierbar, aber ohne Fläche
+        # invisible input buffer of edit mode: focusable but without area
         self.edit = PlainPasteEdit(self)
         self.edit.setFixedSize(0, 0)
-        # nur der Schreibmodus gibt ihm den Fokus (setFocus) – nie Tab oder ein Klick
+        # only edit mode gives it the focus (setFocus) – never Tab or a click
         self.edit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        # Absätze ohne eigene Ausrichtung stehen zentriert – wie bisher in labelwerk; kein
-        # Umbruch im Editor (Größe 0), damit Pos1/Ende und Zeilen den Absätzen entsprechen
+        # Paragraphs without their own alignment are centred – as before in labelwerk; no
+        # wrapping in the editor (size 0), so that Home/End and lines match the paragraphs
         option = QTextOption(Qt.AlignmentFlag.AlignHCenter)
         option.setWrapMode(QTextOption.WrapMode.NoWrap)
         self.edit.document().setDefaultTextOption(option)
 
         self.section(pgettext("text panel", "Font"))
-        self.family = FontCombo([])      # gefüllt von MainWindow.apply_font_list (kurz oder alle)
+        self.family = FontCombo([])      # filled by MainWindow.apply_font_list (short or all)
         self.layout_.addWidget(self.family)
         row = QHBoxLayout()
         self.size = QComboBox()
         self.size.setEditable(True)
-        self.size.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)   # Eingaben nicht an die Liste anhängen
+        self.size.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)   # do not append input to the list
         self.size.addItems([str(s) for s in SIZES_PT])
         self.size.setToolTip(_("Font size in pt"))
         self.grow = _button("A⁺", _("Larger font"), checkable=False)
@@ -138,13 +138,13 @@ class TextPanel(Panel):
 
         self.section(_("Style"))
         row = QHBoxLayout()
-        self.bold = _button("B", _("Bold"))            # Tooltip mit Kürzel: use_actions
+        self.bold = _button("B", _("Bold"))            # tooltip with shortcut: use_actions
         self.italic = _button("I", _("Italic"))
         self.underline = _button("U", _("Underline"))
         for button, attr in ((self.bold, "bold"), (self.italic, "italic"),
                              (self.underline, "underline")):
             button.setProperty("style", attr)
-            font = button.font()                 # wirkt auch im klassischen Design ohne Stylesheet
+            font = button.font()                 # also works in the classic theme without a stylesheet
             getattr(font, "set" + attr.capitalize())(True)
             button.setFont(font)
             row.addWidget(button)
@@ -186,7 +186,7 @@ class TextPanel(Panel):
         self.edit.currentCharFormatChanged.connect(self._sync_buttons)
         self.edit.cursorPositionChanged.connect(self._sync_buttons)
         self.edit.selectionChanged.connect(self._sync_buttons)
-        step = self._step     # Knöpfe und Felder: jede Änderung ein eigener Schritt
+        step = self._step     # buttons and fields: every change is its own step
         self.family.family_chosen.connect(lambda family: step(self._format, family=family))
         self.size.activated.connect(lambda _index: step(self._size_entered))
         self.size.lineEdit().editingFinished.connect(lambda: step(self._size_entered))
@@ -200,8 +200,8 @@ class TextPanel(Panel):
         self.fit.toggled.connect(lambda _checked: step(self._apply))
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
-        """Kürzel für Fett/Kursiv/Unterstrichen: wirken, solange das Panel den Fokus hat.
-        Die Knöpfe zeigen den Tooltip der Aktion – auch nach dem Umbelegen."""
+        """Shortcuts for bold/italic/underline: work while the panel has the focus.
+        The buttons show the action's tooltip – also after remapping."""
         for key, button in (("text.bold", self.bold), ("text.italic", self.italic),
                             ("text.underline", self.underline)):
             action = actions[key]
@@ -215,7 +215,7 @@ class TextPanel(Panel):
         return self.doc.objects[self.index]
 
     def set_object(self, index: int | None) -> None:
-        """Objekt bearbeiten (Index in ``doc.objects``) bzw. mit None keins (Hinweis)."""
+        """Edit an object (index in ``doc.objects``) or none with None (hint)."""
         if index != self.index:
             self.index = index
             self._frame = None
@@ -227,17 +227,17 @@ class TextPanel(Panel):
                 *self.position.spins.values())
 
     def set_editing(self, editing: bool) -> None:
-        """Schreibmodus an/aus: Formatieren ohne Markierung wirkt dann aufs Weitertippen."""
+        """Edit mode on/off: formatting without a selection then applies to further typing."""
         self._editing = editing
 
     def _whole_text(self) -> bool:
-        """Wirkt eine Formatierung ohne Markierung auf den ganzen Text? Außerhalb des
-        Schreibmodus immer, im Schreibmodus nur bei noch leerem Rahmen."""
+        """Does a formatting without a selection act on the whole text? Always outside
+        edit mode, in edit mode only with a still empty frame."""
         return not self._editing or self.edit.document().isEmpty()
 
     def _step(self, change, *args, **kwargs) -> None:
-        """Änderung als eigener Rückgängig-Schritt: vorher Getipptes festhalten, danach das Neue.
-        (Im Schreibmodus gehört sie zur laufenden Bearbeitung – das regelt das Hauptfenster.)"""
+        """Change as its own undo step: record what was typed before, then the new state.
+        (In edit mode it belongs to the current edit – the main window handles that.)"""
         if self._updating:
             return
         self.edited.emit()
@@ -245,9 +245,9 @@ class TextPanel(Panel):
         self.edited.emit()
         self.formatted.emit()
 
-    # --- Formatieren ------------------------------------------------------
+    # --- Formatting -------------------------------------------------------
     def _target(self) -> QTextCursor:
-        """Markierung, sonst der ganze Text (wie ein ausgewählter Textrahmen)."""
+        """Selection, otherwise the whole text (like a selected text frame)."""
         cursor = self.edit.textCursor()
         if not cursor.hasSelection():
             cursor.select(QTextCursor.SelectionType.Document)
@@ -271,7 +271,7 @@ class TextPanel(Panel):
             fmt.setFontUnderline(underline)
         selected = self.edit.textCursor().hasSelection()
         whole = not selected and self._whole_text()
-        if whole:                                       # ganzer Text: Grundformat anpassen
+        if whole:                                       # whole text: adjust the base format
             for key, value in (("family", family), ("pt", size), ("bold", bold),
                                ("italic", italic), ("underline", underline)):
                 if value is not None:
@@ -281,7 +281,7 @@ class TextPanel(Panel):
             if selected or whole:
                 self._target().mergeCharFormat(fmt)
             if not selected:
-                self.edit.mergeCurrentCharFormat(fmt)   # Weitertippen in gleicher Formatierung
+                self.edit.mergeCurrentCharFormat(fmt)   # keep typing in the same formatting
         finally:
             self._formatting = False
         self._apply()
@@ -300,8 +300,8 @@ class TextPanel(Panel):
         if not math.isfinite(size):
             self._sync_buttons()
             return
-        # Fokusverlust mit unverändertem Wert darf nichts vereinheitlichen (Qt meldet ihn teils
-        # auch als „activated“, daher gilt die Prüfung für beide Wege)
+        # Loss of focus with an unchanged value must not unify anything (Qt sometimes reports it
+        # also as “activated”, hence the check applies to both paths)
         if self._shown_pt is not None and abs(size - self._shown_pt) < 0.01:
             return
         self.set_size_pt(size)
@@ -315,11 +315,11 @@ class TextPanel(Panel):
         return smaller[-1] if smaller else MIN_PT
 
     def _step_size(self, direction: int) -> None:
-        """Jedes Textstück in der Markierung (sonst im ganzen Text) auf seine eigene nächste Stufe."""
+        """Each text piece in the selection (otherwise in the whole text) to its own next step."""
         if self._updating:
             return
         selected = self.edit.textCursor().hasSelection()
-        if not selected and not self._whole_text():     # Schreibmodus: nur fürs Weitertippen
+        if not selected and not self._whole_text():     # edit mode: only for further typing
             pt = self._props(self.edit.currentCharFormat())["pt"]
             fmt = QTextCharFormat()
             fmt.setFontPointSize(min(max(self._step_pt(pt, direction), MIN_PT), MAX_PT))
@@ -363,8 +363,8 @@ class TextPanel(Panel):
         self._apply()
 
     def _align(self, key: str) -> None:
-        """Textposition der Absätze in der Markierung bzw. – im Schreibmodus ohne Markierung –
-        des Absatzes an der Schreibmarke; sonst aller Absätze."""
+        """Text position of the paragraphs in the selection or – in edit mode without a selection –
+        of the paragraph at the caret; otherwise of all paragraphs."""
         cursor = self.edit.textCursor()
         if not cursor.hasSelection() and self._whole_text():
             cursor.select(QTextCursor.SelectionType.Document)
@@ -373,9 +373,9 @@ class TextPanel(Panel):
         cursor.mergeBlockFormat(fmt)
         self._apply()
 
-    # --- Editor ↔ Modell --------------------------------------------------
+    # --- Editor ↔ model --------------------------------------------------
     def _props(self, fmt: QTextCharFormat) -> dict:
-        """Formatierung eines Textstücks: nur ausdrücklich Gesetztes, sonst Grundformat."""
+        """Formatting of a text piece: only what is explicitly set, otherwise base format."""
         props = dict(self._base)
         families = fmt.fontFamilies() if fmt.hasProperty(_P.FontFamilies) else None
         if families:
@@ -391,7 +391,7 @@ class TextPanel(Panel):
         return props
 
     def _fill_base_formats(self) -> None:
-        """Fehlende Eigenschaften aus dem Grundformat setzen – der Editor zeigt, was gedruckt wird."""
+        """Set missing properties from the base format – the editor shows what is printed."""
         document = self.edit.document()
         block = document.begin()
         while block.isValid():
@@ -421,7 +421,7 @@ class TextPanel(Panel):
                 fragment = it.fragment()
                 if fragment.isValid():
                     props = self._props(fragment.charFormat())
-                    # U+2028 (Zeilentrenner) und Tab sind im Modell nicht vorgesehen
+                    # U+2028 (line separator) and tab are not provided for in the model
                     text = fragment.text().replace("\t", " ")
                     for index, part in enumerate(text.split("\u2028")):
                         if index:
@@ -433,11 +433,11 @@ class TextPanel(Panel):
                 spans.append(_span("", self._props(block.charFormat()), base_pt))
             paragraphs.append(Paragraph(spans, align))
             block = block.next()
-        obj = self.obj                 # Rahmen und Drehung bleiben beim Tippen erhalten
+        obj = self.obj                 # frame and rotation are kept while typing
         fit = self.fit.isChecked()
         w, h = obj.w_mm, obj.h_mm
         if fit and not obj.fit and obj.positioned and self._frame is not None:
-            # feste Rahmengröße einschalten: Rahmen bleibt so groß, wie er gerade ist
+            # switch on fixed frame size: the frame stays as large as it currently is
             w, h = round(self._frame.w, 3), round(self._frame.h, 3)
             if obj.rotation in (90, 270):
                 w, h = h, w
@@ -459,10 +459,10 @@ class TextPanel(Panel):
         self.changed.emit()
 
     def refresh(self) -> None:
-        """Editor aus dem Modell aufbauen (Auswahl, Rückgängig, Ziehen an den Anfassern)."""
+        """Build the editor from the model (selection, undo, dragging at the handles)."""
         if self.index is not None and not (0 <= self.index < len(self.doc.objects)
                                            and isinstance(self.obj, TextObject)):
-            self.index = None                      # Objekt gibt es nicht mehr (Rückgängig …)
+            self.index = None                      # object no longer exists (undo …)
         editing = self.index is not None
         self.hint.setVisible(not editing)
         for widget in self._editing_widgets():
@@ -474,7 +474,7 @@ class TextPanel(Panel):
         self._updating = True
         try:
             first = obj.paragraphs[0].spans[0] if obj.paragraphs and obj.paragraphs[0].spans else None
-            # Ohne feste Grundgröße rechnet der Renderer relativ zu REF_PT; Verhältnisse erhalten
+            # Without a fixed base size the renderer computes relative to REF_PT; keep ratios
             ref = float(obj.size_pt or (REF_PT if any(sp.size_pt for pa in obj.paragraphs
                                                        for sp in pa.spans) else DEFAULT_PT))
             self._base = {"family": (first.family if first else None) or DEFAULT_FAMILY,
@@ -483,7 +483,7 @@ class TextPanel(Panel):
                           "italic": first.italic if first else False,
                           "underline": first.underline if first else False}
             document = self.edit.document()
-            document.setUndoRedoEnabled(False)     # Aufbau ist kein Schritt im Editor
+            document.setUndoRedoEnabled(False)     # building is not a step in the editor
             document.clear()
             cursor = QTextCursor(document)
             cursor.setCharFormat(_char_format_of(self._base))
@@ -496,7 +496,7 @@ class TextPanel(Panel):
                 for span in para.spans:
                     cursor.insertText(span.text, _char_format(span, ref))
                 if not any(span.text for span in para.spans):
-                    # leerer Absatz: insertText("") tut nichts, Format am Absatz selbst ablegen
+                    # empty paragraph: insertText("") does nothing, store the format on the paragraph itself
                     fmt = (_char_format(para.spans[0], ref) if para.spans
                            else _char_format_of(self._base))
                     cursor.setBlockCharFormat(fmt)
@@ -511,7 +511,7 @@ class TextPanel(Panel):
         self._update_frame_editing()
 
     def _show_nothing(self) -> None:
-        """Kein Text ausgewählt: leeres, gesperrtes Panel."""
+        """No text selected: empty, locked panel."""
         self._updating = True
         try:
             document = self.edit.document()
@@ -519,8 +519,8 @@ class TextPanel(Panel):
             document.clear()
             document.setUndoRedoEnabled(True)
             self.fit.setChecked(False)
-            # keine Schrift anzeigen, die nicht gilt – ohne blockierte Signale: die Felder merken
-            # sich „leer“ und zeigen beim Wiederwählen dieselbe Schrift wieder an
+            # do not show a font that does not apply – without blocked signals: the fields remember
+            # “empty” and show the same font again on reselecting
             for combo in (self.family, self.size):
                 combo.setCurrentIndex(-1)
                 combo.setEditText("")
@@ -530,12 +530,12 @@ class TextPanel(Panel):
 
     # --- Position -----------------------------------------------------------
     def show_frame(self, rect: Rect | None) -> None:
-        """Rahmen des bearbeiteten Objekts in mm anzeigen (vom Hauptfenster nach dem Rendern)."""
+        """Show the frame of the edited object in mm (from the main window after rendering)."""
         self._frame = rect
         self.position.show_frame(rect, self._fixed_frame())
 
     def _update_frame_editing(self) -> None:
-        """Breite/Höhe nur mit fester Rahmengröße änderbar, sonst Anzeige der Größe."""
+        """Width/height changeable only with a fixed frame size, otherwise display of the size."""
         self.position.set_size_editable(self._fixed_frame())
 
     def _fixed_frame(self) -> bool:
@@ -543,11 +543,11 @@ class TextPanel(Panel):
 
     def _frame_changed(self, key: str, value: float) -> None:
         if self.index is None or (key in "wh" and not self.obj.fit):
-            return                                  # Größe nur mit fester Rahmengröße
+            return                                  # size only with a fixed frame size
         self.frame_edited.emit(key, value)
 
     def _sync_buttons(self) -> None:
-        """Knöpfe zeigen die Formatierung an der Schreibmarke."""
+        """Buttons show the formatting at the caret."""
         props = self._props(self.edit.currentCharFormat())
         mixed = self._selection_sizes()
         mixed_families = len({fonts.canonical(f) for f in self._selection_values("family")}) > 1
@@ -556,7 +556,7 @@ class TextPanel(Panel):
                    *self.align_buttons.values())
         for w in widgets:
             w.blockSignals(True)
-        # gemischte Schriften: Feld leer (wie die Größe); eine Wahl setzt dann alle auf sie
+        # mixed fonts: field empty (like the size); a choice then sets all to it
         self.family.set_current_family(None if mixed_families else props["family"])
         self.size.setEditText("" if len(mixed) > 1 else i18n.number(props["pt"]))
         self.bold.setChecked(props["bold"])
@@ -568,25 +568,25 @@ class TextPanel(Panel):
             w.blockSignals(False)
 
     def typing_scale(self) -> float:
-        """Schriftgröße fürs Weitertippen relativ zur Schrift, nach der die Schreibmarke im
-        Zeilensatz bemessen ist (Zeichen davor, am Absatzanfang danach, leerer Absatz:
-        Grundgröße); 1.0 mit Markierung oder ohne eigenes Format fürs Weitertippen."""
+        """Font size for further typing relative to the font the caret in the line layout is
+        measured by (characters before it, at paragraph start the one after, empty paragraph:
+        base size); 1.0 with selection or without own format for further typing."""
         cursor = self.edit.textCursor()
         if cursor.hasSelection():
             return 1.0
-        probe = QTextCursor(self.edit.document())     # Format im Text, nicht das zum Tippen
+        probe = QTextCursor(self.edit.document())     # format in the text, not the one for typing
         probe.setPosition(cursor.position())
         here = (self._base["pt"] if probe.block().length() <= 1
                 else self._props(probe.charFormat())["pt"])
         return self._props(self.edit.currentCharFormat())["pt"] / here
 
     def _selection_sizes(self) -> set[float]:
-        """Verschiedene Größen innerhalb der Markierung (leer ohne Markierung)."""
+        """Different sizes within the selection (empty without selection)."""
         return {round(pt, 2) for pt in self._selection_values("pt")}
 
     def _selection_values(self, key: str) -> set:
-        """Verschiedene Werte einer Formatierung (``_props``-Schlüssel) innerhalb der Markierung
-        (leer ohne Markierung)."""
+        """Different values of a formatting (``_props`` key) within the selection
+        (empty without selection)."""
         cursor = self.edit.textCursor()
         if not cursor.hasSelection():
             return set()
@@ -633,7 +633,7 @@ def _char_format(span: Span, base_pt: float) -> QTextCharFormat:
 
 
 def _complete(fmt: QTextCharFormat) -> bool:
-    """Sind alle vom Modell gelesenen Eigenschaften ausdrücklich gesetzt?"""
+    """Are all properties read from the model explicitly set?"""
     return (fmt.hasProperty(_P.FontFamilies) and fmt.hasProperty(_P.FontPointSize)
             and fmt.fontPointSize() > 0 and fmt.hasProperty(_P.FontWeight)
             and fmt.hasProperty(_P.FontItalic)
@@ -641,7 +641,7 @@ def _complete(fmt: QTextCharFormat) -> bool:
 
 
 def _block_align(fmt) -> str:
-    """Ausrichtung eines Absatzes; nicht gesetzt (z. B. nach setPlainText) = zentriert."""
+    """Alignment of a paragraph; not set (e.g. after setPlainText) = centred."""
     if not fmt.hasProperty(QTextFormat.Property.BlockAlignment):
         return "center"
     return _align_of(fmt.alignment())

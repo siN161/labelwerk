@@ -1,12 +1,12 @@
-"""paketikett-Ergebnisse genau auswerten.
+"""Analyse the paketikett results precisely.
 
-1. QR-Codes im Ergebnis lesen (Inhalt „KÜRZEL x y“ = Mitte der Zelle in mm auf dem Testblatt).
-2. Je Code eine affine Abbildung Testblatt(mm) → Ergebnis(px) aus den vier Ecken.
-3. Codes mit gleicher Abbildung = ein ausgeschnittener Bereich; Abbildung aus allen Ecken neu.
-4. Grenzen genau: dunkle Pixel des Ergebnisses, die das (gerenderte) Testblatt unter dieser Abbildung
-   erklärt, zusammenhängend mit den Codes des Bereichs → Rechteck im Ergebnis → zurück aufs Testblatt.
+1. Read the QR codes in the result (content "CODE x y" = centre of the cell in mm on the test sheet).
+2. Per code, an affine mapping test sheet (mm) → result (px) from the four corners.
+3. Codes with the same mapping = one cut-out area; mapping recomputed from all corners.
+4. Exact boundaries: dark pixels of the result that the (rendered) test sheet explains under this
+   mapping, connected to the codes of the area → rectangle in the result → back onto the test sheet.
 
-Aufruf: LABELWERK_PARCEL_DIR=ordner python analyze.py ERGEBNIS.pdf [...]
+Usage: LABELWERK_PARCEL_DIR=folder python analyze.py RESULT.pdf [...]
 """
 import json
 import math
@@ -25,7 +25,7 @@ QR_MM = 7.4
 sys.path.insert(0, str(Path(__file__).parent))
 from workdir import workdir  # noqa: E402
 
-# Arbeitsordner mit Testblättern und umgewandelten Ergebnissen; Ausgaben (Bilder, JSON) ebenfalls dort
+# working folder with test sheets and converted results; outputs (images, JSON) go there as well
 DATA = workdir()
 WORK = DATA
 NAMES = {"A4H": "A4-hoch", "A4Q": "A4-quer", "A5H": "A5-hoch", "A5Q": "A5-quer", "L100": "100x150",
@@ -52,7 +52,7 @@ def sheet(code, sparse):
         k = 600 / 25.4
         yy, xx = np.indices(dark.shape)
         on_line = (np.abs(((xx / k) + 5) % 10 - 5) < 0.4) | (np.abs(((yy / k) + 5) % 10 - 5) < 0.4)
-        _sheets[key] = dark & ~on_line                     # nur QR-Module (Linien sind periodisch)
+        _sheets[key] = dark & ~on_line                     # QR modules only (lines are periodic)
     return _sheets[key]
 
 
@@ -78,7 +78,7 @@ def corners(cx, cy):
 
 
 def fit(src, dst):
-    """Affine Abbildung (2×3) mm → px nach kleinsten Quadraten."""
+    """Affine mapping (2×3) mm → px by least squares."""
     A = np.hstack([np.asarray(src, float), np.ones((len(src), 1))])
     M, *_ = np.linalg.lstsq(A, np.asarray(dst, float), rcond=None)
     err = np.abs(A @ M - dst).max()
@@ -113,16 +113,16 @@ def group(items):
 
 
 def seed(g):
-    """Rechteck der gelesenen Codes samt Ruhezone (px)."""
+    """Rectangle of the codes read, including the quiet zone (px)."""
     pts = np.array([p for it in g["items"] for p in it["pts"]])
     q = 1.3 * PX * np.linalg.norm(g["M"][:, 0]) / PX
     return [pts[:, 0].min() - q, pts[:, 1].min() - q, pts[:, 0].max() + q, pts[:, 1].max() + q]
 
 
 def refine(box, others, ink):
-    """Rechteck nach außen erweitern, bis eine ganz weiße Spalte/Zeile kommt (Lücke zwischen den
-    Stücken – innerhalb eines Stücks kreuzen die Rasterlinien jede Spalte), ein anderes Stück beginnt
-    oder das Bild endet."""
+    """Grow the rectangle outwards until a completely white column/row appears (gap between the
+    pieces – inside a piece the grid lines cross every column), another piece begins
+    or the image ends."""
     H, W = ink.shape
     x0, y0, x1, y1 = (int(round(v)) for v in box)
     x0, y0, x1, y1 = max(0, x0), max(0, y0), min(W, x1), min(H, y1)
@@ -175,16 +175,16 @@ def analyze(path):
         gs = group(items)
         seeds = [seed(g) for g in gs]
         boxes = [list(refine(seeds[n], [s for m, s in enumerate(seeds) if m != n], ink)) for n in range(len(gs))]
-        # aneinanderstoßende Stücke: Grenze mitten in der Lücke zwischen den gelesenen Codes
+        # abutting pieces: boundary in the middle of the gap between the codes read
         for a in range(len(gs)):
             for b in range(len(gs)):
                 A_, B_ = boxes[a], boxes[b]
                 if a == b or not (A_[0] < B_[2] and B_[0] < A_[2] and A_[1] < B_[3] and B_[1] < A_[3]):
                     continue
                 sa, sb = seeds[a], seeds[b]
-                if sa[2] <= sb[0]:                       # a links von b
+                if sa[2] <= sb[0]:                       # a left of b
                     m = round((sa[2] + sb[0]) / 2); A_[2] = min(A_[2], m); B_[0] = max(B_[0], m)
-                elif sa[3] <= sb[1]:                     # a über b
+                elif sa[3] <= sb[1]:                     # a above b
                     m = round((sa[3] + sb[1]) / 2); A_[3] = min(A_[3], m); B_[1] = max(B_[1], m)
         for n, g in enumerate(gs):
             box = boxes[n]
@@ -215,13 +215,13 @@ def main(paths):
         allres.append(r)
         print(f"\n=== {r['file']}")
         for i, pg in enumerate(r["pages"]):
-            print(f"Seite {i + 1}: {pg['size_mm'][0]} × {pg['size_mm'][1]} mm, {pg['codes']} Codes")
+            print(f"Page {i + 1}: {pg['size_mm'][0]} × {pg['size_mm'][1]} mm, {pg['codes']} codes")
             for g in pg["regions"]:
                 s, d = g["src_mm"], g["dst_mm"]
-                print(f"  {g['code']:4s} Quelle {s[0]:6.1f},{s[1]:6.1f} – {s[2]:6.1f},{s[3]:6.1f}"
-                      f"  → Ziel {d[0]:6.1f},{d[1]:5.1f} – {d[2]:6.1f},{d[3]:5.1f}"
-                      f"  {g['rot']:3d}° ({g['angle']:6.2f})  Maßstab {g['scale'][0]:.3f}/{g['scale'][1]:.3f}"
-                      f"{'  GESPIEGELT' if g['mirror'] else ''}  [{g['codes']}]")
+                print(f"  {g['code']:4s} Source {s[0]:6.1f},{s[1]:6.1f} – {s[2]:6.1f},{s[3]:6.1f}"
+                      f"  → Target {d[0]:6.1f},{d[1]:5.1f} – {d[2]:6.1f},{d[3]:5.1f}"
+                      f"  {g['rot']:3d}° ({g['angle']:6.2f})  Scale {g['scale'][0]:.3f}/{g['scale'][1]:.3f}"
+                      f"{'  MIRRORED' if g['mirror'] else ''}  [{g['codes']}]")
     (WORK / "analyse.json").write_text(json.dumps(allres, indent=1, ensure_ascii=False))
 
 

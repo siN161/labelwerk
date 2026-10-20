@@ -1,4 +1,4 @@
-"""Etiketten als Datei (Etappe 3c): Format *.labelwerk, Rundweg, Fehler."""
+"""Labels as files (stage 3c): *.labelwerk format, round trip, errors."""
 import base64
 import json
 
@@ -26,7 +26,7 @@ def _document():
                                   Span("fett", bold=True, italic=True, underline=True)], "left"),
                        Paragraph([Span("Zeile 2", bold=False)], "right")],
                       size_pt=10, fit=True, x_mm=2.5, y_mm=3, w_mm=40, h_mm=12, rotation=90)
-    centred = TextObject("mittig")                       # Position None = mittig
+    centred = TextObject("mittig")                       # position None = centred
     image = ImageObject.from_image(_picture(), 300, "bild.png", crop=(10, 10, 110, 50))
     image.x_mm, image.y_mm, image.rotation = 30, 4, 180
     image.mode, image.threshold, image.invert, image.keep_ratio = "photo", 90, True, False
@@ -62,7 +62,7 @@ def test_file_is_versioned_readable_json(tmp_path):
     assert [o["type"] for o in objects] == ["text", "text", "image", "image"]
     assert objects[0]["paragraphs"][0]["spans"][0]["text"] == "Absender "
     assert base64.b64decode(objects[3]["svg"]) == SVG and objects[2]["svg"] is None
-    assert "Absender" in path.read_text(encoding="utf-8")   # Umlaute/Text lesbar, nicht maskiert
+    assert "Absender" in path.read_text(encoding="utf-8")   # umlauts/text readable, not escaped
 
 
 def test_save_is_atomic_and_leaves_no_temp_files(tmp_path, monkeypatch):
@@ -89,7 +89,7 @@ def test_unknown_fields_are_ignored_and_missing_get_defaults(tmp_path):
     assert doc.objects[0].rotation == 0 and doc.margin_mm == 1.0 and doc.objects[0].text == "x"
 
 
-# --- Fehler ---------------------------------------------------------------------------
+# --- Errors ---------------------------------------------------------------------------
 def _write(tmp_path, content):
     path = tmp_path / "kaputt.labelwerk"
     path.write_text(content if isinstance(content, str) else json.dumps(content), encoding="utf-8")
@@ -149,7 +149,7 @@ def test_error_names_the_file(tmp_path):
         load(_write(tmp_path, "nicht json"))
 
 
-# --- Zuletzt geöffnet -------------------------------------------------------------------
+# --- Recently opened -------------------------------------------------------------------
 def test_add_recent_file_newest_first_without_duplicates_and_limit():
     recent = [f"/a/{i}.labelwerk" for i in range(10)]
     assert storage.add_recent_file(recent, "/a/3.labelwerk")[:2] == ["/a/3.labelwerk", "/a/0.labelwerk"]
@@ -158,7 +158,7 @@ def test_add_recent_file_newest_first_without_duplicates_and_limit():
 
 
 def test_schemas_cover_every_dataclass_field():
-    """Neue Felder müssen ins Schema – sonst gingen sie beim Speichern still verloren."""
+    """New fields must go into the schema – otherwise they would be silently lost on saving."""
     from dataclasses import fields
     for cls, schema, extra in ((Span, storage.SPAN, set()), (Paragraph, storage.PARAGRAPH, {"spans"}),
                                (TextObject, storage.TEXT, {"paragraphs"}),
@@ -171,14 +171,14 @@ def test_schemas_cover_every_dataclass_field():
         assert {f.name for f in fields(cls)} == set(schema) | extra, cls.__name__
 
 
-# --- Nachbesserungen: fremde und kaputte Dateien ---------------------------------------
+# --- Refinements: foreign and broken files ---------------------------------------
 EPS = (b"%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 30 30\n"
        b"newpath 0 0 moveto 30 30 lineto stroke showpage\n%%EOF\n")
 
 
 @pytest.fixture
 def no_subprocess(monkeypatch):
-    """Kein externes Programm (Ghostscript) darf beim Laden oder Rendern starten."""
+    """No external program (Ghostscript) may start while loading or rendering."""
     import subprocess
 
     def blocked(*args, **kwargs):
@@ -213,7 +213,7 @@ def test_damaged_png_stream_is_refused_when_loading(tmp_path):
     buffer = io.BytesIO()
     Image.new("RGB", (40, 40), "red").save(buffer, "PNG")
     raw = bytearray(buffer.getvalue())
-    start = raw.index(b"IDAT")                                  # Daten kaputt, CRC passend
+    start = raw.index(b"IDAT")                                  # data broken, CRC matching
     length = struct.unpack(">I", raw[start - 4:start])[0]
     raw[start + 4:start + 4 + length] = b"\x00" * length
     raw[start + 4 + length:start + 8 + length] = struct.pack(
@@ -290,7 +290,7 @@ def test_structure_and_bounds_are_checked(tmp_path, change, message):
 
 
 def test_loaded_documents_render_without_unexpected_errors(tmp_path):
-    """Was ``load`` annimmt, scheitert beim Rendern höchstens mit ``ValueError``."""
+    """What ``load`` accepts fails at most with ``ValueError`` when rendering."""
     data = _valid()
     data["document"]["objects"][0].update(size_pt=1000, x_mm=-999, w_mm=300, h_mm=300)
     doc = load(_write(tmp_path, data))
@@ -348,7 +348,7 @@ def test_long_file_name_can_be_saved(tmp_path):
     assert load(path) == _document()
 
 
-# --- Grenzen für fremde Dateien (Schlussreview 3c) -----------------------------------------
+# --- Limits for foreign files (final review 3c) -----------------------------------------
 def _image_object(w_mm, h_mm):
     return {"type": "image", "png": _valid()["document"]["objects"][2]["png"],
             "w_mm": w_mm, "h_mm": h_mm}
@@ -362,7 +362,7 @@ def test_pixel_budget_refuses_huge_frames(tmp_path):
 
 
 def test_pixel_budget_sums_up_all_frames(tmp_path):
-    data = _valid()      # je 600 × 600 mm ≈ 50 Mio. Druckpunkte, zusammen 200 Mio.
+    data = _valid()      # 600 × 600 mm each ≈ 50 million dots, 200 million together
     data["document"]["objects"] = [_image_object(600, 600) for _ in range(4)]
     with pytest.raises(StorageError, match="Etikett zu groß"):
         load(_write(tmp_path, data))
@@ -420,7 +420,7 @@ def test_position_limit_is_the_one_of_the_position_fields():
         storage.from_dict(data)
 
 
-# --- Zierrahmen ---------------------------------------------------------------------------
+# --- Decorative frame ---------------------------------------------------------------------
 def test_frame_is_saved_as_its_own_entry(tmp_path):
     path = save(_document(), tmp_path / "r.labelwerk")
     frame = json.loads(path.read_text())["document"]["frame"]

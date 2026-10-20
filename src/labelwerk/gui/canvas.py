@@ -1,9 +1,9 @@
-"""Arbeitsfläche: Etikett in echter Größe und Form, Objekte (auswählen, ziehen, einrasten,
-an Anfassern skalieren, Text anlegen, Bilder ablegen), mm-Lineale, Zoom, Längen-Anfasser.
+"""Canvas: label in true size and shape, objects (select, drag, snap,
+scale by handles, create text, drop images), mm rulers, zoom, length handle.
 
-Schreibmodus (``gui.text_edit_mode``): Der bearbeitete Rahmen ist durchgezogen und ohne
-Anfasser; Schreibmarke und Markierung kommen als Lage in Druckpunkten vom Schreibmodus
-(``set_edit_marks``), die Arbeitsfläche zeichnet sie nur und meldet Mausklicks hinein."""
+Edit mode (``gui.text_edit_mode``): the frame being edited is solid and has no
+handles; caret and selection arrive as a position in dots from the edit mode
+(``set_edit_marks``), the canvas only draws them and reports mouse clicks into the frame."""
 from __future__ import annotations
 
 import math
@@ -23,16 +23,16 @@ from ..layout import Rect
 from ..printer import DEFAULT_MODEL
 from ..render import INK, PT, RenderedObject
 
-MM = DPI / 25.4          # Szene-Einheiten (Druckpunkte) pro mm bei 300 dpi; je Etikett ``Canvas.mm``
-RULER = 22               # Linealbreite in Pixeln
-_CORNER_MM = 2           # Eckenradius gestanzter Etiketten
-_MARGIN_MM = 15          # grauer Rand um das Etikett
-START_ZOOM = 200         # Prozent; 100 % = echte Größe
-SNAP_PX = 6              # Einrasten: Abstand in Bildschirmpixeln
-HANDLE_PX = 8            # Kantenlänge eines Anfassers in Bildschirmpixeln
-_DRAG_START_PX = 3       # erst ab dieser Mausbewegung wird gezogen (Klick ≠ Verschieben)
-_MIN_FRAME_MM = 1        # kleinster Rahmen beim Skalieren
-HANDLES = ("tl", "t", "tr", "r", "br", "b", "bl", "l")   # Ecken und Kanten, im Uhrzeigersinn
+MM = DPI / 25.4          # scene units (dots) per mm at 300 dpi; per label ``Canvas.mm``
+RULER = 22               # ruler width in pixels
+_CORNER_MM = 2           # corner radius of die-cut labels
+_MARGIN_MM = 15          # grey margin around the label
+START_ZOOM = 200         # percent; 100 % = true size
+SNAP_PX = 6              # snapping: distance in screen pixels
+HANDLE_PX = 8            # edge length of a handle in screen pixels
+_DRAG_START_PX = 3       # dragging only starts after this much mouse movement (click ≠ move)
+_MIN_FRAME_MM = 1        # smallest frame when scaling
+HANDLES = ("tl", "t", "tr", "r", "br", "b", "bl", "l")   # corners and edges, clockwise
 _HANDLE_CURSORS = {
     "tl": Qt.CursorShape.SizeFDiagCursor, "br": Qt.CursorShape.SizeFDiagCursor,
     "tr": Qt.CursorShape.SizeBDiagCursor, "bl": Qt.CursorShape.SizeBDiagCursor,
@@ -40,18 +40,18 @@ _HANDLE_CURSORS = {
     "l": Qt.CursorShape.SizeHorCursor, "r": Qt.CursorShape.SizeHorCursor,
 }
 _GUIDE_COLOR = QColor("#E53935")
-_TAPE_COLOR = QColor("#BDBDBD")    # heller als die Arbeitsfläche, in jedem Design lesbar
-_UNPRINTABLE_COLOR = QColor("#EBEBEB")   # unbedruckbarer Streifen: zwischen Etikett und Restband
-TOOL_MODES = ("select", "text")   # Auswahl-Pfeil, „Text anlegen“
-_EDIT_REACH_PX = 3                # Schreibmodus: Klick so knapp neben dem Rahmen zählt noch hinein
-_SELECTION_ALPHA = 90             # Markierung: Systemfarbe zu ≈ 35 % deckend
+_TAPE_COLOR = QColor("#BDBDBD")    # lighter than the canvas, readable in every theme
+_UNPRINTABLE_COLOR = QColor("#EBEBEB")   # unprintable strip: between label and rest of the tape
+TOOL_MODES = ("select", "text")   # selection arrow, "Create text"
+_EDIT_REACH_PX = 3                # edit mode: a click this close next to the frame still counts as inside
+_SELECTION_ALPHA = 90             # selection: system colour at ≈ 35 % opacity
 
 
 def to_qimage(img: Image.Image, ink: tuple[int, int, int] = (0, 0, 0)) -> QImage:
-    """Druckbild als QImage; Weiß wird transparent, damit die Etikettform sichtbar bleibt.
-    ``ink``: Druckfarbe (``render.INK``, rote Objekte auf Etiketten Rot/Schwarz)."""
+    """Print image as QImage; white becomes transparent so that the label shape stays visible.
+    ``ink``: ink colour (``render.INK``, red objects on red/black labels)."""
     gray = img.convert("L")
-    # Farbe der Tinte, Alpha = 255 - L: über Weiß ergibt das exakt den Ton L (Vorschau = Druck)
+    # Ink colour, alpha = 255 - L: over white this gives exactly the tone L (preview = print)
     rgba = Image.merge("RGBA", (*(Image.new("L", gray.size, c) for c in ink),
                                 ImageOps.invert(gray)))
     return QImage(rgba.tobytes(), rgba.width, rgba.height, 4 * rgba.width,
@@ -59,10 +59,10 @@ def to_qimage(img: Image.Image, ink: tuple[int, int, int] = (0, 0, 0)) -> QImage
 
 
 class ObjectItem(QGraphicsPixmapItem):
-    """Ein Objekt auf der Arbeitsfläche: sein Bild aus ``render_object`` an seiner Position.
+    """An object on the canvas: its image from ``render_object`` at its position.
 
-    Koordinaten in Druckpunkten in Leserichtung; das Elternelement (``Canvas.sheet``) dreht
-    bei „horizontal“ in Druckkoordinaten.
+    Coordinates in dots in reading direction; the parent item (``Canvas.sheet``) rotates
+    for "horizontal" into print coordinates.
     """
 
     def __init__(self, index: int, rendered: RenderedObject, pixmap: QPixmap, keep_ratio: bool,
@@ -70,26 +70,26 @@ class ObjectItem(QGraphicsPixmapItem):
         super().__init__(pixmap, parent)
         self.index = index
         self.rendered = rendered
-        self.keep_ratio = keep_ratio     # Ecken skalieren die Schrift: Seitenverhältnis bleibt
-        self.keep_aspect = keep_aspect   # auch Kanten halten das Verhältnis (Bild)
+        self.keep_ratio = keep_ratio     # corners scale the font: aspect ratio stays
+        self.keep_aspect = keep_aspect   # edges also keep the ratio (image)
         self.setShapeMode(QGraphicsPixmapItem.ShapeMode.BoundingRectShape)
         self.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
         self.setPos(rendered.x, rendered.y)
-        self.setOffset(rendered.image_dx, rendered.image_dy)   # Anschnitt: Bild ragt über Rahmen
+        self.setOffset(rendered.image_dx, rendered.image_dy)   # bleed: image extends beyond the frame
         self.setCursor(Qt.CursorShape.SizeAllCursor)
 
     def is_empty(self) -> bool:
         return self.rendered.w == 0 or self.rendered.h == 0
 
     def size(self) -> tuple[float, float]:
-        """Rahmengröße in Druckpunkten; ein leerer Text zeigt einen Platzhalter (eine Zeile hoch)."""
+        """Frame size in dots; an empty text shows a placeholder (one line high)."""
         if self.is_empty():
             line = self.rendered.base_pt * self.rendered.dpi / 72
             return line / 2, line
         return self.rendered.w, self.rendered.h
 
     def frame(self) -> QRectF:
-        """Rahmen in Druckpunkten in Leserichtung (beim Ziehen samt Vorschau-Streckung)."""
+        """Frame in dots in reading direction (while dragging including preview stretch)."""
         return self.mapRectToParent(QRectF(0, 0, *self.size()))
 
     def frame_mm(self) -> Rect:
@@ -98,24 +98,24 @@ class ObjectItem(QGraphicsPixmapItem):
 
 
 class Canvas(QGraphicsView):
-    length_changed = Signal(object)   # neue Länge in mm (float) oder None = automatisch
-    zoom_changed = Signal(int)        # Zoom in Prozent
-    drag_finished = Signal()          # Längen-Anfasser losgelassen (nach tatsächlichem Ziehen)
-    selection_changed = Signal(list)  # Indizes der ausgewählten Objekte in der Reihenfolge der Wahl
-    objects_moved = Signal(list, list)         # Indizes, neue Rahmen (Rect, mm) nach dem Loslassen
-    object_resized = Signal(int, object, str)  # Index, neuer Rahmen (Rect, mm), Anfasser („tl“ …)
-    text_requested = Signal(float, float)      # „Text anlegen“: Klick aufs Etikett (mm, Leserichtung)
-    edit_requested = Signal(int, object)       # Text bearbeiten (Doppelklick): Index, Klickpunkt
-                                               # (QPointF, Druckpunkte in Leserichtung) oder None
-    edit_pressed = Signal(object, bool)        # Schreibmodus: Klick in den Rahmen (Punkt, Umschalt)
-    edit_dragged = Signal(object)              # Schreibmodus: Ziehen im Rahmen markiert (Punkt)
-    edit_double_clicked = Signal(object)       # Schreibmodus: Doppelklick markiert ein Wort
-    edit_left = Signal()                       # Schreibmodus: Klick neben den Rahmen beendet ihn
-    object_clicked = Signal(int)               # Klick auf ein Objekt (auch ein schon gewähltes)
-    tool_changed = Signal(str)                 # Werkzeug: "select" | "text"
-    dropped = Signal(object, object, float, float)  # abgelegt: Dateien (list[Path]), Bild
-                                               # (PIL oder None), Ablagepunkt (mm, Leserichtung)
-    symbol_dropped = Signal(str, float, float)  # Symbol aus dem Fenster abgelegt: id, Punkt (mm)
+    length_changed = Signal(object)   # new length in mm (float) or None = automatic
+    zoom_changed = Signal(int)        # zoom in percent
+    drag_finished = Signal()          # length handle released (after actual dragging)
+    selection_changed = Signal(list)  # indices of the selected objects in order of selection
+    objects_moved = Signal(list, list)         # indices, new frames (Rect, mm) after release
+    object_resized = Signal(int, object, str)  # index, new frame (Rect, mm), handle ("tl" …)
+    text_requested = Signal(float, float)      # "Create text": click on the label (mm, reading direction)
+    edit_requested = Signal(int, object)       # edit text (double click): index, click point
+                                               # (QPointF, dots in reading direction) or None
+    edit_pressed = Signal(object, bool)        # edit mode: click into the frame (point, shift)
+    edit_dragged = Signal(object)              # edit mode: dragging in the frame selects (point)
+    edit_double_clicked = Signal(object)       # edit mode: double click selects a word
+    edit_left = Signal()                       # edit mode: click next to the frame ends it
+    object_clicked = Signal(int)               # click on an object (also one already selected)
+    tool_changed = Signal(str)                 # tool: "select" | "text"
+    dropped = Signal(object, object, float, float)  # dropped: files (list[Path]), image
+                                               # (PIL or None), drop point (mm, reading direction)
+    symbol_dropped = Signal(str, float, float)  # symbol dropped from the window: id, point (mm)
 
     def __init__(self, model: str = DEFAULT_MODEL):
         super().__init__()
@@ -125,9 +125,9 @@ class Canvas(QGraphicsView):
                             | QPainter.RenderHint.SmoothPixmapTransform)
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.viewport().setMouseTracking(True)             # Mauszeiger über den Anfassern
-        self.setAcceptDrops(True)                          # Bilder und Bilddateien ablegen
-        self.dpi, self.mm = DPI, MM                        # Auflösung des Etiketts, Punkte je mm
+        self.viewport().setMouseTracking(True)             # mouse pointer over the handles
+        self.setAcceptDrops(True)                          # drop images and image files
+        self.dpi, self.mm = DPI, MM                        # resolution of the label, dots per mm
         self.set_model(model)
         self.zoom = START_ZOOM
         self.orientation = "vertical"
@@ -136,16 +136,16 @@ class Canvas(QGraphicsView):
         self.outline = self.printable = self.handle = self.tape = None
         self._tape = QRectF()
         self._cut_edges: list[str] = []
-        self.sheet: QGraphicsRectItem | None = None        # Etikett in Leserichtung (Druckpunkte)
+        self.sheet: QGraphicsRectItem | None = None        # label in reading direction (dots)
         self.objects: list[ObjectItem] = []
         self._pixmaps: dict[int, tuple[RenderedObject, QPixmap]] = {}
         self._selection: list[int] = []
         self._area = self._label_rect = Rect(0, 0, 0, 0)
-        self._inner: Rect | None = None                    # Innenraum des Zierrahmens (mm)
-        self.frame_item: QGraphicsPixmapItem | None = None # Zierrahmen (unter den Objekten)
-        self._frame_source: Image.Image | None = None      # Maske, aus der _frame_pixmap entstand
+        self._inner: Rect | None = None                    # inner area of the decorative frame (mm)
+        self.frame_item: QGraphicsPixmapItem | None = None # decorative frame (below the objects)
+        self._frame_source: Image.Image | None = None      # mask from which _frame_pixmap was made
         self._frame_pixmap = QPixmap()
-        self._grow: str | None = None                      # mitwachsende Achse (Endlosband)
+        self._grow: str | None = None                      # growing axis (continuous tape)
         self._guides: list[tuple[str, float]] = []
         self._caption = ""
         self._drag: str | None = None                      # "length" | "move" | "resize"
@@ -159,38 +159,38 @@ class Canvas(QGraphicsView):
         self._handle_offset = QPointF()
         self._handle_cursor = False
         self._tool = "select"
-        self.read_only = False                             # nur Ansicht (Paketmarke): keine Klicks
-        self._editing: int | None = None                   # Objekt im Schreibmodus
-        self._edit_frame = QRectF()                        # Rahmen, Schreibmarke, Markierung
-        self._caret: QLineF | None = None                  # (Druckpunkte in Leserichtung)
+        self.read_only = False                             # view only (parcel label): no clicks
+        self._editing: int | None = None                   # object in edit mode
+        self._edit_frame = QRectF()                        # frame, caret, selection
+        self._caret: QLineF | None = None                  # (dots in reading direction)
         self._marked: list[QRectF] = []
         self._caret_on = True
-        self._caret_focus = True                           # Editor hat den Tastaturfokus
+        self._caret_focus = True                           # the editor has keyboard focus
         self._blink = QTimer(self)
         self._blink.timeout.connect(self._toggle_caret)
         self._apply_zoom()
 
-    # --- Inhalt -----------------------------------------------------------
+    # --- Content -----------------------------------------------------------
     def set_document(self, label: Label, size: tuple[int, int],
                      rendered: list[RenderedObject], orientation: str = "vertical",
                      area: Rect | None = None, keep_ratio: list[bool] | None = None,
                      grow: str | None = None, keep_aspect: list[bool] | None = None,
                      frame: Image.Image | None = None, inner: Rect | None = None) -> None:
-        """Etikett (physische Form) und die einzeln gerenderten Objekte darin anzeigen.
+        """Show the label (physical shape) and the individually rendered objects in it.
 
-        ``size``: Etikett in Druckpunkten in Leserichtung (wie ``render.label_size``);
-        ``area``: bedruckbarer Bereich in mm (Einrasten); ``keep_ratio`` je Objekt: Ecken
-        skalieren die Schrift (ohne feste Rahmengröße); ``keep_aspect`` je Objekt: auch
-        Kanten halten das Seitenverhältnis (Bild); ``grow``: Achse, in der das Etikett
-        mitwächst (``layout.growing_axis``) – dort rastet nur der Anfang ein; ``frame``: Maske des
-        Zierrahmens (``Rendered.frame``), liegt unter den Objekten und nimmt keine Klicks;
-        ``inner``: sein Innenraum in mm (Einrasten). Die Szene ist immer in
-        Druckkoordinaten; bei „horizontal“ dreht die Ansicht um −90°, damit das Etikett in
-        Leserichtung erscheint – die Objekte liegen in ``sheet``, das in Leserichtung zählt.
+        ``size``: label in dots in reading direction (as ``render.label_size``);
+        ``area``: printable area in mm (snapping); ``keep_ratio`` per object: corners
+        scale the font (without fixed frame size); ``keep_aspect`` per object: edges
+        also keep the aspect ratio (image); ``grow``: axis in which the label
+        grows (``layout.growing_axis``) – only its start snaps there; ``frame``: mask of the
+        decorative frame (``Rendered.frame``), lies below the objects and takes no clicks;
+        ``inner``: its inner area in mm (snapping). The scene is always in
+        print coordinates; for "horizontal" the view rotates by −90° so that the label appears in
+        reading direction – the objects lie in ``sheet``, which counts in reading direction.
         """
         if orientation != self.orientation or label.dpi != self.dpi:
             self.orientation = orientation
-            self.dpi, self.mm = label.dpi, label.dpi / 25.4   # Szene in Druckpunkten des Etiketts
+            self.dpi, self.mm = label.dpi, label.dpi / 25.4   # scene in the label's dots
             self._apply_zoom()
         self.cancel_object_drag()
         scene = self.scene()
@@ -198,9 +198,9 @@ class Canvas(QGraphicsView):
         self.label = label
         width, height = size
         horizontal = orientation == "horizontal"
-        pw, ph = (height, width) if horizontal else (width, height)   # Druckbild
+        pw, ph = (height, width) if horizontal else (width, height)   # print image
         tw = label.total_width
-        th = label.total_height or ph + 2 * label.feed_margin   # Endlosband: Stück mit Vorschub
+        th = label.total_height or ph + 2 * label.feed_margin   # continuous tape: piece with feed
         path = QPainterPath()
         if label.shape == "round":
             path.addEllipse(0, 0, tw, th)
@@ -211,8 +211,8 @@ class Canvas(QGraphicsView):
         self.outline = scene.addPath(path, QPen(Qt.PenStyle.NoPen), QBrush(Qt.GlobalColor.white))
 
         ox, oy = (tw - pw) / 2, (th - ph) / 2
-        # Streifen, die der Drucker nicht bedruckt (quer, längs Vorschub bzw. Etikettrand):
-        # hellgrau, nur Anzeige – unter dem Etikettinhalt, ohne Klicks, nicht im Druckbild
+        # Strips the printer does not print (across, along the feed or label edge):
+        # light grey, display only – below the label content, no clicks, not in the print image
         printed = QPainterPath()
         printed.addRect(QRectF(ox, oy, pw, ph))
         self.unprintable = scene.addPath(path.subtracted(printed), QPen(Qt.PenStyle.NoPen),
@@ -220,13 +220,13 @@ class Canvas(QGraphicsView):
         self.unprintable.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.sheet = QGraphicsRectItem(0, 0, width, height)
         self.sheet.setPen(QPen(Qt.PenStyle.NoPen))
-        # Leserichtung → Druck: bei „horizontal“ 90° im Uhrzeigersinn wie render_document
+        # reading direction → print: for "horizontal" 90° clockwise as render_document
         self.sheet.setTransform(QTransform().translate(ox + pw, oy).rotate(90) if horizontal
                                 else QTransform().translate(ox, oy))
         scene.addItem(self.sheet)
         self.frame_item = None
         if frame is not None:
-            if frame is not self._frame_source:  # der Renderer liefert unverändert dieselbe Maske
+            if frame is not self._frame_source:  # the renderer returns the same mask unchanged
                 self._frame_source = frame
                 self._frame_pixmap = QPixmap.fromImage(to_qimage(ImageOps.invert(frame)))
             self.frame_item = QGraphicsPixmapItem(self._frame_pixmap, self.sheet)
@@ -246,11 +246,11 @@ class Canvas(QGraphicsView):
         dotted = QPen(QColor("#888888"), 1, Qt.PenStyle.DotLine)
         dotted.setCosmetic(True)
         if label.shape != "round" and area is not None:
-            # bedruckbarer Bereich mit allen vier Rändern (auch in Bandrichtung), in Leserichtung
+            # printable area with all four margins (also in tape direction), in reading direction
             self.printable = QGraphicsRectItem(QRectF(area.x * self.mm, area.y * self.mm,
                                                       area.w * self.mm, area.h * self.mm), self.sheet)
             self.printable.setPen(dotted)
-            self.printable.setZValue(-2)                 # unter dem Zierrahmen
+            self.printable.setZValue(-2)                 # below the decorative frame
         else:
             self.printable = scene.addRect(QRectF(ox, oy, pw, ph), dotted)
 
@@ -274,11 +274,11 @@ class Canvas(QGraphicsView):
         self.set_selection([i for i in self._selection if self._selectable(i)])
 
     def _add_tape(self, scene: QGraphicsScene, tw: float, th: float) -> None:
-        """Endlosband wie im P-touch Editor: Der Anfang des Etiketts in Bandrichtung ist eine
-        geschlossene, durchgezogene Kante; nur das Ende trägt die gestrichelte Schnittlinie,
-        dahinter läuft das Band als hellgrauer Streifen weiter (Szene-y; bei „horizontal“ ist
-        die Ansicht gedreht). Nur Anzeige: reagiert nicht auf die Maus und gehört weder zum
-        Druckbild noch zur Etikettgröße."""
+        """Continuous tape as in the P-touch Editor: the start of the label in tape direction is a
+        closed, solid edge; only the end carries the dashed cut line,
+        behind it the tape continues as a light grey strip (scene y; for "horizontal" the
+        view is rotated). Display only: does not react to the mouse and belongs neither to the
+        print image nor to the label size."""
         self._tape = QRectF(0, th, tw, _MARGIN_MM * self.mm)
         self.tape = scene.addRect(self._tape, QPen(Qt.PenStyle.NoPen), QBrush(_TAPE_COLOR))
         self.tape.setZValue(-1)
@@ -289,30 +289,30 @@ class Canvas(QGraphicsView):
         self._cut_edges = ["end"]
 
     def tape_rect(self) -> QRectF:
-        """Restband in Szene-Koordinaten (Bandrichtung = Szene-y, unterhalb des Etiketts);
-        leer bei gestanzten Etiketten."""
+        """Rest of the tape in scene coordinates (tape direction = scene y, below the label);
+        empty for die-cut labels."""
         return QRectF(self._tape)
 
     def set_model(self, model: str) -> None:
-        """Druckermodell: Grenzen der Etikettlänge beim Ziehen."""
+        """Printer model: limits of the label length when dragging."""
         min_len, max_len = length_limits(model)
         self.min_mm, self.max_mm = min_len / MM, max_len / MM
 
     def cut_edges(self) -> list[str]:
-        """Kanten in Bandrichtung mit Schnittlinie: bei Endlosband nur das Ende („end“) –
-        der Anfang ist geschlossen; gestanzte Etiketten behalten ihre Darstellung (leer)."""
+        """Edges in tape direction with cut line: for continuous tape only the end ("end") –
+        the start is closed; die-cut labels keep their appearance (empty)."""
         return list(self._cut_edges)
 
     def _pixmap(self, rendered: RenderedObject) -> QPixmap:
-        """Pixmap je Objektbild nur einmal erzeugen (unverändertes Objekt = dasselbe Bild).
+        """Create the pixmap per object image only once (unchanged object = same image).
 
-        Der Cache hält das Objektbild selbst fest, damit seine id nicht neu vergeben wird."""
+        The cache holds on to the object image itself so that its id is not reissued."""
         cached = self._pixmaps.get(id(rendered))
         if cached is not None and cached[0] is rendered:
             return cached[1]
         return QPixmap.fromImage(to_qimage(rendered.image, INK[rendered.color]))
 
-    # --- Auswahl ----------------------------------------------------------
+    # --- Selection ----------------------------------------------------------
     def selection(self) -> list[int]:
         return list(self._selection)
 
@@ -322,26 +322,26 @@ class Canvas(QGraphicsView):
         if chosen != self._selection:
             self._selection = chosen
             if self._drag not in ("move", "resize"):
-                self._grabbed = -1       # Nummern können sich geändert haben: nicht festhalten
+                self._grabbed = -1       # numbers may have changed: do not hold on
             self.viewport().update()
             self.selection_changed.emit(self.selection())
 
     def select_all(self) -> None:
-        """Alle Objekte wählen; „Text anlegen“ endet dabei (zurück zum Auswahl-Pfeil)."""
+        """Select all objects; "Create text" ends in the process (back to the selection arrow)."""
         self.set_tool("select")
         self.set_selection(list(range(len(self.objects))))
 
     def _selectable(self, index: int) -> bool:
         return 0 <= index < len(self.objects)
 
-    # --- Schreibmodus -----------------------------------------------------
+    # --- Edit mode -----------------------------------------------------------
     def editing(self) -> int | None:
-        """Objekt im Schreibmodus (None = keins)."""
+        """Object in edit mode (None = none)."""
         return self._editing
 
     def set_editing(self, index: int | None) -> None:
-        """Schreibmodus für ein Objekt anzeigen bzw. mit None beenden: Rahmen durchgezogen,
-        keine Anfasser, Textcursor über dem Objekt; Klicks hinein melden ``edit_pressed``."""
+        """Show edit mode for an object or end it with None: frame solid,
+        no handles, text cursor over the object; clicks into it report ``edit_pressed``."""
         self._editing = index
         if index is None:
             self._edit_frame, self._caret, self._marked = QRectF(), None, []
@@ -350,44 +350,44 @@ class Canvas(QGraphicsView):
         self.viewport().update()
 
     def set_edit_marks(self, frame: QRectF, caret: QLineF | None, marked: list[QRectF]) -> None:
-        """Rahmen, Schreibmarke und Markierung des Schreibmodus (Druckpunkte in Leserichtung,
-        wie ``sheet``). Die Schreibmarke erscheint sofort und blinkt im Systemtakt."""
+        """Frame, caret and selection of the edit mode (dots in reading direction,
+        like ``sheet``). The caret appears immediately and blinks at the system rate."""
         self._edit_frame, self._caret, self._marked = QRectF(frame), caret, list(marked)
         self._restart_blink()
 
     def set_caret_focus(self, focused: bool) -> None:
-        """Schreibmarke nur zeigen, solange der Editor den Tastaturfokus hat – sonst landet
-        Getipptes woanders (z. B. im Feld „Schrift“)."""
+        """Show the caret only while the editor has keyboard focus – otherwise typed
+        text lands elsewhere (e.g. in the "Font" field)."""
         self._caret_focus = focused
         self._restart_blink()
 
     def caret_shown(self) -> bool:
-        """Wird im Schreibmodus eine Schreibmarke gezeigt (blinkend)?"""
+        """Is a caret shown in edit mode (blinking)?"""
         return self._editing is not None and self._caret is not None and self._caret_focus
 
     def _restart_blink(self) -> None:
-        """Schreibmarke sofort sichtbar, blinkt im Systemtakt; ohne Fokus aus."""
+        """Caret immediately visible, blinks at the system rate; off without focus."""
         self._caret_on = True
         flash = QApplication.cursorFlashTime()
         if flash > 0 and self.caret_shown():
             self._blink.start(flash // 2)
         else:
-            self._blink.stop()                             # aus oder Blinken abgeschaltet
+            self._blink.stop()                             # off or blinking disabled
         self.viewport().update()
 
     def caret_line(self) -> QLineF:
-        """Schreibmarke in Ansichtskoordinaten (leer außerhalb des Schreibmodus)."""
+        """Caret in view coordinates (empty outside edit mode)."""
         if self._caret is None or self.sheet is None:
             return QLineF()
         return QLineF(self._view_point(self._caret.x1(), self._caret.y1()),
                       self._view_point(self._caret.x2(), self._caret.y2()))
 
     def selection_rects(self) -> list[QRectF]:
-        """Markierung im Schreibmodus in Ansichtskoordinaten (ein Rechteck je Zeile)."""
+        """Selection in edit mode in view coordinates (one rectangle per line)."""
         return [self._view_rect(rect) for rect in self._marked] if self.sheet is not None else []
 
     def edit_frame_rect(self) -> QRectF:
-        """Rahmen des Objekts im Schreibmodus in Ansichtskoordinaten."""
+        """Frame of the object in edit mode in view coordinates."""
         return self._view_rect(self._edit_frame) if self.sheet is not None else QRectF()
 
     def _view_rect(self, rect: QRectF) -> QRectF:
@@ -398,7 +398,7 @@ class Canvas(QGraphicsView):
         return self.edit_frame_rect().adjusted(-reach, -reach, reach, reach).contains(pos)
 
     def _show_edit_cursor(self) -> None:
-        """Textcursor über dem bearbeiteten Objekt, sonst der Verschiebe-Cursor."""
+        """Text cursor over the object being edited, otherwise the move cursor."""
         for item in self.objects:
             item.setCursor(Qt.CursorShape.IBeamCursor if item.index == self._editing
                            else Qt.CursorShape.SizeAllCursor)
@@ -408,19 +408,19 @@ class Canvas(QGraphicsView):
         self.viewport().update()
 
     def nudge(self, dx_mm: float, dy_mm: float) -> None:
-        """Ausgewählte Objekte um dx/dy mm verschieben (Pfeiltasten; nicht während des Ziehens)."""
+        """Move selected objects by dx/dy mm (arrow keys; not while dragging)."""
         if self._selection and self._drag not in ("move", "resize"):
             frames = [self.objects[i].frame_mm().moved(dx_mm, dy_mm) for i in self._selection]
             self.objects_moved.emit(self.selection(), frames)
 
-    # --- Werkzeug ---------------------------------------------------------
+    # --- Tool -----------------------------------------------------------------
     def tool(self) -> str:
         return self._tool
 
     def set_tool(self, tool: str) -> None:
-        """Werkzeug wählen: Auswahl-Pfeil oder „Text anlegen“ (Klick aufs Etikett legt Text an)."""
+        """Choose the tool: selection arrow or "Create text" (a click on the label creates text)."""
         if tool not in TOOL_MODES:
-            raise ValueError(f"unknown tool {tool!r}")          # Programmierfehler, keine Meldung
+            raise ValueError(f"unknown tool {tool!r}")          # programming error, no message
         if tool != self._tool:
             self._tool = tool
             if tool == "text":
@@ -430,7 +430,7 @@ class Canvas(QGraphicsView):
             self.tool_changed.emit(tool)
 
     def _create_text(self, pos: QPointF) -> None:
-        """„Text anlegen“: Klick auf ein Objekt wählt es, Klick aufs Etikett legt dort Text an."""
+        """"Create text": a click on an object selects it, a click on the label creates text there."""
         item = self._object_at(pos)
         if item is not None:
             self.set_selection([item.index])
@@ -444,22 +444,22 @@ class Canvas(QGraphicsView):
             self.set_tool("select")
             self.text_requested.emit(x, y)
 
-    # --- Geometrie --------------------------------------------------------
+    # --- Geometry ------------------------------------------------------------
     def px_per_mm(self) -> float:
-        """Bildschirmpixel je mm beim aktuellen Zoom."""
+        """Screen pixels per mm at the current zoom."""
         return self._scale * self.mm
 
     def guides(self) -> list[tuple[str, float]]:
-        """Hilfslinien beim Ziehen: ("x" | "y", mm in Leserichtung)."""
+        """Guide lines while dragging: ("x" | "y", mm in reading direction)."""
         return list(self._guides)
 
     def view_rect(self, index: int) -> QRectF:
-        """Rahmen eines Objekts in Ansichtskoordinaten (Pixel)."""
+        """Frame of an object in view coordinates (pixels)."""
         frame = self.sheet.mapRectToScene(self.objects[index].frame())
         return self.viewportTransform().mapRect(frame)
 
     def handle_points(self, index: int) -> dict[str, QPointF]:
-        """Mittelpunkte der 8 Anfasser in Ansichtskoordinaten (Ansicht zeigt die Leserichtung)."""
+        """Centres of the 8 handles in view coordinates (the view shows the reading direction)."""
         r = self.view_rect(index)
         cx, cy = r.center().x(), r.center().y()
         return {"tl": r.topLeft(), "t": QPointF(cx, r.top()), "tr": r.topRight(),
@@ -467,44 +467,44 @@ class Canvas(QGraphicsView):
                 "bl": r.bottomLeft(), "l": QPointF(r.left(), cy)}
 
     def _reading(self, pos: QPointF) -> QPointF:
-        """Ansichtspunkt → Druckpunkte in Leserichtung."""
+        """View point → dots in reading direction."""
         return self.sheet.mapFromScene(self.viewportTransform().inverted()[0].map(pos))
 
     def _view_point(self, x: float, y: float) -> QPointF:
-        """Druckpunkte in Leserichtung → Ansichtspunkt."""
+        """Dots in reading direction → view point."""
         return self.viewportTransform().map(self.sheet.mapToScene(QPointF(x, y)))
 
     def _object_at(self, pos: QPointF) -> ObjectItem | None:
-        for item in self.items(pos.toPoint()):            # oberstes zuerst
+        for item in self.items(pos.toPoint()):            # topmost first
             if isinstance(item, ObjectItem) and not item.is_empty():
                 return item
         return None
 
     def _handle_at(self, pos: QPointF) -> tuple[int, str] | None:
         reach = HANDLE_PX / 2 + 1
-        for index in reversed(self._selection):            # zuletzt gewähltes zuerst
+        for index in reversed(self._selection):            # most recently selected first
             if self.objects[index].is_empty() or index == self._editing:
-                continue                                   # Platzhalter, Schreibmodus: keine Anfasser
+                continue                                   # placeholder, edit mode: no handles
             for key, point in self.handle_points(index).items():
                 if abs(point.x() - pos.x()) <= reach and abs(point.y() - pos.y()) <= reach:
                     return index, key
         return None
 
-    # --- Zoom -------------------------------------------------------------
+    # --- Zoom ----------------------------------------------------------------
     def set_zoom(self, percent: int) -> None:
         self.zoom = max(25, min(400, percent))
         self._apply_zoom()
         self.zoom_changed.emit(self.zoom)
 
     def _apply_zoom(self) -> None:
-        self._scale = self.zoom / 100 * self.logicalDpiX() / self.dpi   # 100 % = echte Größe
+        self._scale = self.zoom / 100 * self.logicalDpiX() / self.dpi   # 100 % = true size
         self.resetTransform()
         self.scale(self._scale, self._scale)
         if self.orientation == "horizontal":
-            self.rotate(-90)                                       # Leserichtung
+            self.rotate(-90)                                       # reading direction
 
     def _caption_for(self, length_dots: float) -> str:
-        """Größenangabe in Leserichtung (Breite × Höhe)."""
+        """Size in reading direction (width × height)."""
         w, h = self.label.size_mm
         w = mm_text(w)
         if self.label.shape == "round":
@@ -518,25 +518,25 @@ class Canvas(QGraphicsView):
         else:
             super().wheelEvent(event)
 
-    # --- Maus -------------------------------------------------------------
+    # --- Mouse ---------------------------------------------------------------
     def _on_handle(self, event) -> bool:
         return self.handle is not None and self.itemAt(event.position().toPoint()) is self.handle
 
     def is_dragging(self) -> bool:
-        """Längen-Anfasser oder Objekt wird gerade gezogen (Markieren im Schreibmodus zählt
-        nicht – dabei ändert sich kein Objekt)."""
+        """The length handle or an object is being dragged (selecting in edit mode does not
+        count – no object changes)."""
         return self._drag in ("length", "move", "resize")
 
     def snap_length(self, scene_y: float) -> float:
-        """Szene-y der Unterkante → Länge des Stücks in mm (Raster 0,5 mm, innerhalb der
-        Modellgrenzen – sie gelten für das Druckbild, das Stück hat den Vorschub dazu)."""
+        """Scene y of the lower edge → length of the piece in mm (0.5 mm grid, within the
+        model limits – they apply to the print image, the piece has the feed added)."""
         mm = round(scene_y / self.mm * 2) / 2
         feed = 2 * self.label.feed_margin / self.mm if self.label is not None else 0.0
         return min(max(mm, self.min_mm + feed), self.max_mm + feed)
 
     def set_read_only(self, read_only: bool) -> None:
-        """Nur Ansicht (Umwandlung einer Paketmarke): Klicks, Ziehen und Doppelklick wirken
-        nicht, der Längen-Anfasser ist ausgeblendet; Ablegen und Zoom gehen weiter."""
+        """View only (conversion of a parcel label): clicks, dragging and double click have
+        no effect, the length handle is hidden; dropping and zoom still work."""
         self.read_only = read_only
         if read_only:
             self.cancel_object_drag()
@@ -553,7 +553,7 @@ class Canvas(QGraphicsView):
         pos = event.position()
         self._press = pos
         self._moved = False
-        # Werkzeug dieses Klicks – auch wenn das Ende des Schreibmodus es gleich umstellt
+        # tool of this click – even if the end of edit mode switches it right away
         tool = self._tool
         if self._editing is not None:
             if self._in_edit_frame(pos):
@@ -561,10 +561,10 @@ class Canvas(QGraphicsView):
                 shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
                 self.edit_pressed.emit(self._reading(pos), shift)
                 return
-            self.edit_left.emit()                          # danach wirkt der Klick wie sonst
+            self.edit_left.emit()                          # afterwards the click acts as usual
         if self._on_handle(event):
             self._drag = "length"
-            # Versatz zwischen Cursor und Schnittkante merken, damit der Anfasser nicht springt
+            # remember the offset between cursor and cut edge so that the handle does not jump
             self._grab_offset = self.mapToScene(pos.toPoint()).y() - self.label_height()
             return
         if self.sheet is None:
@@ -601,7 +601,7 @@ class Canvas(QGraphicsView):
         f = self._start_frame
         x = f.left() if "l" in key else f.right() if "r" in key else f.center().x()
         y = f.top() if "t" in key else f.bottom() if "b" in key else f.center().y()
-        self._handle_offset = QPointF(x, y) - self._reading(pos)   # Anfasser springt nicht
+        self._handle_offset = QPointF(x, y) - self._reading(pos)   # handle does not jump
 
     def mouseMoveEvent(self, event) -> None:
         pos = event.position()
@@ -633,12 +633,12 @@ class Canvas(QGraphicsView):
             if self._tool == "text":
                 self.viewport().setCursor(Qt.CursorShape.IBeamCursor)
         super().mouseMoveEvent(event)
-        if hit is not None and self._tool == "select":     # Anfasser zeigt seine Richtung
+        if hit is not None and self._tool == "select":     # handle shows its direction
             self.viewport().setCursor(_HANDLE_CURSORS[hit[1]])
         self._handle_cursor = hit is not None and self._tool == "select"
 
     def _drag_move(self, pos: QPointF, snapping: bool) -> None:
-        """Ausgewählte Bilder verschieben (Modell erst beim Loslassen), dabei einrasten."""
+        """Move selected images (model only on release), snapping on the way."""
         delta = self._reading(pos) - self._reading(self._press)
         self._guides = []
         if snapping:
@@ -659,7 +659,7 @@ class Canvas(QGraphicsView):
         return Rect(start.x() / self.mm, start.y() / self.mm, w / self.mm, h / self.mm)
 
     def _drag_resize(self, pos: QPointF) -> None:
-        """Vorschau beim Ziehen an einem Anfasser: Bild gestreckt, gerendert wird beim Loslassen."""
+        """Preview while dragging a handle: image stretched, rendering happens on release."""
         item = self.objects[self._grabbed]
         frame = resized_frame(self._start_frame, self._resize_key,
                               self._reading(pos) + self._handle_offset, item.keep_ratio,
@@ -686,13 +686,13 @@ class Canvas(QGraphicsView):
             elif drag == "resize" and self._moved:
                 self.object_resized.emit(index, self.objects[index].frame_mm(), self._resize_key)
             elif drag == "move" and len(self._selection) > 1:
-                self.set_selection([index])                # Klick in die Auswahl: nur dieses
+                self.set_selection([index])                # click into the selection: only this one
             return
         super().mouseReleaseEvent(event)
 
     def cancel_object_drag(self) -> None:
-        """Ziehen eines Objekts abbrechen (neuer Inhalt, Objektliste geändert): Das Modell
-        bleibt unverändert, das Loslassen bewirkt nichts mehr."""
+        """Cancel dragging an object (new content, object list changed): the model
+        stays unchanged, releasing has no effect any more."""
         if self._drag in ("move", "resize"):
             self._drag = None
             self._guides = []
@@ -717,7 +717,7 @@ class Canvas(QGraphicsView):
     def label_height(self) -> float:
         return self.outline.path().boundingRect().height() if self.outline else 0.0
 
-    # --- Ablegen ----------------------------------------------------------
+    # --- Dropping ---------------------------------------------------------
     def _accepts(self, event) -> bool:
         mime = event.mimeData()
         return self.sheet is not None and (
@@ -731,7 +731,7 @@ class Canvas(QGraphicsView):
             event.ignore()
 
     def dragMoveEvent(self, event) -> None:
-        self.dragEnterEvent(event)          # nicht an die Szene: sie kennt keine Ablageziele
+        self.dragEnterEvent(event)          # not to the scene: it knows no drop targets
 
     def dropEvent(self, event) -> None:
         if not self._accepts(event):
@@ -739,8 +739,8 @@ class Canvas(QGraphicsView):
             return
         event.acceptProposedAction()
         point = self._reading(event.position())
-        # Daten jetzt kopieren (QMimeData lebt nur während des Ablegens), verarbeiten erst
-        # danach: ein Dialog (PDF-Seite) im dropEvent hielte die Quelle des Ziehens fest
+        # Copy the data now (QMimeData lives only during the drop), process only
+        # afterwards: a dialog (PDF page) in dropEvent would hold on to the source of the drag
         x, y = point.x() / self.mm, point.y() / self.mm
         if event.mimeData().hasFormat(image_import.MIME_SYMBOL):
             symbol = bytes(event.mimeData().data(image_import.MIME_SYMBOL)).decode(errors="replace")
@@ -750,7 +750,7 @@ class Canvas(QGraphicsView):
         image = None if paths else image_import.mime_image(event.mimeData())
         QTimer.singleShot(0, self, lambda: self.dropped.emit(paths, image, x, y))
 
-    # --- Auswahlrahmen, Hilfslinien, Lineale ------------------------------
+    # --- Selection frame, guide lines, rulers ---------------------------------
     def drawForeground(self, painter: QPainter, rect) -> None:
         painter.save()
         painter.resetTransform()
@@ -770,18 +770,18 @@ class Canvas(QGraphicsView):
         painter.restore()
 
     def _draw_selection(self, painter: QPainter) -> None:
-        """Ausgewählte Objekte: gestrichelter Rahmen mit 8 Anfassern (feste Pixelgröße)."""
+        """Selected objects: dashed frame with 8 handles (fixed pixel size)."""
         frame = QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.DashLine)
         border = QPen(Qt.GlobalColor.black, 1)
         half = HANDLE_PX / 2
         for index in self._selection:
             if index == self._editing:
-                continue                                   # Schreibmodus: _draw_editing
+                continue                                   # edit mode: _draw_editing
             painter.setPen(frame)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(self.view_rect(index))
             if self.objects[index].is_empty():
-                continue                                   # leerer Text: nur der Platzhalter
+                continue                                   # empty text: only the placeholder
             painter.setPen(border)
             painter.setBrush(Qt.GlobalColor.white)
             for point in self.handle_points(index).values():
@@ -789,8 +789,8 @@ class Canvas(QGraphicsView):
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
     def _draw_editing(self, painter: QPainter) -> None:
-        """Schreibmodus: durchgezogener Rahmen ohne Anfasser, Markierung in der Systemfarbe
-        (halbtransparent über dem Druckbild), blinkende Schreibmarke (1 Bildschirmpixel)."""
+        """Edit mode: solid frame without handles, selection in the system colour
+        (semi-transparent over the print image), blinking caret (1 screen pixel)."""
         if self._editing is None or self.sheet is None:
             return
         painter.setPen(QPen(Qt.GlobalColor.black, 1))
@@ -802,7 +802,7 @@ class Canvas(QGraphicsView):
             painter.fillRect(rect, color)
         if self.caret_shown() and self._caret_on:
             painter.save()
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)   # scharf, 1 Pixel
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)   # sharp, 1 pixel
             painter.setPen(QPen(Qt.GlobalColor.black, 0))
             line = self.caret_line()
             painter.drawLine(QPointF(round(line.x1()), round(line.y1())),
@@ -810,7 +810,7 @@ class Canvas(QGraphicsView):
             painter.restore()
 
     def _draw_guides(self, painter: QPainter, vw: int, vh: int) -> None:
-        """Rote Hilfslinien über die ganze Ansicht, solange ein Objekt einrastet."""
+        """Red guide lines across the whole view while an object snaps."""
         painter.setPen(QPen(_GUIDE_COLOR, 1))
         for axis, mm in self._guides:
             point = self._view_point(mm * self.mm, mm * self.mm)
@@ -820,14 +820,14 @@ class Canvas(QGraphicsView):
                 painter.drawLine(QPointF(0, point.y()), QPointF(vw, point.y()))
 
     def label_view_rect(self) -> QRectF:
-        """Etikett in Ansichtskoordinaten (berücksichtigt Zoom und Drehung)."""
+        """Label in view coordinates (takes zoom and rotation into account)."""
         if self.outline is None:
             return QRectF()
         return QRectF(self.mapFromScene(self.outline.path().boundingRect()).boundingRect())
 
     def _draw_rulers(self, painter: QPainter, vw: int, vh: int) -> None:
         origin = self.label_view_rect().topLeft() if self.outline else self.mapFromScene(QPointF(0, 0))
-        ppm = self._scale * self.mm                            # Pixel pro mm
+        ppm = self._scale * self.mm                            # pixels per mm
         small = QFont(painter.font())
         small.setPointSize(7)
         small.setBold(False)
@@ -862,12 +862,12 @@ class Canvas(QGraphicsView):
 
 def resized_frame(start: QRectF, key: str, point: QPointF, keep_ratio: bool,
                   keep_aspect: bool = False, mm: float = MM) -> QRectF:
-    """Rahmen nach Ziehen am Anfasser ``key`` auf ``point`` (Druckpunkte in Leserichtung).
+    """Frame after dragging handle ``key`` to ``point`` (dots in reading direction).
 
-    Die gegenüberliegende Ecke bzw. Kante bleibt stehen; mindestens 1 mm (``mm``: Druckpunkte je
-    mm des Etiketts). ``keep_ratio``:
-    Ecken behalten das Seitenverhältnis (Schrift skalieren); ``keep_aspect``: Ecken und
-    Kanten wie beim Loslassen (``layout.keep_aspect``, Bild).
+    The opposite corner or edge stays put; at least 1 mm (``mm``: dots per mm of the
+    label). ``keep_ratio``:
+    corners keep the aspect ratio (scale the font); ``keep_aspect``: corners and
+    edges as on release (``layout.keep_aspect``, image).
     """
     left, top, right, bottom = start.left(), start.top(), start.right(), start.bottom()
     if "l" in key:

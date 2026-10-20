@@ -1,26 +1,26 @@
-"""Symbol-Bibliothek erzeugen: src/labelwerk/clipart_data/clipart.zip und LICENSES.md.
+"""Generate the symbol library: src/labelwerk/clipart_data/clipart.zip and LICENSES.md.
 
-Lädt reproduzierbar:
-- Tabler Icons (MIT) als npm-Tarball mit fester Version und SHA-256 – ohne Marken: ohne die
-  Kategorien „Brand“ und „Laundry“ (Pflegesymbole) und ohne die Namen/Präfixe aus
+Downloads reproducibly:
+- Tabler Icons (MIT) as an npm tarball with a fixed version and SHA-256 – without trademarks: without the
+  categories "Brand" and "Laundry" (care symbols) and without the names/prefixes from
   ``tabler_skip`` in de.json,
-- Packzeichen (ISO 7000/ISO 780) und Sicherheitszeichen (ISO 7010) von Wikimedia Commons –
-  nur Dateien mit Lizenz „Public domain“ oder „CC0“ laut Commons-API, ohne Einschränkungs-
-  hinweise (Marke, Hoheitszeichen …) und ohne CC0-Freigaben von Dateien, deren Urheber die ISO
-  ist (die kann ein Hochlader nicht erteilen); je ISO-7010-Code genau eine Datei,
-- eigene Zeichnungen aus tools/clipart/eigene (CC0).
-Was nicht passt, wird übersprungen und aufgelistet – außer bei den ausdrücklich gelisteten
-ISO-7000-Zeichen: dann Abbruch. Der Stand der Commons-Dateien (SHA-1, Lizenz) steht in
-tools/clipart/commons.lock.json; weicht er ab, bricht das Skript ab (``--update`` schreibt ihn
-neu – danach die Änderungen prüfen). Deutsche Namen, Kategorien, Suchbegriffe:
-tools/clipart/de.json, englische: tools/clipart/en.json (Pflicht für jedes Zeichen – die englischen
-Commons-Beschreibungen sind zu uneinheitlich). Jeder Eintrag hat ``names``/``subgroups`` je Sprache
-({"de", "en"}). Jede SVG wird mit Qt probehalber gerastert (leer/ungültig → übersprungen).
+- packaging marks (ISO 7000/ISO 780) and safety signs (ISO 7010) from Wikimedia Commons –
+  only files with the licence "Public domain" or "CC0" according to the Commons API, without restriction
+  notes (trademark, state emblem ...) and without CC0 releases of files whose author is
+  ISO (an uploader cannot grant those); exactly one file per ISO 7010 code,
+- own drawings from tools/clipart/eigene (CC0).
+Whatever does not fit is skipped and listed – except for the explicitly listed
+ISO 7000 marks: those abort the run. The state of the Commons files (SHA-1, licence) is in
+tools/clipart/commons.lock.json; if it differs, the script aborts (``--update`` rewrites it
+– then check the changes). German names, categories, search terms:
+tools/clipart/de.json, English ones: tools/clipart/en.json (required for every symbol – the English
+Commons descriptions are too inconsistent). Every entry has ``names``/``subgroups`` per language
+({"de", "en"}). Every SVG is trial-rasterised with Qt (empty/invalid → skipped).
 
-    .venv/bin/python tools/fetch_clipart.py [--cache ORDNER] [--update]
+    .venv/bin/python tools/fetch_clipart.py [--cache FOLDER] [--update]
 
-Braucht Netz (Commons drosselt: Pausen von 3 s je Datei); nicht Teil der Tests. Das Ergebnis
-wird eingecheckt.
+Needs network access (Commons throttles: pauses of 3 s per file); not part of the tests. The result
+is checked in.
 """
 from __future__ import annotations
 
@@ -45,8 +45,8 @@ OUT = ROOT / "src" / "labelwerk" / "clipart_data"
 TABLER_VERSION = "3.49.0"
 TABLER_URL = f"https://registry.npmjs.org/@tabler/icons/-/icons-{TABLER_VERSION}.tgz"
 TABLER_SHA256 = "aa3042907eb0bdb079fd70733e2d75f785683d4726279128a0ca2343099f7074"
-TABLER_SKIP_CATEGORIES = {"Brand", "Laundry"}   # Laundry: Textil-Pflegesymbole (GINETEX-Marken);
-                                                # die Waschmaschine liegt in „Devices“ und bleibt
+TABLER_SKIP_CATEGORIES = {"Brand", "Laundry"}   # Laundry: textile care symbols (GINETEX marks);
+                                                # the washing machine is in "Devices" and stays
 API = "https://commons.wikimedia.org/w/api.php"
 ISO7010_CATEGORY = "Category:ISO 7010 safety signs (vector drawings)"
 ISO7010_FILE = re.compile(r"^File:ISO 7010 ([EFMPW]\d{3})(?:\.svg$|[ ;].*\.svg$)")
@@ -54,7 +54,7 @@ ISO7010_VARIANT = re.compile(r"\b(new|arrow|color)\b|-r\d", re.IGNORECASE)
 FREE = {"Public domain": "Public domain", "CC0": "CC0"}
 OWN_LICENSE = "CC0"
 USER_AGENT = ("labelwerk-fetch-clipart/1.0 (https://github.com/siN161/labelwerk; "
-              "einmaliger Abruf der Symbol-Bibliothek) python-urllib")   # Wikimedia-Richtlinie
+              "one-off retrieval of the symbol library) python-urllib")   # Wikimedia policy
 RETRY = {429, 500, 502, 503, 504}
 _WS = re.compile(r">\s+<")
 _AUTHOR_NOISE = re.compile(r"(Diese Vektorgrafik wurde "
@@ -69,9 +69,9 @@ class FetchError(Exception):
 
 
 def fetch(url: str, cache: Path | None = None, check=None) -> bytes:
-    """URL laden – mit Cache-Ordner (atomar geschrieben), Wiederholung nur bei Drosselung,
-    Serverfehler oder Zeitüberschreitung, höflicher Pause. ``check(data)`` wirft bei
-    inhaltlichem Fehler (dann wird nichts gecacht)."""
+    """Load a URL – with a cache folder (written atomically), retry only on throttling,
+    server error or timeout, polite pause. ``check(data)`` raises on a
+    content error (then nothing is cached)."""
     if cache is not None:
         hit = cache / hashlib.sha256(url.encode()).hexdigest()
         if hit.exists():
@@ -84,14 +84,14 @@ def fetch(url: str, cache: Path | None = None, check=None) -> bytes:
             break
         except urllib.error.HTTPError as e:
             if e.code not in RETRY or attempt == 5:
-                raise SystemExit(f"Laden fehlgeschlagen: {url}: {e}") from e
+                raise SystemExit(f"Download failed: {url}: {e}") from e
             retry = e.headers.get("Retry-After")
             time.sleep(int(retry) if retry and retry.isdigit() else 60)
         except (urllib.error.URLError, TimeoutError) as e:
             if attempt == 5:
-                raise SystemExit(f"Laden fehlgeschlagen: {url}: {e}") from e
+                raise SystemExit(f"Download failed: {url}: {e}") from e
             time.sleep(30)
-    time.sleep(3.0 if "upload.wikimedia.org" in url else 0.5)   # Commons drosselt sonst (429)
+    time.sleep(3.0 if "upload.wikimedia.org" in url else 0.5)   # otherwise Commons throttles (429)
     if check is not None:
         check(data)
     if cache is not None:
@@ -107,12 +107,12 @@ def api(cache: Path | None, **params) -> dict:
 
     def check(data: bytes) -> None:
         if "error" in json.loads(data):
-            raise SystemExit(f"Commons-API meldet Fehler: {json.loads(data)['error']}")
+            raise SystemExit(f"Commons API reports an error: {json.loads(data)['error']}")
     return json.loads(fetch(f"{API}?{urllib.parse.urlencode(params)}", cache, check))
 
 
 def plain(html: str) -> str:
-    """HTML → Text (Tags als Leerraum, damit Wörter nicht zusammenkleben)."""
+    """HTML → text (tags as whitespace so that words do not stick together)."""
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html or "")).strip()
 
 
@@ -122,8 +122,8 @@ def author(html: str) -> str:
 
 
 def compact(svg: str) -> str:
-    """SVG verkleinern: Leerraum zwischen Tags, Tabler-Klassen und unsichtbares Hilfsrechteck
-    raus, currentColor → Schwarz."""
+    """Shrink the SVG: drop whitespace between tags, Tabler classes and the invisible helper
+    rectangle, currentColor → black."""
     svg = re.sub(r'<path stroke="none" d="M0 0h24v24H0z" fill="none"\s*/>', "", svg)
     svg = re.sub(r'\s+class="[^"]*"', "", svg)
     svg = svg.replace("currentColor", "#000000")
@@ -132,7 +132,7 @@ def compact(svg: str) -> str:
 
 # --- Tabler ------------------------------------------------------------------------------
 def blocked(name: str, skip: list[str]) -> bool:
-    """Marke? Eintrag mit „-“ am Ende ist ein Präfix, sonst Name samt Varianten („lego-off“)."""
+    """Trademark? An entry ending in "-" is a prefix, otherwise a name including variants ("lego-off")."""
     return any(name.startswith(s) if s.endswith("-") else name == s or name.startswith(s + "-")
                for s in skip)
 
@@ -140,16 +140,16 @@ def blocked(name: str, skip: list[str]) -> bool:
 def tabler(de: dict, cache: Path | None) -> tuple[list[dict], dict[str, bytes], str]:
     data = fetch(TABLER_URL, cache)
     if hashlib.sha256(data).hexdigest() != TABLER_SHA256:
-        raise SystemExit("Tabler-Archiv: Prüfsumme stimmt nicht – Version geändert?")
+        raise SystemExit("Tabler archive: checksum does not match – version changed?")
     with tarfile.open(fileobj=io.BytesIO(data)) as tar:
         def read(name: str) -> bytes:
             return tar.extractfile(f"package/{name}").read()
         icons = json.loads(read("icons.json"))
         licence = read("LICENSE").decode()
         skip = de["tabler_skip"]
-        for entry in skip:                       # Tippfehler in der Sperrliste fallen auf
+        for entry in skip:                       # typos in the block list get noticed
             if not any(blocked(name, [entry]) for name in icons):
-                raise SystemExit(f"tabler_skip: {entry!r} passt auf kein Icon")
+                raise SystemExit(f"tabler_skip: {entry!r} matches no icon")
         wanted = {name: icon for name, icon in icons.items()
                   if icon.get("category") not in TABLER_SKIP_CATEGORIES
                   and not blocked(name, skip)}
@@ -157,7 +157,7 @@ def tabler(de: dict, cache: Path | None) -> tuple[list[dict], dict[str, bytes], 
         for word, names in de["synonyms"].items():
             for name in names:
                 if name not in wanted:
-                    raise SystemExit(f"Synonym {word!r}: Tabler-Icon {name!r} gibt es nicht")
+                    raise SystemExit(f"Synonym {word!r}: Tabler icon {name!r} does not exist")
                 synonyms.setdefault(name, []).append(word)
         entries, files = [], {}
         for name, icon in sorted(wanted.items()):
@@ -184,9 +184,9 @@ def tabler(de: dict, cache: Path | None) -> tuple[list[dict], dict[str, bytes], 
 
 # --- Wikimedia Commons ---------------------------------------------------------------------
 def iso_name(description: str) -> str:
-    """Titel aus der Commons-Beschreibung: „Warnzeichen W012: Warnung vor elektrischer
-    Spannung“ → „Warnung vor elektrischer Spannung“; ohne Kennung, Erklärung nach „;“ und
-    angehängte Quellenangaben."""
+    """Title from the Commons description: "Warnzeichen W012: Warnung vor elektrischer
+    Spannung" → "Warnung vor elektrischer Spannung"; without code, explanation after ";" and
+    appended source references."""
     text = description.split(":", 1)[1] if ":" in description else description
     text = re.sub(r"^(Safe condition sign|ISO 7010)?\s*[EFMPW]\d{3}\s*", "", text.strip())
     text = re.split(r";|Technische Regeln|Quelle\s*:|In Deutschland| nach DIN", text)[0]
@@ -194,7 +194,7 @@ def iso_name(description: str) -> str:
 
 
 def category_files(cache: Path | None) -> list[str]:
-    """Alle Dateien der ISO-7010-Kategorie (seitenweise)."""
+    """All files of the ISO 7010 category (page by page)."""
     titles, more = [], {}
     while True:
         answer = api(cache, action="query", list="categorymembers", cmtitle=ISO7010_CATEGORY,
@@ -219,17 +219,17 @@ def file_info(titles: list[str], cache: Path | None, language: str = "de") -> di
 
 
 def problem(title: str, meta: dict | None) -> str | None:
-    """Warum diese Datei nicht in Frage kommt – oder None."""
+    """Why this file is out of the question – or None."""
     if meta is None:
-        return "nicht gefunden"
+        return "not found"
     ext = meta["extmetadata"]
     licence = ext.get("LicenseShortName", {}).get("value", "")
     if licence not in FREE:
-        return f"Lizenz {licence!r}"
+        return f"licence {licence!r}"
     if ext.get("Restrictions", {}).get("value", "").strip():
-        return f"Einschränkung {plain(ext['Restrictions']['value'])!r}"
+        return f"restriction {plain(ext['Restrictions']['value'])!r}"
     if licence == "CC0" and re.search(r"\bISO\b", author(ext.get("Artist", {}).get("value", ""))):
-        return "CC0-Freigabe für ein ISO-Werk (zweifelhaft)"
+        return "CC0 release for an ISO work (doubtful)"
     return None
 
 
@@ -241,16 +241,16 @@ def commons(de: dict, en: dict, cache: Path | None, lock: dict, update: bool
     for title in sorted(category_files(cache)):
         match = ISO7010_FILE.match(title)
         if match is None or ISO7010_VARIANT.search(title[14:]):
-            skipped.append(f"{title}: kein Zeichen bzw. Variante")
+            skipped.append(f"{title}: not a sign or a variant")
             continue
         candidates.setdefault(match[1], []).append(title)
-    for code, titles in candidates.items():          # der Dateiname ohne Zusatz zuerst
+    for code, titles in candidates.items():          # the file name without suffix first
         titles.sort(key=lambda t, c=code: t != f"File:ISO 7010 {c}.svg")
     info = file_info([t for t, _ in listed] + [t for ts in candidates.values() for t in ts], cache)
     chosen = []
     for title, ident in listed:
         if why := problem(title, info.get(title)):
-            raise SystemExit(f"{title}: {why} – ist in de.json ausdrücklich gelistet")
+            raise SystemExit(f"{title}: {why} – is explicitly listed in de.json")
         chosen.append((title, ident, "versand"))
     for code, titles in sorted(candidates.items()):
         reasons = []
@@ -269,11 +269,11 @@ def commons(de: dict, en: dict, cache: Path | None, lock: dict, update: bool
         licence = FREE[ext["LicenseShortName"]["value"]]
         new_lock[title] = {"sha1": meta["sha1"], "license": licence}
         if not update and lock.get(title) != new_lock[title]:
-            raise SystemExit(f"{title}: Stand weicht von commons.lock.json ab "
-                             f"({lock.get(title)} → {new_lock[title]}) – mit --update übernehmen")
+            raise SystemExit(f"{title}: state differs from commons.lock.json "
+                             f"({lock.get(title)} → {new_lock[title]}) – accept with --update")
         svg = fetch(meta["url"].split("?")[0], cache)
         if hashlib.sha1(svg).hexdigest() != meta["sha1"]:
-            raise SystemExit(f"{title}: Prüfsumme stimmt nicht")
+            raise SystemExit(f"{title}: checksum does not match")
         code = ident.split("/")[1]
         if group == "versand":
             name, subgroup, standard = de["iso7000"][code], "Packzeichen (ISO 780)", "ISO 780"
@@ -284,7 +284,7 @@ def commons(de: dict, en: dict, cache: Path | None, lock: dict, update: bool
             description = plain(ext.get("ImageDescription", {}).get("value", ""))
             name = f"{de['iso7010'].get(code) or iso_name(description) or title[5:-4]} ({code})"
             if code not in en["iso7010"]:
-                raise SystemExit(f"{title}: englischer Name fehlt in en.json (iso7010/{code})")
+                raise SystemExit(f"{title}: English name missing in en.json (iso7010/{code})")
             name_en = f"{en['iso7010'][code]} ({code})"
         path = f"commons/{ident}.svg"
         files[path] = svg
@@ -296,21 +296,21 @@ def commons(de: dict, en: dict, cache: Path | None, lock: dict, update: bool
             "url": f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}",
             "author": author(ext.get("Artist", {}).get("value", "")), "license": licence})
     if not update and set(lock) != set(new_lock):
-        raise SystemExit(f"Auswahl weicht von commons.lock.json ab: "
-                         f"{sorted(set(lock) ^ set(new_lock))} – mit --update übernehmen")
+        raise SystemExit(f"Selection differs from commons.lock.json: "
+                         f"{sorted(set(lock) ^ set(new_lock))} – accept with --update")
     return entries, files, skipped, new_lock
 
 
-# --- eigene Zeichnungen ----------------------------------------------------------------------
+# --- own drawings ----------------------------------------------------------------------
 def own(de: dict, en: dict) -> tuple[list[dict], dict[str, bytes]]:
     entries, files = [], {}
     names = de["eigene"]
     found = {p.stem for p in (DATA / "eigene").glob("*.svg")}
     if found != set(names):
-        raise SystemExit(f"tools/clipart/eigene und de.json passen nicht zusammen: "
+        raise SystemExit(f"tools/clipart/eigene and de.json do not match: "
                          f"{sorted(found ^ set(names))}")
     if set(en["eigene"]) != set(names):
-        raise SystemExit(f"en.json und de.json (eigene) passen nicht zusammen: "
+        raise SystemExit(f"en.json and de.json (eigene) do not match: "
                          f"{sorted(set(en['eigene']) ^ set(names))}")
     for stem, meta in sorted(names.items()):
         path = f"labelwerk/{stem}.svg"
@@ -327,13 +327,13 @@ def own(de: dict, en: dict) -> tuple[list[dict], dict[str, bytes]]:
 
 
 def check_render(files: dict[str, bytes]) -> list[str]:
-    """Jede SVG mit Qt rastern: ungültig oder ganz weiß → Liste der Fehler."""
+    """Rasterise every SVG with Qt: invalid or completely white → list of failures."""
     import os
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtCore import QByteArray, QRectF, Qt
     from PySide6.QtGui import QGuiApplication, QImage, QPainter
     from PySide6.QtSvg import QSvgRenderer
-    app = QGuiApplication.instance() or QGuiApplication([])  # noqa: F841 – muss leben
+    app = QGuiApplication.instance() or QGuiApplication([])  # noqa: F841 – must stay alive
     dark = bytes(range(128))
     bad = []
     for path, svg in files.items():
@@ -351,29 +351,29 @@ def check_render(files: dict[str, bytes]) -> list[str]:
 
 
 def licences_md(entries: list[dict], tabler_licence: str) -> str:
-    lines = ["# Lizenzen der Symbole", "",
-             "Automatisch erzeugt von `tools/fetch_clipart.py` – nicht von Hand ändern.", "",
-             "Namen: deutsch aus `tools/clipart/de.json` bzw. der Commons-Beschreibung, englisch aus "
-             "`tools/clipart/en.json` – eigene Übersetzungen bzw. Kurztitel der Normen, keine Texte aus "
-             "Commons oder Wikipedia übernommen.", "",
+    lines = ["# Licences of the symbols", "",
+             "Generated automatically by `tools/fetch_clipart.py` – do not edit by hand.", "",
+             "Names: German from `tools/clipart/de.json` or the Commons description, English from "
+             "`tools/clipart/en.json` – own translations or short titles of the standards, no text taken "
+             "from Commons or Wikipedia.", "",
              f"## Tabler Icons {TABLER_VERSION} (MIT)", "", "https://tabler.io/icons", "",
              "```", tabler_licence.strip(), "```", "",
-             "## Wikimedia Commons (gemeinfrei bzw. CC0)", "",
-             "| Symbol | Datei | Urheber | Lizenz |", "|---|---|---|---|"]
+             "## Wikimedia Commons (public domain or CC0)", "",
+             "| Symbol | File | Author | Licence |", "|---|---|---|---|"]
     for e in entries:
         if e["id"].startswith(("iso7000/", "iso7010/")):
-            lines.append(f"| {e['name']} | [{e['source']}]({e['url']}) | {e['author']} | "
+            lines.append(f"| {e['names']['en']} | [{e['source']}]({e['url']}) | {e['author']} | "
                          f"{e['license']} |")
-    lines += ["", "## Eigene Zeichnungen (CC0 – frei verwendbar, auch auf gedruckten Etiketten)", ""]
-    lines += [f"- {e['name']}" for e in entries if e["id"].startswith("labelwerk/")]
+    lines += ["", "## Own drawings (CC0 – free to use, also on printed labels)", ""]
+    lines += [f"- {e['names']['en']}" for e in entries if e["id"].startswith("labelwerk/")]
     return "\n".join(lines) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--cache", type=Path, help="Ordner für geladene Dateien (wiederholbar)")
+    parser.add_argument("--cache", type=Path, help="folder for downloaded files (repeatable)")
     parser.add_argument("--update", action="store_true",
-                        help="geänderten Stand der Commons-Dateien übernehmen (commons.lock.json)")
+                        help="accept a changed state of the Commons files (commons.lock.json)")
     args = parser.parse_args()
     de = json.loads((DATA / "de.json").read_text(encoding="utf-8"))
     en = json.loads((DATA / "en.json").read_text(encoding="utf-8"))
@@ -386,17 +386,17 @@ def main() -> None:
     files = {**own_files, **commons_files, **tabler_files}
     bad = check_render(files)
     if bad:
-        print("Nicht darstellbar (übersprungen):", *bad, sep="\n  ")
+        print("Cannot be rendered (skipped):", *bad, sep="\n  ")
         entries = [e for e in entries if e["file"] not in bad]
         files = {k: v for k, v in files.items() if k not in bad}
     ids = [e["id"] for e in entries]
     if len(ids) != len(set(ids)):
-        raise SystemExit("Doppelte ids im Katalog")
+        raise SystemExit("Duplicate ids in the catalog")
     OUT.mkdir(parents=True, exist_ok=True)
     catalog = {"version": 1, "symbols": entries}
     with zipfile.ZipFile(OUT / "clipart.zip", "w", zipfile.ZIP_DEFLATED) as zf:
         for name in ["catalog.json", *sorted(files)]:
-            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))   # reproduzierbar
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))   # reproducible
             info.compress_type = zipfile.ZIP_DEFLATED
             data = (json.dumps(catalog, ensure_ascii=False, separators=(",", ":")).encode()
                     if name == "catalog.json" else files[name])
@@ -409,9 +409,9 @@ def main() -> None:
     for e in entries:
         counts[e["group"]] = counts.get(e["group"], 0) + 1
     size = (OUT / "clipart.zip").stat().st_size
-    print(f"{len(entries)} Symbole {counts}, clipart.zip {size / 1e6:.1f} MB")
+    print(f"{len(entries)} symbols {counts}, clipart.zip {size / 1e6:.1f} MB")
     if skipped:
-        print("Übersprungen:", *skipped, sep="\n  ")
+        print("Skipped:", *skipped, sep="\n  ")
 
 
 if __name__ == "__main__":

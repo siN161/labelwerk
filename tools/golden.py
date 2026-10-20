@@ -1,13 +1,13 @@
-"""Referenz-Rasterdaten je Druckermodell (tests/golden/raster.json) prüfen bzw. neu erzeugen.
+"""Check or regenerate the reference raster data per printer model (tests/golden/raster.json).
 
-    python tools/golden.py            # vergleichen (wie der Test)
-    python tools/golden.py --update   # nach einer gewollten Änderung neu schreiben
+    python tools/golden.py            # compare (like the test)
+    python tools/golden.py --update   # rewrite after an intended change
 
-Je Modell ein festes Testetikett (nur Formen, keine Schrift – Schriftversionen dürfen nicht
-zählen) als SHA-256 der Rasterdaten: Endlos 62 mm mit und ohne Schnitt, gestanzt 62×29, bei
-breiten Modellen 102 mm, bei Zweifarb-Modellen 62red; Zebra (ZPL) je Auflösung 57×32 mm,
-102×152 mm mit Schneiden und eine Serie. Beweist, was gesendet wird – nicht, was gedruckt wird. Die Werte hängen an brother_ql (pyproject: auf 1.3.x festgelegt) – nach einem
-Update der Bibliothek prüfen und neu erzeugen.
+One fixed test label per model (shapes only, no text – font versions must not count) as SHA-256
+of the raster data: continuous 62 mm with and without cut, die-cut 62×29, 102 mm for wide
+models, 62red for two-colour models; Zebra (ZPL) per resolution 57×32 mm, 102×152 mm with
+cutting and a series. Proves what is sent – not what is printed. The values depend on
+brother_ql (pyproject: pinned to 1.3.x) – check and regenerate after a library update.
 """
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ GOLDEN = Path(__file__).resolve().parent.parent / "tests" / "golden" / "raster.j
 
 
 def test_image(label_id: str, length: int = 200) -> Image.Image:
-    """Rahmen, Schachbrett (und bei 62red ein rotes Feld) über die ganze Breite – nur achsparallele
-    Rechtecke, damit keine Zeichenroutine von Pillow mitzählt."""
+    """Frame, checkerboard (and a red field for 62red) across the whole width – only axis-parallel
+    rectangles, so that no Pillow drawing routine counts."""
     label = get_label(label_id)
     size = (label.width, label.height or length)
     img = Image.new("RGB", size, "white")
@@ -73,11 +73,11 @@ def main(argv: list[str]) -> int:
     if "--update" in argv:
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
         GOLDEN.write_text(json.dumps(current, indent=1, sort_keys=True) + "\n")
-        print(f"geschrieben: {GOLDEN}")
+        print(f"written: {GOLDEN}")
         return 0
     stored = json.loads(GOLDEN.read_text())
     changed = [m for m in sorted(set(current) | set(stored)) if current.get(m) != stored.get(m)]
-    print("unverändert" if not changed else "geändert: " + ", ".join(changed))
+    print("unchanged" if not changed else "changed: " + ", ".join(changed))
     return 1 if changed else 0
 
 

@@ -1,4 +1,4 @@
-"""Platzier-Logik ohne Qt: Einrasten, Ausrichten, Größe angleichen, Skalieren (Etappe 3d-1)."""
+"""Placement logic without Qt: snapping, aligning, matching size, scaling (stage 3d-1)."""
 import pytest
 
 from labelwerk import layout, render
@@ -13,7 +13,7 @@ def _mm(dots):
 
 
 def _approx(rect, **kw):
-    """Rechteck mit Rundungsspielraum vergleichen (pytest.approx kennt keine Dataclasses)."""
+    """Compare a rectangle with rounding tolerance (pytest.approx does not know dataclasses)."""
     return pytest.approx((rect.x, rect.y, rect.w, rect.h), **kw)
 
 
@@ -49,7 +49,7 @@ def test_object_rect_converts_dots_to_mm():
     assert _t(layout.object_rect(rendered)) == _approx(expected)
 
 
-# --- Etikett und bedruckbarer Bereich ---------------------------------------------
+# --- Label and printable area ---------------------------------------------
 @pytest.mark.parametrize("doc", [
     Document("62x29"),
     Document("62x29", orientation="horizontal"),
@@ -69,8 +69,8 @@ def test_printable_area_vertical_margins():
     doc = Document("62x29", margin_mm=2)
     label = layout.label_rect(doc)
     area = layout.printable_area(doc)
-    side = _mm(round(2 * DPI / 25.4) - 18)        # Rand 2 mm ab Papierkante: quer 18 Punkte unbedruckbar
-    assert _t(area) == _approx(Rect(side, 0, label.w - 2 * side, label.h))   # längs 35: alles im Streifen
+    side = _mm(round(2 * DPI / 25.4) - 18)        # margin 2 mm from paper edge: 18 dots unprintable across
+    assert _t(area) == _approx(Rect(side, 0, label.w - 2 * side, label.h))   # along 35: all in the strip
 
 
 def test_printable_area_from_known_size_renders_nothing(monkeypatch):
@@ -94,7 +94,7 @@ def test_printable_area_is_centered_on_label():
     assert (area.cx, area.cy) == pytest.approx((label.cx, label.cy))
 
 
-# --- Einrasten --------------------------------------------------------------------
+# --- Snapping --------------------------------------------------------------------
 _AREA = Rect(1, 1, 60, 28)
 _LABEL = Rect(0, 0, 62, 30)
 
@@ -126,7 +126,7 @@ def test_snap_to_frame_inner_room():
     inner = Rect(3, 3, 56, 24)
     s = layout.snap(Rect(3.2, 9, 5, 5), [], _AREA, 0.5, inner=inner)
     assert s.dx == pytest.approx(-0.2) and s.guides == [("x", 3)]
-    s = layout.snap(Rect(53.9, 9, 5, 5), [], _AREA, 0.5, inner=inner)      # rechte Innenkante 59
+    s = layout.snap(Rect(53.9, 9, 5, 5), [], _AREA, 0.5, inner=inner)      # right inner edge 59
     assert s.dx == pytest.approx(0.1)
 
 
@@ -142,13 +142,13 @@ def test_snap_to_label_edge():
 
 
 def test_snap_to_target_edges_and_centers():
-    target = Rect(30, 5, 10, 4)                    # Mitte (35, 7)
+    target = Rect(30, 5, 10, 4)                    # centre (35, 7)
     s = layout.snap(Rect(20.3, 4.8, 4, 3), [target], _AREA, 0.5)
-    assert s.dx == 0                               # waagrecht nichts in Reichweite
-    # Oberkante 4,8 → 5; Mitte 6,3 und Unterkante 7,8 liegen zu weit von 7 und 9
+    assert s.dx == 0                               # nothing in range horizontally
+    # top edge 4.8 → 5; centre 6.3 and bottom edge 7.8 are too far from 7 and 9
     assert s.dy == pytest.approx(0.2) and s.guides == [("y", 5)]
     s = layout.snap(Rect(32.8, 20, 4, 2), [target], _AREA, 0.5)
-    assert s.dx == pytest.approx(0.2) and s.guides == [("x", 35)]   # Mitte an Mitte
+    assert s.dx == pytest.approx(0.2) and s.guides == [("x", 35)]   # centre to centre
 
 
 def test_snap_picks_nearest_candidate():
@@ -168,21 +168,21 @@ def test_snap_zero_tolerance_only_exact():
 
 
 def test_snap_reports_all_lines_that_match_after_shift():
-    # gleich breit wie das Ziel: linke und rechte Kante (und Mitte) treffen gleichzeitig
+    # same width as the target: left and right edge (and centre) hit at the same time
     target = Rect(30, 5, 10, 4)
     s = layout.snap(Rect(30.2, 16, 10, 4), [target], _AREA, 0.5)
     assert s.dx == pytest.approx(-0.2)
     assert sorted(s.guides) == [("x", 30), ("x", 35), ("x", 40)]
 
 
-# --- Ausrichten -------------------------------------------------------------------
+# --- Aligning -------------------------------------------------------------------
 _RECTS = [Rect(5, 2, 10, 4), Rect(20, 8, 6, 10), Rect(12, 15, 4, 2)]
 
 
 @pytest.mark.parametrize("mode, expected", [
     ("left", [5, 5, 5]),
-    ("right", [16, 20, 22]),              # rechte Kanten auf 26
-    ("hcenter", [10.5, 12.5, 13.5]),      # Mitte der Auswahl 15,5
+    ("right", [16, 20, 22]),              # right edges to 26
+    ("hcenter", [10.5, 12.5, 13.5]),      # centre of the selection 15.5
 ])
 def test_align_horizontally_to_each_other(mode, expected):
     out = layout.align(_RECTS, mode)
@@ -193,8 +193,8 @@ def test_align_horizontally_to_each_other(mode, expected):
 
 @pytest.mark.parametrize("mode, expected", [
     ("top", [2, 2, 2]),
-    ("bottom", [14, 8, 16]),              # Unterkanten auf 18
-    ("vcenter", [8, 5, 9]),               # Mitte der Auswahl 10
+    ("bottom", [14, 8, 16]),              # bottom edges to 18
+    ("vcenter", [8, 5, 9]),               # centre of the selection 10
 ])
 def test_align_vertically_to_each_other(mode, expected):
     out = layout.align(_RECTS, mode)
@@ -230,12 +230,12 @@ def test_align_unknown_mode_raises():
         layout.align(_RECTS, "diagonal")
 
 
-# --- Größe angleichen, maximieren -------------------------------------------------
+# --- Matching size, maximizing -------------------------------------------------
 def test_match_size_uses_first_rect_as_reference():
     out = layout.match_size(_RECTS, "same")
     assert out[0] == _RECTS[0]
     assert all((r.w, r.h) == (10, 4) for r in out)
-    assert [(r.x, r.y) for r in out] == [(r.x, r.y) for r in _RECTS]   # linke obere Ecke bleibt
+    assert [(r.x, r.y) for r in out] == [(r.x, r.y) for r in _RECTS]   # top-left corner stays
 
 
 def test_match_width_and_height():
@@ -250,12 +250,12 @@ def test_match_size_edge_cases():
 
 
 def test_maximize_wide_rect_fills_width_centered():
-    r = layout.maximize(Rect(10, 10, 20, 5), _AREA)        # Seitenverhältnis 4:1
+    r = layout.maximize(Rect(10, 10, 20, 5), _AREA)        # aspect ratio 4:1
     assert _t(r) == _approx(Rect(1, 15 - 7.5, 60, 15))
 
 
 def test_maximize_tall_rect_fills_height_centered():
-    r = layout.maximize(Rect(10, 10, 7, 14), _AREA)        # 1:2 → Höhe 28
+    r = layout.maximize(Rect(10, 10, 7, 14), _AREA)        # 1:2 → height 28
     assert _t(r) == _approx(Rect(31 - 7, 1, 14, 28))
 
 
@@ -263,7 +263,7 @@ def test_maximize_degenerate_rect_is_only_centered():
     assert layout.maximize(Rect(3, 3, 0, 5), _AREA) == Rect(31, 12.5, 0, 5)
 
 
-# --- Platzieren -------------------------------------------------------------------
+# --- Placing -------------------------------------------------------------------
 def test_place_sets_position_without_touching_original():
     obj = TextObject("A", size_pt=12)
     placed = layout.place(obj, Rect(4, 5, 30, 10))
@@ -287,7 +287,7 @@ def test_place_rotated_fit_object_stores_unrotated_frame():
     assert _t(rect) == _approx(Rect(4, 5, 10, 30), abs=_mm(1))
 
 
-# --- Text skalieren ---------------------------------------------------------------
+# --- Scaling text ---------------------------------------------------------------
 def _sizes(obj):
     return obj.size_pt, [s.size_pt for p in obj.paragraphs for s in p.spans]
 
@@ -296,7 +296,7 @@ def test_scale_text_scales_base_and_spans():
     obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=20)])], size_pt=10)
     scaled = layout.scale_text(obj, 1.5)
     assert _sizes(scaled) == (15, [None, 30])
-    assert _sizes(obj) == (10, [None, 20])                 # Original unverändert
+    assert _sizes(obj) == (10, [None, 20])                 # original unchanged
 
 
 def test_scale_text_clamps_factor_to_keep_ratios():
@@ -306,7 +306,7 @@ def test_scale_text_clamps_factor_to_keep_ratios():
 
 
 def test_scale_text_at_limit_keeps_sizes():
-    # größtes Stück schon 100 pt: Vergrößern ändert nichts, Verhältnisse bleiben
+    # largest span already 100 pt: enlarging changes nothing, ratios stay
     obj = TextObject([Paragraph([Span("a", size_pt=5), Span("b", size_pt=100)])], size_pt=10)
     assert _sizes(layout.scale_text(obj, 2)) == (10, [5, 100])
     obj = TextObject([Paragraph([Span("a", size_pt=4), Span("b", size_pt=100)])], size_pt=50)
@@ -314,8 +314,8 @@ def test_scale_text_at_limit_keeps_sizes():
 
 
 def test_scale_text_clamps_each_size_when_ratio_too_wide():
-    # Größen außerhalb 4–100 (z. B. von Hand bearbeitet): jede Größe für sich begrenzt,
-    # aber nicht in den Bereich hineingezogen
+    # sizes outside 4–100 (e.g. hand-edited): each size limited on its own,
+    # but not pulled into the range
     obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=100)])], size_pt=2)
     assert _sizes(layout.scale_text(obj, 1.5)) == (3, [None, MAX_PT])
 
@@ -326,9 +326,9 @@ def test_scale_text_rounds_to_tenth():
 
 
 def test_scale_text_auto_size_uses_effective_base():
-    obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=24)])])   # relativ zu 12 pt
+    obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=24)])])   # relative to 12 pt
     scaled = layout.scale_text(obj, 2, base_pt=18)
-    # bisher wirksam: Grundgröße 18, Stück 24/12 × 18 = 36 → doppelt
+    # effective so far: base size 18, span 24/12 × 18 = 36 → double
     assert _sizes(scaled) == (36, [None, 72])
 
 
@@ -350,7 +350,7 @@ def test_scale_text_renders_proportionally_larger():
     assert big.w == pytest.approx(2 * small.w, rel=0.08)
 
 
-# --- Objekte außerhalb ------------------------------------------------------------
+# --- Objects outside ------------------------------------------------------------
 def test_objects_outside_none_for_centered_and_inside():
     doc = Document("62", length_mm=40, objects=[TextObject("Mitte"),
                                                  TextObject("A", size_pt=12, x_mm=5, y_mm=5)])
@@ -370,7 +370,7 @@ def test_objects_outside_lists_overhanging_indices(orientation):
 
 
 def test_objects_outside_auto_length_grows_instead():
-    # automatische Länge: in Bandlaufrichtung wächst das Etikett mit
+    # automatic length: along the tape direction the label grows with it
     doc = Document("62", objects=[TextObject("weit unten", size_pt=12, x_mm=5, y_mm=150)])
     assert layout.objects_outside(doc) == []
 
@@ -380,16 +380,16 @@ def test_objects_outside_ignores_empty_objects():
     assert layout.objects_outside(doc) == []
 
 
-# --- Verschieben und Anfasser (Arbeitsfläche) ---------------------------------------
+# --- Moving and handles (canvas) ---------------------------------------
 def _rendered(x_mm, y_mm, w_mm, h_mm, base_pt=12.0):
-    """Gerendertes Objekt wie von render_object: Position und Größe auf Druckpunkte gerundet."""
+    """Rendered object as from render_object: position and size rounded to dots."""
     dots = [round(v * DPI / 25.4) for v in (x_mm, y_mm, w_mm, h_mm)]
     return RenderedObject(None, *dots, base_pt)
 
 
 def test_exact_rect_uses_model_position_and_fixed_frame():
     obj = TextObject("A", size_pt=12, fit=True, x_mm=4, y_mm=5, w_mm=20, h_mm=8, rotation=90)
-    assert layout.exact_rect(obj, _rendered(4, 5, 8, 20)) == Rect(4, 5, 8, 20)   # gedreht
+    assert layout.exact_rect(obj, _rendered(4, 5, 8, 20)) == Rect(4, 5, 8, 20)   # rotated
     free = TextObject("A", size_pt=12, x_mm=4, y_mm=5)
     rendered = _rendered(4, 5, 10, 3)
     assert layout.exact_rect(free, rendered) == Rect(4, 5, _mm(rendered.w), _mm(rendered.h))
@@ -400,12 +400,12 @@ def test_exact_rect_uses_model_position_and_fixed_frame():
 def test_fix_size_freezes_effective_size_and_turns_fit_off():
     obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=24)])], size_pt=12, fit=True)
     fixed = layout.fix_size(obj, 18.04)
-    assert _sizes(fixed) == (18, [None, 36])               # Stück behält sein Verhältnis
+    assert _sizes(fixed) == (18, [None, 36])               # span keeps its ratio
     assert not fixed.fit and obj.fit
 
 
 def test_move_shifts_model_position_by_exact_amount():
-    # Druckpunkte runden 4 mm auf 3,98 mm – die Verschiebung zählt, nicht der gerundete Wert
+    # dots round 4 mm to 3.98 mm – the displacement counts, not the rounded value
     obj = TextObject("A", size_pt=12, x_mm=4, y_mm=5)
     rendered = _rendered(4, 5, 10, 3)
     moved = layout.move(obj, layout.object_rect(rendered).moved(-0.1, 1), rendered)
@@ -473,10 +473,10 @@ def test_resize_edge_turns_fixed_frame_on():
     resized = layout.resize(obj, Rect(old.x, old.y, old.w, old.h + 8), rendered, "b")
     assert resized.fit
     assert (resized.x_mm, resized.y_mm, resized.w_mm, resized.h_mm) == \
-        pytest.approx((1, 1, old.h + 8, old.w), abs=0.001)             # ungedreht gespeichert
+        pytest.approx((1, 1, old.h + 8, old.w), abs=0.001)             # stored unrotated
 
 
-# --- Zahlen im Panel „Position“ -----------------------------------------------------
+# --- Numbers in the “Position” panel -----------------------------------------------------
 def test_set_frame_moves_object_without_fixed_frame():
     obj = TextObject("A", size_pt=12, x_mm=4, y_mm=5)
     placed = layout.set_frame(obj, Rect(10, 6, 99, 99), _rendered(4, 5, 10, 3))
@@ -507,7 +507,7 @@ def test_set_frame_stores_rotated_frame_unrotated():
     assert (placed.w_mm, placed.h_mm) == (30, 10)
 
 
-# --- Reiter „Layout“: Objekte ausrichten, angleichen, drehen, Reihenfolge -----------
+# --- LAYOUT tab: align, match, rotate objects, order -----------
 def _frame(obj, doc=None):
     rendered = render_object(obj, doc or Document("62", length_mm=40, objects=[obj]))
     return layout.exact_rect(obj, rendered), rendered
@@ -534,9 +534,9 @@ def test_align_objects_to_each_other(mode, attr):
     expected = getattr(layout.align(before, mode)[0], attr)
     after = [layout.exact_rect(o, r) for o, r in zip(aligned, _rendered_of(aligned))]
     assert [getattr(r, attr) for r in after] == pytest.approx([expected] * 3, abs=0.001)
-    other = "y" if attr in ("x", "right", "cx") else "x"     # andere Achse bleibt
+    other = "y" if attr in ("x", "right", "cx") else "x"     # other axis stays
     assert [getattr(r, other) for r in after] == pytest.approx([getattr(r, other) for r in before])
-    assert (objs[0].x_mm, objs[0].y_mm) == (4, 4)            # Eingabe bleibt unverändert
+    assert (objs[0].x_mm, objs[0].y_mm) == (4, 4)            # input stays unchanged
 
 
 def test_align_objects_to_paper_uses_area():
@@ -562,7 +562,7 @@ def test_match_objects_sets_fixed_frame_to_reference():
     rendered = _rendered_of(objs)
     for mode, size in (("same", (30, 10)), ("width", (30, 4)), ("height", (10, 10))):
         ref, other = layout.match_objects(objs, rendered, mode)
-        assert ref is objs[0]                                # unverändert, keine Kopie (Cache)
+        assert ref is objs[0]                                # unchanged, no copy (cache)
         assert (other.w_mm, other.h_mm, other.x_mm, other.y_mm) == (*size, 5, 20)
 
 
@@ -572,7 +572,7 @@ def test_match_objects_scales_text_without_fixed_frame(mode):
             TextObject("Wort", size_pt=12, x_mm=5, y_mm=30)]
     ref, other = layout.match_objects(objs, _rendered_of(objs), mode)
     assert other.size_pt == pytest.approx(24, abs=0.5) and not other.fit
-    assert (other.x_mm, other.y_mm) == (5, 30)                # Ecke bleibt
+    assert (other.x_mm, other.y_mm) == (5, 30)                # corner stays
 
 
 def test_match_objects_keeps_aspect_for_width():
@@ -626,10 +626,10 @@ def test_rotate_positions_centered_object():
 
 @pytest.mark.parametrize("indices, step, order, moved", [
     ([0], 1, "BACD", [1]),
-    ([3], 1, "ABCD", [3]),                  # ganz vorne bleibt vorne
+    ([3], 1, "ABCD", [3]),                  # frontmost stays in front
     ([1, 2], 1, "ADBC", [2, 3]),
-    ([2, 3], 1, "ABCD", [2, 3]),            # blockiert vom vordersten
-    ([2, 0], -1, "ACBD", [1, 0]),           # Indizes in der Reihenfolge der Wahl
+    ([2, 3], 1, "ABCD", [2, 3]),            # blocked by the frontmost
+    ([2, 0], -1, "ACBD", [1, 0]),           # indices in the order of selection
     ([1], -1, "BACD", [0]),
     ([], 1, "ABCD", []),
 ])
@@ -638,7 +638,7 @@ def test_reorder(indices, step, order, moved):
     assert "".join(items) == order and new == moved
 
 
-# --- Randfälle (Fix-Runde) ----------------------------------------------------------
+# --- Edge cases (fix round) ----------------------------------------------------------
 def test_fix_size_of_auto_object_with_span_sizes_keeps_image():
     obj = TextObject([Paragraph([Span("klein", size_pt=10), Span("GROSS", size_pt=30)])])
     doc = Document("62", objects=[obj])
@@ -672,7 +672,7 @@ def test_scale_text_rejects_non_positive_sizes(size):
 def test_scale_text_factor_one_keeps_small_sizes():
     obj = TextObject([Paragraph([Span("a"), Span("b", size_pt=3)])], size_pt=10)
     assert _sizes(layout.scale_text(obj, 1)) == (10, [None, 3])
-    assert _sizes(layout.scale_text(obj, 0.5)) == (10, [None, 3])   # kleiner geht nicht
+    assert _sizes(layout.scale_text(obj, 0.5)) == (10, [None, 3])   # cannot go smaller
     assert _sizes(layout.scale_text(obj, 2)) == (20, [None, 6])
 
 
@@ -688,7 +688,7 @@ def test_maximize_into_empty_area_keeps_rect(area):
 
 
 def test_maximize_on_growing_axis_fits_across_only():
-    # Endlosband mit automatischer Länge („y“ wächst): nur die Breite begrenzt
+    # continuous tape with automatic length ("y" grows): only the width limits
     r = layout.maximize(Rect(10, 30, 10, 10), _AREA, grow="y")
     assert _t(r) == _approx(Rect(_AREA.x, 30, _AREA.w, _AREA.w))
     r = layout.maximize(Rect(30, 10, 10, 10), _AREA, grow="x")
@@ -713,19 +713,19 @@ def test_maximize_object_on_auto_length_fills_across(orientation):
     across, room = (r.w, area.w) if orientation == "vertical" else (r.h, area.h)
     along, old_room = (r.h, area.h) if orientation == "vertical" else (r.w, area.w)
     assert across == pytest.approx(room, rel=0.06) and across <= room + 0.1
-    assert along > old_room                         # Etikett wächst mit, statt zu begrenzen
-    assert (big.x_mm, big.y_mm)[orientation == "vertical"] == pytest.approx(2)  # Anfang bleibt
+    assert along > old_room                         # the label grows along instead of limiting
+    assert (big.x_mm, big.y_mm)[orientation == "vertical"] == pytest.approx(2)  # start stays
 
 
 def test_snap_on_growing_axis_ignores_moving_end_and_center():
     area, label = Rect(1, 1, 60, 30), Rect(0, 0, 62, 32)
-    moving = Rect(10, 24.5, 10, 6)                 # Unterkante 30,5 nahe area.bottom (31)
+    moving = Rect(10, 24.5, 10, 6)                 # bottom edge 30.5 near area.bottom (31)
     assert layout.snap(moving, [], area, 2, label=label).dy != 0
     s = layout.snap(moving, [], area, 2, label=label, grow="y")
     assert s.dy == 0 and not [g for g in s.guides if g[0] == "y"]
-    near_center = Rect(10, 13.5, 10, 6)            # Mitte 16.5 nahe label.cy 16
+    near_center = Rect(10, 13.5, 10, 6)            # centre 16.5 near label.cy 16
     assert layout.snap(near_center, [], area, 1, label=label, grow="y").dy == 0
-    top = Rect(10, 1.5, 10, 6)                      # Anfang bleibt Einrastziel
+    top = Rect(10, 1.5, 10, 6)                      # start remains a snapping target
     assert layout.snap(top, [], area, 1, label=label, grow="y").dy == pytest.approx(-0.5)
 
 
@@ -733,7 +733,7 @@ def test_outside_indices_from_rendered_objects():
     rendered = [RenderedObject(None, 10, 10, 20, 20, 12.0),
                 RenderedObject(None, 90, 10, 20, 20, 12.0),
                 RenderedObject(None, -1, 10, 20, 20, 12.0),
-                RenderedObject(None, 500, 500, 0, 0, 12.0)]       # leer
+                RenderedObject(None, 500, 500, 0, 0, 12.0)]       # empty
     assert layout.outside_indices(rendered, (100, 50)) == [1, 2]
 
 
@@ -744,12 +744,12 @@ def test_objects_outside_raises_text_too_large_like_rendering():
         layout.objects_outside(doc)
 
 
-# --- Raster der Positionsfelder ------------------------------------------------------
+# --- Grid of the position fields ------------------------------------------------------
 def test_to_grid_rounds_chosen_values_to_tenth_mm():
     obj = TextObject("A", fit=True, x_mm=1.234, y_mm=5.678, w_mm=20.049, h_mm=7.051)
     assert _model_frame(layout.to_grid(obj, x=True, w=True)) == (1.2, 5.678, 20.0, 7.051)
     assert _model_frame(layout.to_grid(obj, y=True, h=True)) == (1.234, 5.7, 20.049, 7.1)
-    assert _model_frame(obj) == (1.234, 5.678, 20.049, 7.051)          # Original bleibt
+    assert _model_frame(obj) == (1.234, 5.678, 20.049, 7.051)          # original stays
 
 
 def test_to_grid_maps_reading_width_of_turned_object_to_h_mm():
@@ -767,12 +767,12 @@ def _model_frame(obj):
     return obj.x_mm, obj.y_mm, obj.w_mm, obj.h_mm
 
 
-# --- Gedrehte und gemischte Objekte im Reiter „Layout“ -------------------------------------
+# --- Rotated and mixed objects in the LAYOUT tab -------------------------------------
 DOT_MM = 25.4 / DPI
 
 
 def _mixed():
-    """Gedreht ohne/mit fester Rahmengröße und ungedreht – Rahmen in Leserichtung verschieden."""
+    """Rotated without/with fixed frame size and unrotated – frames differ in reading direction."""
     return [TextObject("Quer", size_pt=14, x_mm=3, y_mm=4, rotation=90),
             TextObject("Rahmen", size_pt=12, fit=True, x_mm=20, y_mm=10, w_mm=24, h_mm=8,
                        rotation=270),
@@ -789,9 +789,9 @@ def test_align_rotated_and_mixed_objects(mode, attr):
     objs = _mixed()
     aligned = layout.align_objects(objs, _rendered_of(objs), mode)
     values = [getattr(r, attr) for r in _shown(aligned)]
-    assert max(values) - min(values) <= 2 * DOT_MM           # gerendert bündig (Druckpunkte)
+    assert max(values) - min(values) <= 2 * DOT_MM           # rendered flush (dots)
     assert [o.rotation for o in aligned] == [90, 270, 0]
-    assert aligned[1].fit and (aligned[1].w_mm, aligned[1].h_mm) == (24, 8)   # Rahmen bleibt
+    assert aligned[1].fit and (aligned[1].w_mm, aligned[1].h_mm) == (24, 8)   # frame stays
 
 
 @pytest.mark.parametrize("mode", ["same", "width", "height"])
@@ -799,13 +799,13 @@ def test_match_size_with_rotated_fixed_frame_reference(mode):
     objs = _mixed()
     ref, other, plain = layout.match_objects([objs[1], objs[0], objs[2]],
                                              _rendered_of([objs[1], objs[0], objs[2]]), mode)
-    target = _shown([ref])[0]                                # 8 × 24 mm in Leserichtung
+    target = _shown([ref])[0]                                # 8 × 24 mm in reading direction
     after = _shown([ref, other, plain])
-    for r in after[1:]:                                      # Text ohne Rahmen: Verhältnis bleibt
+    for r in after[1:]:                                      # text without frame: ratio stays
         measure = {"width": lambda q: q.w, "height": lambda q: q.h,
-                   "same": lambda q: q.w * q.h}[mode]      # „gleiche Größe“: gleiche Fläche
+                   "same": lambda q: q.w * q.h}[mode]      # “same size”: same area
         assert measure(r) == pytest.approx(measure(target), rel=0.15)
-    assert not other.fit and other.rotation == 90            # Text ohne Rahmen: skaliert
+    assert not other.fit and other.rotation == 90            # text without frame: scaled
 
 
 def test_match_size_sets_turned_fixed_frame_from_plain_reference():
@@ -815,7 +815,7 @@ def test_match_size_sets_turned_fixed_frame_from_plain_reference():
     want = _shown([ref])[0]
     got = _shown([framed])[0]
     assert (got.w, got.h) == pytest.approx((want.w, want.h), abs=0.1)
-    assert (framed.w_mm, framed.h_mm) == pytest.approx((want.h, want.w), abs=0.01)  # ungedreht
+    assert (framed.w_mm, framed.h_mm) == pytest.approx((want.h, want.w), abs=0.01)  # unrotated
 
 
 @pytest.mark.parametrize("index", [0, 1])
@@ -832,7 +832,7 @@ def test_maximize_rotated_objects(index):
     assert big.rotation == obj.rotation and big.fit == obj.fit
 
 
-# --- Schlussrunde -------------------------------------------------------------------
+# --- Final round -------------------------------------------------------------------
 @pytest.mark.parametrize("mode", ["same", "width", "height"])
 @pytest.mark.parametrize("fit", [False, True])
 def test_match_objects_with_empty_reference_changes_nothing(mode, fit):
@@ -876,17 +876,17 @@ def test_align_to_paper_along_growing_axis_puts_group_at_start_margin(orientatio
         assert start == pytest.approx(area.y if vertical else area.x, abs=0.1)
         w, h = layout.label_size(doc)
         length = _mm(h if vertical else w)
-        assert length - end == pytest.approx(start, abs=2 * 25.4 / DPI)   # gleicher Rand beidseitig
+        assert length - end == pytest.approx(start, abs=2 * 25.4 / DPI)   # same margin on both sides
         gap = (lambda r: r[1].y - r[0].y) if vertical else (lambda r: r[1].x - r[0].x)
-        assert gap(rects) == pytest.approx(gap(old), abs=0.1)             # Abstand bleibt
+        assert gap(rects) == pytest.approx(gap(old), abs=0.1)             # distance stays
 
 
 @pytest.mark.parametrize("orientation, modes", [
     ("vertical", ("top", "vcenter", "bottom")), ("horizontal", ("left", "hcenter", "right"))])
 def test_align_to_paper_along_growing_axis_centers_short_content_on_minimum_length(orientation,
                                                                                   modes):
-    """Inhalt + Rand kürzer als die Mindestlänge: das Etikett bleibt so lang – die Auswahl
-    steht mittig darin (gleiche Ränder an beiden Enden)."""
+    """Content + margin shorter than the minimum length: the label stays that long – the selection
+    sits centred in it (same margins at both ends)."""
     vertical = orientation == "vertical"
     min_mm = _mm(layout.length_limits("QL-600")[0])
     for mode in modes:
@@ -906,8 +906,8 @@ def test_align_to_paper_along_growing_axis_centers_short_content_on_minimum_leng
 
 
 def test_align_to_paper_along_growing_axis_ignores_minimum_when_others_make_label_longer():
-    """Andere (nicht gewählte) Objekte machen das Etikett länger als die Mindestlänge: die
-    Auswahl sitzt am Anfang des Bereichs, nicht mittig in der Mindestlänge."""
+    """Other (unselected) objects make the label longer than the minimum length: the
+    selection sits at the start of the area, not centred in the minimum length."""
     min_mm = _mm(layout.length_limits("QL-600")[0])
     doc = Document("62", orientation="vertical", margin_mm=1,
                    objects=[TextObject("Titel", size_pt=12, x_mm=5, y_mm=10),
@@ -921,8 +921,8 @@ def test_align_to_paper_along_growing_axis_ignores_minimum_when_others_make_labe
 
 
 def test_align_to_paper_along_growing_axis_centers_when_all_together_stay_short():
-    """Auch mit anderen Objekten: bleibt alles zusammen kürzer als die Mindestlänge, steht die
-    Auswahl mittig darin."""
+    """Also with other objects: if everything together stays shorter than the minimum length, the
+    selection sits centred in it."""
     min_mm = _mm(layout.length_limits("QL-600")[0])
     objs = [TextObject("A", size_pt=12, x_mm=3, y_mm=4)]
     rendered = [_rendered(3, 4, 10, 4)]
@@ -952,7 +952,7 @@ def test_snap_to_start_margin_on_auto_length(grow, moving):
     assert (axis, 1.0) in s.guides
 
 
-# --- Bilder (Etappe 3d-2a) ----------------------------------------------------------
+# --- Images (stage 3d-2a) ----------------------------------------------------------
 def _picture(x_mm=10, y_mm=5, w_mm=20, h_mm=10, **kw):
     from PIL import Image
     obj = ImageObject.from_image(Image.new("RGB", (40, 20), "black"), 300, "bild.png")
@@ -979,20 +979,20 @@ def test_move_image_keeps_size():
 def test_set_frame_of_image_sets_position_and_size():
     obj = _picture(rotation=270)
     placed = layout.set_frame(obj, Rect(1, 2, 8, 30), _rendered(10, 5, 10, 20))
-    assert _model_frame(placed) == (1, 2, 30, 8)                   # ungedreht gespeichert
+    assert _model_frame(placed) == (1, 2, 30, 8)                   # stored unrotated
 
 
 @pytest.mark.parametrize("handle, new, expected", [
-    ("br", Rect(10, 5, 40, 12), (10, 5, 40, 20)),     # rechts unten gezogen: größeres Maß zählt
-    ("bl", Rect(0, 5, 30, 25), (-20, 5, 50, 25)),     # links unten: rechte obere Ecke bleibt
-    ("tl", Rect(14, 1, 16, 14), (2, 1, 28, 14)),      # links oben: rechte untere Ecke bleibt
+    ("br", Rect(10, 5, 40, 12), (10, 5, 40, 20)),     # dragged bottom right: the larger dimension counts
+    ("bl", Rect(0, 5, 30, 25), (-20, 5, 50, 25)),     # bottom left: top-right corner stays
+    ("tl", Rect(14, 1, 16, 14), (2, 1, 28, 14)),      # top left: bottom-right corner stays
 ])
 def test_resize_image_corner_keeps_ratio(handle, new, expected):
     obj = _picture()
     rendered = _rendered(10, 5, 20, 10)
     shown = layout.object_rect(rendered)
     delta = Rect(new.x - 10 + shown.x, new.y - 5 + shown.y, new.w - 20 + shown.w,
-                 new.h - 10 + shown.h)                 # relativ zum gerundeten Rahmen
+                 new.h - 10 + shown.h)                 # relative to the rounded frame
     resized = layout.resize(obj, delta, rendered, handle)
     assert _model_frame(resized) == pytest.approx(expected, abs=0.002)
     assert resized.w_mm / resized.h_mm == pytest.approx(2)
@@ -1003,16 +1003,16 @@ def test_resize_image_edge_with_keep_ratio_scales_uniformly_around_centre():
     rendered = _rendered(10, 5, 20, 10)
     old = layout.object_rect(rendered)
     wider = layout.resize(obj, Rect(old.x, old.y, old.w + 10, old.h), rendered, "r")
-    assert _model_frame(wider) == pytest.approx((10, 2.5, 30, 15), abs=0.002)   # Mitte senkrecht
+    assert _model_frame(wider) == pytest.approx((10, 2.5, 30, 15), abs=0.002)   # centre vertical
     taller = layout.resize(obj, Rect(old.x, old.y - 5, old.w, old.h + 5), rendered, "t")
-    assert _model_frame(taller) == pytest.approx((5, 0, 30, 15), abs=0.002)     # Mitte waagerecht
+    assert _model_frame(taller) == pytest.approx((5, 0, 30, 15), abs=0.002)     # centre horizontal
 
 
 HANDLES = ("tl", "t", "tr", "r", "br", "b", "bl", "l")
 
 
 def _dragged(rect: Rect, handle: str, amount: float) -> Rect:
-    """``rect`` nach Ziehen am Anfasser ``handle`` um ``amount`` mm nach außen."""
+    """``rect`` after dragging the handle ``handle`` outward by ``amount`` mm."""
     left, top, right, bottom = rect.x, rect.y, rect.right, rect.bottom
     left -= amount if "l" in handle else 0
     right += amount if "r" in handle else 0
@@ -1023,8 +1023,8 @@ def _dragged(rect: Rect, handle: str, amount: float) -> Rect:
 
 @pytest.mark.parametrize("handle", HANDLES)
 def test_keep_aspect_fixes_what_the_handle_says(handle):
-    """Ecke: gegenüberliegende Ecke bleibt; Kante: gegenüberliegende Kante bleibt, quer dazu
-    die Mitte – unabhängig davon, welches Maß sich (in Rechenrauschen) mehr geändert hat."""
+    """Corner: the opposite corner stays; edge: the opposite edge stays, across it
+    the centre – regardless of which dimension changed more (in numerical noise)."""
     old = Rect(10, 20, 40, 20)
     new = layout.keep_aspect(old, _dragged(old, handle, 4), handle)
     assert new.w / new.h == pytest.approx(2)
@@ -1040,7 +1040,7 @@ def test_keep_aspect_fixes_what_the_handle_says(handle):
 
 def test_keep_aspect_edge_ignores_noise_in_the_other_axis():
     old = Rect(10, 20, 40, 20)
-    noisy = Rect(10, 20 - 1e-9, 40 + 1e-12, 26 + 1e-9)       # unten gezogen, quer nur Rauschen
+    noisy = Rect(10, 20 - 1e-9, 40 + 1e-12, 26 + 1e-9)       # dragged at the bottom, across only noise
     new = layout.keep_aspect(old, noisy, "b")
     assert (new.y, new.h, new.cx) == pytest.approx((20, 26, old.cx))
 
@@ -1048,7 +1048,7 @@ def test_keep_aspect_edge_ignores_noise_in_the_other_axis():
 @pytest.mark.parametrize("rotation", [0, 90])
 @pytest.mark.parametrize("handle", HANDLES)
 def test_resize_image_result_matches_preview(handle, rotation):
-    """Die Vorschau (``keep_aspect`` auf dem gezeigten Rahmen) ist das Ergebnis (±1 Punkt)."""
+    """The preview (``keep_aspect`` on the displayed frame) is the result (±1 dot)."""
     obj = _picture(x_mm=20, y_mm=12, rotation=rotation)
     _, rendered = _frame(obj)
     shown = layout.object_rect(rendered)
@@ -1098,10 +1098,10 @@ def test_match_size_image_to_text_keeps_image_ratio():
     objs = [TextObject("Rahmen", size_pt=12, fit=True, x_mm=1, y_mm=1, w_mm=30, h_mm=6),
             _picture(x_mm=5, y_mm=20)]
     rendered = _rendered_of(objs)
-    # Breite × 1,5, Höhe × 0,6; „gleiche Größe“: Mittel aus beiden Faktoren
+    # width × 1.5, height × 0.6; “same size”: mean of both factors
     for mode, width in (("width", 30), ("height", 12), ("same", 20 * (1.5 * 0.6) ** 0.5)):
         _, image = layout.match_objects(objs, rendered, mode)
-        assert (image.x_mm, image.y_mm) == (5, 20)              # Ecke bleibt
+        assert (image.x_mm, image.y_mm) == (5, 20)              # corner stays
         assert (image.w_mm, image.h_mm) == pytest.approx((width, width / 2), abs=0.002)
 
 
@@ -1152,7 +1152,7 @@ def test_text_only_helpers_refuse_images():
             call()
 
 
-# --- Serien: Ankerpunkt beim Füllen ---------------------------------------------------------------
+# --- Series: anchor point when filling ---------------------------------------------------------------
 @pytest.mark.parametrize("align, edge", [("center", "cx"), ("right", "right"), ("left", "x")])
 def test_filled_text_keeps_its_anchor(align, edge):
     from labelwerk.document import Paragraph, Span
@@ -1163,7 +1163,7 @@ def test_filled_text_keeps_its_anchor(align, edge):
         filled = layout.fill_anchored(doc, ["A"], [value])
         rect = layout.object_rect(render_object(filled.objects[0], filled))
         assert getattr(rect, edge) == pytest.approx(getattr(raw, edge), abs=0.2), value
-    assert (obj.x_mm, obj.y_mm) == (20, 5)                 # das Etikett selbst bleibt
+    assert (obj.x_mm, obj.y_mm) == (20, 5)                 # the label itself stays
 
 
 def test_fill_anchored_leaves_fixed_frames_and_unpositioned_text():

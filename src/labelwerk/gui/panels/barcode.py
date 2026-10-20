@@ -1,10 +1,10 @@
-"""Panel „Barcode“: Strichcodes und QR-Codes einfügen und den gewählten einstellen.
+"""Panel “Barcode”: insert barcodes and QR codes and adjust the selected one.
 
-Art (QR, Code 128, Code 39, EAN-13, EAN-8), Inhalt (jede Eingabe sofort, eine Bearbeitung = ein
-Rückgängig-Schritt), Modulbreite in ganzen Druckpunkten (angezeigt in mm), Höhe und Klartext
-(Strichcodes), Fehlerkorrektur (QR), Drehen (Aktionen wie im Reiter Layout) und der Bereich
-„Position“. Kodieren und Prüfen macht der Kern (``barcodes``); Einfügen und Rahmenfelder führt
-das Hauptfenster aus.
+Kind (QR, Code 128, Code 39, EAN-13, EAN-8), content (every input immediately, one edit = one
+undo step), module width in whole dots (shown in mm), height and human-readable text
+(barcodes), error correction (QR), rotate (actions as in the Layout tab) and the area
+“Position”. Encoding and checking is done by the core (``barcodes``); inserting and frame
+fields are handled by the main window.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from .position import PositionSection
 HINT = N_("Insert a barcode or QR code – choose the type, type the content")
 LEVELS = (("L", N_("L – 7%")), ("M", N_("M – 15%")), ("Q", N_("Q – 25%")), ("H", N_("H – 30%")))
 _NUMBER = re.compile(r"\d*[.,]?\d*")
-_ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (Attribut, Aktion, Symbol)
+_ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (attribute, action, icon)
            ("rotate_right", "object.rotate_right", "rotate-right"))
 
 
@@ -42,17 +42,17 @@ def _mm(value: float) -> str:
 
 
 class ModuleSpin(SpinBox):
-    """Modulbreite in ganzen Druckpunkten, angezeigt und eingegeben in mm („0.25 mm“ wie die
-    anderen Zahlenfelder; ein Komma geht auch)."""
+    """Module width in whole dots, shown and entered in mm (“0.25 mm” like the
+    other number fields; a comma works too)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.dpi = DPI                  # Auflösung des Etiketts: ein Punkt sind 25,4/dpi mm
+        self.dpi = DPI                  # resolution of the label: one dot is 25.4/dpi mm
         self.setRange(1, barcodes.max_module(DPI))
         self.setSuffix(" mm")
 
     def set_dpi(self, dpi: int) -> None:
-        """Auflösung gewechselt: dieselbe Punktzahl zeigt eine andere Breite in mm."""
+        """Resolution changed: the same number of dots shows a different width in mm."""
         if dpi != self.dpi:
             self.dpi = dpi
             self.setMaximum(max(barcodes.max_module(dpi), self.value()))
@@ -62,7 +62,7 @@ class ModuleSpin(SpinBox):
         return i18n.number(value * 25.4 / self.dpi, 2)
 
     def _dots(self, text: str) -> int | None:
-        """Getippte mm → Druckpunkte; None, wenn (noch) keine gültige Zahl."""
+        """Typed mm → dots; None if (not yet) a valid number."""
         core = text.removesuffix(self.suffix()).strip().replace(",", ".")
         if not _NUMBER.fullmatch(core) or core in ("", "."):
             return None
@@ -74,8 +74,8 @@ class ModuleSpin(SpinBox):
         return self.value() if dots is None else min(max(dots, 1), self.maximum())
 
     def validate(self, text: str, pos: int):
-        """Nur Ziffern mit einem Komma/Punkt; außerhalb 1–``maximum()`` Punkte unfertig (wird
-        nicht übernommen)."""
+        """Only digits with one comma/dot; outside 1–``maximum()`` dots unfinished (is
+        not accepted)."""
         core = text.removesuffix(self.suffix()).strip()
         if not _NUMBER.fullmatch(core.replace(",", ".")):
             return QValidator.State.Invalid, text, pos
@@ -86,8 +86,8 @@ class ModuleSpin(SpinBox):
 
 
 class _KeepUndo(QObject):
-    """Strg+Z/Strg+Umschalt+Z im Inhaltsfeld gehören dem Etikett (ein Schritt je Bearbeitung),
-    nicht dem eigenen Rückgängig des Felds."""
+    """Ctrl+Z/Ctrl+Shift+Z in the content field belong to the label (one step per edit),
+    not to the field's own undo."""
 
     def eventFilter(self, watched, event) -> bool:
         if event.type() == QEvent.Type.ShortcutOverride and (
@@ -99,16 +99,16 @@ class _KeepUndo(QObject):
 
 
 class BarcodePanel(Panel):
-    frame_edited = Signal(str, float)   # Feld im Bereich „Position“ ("x" | "y" | "w" | "h"), mm
+    frame_edited = Signal(str, float)   # field in the "Position" section ("x" | "y" | "w" | "h"), mm
 
     def __init__(self, doc: Document):
         super().__init__(doc, _("Barcode"))
-        self.index: int | None = None   # bearbeiteter Barcode; None = keiner ausgewählt
-        # Serie: Barcode mit dem Wert der Vorschau-Zeile (Hauptfenster), für den Prüfhinweis
+        self.index: int | None = None   # barcode being edited; None = none selected
+        # Series: barcode with the value of the preview row (main window), for the check hint
         self.fill_preview: Callable[[BarcodeObject], BarcodeObject] | None = None
-        self.red_available = False      # Etikett und Drucker können Rot (Hinweis nur dann)
+        self.red_available = False      # label and printer can do red (hint only then)
         self._updating = False
-        self._typing = False            # Inhalt wird gerade getippt (ein Rückgängig-Schritt)
+        self._typing = False            # content is being typed (one undo step)
 
         self.hint = QLabel(_(HINT))
         self.hint.setObjectName("hint")
@@ -195,7 +195,7 @@ class BarcodePanel(Panel):
         self.layout_.addStretch()
 
         self.refresh()
-        step = self._step               # jede Einstellung ein eigener Rückgängig-Schritt
+        step = self._step               # every setting is its own undo step
         self.kind.activated.connect(self._kind_chosen)
         self.data.textEdited.connect(self._data_edited)
         self.data.editingFinished.connect(self._data_finished)
@@ -205,8 +205,8 @@ class BarcodePanel(Panel):
         self.error.activated.connect(lambda _index: step(self._set, error=self.error.currentData()))
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
-        """„Barcode einfügen“ und Drehen lösen ihre Aktionen aus (Kürzel im Tooltip); die Art
-        zum Einfügen liest das Hauptfenster aus ``chosen_kind``."""
+        """“Insert barcode” and rotate trigger their actions (shortcut in the tooltip); the kind
+        for inserting is read by the main window from ``chosen_kind``."""
         insert = actions["barcode.insert"]
         self.insert.clicked.connect(lambda _checked=False: insert.trigger())
         self.insert.setToolTip(insert.toolTip())
@@ -226,17 +226,17 @@ class BarcodePanel(Panel):
         return self.doc.objects[self.index]
 
     def chosen_kind(self) -> str:
-        """Art aus der Auswahl (für „Barcode einfügen“)."""
+        """Kind from the selection (for “Insert barcode”)."""
         return self.kind.currentData()
 
     def set_object(self, index: int | None) -> None:
-        """Barcode bearbeiten (Index in ``doc.objects``) bzw. mit None keinen."""
+        """Edit a barcode (index in ``doc.objects``) or none with None."""
         if index != self.index:
             self.index = index
             self.refresh()
 
     def focus_data(self) -> None:
-        """Inhalt markiert in den Fokus (nach dem Einfügen, Doppelklick): Tippen ersetzt ihn."""
+        """Content selected in focus (after inserting, double-click): typing replaces it."""
         self.data.setFocus()
         self.data.selectAll()
 
@@ -244,11 +244,11 @@ class BarcodePanel(Panel):
         return (self.data, self.size_box, self.text, self.rotate_left, self.rotate_right,
                 self.position)
 
-    # --- Modell → Panel -----------------------------------------------------
+    # --- Model → panel -----------------------------------------------------
     def refresh(self) -> None:
         if self.index is not None and not (0 <= self.index < len(self.doc.objects)
                                            and isinstance(self.obj, BarcodeObject)):
-            self.index = None                      # Objekt gibt es nicht mehr (Rückgängig …)
+            self.index = None                      # object no longer exists (undo …)
         selected = self.index is not None
         self.hint.setVisible(not selected)
         for widget in self._settings_widgets():
@@ -283,14 +283,14 @@ class BarcodePanel(Panel):
             self._updating = False
 
     def update_check(self) -> None:
-        """Prüfhinweis neu (z. B. andere Vorschau-Zeile der Serie)."""
+        """Check hint anew (e.g. other preview row of the series)."""
         if self.index is not None and 0 <= self.index < len(self.doc.objects) \
                 and isinstance(self.obj, BarcodeObject):
             self._show_check()
 
     def _show_check(self) -> None:
-        """Fehler des Inhalts bzw. Hinweise (ergänzte Prüfziffer, Ruhezone) – mit Platzhaltern
-        in einer Serie für den Wert der Vorschau-Zeile."""
+        """Error of the content or hints (completed check digit, quiet zone) – with placeholders
+        in a series for the value of the preview row."""
         obj = self.obj
         if self.fill_preview is not None and series.placeholders(Document(objects=[obj])):
             obj = self.fill_preview(obj)
@@ -313,15 +313,15 @@ class BarcodePanel(Panel):
 
     def _set_check(self, text: str) -> None:
         self.check.setText(text)
-        self.check.setVisible(bool(text))           # leer: kein leerer Hinweis-Kasten
+        self.check.setVisible(bool(text))           # empty: no empty hint box
 
     def show_frame(self, rect: Rect | None) -> None:
-        """Rahmen des Barcodes in mm anzeigen (vom Hauptfenster nach dem Rendern)."""
+        """Show the barcode's frame in mm (from the main window after rendering)."""
         self.position.show_frame(rect, editable_size=True)
 
-    # --- Panel → Modell -----------------------------------------------------
+    # --- Panel → model -----------------------------------------------------
     def _step(self, change, *args, **kwargs) -> None:
-        """Änderung als eigener Rückgängig-Schritt (vorher Offenes festhalten, danach das Neue)."""
+        """Change as its own undo step (record what is open before, the new state after)."""
         if self._updating or self.index is None:
             return
         self.edited.emit()
@@ -337,15 +337,15 @@ class BarcodePanel(Panel):
         self._change(lambda obj: replace(obj, **values))
 
     def _kind_chosen(self) -> None:
-        """Art gewählt: für den gewählten Barcode (ein Schritt) bzw. für den nächsten."""
+        """Kind chosen: for the selected barcode (one step) or for the next one."""
         if self.index is None:
             self.refresh()
         else:
             self._step(self._change, self._with_kind)
 
     def _with_kind(self, obj: BarcodeObject) -> BarcodeObject:
-        """Neue Art: Beispielinhalt der alten wird der der neuen; zwischen QR und Strichcode die
-        übliche Modulbreite der neuen Art."""
+        """New kind: sample content of the old becomes that of the new; between QR and barcode the
+        usual module width of the new kind."""
         kind = self.chosen_kind()
         data = barcodes.SAMPLES[kind] if obj.data == barcodes.SAMPLES[obj.kind] else obj.data
         module = obj.module
@@ -354,8 +354,8 @@ class BarcodePanel(Panel):
         return replace(obj, kind=kind, data=data, module=module)
 
     def _data_edited(self, text: str) -> None:
-        """Getippt: sofort aufs Etikett; der erste Anschlag hält den Stand davor fest, das Ende
-        der Bearbeitung (Enter, Fokus weg) den neuen – zusammen ein Schritt."""
+        """Typed: straight onto the label; the first keystroke records the state before, the end
+        of the edit (Enter, focus away) the new one – together one step."""
         if self._updating or self.index is None:
             return
         if not self._typing:

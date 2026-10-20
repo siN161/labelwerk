@@ -1,4 +1,4 @@
-"""Bild-Objekt (Etappe 3d-2a): Modell und Rendern."""
+"""Image object (stage 3d-2a): model and rendering."""
 import io
 import random
 
@@ -17,7 +17,7 @@ def _dots(mm):
 
 
 def _source(w=600, h=300) -> Image.Image:
-    """Weißes Bild mit schwarzem Quadrat oben links (ein Zehntel der Breite)."""
+    """White image with a black square at the top left (one tenth of the width)."""
     img = Image.new("RGB", (w, h), "white")
     img.paste((0, 0, 0), (0, 0, w // 10, w // 10))
     return img
@@ -34,7 +34,7 @@ def _decoded(obj: ImageObject) -> Image.Image:
     return Image.open(io.BytesIO(obj.png))
 
 
-# --- Modell -------------------------------------------------------------------------
+# --- Model --------------------------------------------------------------------------
 def test_defaults():
     obj = _image()
     assert (obj.mode, obj.threshold, obj.invert, obj.keep_ratio, obj.rotation) == \
@@ -68,7 +68,7 @@ def test_from_image_size_comes_from_crop():
     obj = ImageObject.from_image(_source(), 300, "marke.pdf", page=2, crop=[0, 0, 60, 30])
     assert obj.crop == (0, 0, 60, 30) and obj.page == 2
     assert (obj.w_mm, obj.h_mm) == pytest.approx((5.08, 2.54))
-    assert _decoded(obj).size == (600, 300)                # Original bleibt ganz
+    assert _decoded(obj).size == (600, 300)                # original stays whole
 
 
 def test_from_image_caps_huge_images_and_their_crop():
@@ -76,7 +76,7 @@ def test_from_image_caps_huge_images_and_their_crop():
     obj = ImageObject.from_image(src, 300, "lang.png", crop=(100, 0, 2100, 20))
     assert _decoded(obj).size == (MAX_PIXELS, 10)
     assert obj.crop == (50, 0, 1050, 10)
-    assert obj.w_mm == pytest.approx(2000 / 300 * 25.4)    # Druckgröße bleibt
+    assert obj.w_mm == pytest.approx(2000 / 300 * 25.4)    # print size stays
 
 
 def test_repr_leaves_out_png_bytes():
@@ -86,17 +86,17 @@ def test_repr_leaves_out_png_bytes():
 def test_limit_resolution_after_shrinking_keeps_natural_size_and_crop():
     obj = ImageObject.from_image(_source(1200, 600), 300, "foto.jpg", crop=(0, 0, 600, 600))
     natural = obj.natural_mm()
-    obj.w_mm, obj.h_mm = obj.w_mm / 4, obj.h_mm / 4          # eingepasst: 1200 dpi
+    obj.w_mm, obj.h_mm = obj.w_mm / 4, obj.h_mm / 4          # fitted: 1200 dpi
     limited = obj.limit_resolution()
-    assert _decoded(limited).size == (600, 300)               # höchstens 600 dpi
+    assert _decoded(limited).size == (600, 300)               # at most 600 dpi
     assert limited.crop == (0, 0, 300, 300) and limited.dpi == pytest.approx(150)
-    assert limited.natural_mm() == pytest.approx(natural)     # „Originalgröße“ bleibt 1:1
+    assert limited.natural_mm() == pytest.approx(natural)     # “original size” stays 1:1
     assert (limited.w_mm, limited.h_mm) == (obj.w_mm, obj.h_mm)
     assert obj.limit_resolution().limit_resolution().png == limited.png
 
 
 def test_limit_resolution_leaves_fine_images_alone():
-    obj = _image(w_mm=25.4, h_mm=12.7)                        # 600 dpi: noch in Grenzen
+    obj = _image(w_mm=25.4, h_mm=12.7)                        # 600 dpi: still within limits
     assert obj.limit_resolution() is obj
 
 
@@ -105,7 +105,7 @@ def test_document_holds_text_and_images():
     assert not doc.is_empty()
 
 
-# --- Rendern ------------------------------------------------------------------------
+# --- Rendering ----------------------------------------------------------------------
 def _doc(*objects, **kw) -> Document:
     return Document("62", length_mm=80, objects=list(objects), **kw)
 
@@ -126,18 +126,18 @@ def test_render_rotation_turns_clockwise(rotation, corner):
     r = render_object(obj, _doc(obj))
     size = (300, 600) if rotation in (90, 270) else (600, 300)
     assert (r.w, r.h) == size and r.image.size == size
-    assert r.image.getpixel(corner) == 0                   # Quadrat oben links, gedreht
+    assert r.image.getpixel(corner) == 0                   # square at the top left, rotated
     assert r.image.getpixel((5, 5)) == 255
 
 
 def test_keep_ratio_fits_into_wrong_frame_and_centres():
-    obj = _image(w_mm=50.8, h_mm=50.8)                      # Rahmen quadratisch, Bild 2:1
+    obj = _image(w_mm=50.8, h_mm=50.8)                      # frame square, image 2:1
     r = render_object(obj, _doc(obj))
     assert r.image.size == (600, 600)
-    assert r.image.getpixel((5, 5)) == 255                 # oben 150 Punkte frei
-    assert r.image.getpixel((5, 155)) == 0                 # Quadrat beginnt bei 150
-    assert r.image.getpixel((5, 215)) == 255               # 60 hoch
-    obj.keep_ratio = False                                  # verzerrt: Quadrat doppelt so hoch
+    assert r.image.getpixel((5, 5)) == 255                 # top 150 dots free
+    assert r.image.getpixel((5, 155)) == 0                 # square begins at 150
+    assert r.image.getpixel((5, 215)) == 255               # 60 high
+    obj.keep_ratio = False                                  # distorted: square twice as tall
     r = render_object(obj, _doc(obj))
     assert r.image.getpixel((5, 5)) == 0 and r.image.getpixel((5, 110)) == 0
     assert r.image.getpixel((5, 125)) == 255
@@ -160,17 +160,17 @@ def test_render_threshold_invert_and_photo():
     src = Image.new("RGB", (100, 100), (150, 150, 150))
     obj = ImageObject.from_image(src, 300, "grau.png")
     doc = _doc(obj)
-    assert render_object(obj, doc).image.getextrema() == (255, 255)    # heller als 128
+    assert render_object(obj, doc).image.getextrema() == (255, 255)    # lighter than 128
     obj.threshold = 160
     assert render_object(obj, doc).image.getextrema() == (0, 0)
     obj.invert = True
     assert render_object(obj, doc).image.getextrema() == (255, 255)
     obj.invert, obj.mode, obj.threshold = False, "photo", 128
-    assert render_object(obj, doc).image.getextrema() == (0, 255)      # Punkte gestreut
+    assert render_object(obj, doc).image.getextrema() == (0, 255)      # dots scattered
 
 
 def _modules(module_px: int, n: int = 21, seed: int = 3) -> tuple[Image.Image, list]:
-    """Zufallsmuster aus ``n`` × ``n`` Modulen (wie ein QR-Code), je ``module_px`` Pixel."""
+    """Random pattern of ``n`` × ``n`` modules (like a QR code), ``module_px`` pixels each."""
     rng = random.Random(seed)
     cells = [[rng.random() < 0.5 for _ in range(n)] for _ in range(n)]
     img = Image.new("RGB", (n * module_px, n * module_px), "white")
@@ -182,7 +182,7 @@ def _modules(module_px: int, n: int = 21, seed: int = 3) -> tuple[Image.Image, l
     return img, cells
 
 
-@pytest.mark.parametrize("module_px, dpi", [(4, 300), (2, 150)])       # 1:1 und 2× vergrößert
+@pytest.mark.parametrize("module_px, dpi", [(4, 300), (2, 150)])       # 1:1 and enlarged 2×
 def test_codes_stay_bit_exact_at_one_to_one_and_double_size(module_px, dpi):
     img, _ = _modules(module_px)
     obj = ImageObject.from_image(img, dpi, "qr.png")
@@ -192,11 +192,11 @@ def test_codes_stay_bit_exact_at_one_to_one_and_double_size(module_px, dpi):
 
 
 def test_large_image_is_reduced_before_lanczos():
-    """Stark verkleinert: erst ganzzahlig reduzieren, dann Lanczos (``reducing_gap=2``)."""
+    """Strongly reduced: first reduce by integer factors, then Lanczos (``reducing_gap=2``)."""
     from labelwerk import render
     src = Image.radial_gradient("L").convert("RGB").resize((1800, 1200))
     obj = ImageObject.from_image(src, 600, "gross.png")
-    obj.w_mm, obj.h_mm = 25.4, 25.4 * 2 / 3                # 300 × 200 Punkte
+    obj.w_mm, obj.h_mm = 25.4, 25.4 * 2 / 3                # 300 × 200 dots
     render._scaled_source.cache_clear()
     picture = render._scaled_source(obj.png, None, (300, 200), True)
     expected = src.resize((300, 200), Image.Resampling.LANCZOS, reducing_gap=2.0)
@@ -216,7 +216,7 @@ def test_invalid_image_settings_raise_at_render(field, value, message):
 def test_image_grows_auto_length():
     obj = _image(x_mm=1, y_mm=10)
     doc = Document("62", objects=[obj])
-    assert label_size(doc) == (696, _dots(10) + 300)    # 1 mm Rand liegt im Vorschub des Druckers
+    assert label_size(doc) == (696, _dots(10) + 300)    # 1 mm margin lies in the printer's feed
 
 
 def test_preview_equals_print_with_text_and_images():

@@ -47,7 +47,7 @@ def test_window_opens_dialog_and_takes_new_settings(qtbot, monkeypatch):
 
     def fake_exec(dialog):
         dialog.check_media.setChecked(False)
-        dialog.accept()                       # speichert in XDG_CONFIG_HOME (Test-Ordner)
+        dialog.accept()                       # saves to XDG_CONFIG_HOME (test folder)
         return QDialog.DialogCode.Accepted
     monkeypatch.setattr(SettingsDialog, "exec", fake_exec)
     win.settings_action.trigger()
@@ -102,14 +102,14 @@ def test_all_fonts_option_fills_the_list_at_once(qtbot, monkeypatch):
     dlg = SettingsDialog(Settings(font_family="DejaVu Sans"))
     qtbot.addWidget(dlg)
     assert not dlg.fonts_all.isChecked() and dlg.font_family.count() == 1
-    dlg.fonts_all.setChecked(True)                               # sofort in der Liste
+    dlg.fonts_all.setChecked(True)                               # immediately in the list
     assert dlg.font_family.count() == 2 and dlg.font_family.current_family() == "DejaVu Sans"
     assert dlg.values().fonts_all is True and dlg.values().font_family == "DejaVu Sans"
-    assert not dlg.restart_needed()                              # wirkt ohne Neustart
+    assert not dlg.restart_needed()                              # takes effect without a restart
 
 
 def test_all_fonts_option_sits_under_the_font(qtbot):
-    """„Alle Schriften zeigen“ steht direkt unter der Schriftart (Bereich NEUES ETIKETT)."""
+    """Show all fonts" sits directly below the font (section NEW LABEL)."""
     from PySide6.QtWidgets import QFormLayout
     dlg = SettingsDialog(Settings())
     qtbot.addWidget(dlg)
@@ -197,7 +197,7 @@ def test_dialog_keeps_shortcuts_when_saving(qtbot, tmp_path):
     assert load_settings(path).shortcuts == {"file.print": "Ctrl+Shift+P"}
 
 
-# --- Reiter „Tastenkürzel“ ----------------------------------------------------------
+# --- Tab Shortcuts -----------------------------------------------------------------
 def _shortcut_dialog(qtbot, settings=None, path=None):
     dialog = SettingsDialog(settings or Settings(), path=path)
     qtbot.addWidget(dialog)
@@ -218,7 +218,7 @@ def test_dialog_has_tabs_general_and_shortcuts(qtbot):
     dialog = _shortcut_dialog(qtbot)
     tabs = dialog.tabs
     assert [tabs.tabText(i) for i in range(tabs.count())] == ["Allgemein", "Tastenkürzel"]
-    assert tabs.widget(0).isAncestorOf(dialog.label)        # bisherige Felder unter „Allgemein“
+    assert tabs.widget(0).isAncestorOf(dialog.label)        # existing fields under General
 
 
 def test_shortcut_table_lists_every_action_with_scope_and_keys(qtbot):
@@ -251,8 +251,8 @@ def test_fixed_shortcut_row_is_not_editable(qtbot):
 def test_values_contain_only_changed_shortcuts(qtbot):
     dialog = _shortcut_dialog(qtbot, Settings(shortcuts={"file.print": "Ctrl+Shift+P"}))
     dialog.set_shortcut("edit.copy", "Ctrl+Shift+C")
-    dialog.set_shortcut("edit.cut", "")                     # Kürzel geleert
-    dialog.set_shortcut("edit.paste", "Ctrl+V")             # = Standard
+    dialog.set_shortcut("edit.cut", "")                     # shortcut cleared
+    dialog.set_shortcut("edit.paste", "Ctrl+V")             # = default
     assert dialog.values().shortcuts == {"file.print": "Ctrl+Shift+P",
                                          "edit.copy": "Ctrl+Shift+C", "edit.cut": ""}
 
@@ -266,11 +266,11 @@ def test_shortcut_cell_edits_with_key_sequence_edit(qtbot):
     dialog.activateWindow()
     dialog.tabs.setCurrentIndex(1)
     table = dialog.shortcut_table
-    table.cellClicked.emit(_row("file.print"), 0)           # Klick irgendwo in die Zeile
+    table.cellClicked.emit(_row("file.print"), 0)           # click anywhere in the row
     editor = table.findChild(QKeySequenceEdit)
     assert editor is not None and editor.isClearButtonEnabled()
     qtbot.waitUntil(editor.hasFocus, timeout=1000)
-    assert editor.maximumSequenceLength() == 1                 # genau eine Tastenkombination
+    assert editor.maximumSequenceLength() == 1                 # exactly one key combination
     QTest.keyClick(editor, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier
                    | Qt.KeyboardModifier.AltModifier)
     qtbot.waitUntil(lambda: dialog.shortcut("file.print") == "Ctrl+Alt+P", timeout=2000)
@@ -296,7 +296,7 @@ def test_escape_cancels_shortcut_editing(qtbot):
 def test_conflict_marks_rows_red_and_blocks_saving(qtbot):
     dialog = _shortcut_dialog(qtbot)
     assert dialog.save_button.isEnabled() and dialog.conflict_hint.isHidden()
-    dialog.set_shortcut("app.settings", "Ctrl+P")           # wie „Drucken“
+    dialog.set_shortcut("app.settings", "Ctrl+P")           # like "Print"
     assert _is_red(dialog, "app.settings") and _is_red(dialog, "file.print")
     assert not _is_red(dialog, "edit.copy")
     assert not dialog.save_button.isEnabled()
@@ -310,7 +310,7 @@ def test_conflict_marks_rows_red_and_blocks_saving(qtbot):
 
 def test_same_key_in_canvas_and_text_is_no_conflict(qtbot):
     dialog = _shortcut_dialog(qtbot)
-    dialog.set_shortcut("text.bold", "Ctrl+D")             # „Duplizieren“ gilt nur auf der Fläche
+    dialog.set_shortcut("text.bold", "Ctrl+D")             # "Duplicate" applies only on the canvas
     assert dialog.save_button.isEnabled()
 
 
@@ -322,7 +322,7 @@ def test_conflict_with_saved_settings_is_shown_on_open(qtbot):
 def test_standard_button_resets_one_row(qtbot):
     dialog = _shortcut_dialog(qtbot, Settings(shortcuts={"file.print": "Ctrl+Shift+P",
                                                          "edit.copy": ""}))
-    assert dialog.reset_button("edit.paste") is None            # schon Standard
+    assert dialog.reset_button("edit.paste") is None            # already default
     dialog.reset_button("file.print").click()
     assert dialog.shortcut("file.print") == "Ctrl+P"
     assert dialog.reset_button("file.print") is None
@@ -353,7 +353,7 @@ def test_saved_shortcut_takes_effect_in_window(qtbot, monkeypatch):
     assert win.settings.shortcuts == {"file.print": "Ctrl+Shift+P", "text.bold": "Ctrl+Shift+B"}
     assert win.shortcut_actions["file.print"].shortcut() == QKeySequence("Ctrl+Shift+P")
     assert win.shortcut_actions["text.bold"].shortcut() == QKeySequence("Ctrl+Shift+B")
-    assert win.shortcut_actions["text.bold"] in win.panel("text").actions()   # B/I/U über die Aktionen
+    assert win.shortcut_actions["text.bold"] in win.panel("text").actions()   # B/I/U via the actions
     panel = win.panel("text")
     assert panel.bold.toolTip() == win.shortcut_actions["text.bold"].toolTip()
     assert "Ctrl+Shift+B" in panel.bold.toolTip() and "Ctrl+I" in panel.italic.toolTip()
@@ -384,13 +384,13 @@ def test_rejected_key_input_is_reported(qtbot):
     delegate = table.itemDelegateForColumn(2)
     editor = QKeySequenceEdit()
     qtbot.addWidget(editor)
-    editor.setKeySequence(QKeySequence(Qt.Key.Key_Shift))   # nur eine Umschalttaste
+    editor.setKeySequence(QKeySequence(Qt.Key.Key_Shift))   # only a modifier key
     index = table.model().index(_row("edit.copy"), 2)
     delegate.setModelData(editor, table.model(), index)
-    assert dialog.shortcut("edit.copy") == "Ctrl+C"         # unverändert
+    assert dialog.shortcut("edit.copy") == "Ctrl+C"         # unchanged
     assert not dialog.key_hint.isHidden()
     assert "Shift" in dialog.key_hint.text() and "Kopieren" in dialog.key_hint.text()
-    dialog.set_shortcut("edit.copy", "Ctrl+Shift+C")        # nächste gültige Eingabe
+    dialog.set_shortcut("edit.copy", "Ctrl+Shift+C")        # next valid input
     assert dialog.key_hint.isHidden()
 
 
@@ -398,17 +398,17 @@ def test_dialog_fits_on_small_screens(qtbot):
     from PySide6.QtCore import QSize
     from labelwerk.gui.settings_dialog import DIALOG_SIZE, MIN_SIZE, initial_size
     dialog = _shortcut_dialog(qtbot)
-    assert (dialog.minimumWidth(), dialog.minimumHeight()) == MIN_SIZE   # Mindestgröße, nicht fest
+    assert (dialog.minimumWidth(), dialog.minimumHeight()) == MIN_SIZE   # minimum size, not fixed
     assert initial_size(QSize(1920, 1080)) == QSize(*DIALOG_SIZE)
     small = initial_size(QSize(700, 500))
     assert small.width() <= 700 and small.height() <= 500
-    assert initial_size(QSize(300, 200)) == QSize(*MIN_SIZE)  # nie kleiner als die Mindestgröße
+    assert initial_size(QSize(300, 200)) == QSize(*MIN_SIZE)  # never smaller than the minimum size
     screen = dialog.screen().availableGeometry().size()
     assert dialog.size() == initial_size(screen)
 
 
 def test_dialog_keeps_symbol_lists(qtbot):
-    """Zuletzt verwendet und Favoriten pflegt das Symbol-Fenster – der Dialog reicht sie durch."""
+    """The symbol window maintains recently used and favourites – the dialog passes them through."""
     dialog = SettingsDialog(Settings(symbols_recent=["labelwerk/erde"],
                                      symbols_favorites=["iso7010/W012"]))
     qtbot.addWidget(dialog)
@@ -434,10 +434,10 @@ def test_dialog_start_tool_choice(qtbot, tmp_path):
     assert combo.itemText(0) == "Zuletzt benutzter" and combo.itemText(2) == "Papier"
     assert dialog.restart_hint.isHidden()
     combo.setCurrentIndex(combo.findData("last"))
-    assert not dialog.restart_hint.isHidden()                       # wirkt erst beim Start
+    assert not dialog.restart_hint.isHidden()                       # takes effect only at the next start
     dialog.accept()
     saved = load_settings(path)
-    assert (saved.start_tool, saved.last_tool) == ("last", "image")  # zuletzt benutzter bleibt
+    assert (saved.start_tool, saved.last_tool) == ("last", "image")  # last used stays
 
 
 def test_dialog_image_defaults(qtbot, tmp_path):
@@ -448,7 +448,7 @@ def test_dialog_image_defaults(qtbot, tmp_path):
     assert [dialog.image_mode.itemText(i) for i in range(2)] == ["Strich", "Foto"]
     dialog.image_mode.setCurrentIndex(dialog.image_mode.findData("line"))
     dialog.image_threshold.setValue(150)
-    assert dialog.restart_hint.isHidden()                           # sofort wirksam
+    assert dialog.restart_hint.isHidden()                           # takes effect immediately
     dialog.accept()
     saved = load_settings(path)
     assert (saved.image_mode, saved.image_threshold) == ("line", 150)
@@ -481,7 +481,7 @@ def test_saved_image_defaults_apply_at_once(qtbot, monkeypatch):
 
 
 def test_font_list_is_read_once_at_startup(qtbot, monkeypatch):
-    """Mit „Alle Schriften“ liest der Start nur die volle Liste (nicht erst die kurze)."""
+    """With "Show all fonts" the start reads only the full list (not the short one first)."""
     from labelwerk import fonts
     calls = []
 

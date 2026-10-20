@@ -1,4 +1,4 @@
-"""Druck im Hintergrund-Thread, damit die Oberfläche nicht blockiert."""
+"""Printing in a background thread so the UI does not block."""
 from __future__ import annotations
 
 import threading
@@ -12,24 +12,24 @@ from ..printer import PrintCancelled, PrintError, print_image
 
 
 class PrintSignals(QObject):
-    done = Signal(dict)       # Status von brother_ql
-    failed = Signal(str)      # Meldung für die Statusleiste
-    progress = Signal(int, int)   # Serie: gedruckt, alle (nach jedem Teilauftrag)
-    cancelled = Signal(str)   # Serie abgebrochen (Meldung)
+    done = Signal(dict)       # status from brother_ql
+    failed = Signal(str)      # message for the status bar
+    progress = Signal(int, int)   # series: printed, total (after each partial job)
+    cancelled = Signal(str)   # series cancelled (message)
 
 
 class PrintWorker(QRunnable):
-    """``image``: ein Etikett oder eine Liste (Serie, ein Auftrag); ``cut_every``: schneiden
-    alle n Etiketten (``printer.cut_interval``); ``printer``: URI des gewählten Druckers (USB oder
-    Netzwerk). ``cancel()`` (aus dem GUI-Thread) bricht vor dem nächsten Teilauftrag ab."""
+    """``image``: one label or a list (series, one job); ``cut_every``: cut after every n
+    labels (``printer.cut_interval``); ``printer``: URI of the chosen printer (USB or
+    network). ``cancel()`` (from the GUI thread) aborts before the next partial job."""
 
     def __init__(self, image: Image.Image | list[Image.Image], label_id: str, model: str,
                  cut_every: int = 1, printer: str | None = None,
                  options: dict[str, str] | None = None):
         super().__init__()
         self.image, self.label_id, self.model = image, label_id, model
-        self.printer = printer                     # URI; None = USB-Drucker selbst suchen
-        self.options = options or {}               # Treiber-Optionen (CUPS, z. B. Schnitt)
+        self.printer = printer                     # URI; None = find the USB printer yourself
+        self.options = options or {}               # driver options (CUPS, e.g. cut)
         self.cut_every = cut_every
         self.signals = PrintSignals()
         self._cancel = threading.Event()
@@ -52,7 +52,8 @@ class PrintWorker(QRunnable):
         except PrintError as e:
             self.signals.failed.emit(str(e))
             return
-        except Exception as e:  # kein Absturz des Threads; Meldung statt Traceback
+        except Exception as e:  # no thread crash; message instead of traceback
+
             self.signals.failed.emit(_("Unexpected error while printing: {error}").format(error=e))
             return
         self.signals.done.emit(status)

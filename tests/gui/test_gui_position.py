@@ -1,4 +1,4 @@
-"""Bereich „Position“ als eigenes Widget (gemeinsam für Text- und Bild-Panel)."""
+"""POSITION section as its own widget (shared by the text and image panel)."""
 from labelwerk.gui.panels.position import PositionSection
 from labelwerk.layout import Rect
 
@@ -16,7 +16,7 @@ def test_show_frame_sets_values_without_signal(qtbot):
     section.show_frame(Rect(1.5, 2, 30, 8.2), editable_size=True)
     assert [s.value() for s in section.spins.values()] == [1.5, 2, 30, 8.2]
     section.show_frame(None, editable_size=True)
-    assert [s.value() for s in section.spins.values()] == [0, 0, 1, 1]   # Mindestgröße 1 mm
+    assert [s.value() for s in section.spins.values()] == [0, 0, 1, 1]   # minimum size 1 mm
     assert seen == []
 
 

@@ -1,13 +1,13 @@
-"""Dateiauswahl zum Öffnen: eigener Qt-Dialog mit Vorschau rechts (Bilder, SVG, PDF mit
-Seitenwahl, Etiketten, Tabellen) – oder die Dateiauswahl des Systems (Einstellung
-``system_file_dialog``, ab dem Start: Qt bringt sie über das XDG-Portal selbst mit, wenn die
-Anwendung mit dem Platform-Theme „xdgdesktopportal“ startet – ``app.qt_arguments``; ohne dieses
-Qt-Plugin gibt es nur den eigenen Dialog: ``system_dialog_available``).
+"""File selection for opening: own Qt dialog with a preview on the right (images, SVG, PDF with
+page selection, labels, tables) – or the system's file selection (setting
+``system_file_dialog``, from startup: Qt brings it along via the XDG portal itself when the
+application starts with the platform theme “xdgdesktopportal” – ``app.qt_arguments``; without this
+Qt plugin there is only the own dialog: ``system_dialog_available``).
 
-Vorschauen sind fremde Eingabe: Größe und Pixel begrenzt, verkleinert gelesen, jeder Fehler →
-„Keine Vorschau“ (nie ein Absturz). Gelesen wird im Hintergrund (ein Thread, veraltete Ergebnisse
-zählen nicht); PDF im GUI-Thread – PDFium ist nicht threadsicher und alle anderen PDF-Aufrufe
-laufen dort. ``exec_dialog`` ist in Tests ersetzbar (kein echter modaler Dialog).
+Previews are foreign input: size and pixels limited, read downscaled, every error →
+“No preview” (never a crash). Reading happens in the background (one thread, outdated results
+do not count); PDF in the GUI thread – PDFium is not thread-safe and all other PDF calls
+run there. ``exec_dialog`` can be replaced in tests (no real modal dialog).
 """
 from __future__ import annotations
 
@@ -27,21 +27,21 @@ from ..i18n import _, ngettext, number
 from ..render import Renderer
 from ..storage import SUFFIX
 
-PREVIEW_PX = 260                       # Kantenlänge der Vorschau
-MAX_PREVIEW_BYTES = 64 * 1024 * 1024   # größere Dateien: nur Name und Größe
-MAX_PREVIEW_PIXELS = 50_000_000        # Bilder: mehr Pixel nicht dekodieren (JPEG verkleinert schon dabei)
-TABLE_ROWS = 8                         # Tabellen: so viele Zeilen in der Vorschau
-TABLE_CELL = 24                        # Zeichen je Zelle in der Vorschau
-DELAY_MS = 120                         # Vorschau erst, wenn die Auswahl kurz stehen bleibt
-DIALOG_SIZE = (1100, 640)              # höchstens 90 % des Bildschirms
-SIDEBAR_PX = 160                       # Orte links: mindestens so breit
+PREVIEW_PX = 260                       # edge length of the preview
+MAX_PREVIEW_BYTES = 64 * 1024 * 1024   # larger files: only name and size
+MAX_PREVIEW_PIXELS = 50_000_000        # images: decode no more pixels (JPEG is downscaled while decoding)
+TABLE_ROWS = 8                         # tables: this many rows in the preview
+TABLE_CELL = 24                        # characters per cell in the preview
+DELAY_MS = 120                         # preview only when the selection stops for a moment
+DIALOG_SIZE = (1100, 640)              # at most 90 % of the screen
+SIDEBAR_PX = 160                       # places on the left: at least this wide
 _RASTER = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
 _TABLES = (*series.CSV_SUFFIXES, ".xlsx", ".xlsm")
 
 
 class Chosen(str):
-    """Gewählter Pfad; ``page``: im Dialog gewählte PDF-Seite (None = nicht gewählt – dann fragt
-    der Aufrufer wie bisher)."""
+    """Chosen path; ``page``: PDF page chosen in the dialog (None = not chosen – then the caller
+    asks as before)."""
     page: int | None = None
 
     def __new__(cls, path: str, page: int | None = None):
@@ -52,8 +52,8 @@ class Chosen(str):
 
 @dataclass
 class Preview:
-    """Vorschau einer Datei: Bild (oder None), Text darunter (Name, Größe, Tabelle …),
-    Seitenzahl und gezeigte Seite (PDF)."""
+    """Preview of a file: image (or None), text below (name, size, table …),
+    page count and shown page (PDF)."""
     image: QImage | None
     text: str
     pages: int = 1
@@ -62,7 +62,7 @@ class Preview:
 
 def make_preview(path: str | Path, page: int = 1, size: int = PREVIEW_PX,
                  model: str = "QL-600") -> Preview:
-    """Vorschau einer Datei für den Dialog; Ordner/fehlende Datei → leer, Fehler → „Keine Vorschau“."""
+    """Preview of a file for the dialog; folder/missing file → empty, error → “No preview”."""
     path = Path(path)
     try:
         if not path.is_file():
@@ -85,7 +85,7 @@ def make_preview(path: str | Path, page: int = 1, size: int = PREVIEW_PX,
             return _label(path, size, info, model)
         if suffix in _TABLES:
             return _table(path, info)
-    except Exception:                   # fremde Datei: jeder Fehler heißt „keine Vorschau“
+    except Exception:                   # foreign file: every error means “no preview”
         return Preview(None, f"{info}\n{_('No preview')}")
     return Preview(None, info)
 
@@ -104,8 +104,8 @@ def _no_preview(info: str) -> Preview:
 
 def _raster(path: Path, size: int, info: str) -> Preview:
     reader = QImageReader(str(path))
-    reader.setAutoTransform(True)                  # EXIF-Lage wie beim Einfügen
-    raw = reader.size()                            # wie gespeichert, vor der Drehung
+    reader.setAutoTransform(True)                  # EXIF orientation as when inserting
+    raw = reader.size()                            # as stored, before rotation
     if not raw.isValid() or raw.isEmpty():
         return _no_preview(info)
     if raw.width() * raw.height() > MAX_PREVIEW_PIXELS and bytes(reader.format()) != b"jpeg":
@@ -120,8 +120,8 @@ def _raster(path: Path, size: int, info: str) -> Preview:
 
 
 def _fit(full: QSize, size: int, grow: bool = False) -> QSize:
-    """Größe innerhalb ``size`` × ``size`` mit gleichem Seitenverhältnis (``grow``: auch größer
-    als das Bild); jede Kante mindestens 1."""
+    """Size within ``size`` × ``size`` with the same aspect ratio (``grow``: also larger
+    than the image); each edge at least 1."""
     factor = size / max(full.width(), full.height(), 1)
     if not grow:
         factor = min(1.0, factor)
@@ -146,7 +146,7 @@ def _svg(path: Path, size: int, info: str) -> Preview:
 def _pdf(path: Path, page: int, size: int, info: str) -> Preview:
     import pypdfium2 as pdfium
 
-    with PDFIUM_LOCK:                                 # PDFium ist nicht threadsicher
+    with PDFIUM_LOCK:                                 # PDFium is not thread-safe
         pdf = pdfium.PdfDocument(path)
         try:
             pages = len(pdf)
@@ -165,11 +165,11 @@ def _pdf(path: Path, page: int, size: int, info: str) -> Preview:
 def _label(path: Path, size: int, info: str, model: str) -> Preview:
     image = Renderer().render(storage.load(path), model, placeholders=True).image
     image.thumbnail((size - 2, size - 2))
-    return Preview(_qimage(ImageOps.expand(image.convert("L"), 1, fill=160)), info)   # Etikettrand
+    return Preview(_qimage(ImageOps.expand(image.convert("L"), 1, fill=160)), info)   # label edge
 
 
 def _table(path: Path, info: str) -> Preview:
-    table = series.load_table(path, limit=TABLE_ROWS)          # nur der Anfang (große Tabellen)
+    table = series.load_table(path, limit=TABLE_ROWS)          # only the beginning (large tables)
     lines = [" | ".join(_cell(c) for c in table.columns)]
     lines += [" | ".join(_cell(c) for c in row) for row in table.rows]
     rows = len(table.rows)
@@ -189,7 +189,7 @@ def _qimage(image: Image.Image) -> QImage:
 
 
 class _Done(QObject):
-    """Ergebnis eines Vorschau-Auftrags (Generation, Preview) – über Threadgrenzen hinweg."""
+    """Result of a preview job (generation, preview) – across thread boundaries."""
     done = Signal(int, object)
 
 
@@ -198,13 +198,13 @@ class _Job(QRunnable):
         super().__init__()
         self._args = (path, page, PREVIEW_PX, model)
         self._generation = generation
-        self._emitter = emitter                   # hält den Sender am Leben, bis gemeldet ist
+        self._emitter = emitter                   # keeps the sender alive until reported
 
     def run(self) -> None:
-        preview = make_preview(*self._args)       # QImage geht im Hintergrund, QPixmap nicht
+        preview = make_preview(*self._args)       # QImage may go to the background, QPixmap may not
         try:
             self._emitter.done.emit(self._generation, preview)
-        except RuntimeError:                      # Dialog inzwischen geschlossen
+        except RuntimeError:                      # dialog closed in the meantime
             pass
 
 
@@ -212,7 +212,7 @@ _pool: QThreadPool | None = None
 
 
 def _threads() -> QThreadPool:
-    """Ein Hintergrund-Thread für alle Vorschauen (nacheinander, nie parallel)."""
+    """One background thread for all previews (one after another, never in parallel)."""
     global _pool
     if _pool is None:
         _pool = QThreadPool()
@@ -221,14 +221,14 @@ def _threads() -> QThreadPool:
 
 
 def wait_for_previews() -> None:
-    """Laufende Vorschauen abwarten (Dialog geschlossen, Tests)."""
+    """Wait for running previews (dialog closed, tests)."""
     if _pool is not None:
         _pool.waitForDone()
 
 
 class PreviewPane(QWidget):
-    """Vorschau rechts im Dialog: Bild, Text, bei PDF mit mehreren Seiten ◀ n/N ▶. Gelesen wird
-    im Hintergrund; jedes ``show_file`` zählt die Generation hoch, ältere Ergebnisse verfallen."""
+    """Preview on the right in the dialog: image, text, ◀ n/N ▶ for PDFs with several pages. Reading
+    happens in the background; each ``show_file`` increments the generation, older results expire."""
 
     def __init__(self, pages: bool = False, model: str = "QL-600"):
         super().__init__()
@@ -242,12 +242,12 @@ class PreviewPane(QWidget):
         self._emitter.done.connect(self.show_result)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 0, 0, 0)
-        self.setFixedWidth(PREVIEW_PX + 8)            # gleich breit mit und ohne Bild
+        self.setFixedWidth(PREVIEW_PX + 8)            # same width with and without image
         self.image = QLabel()
         self.image.setFixedSize(PREVIEW_PX, PREVIEW_PX)
         self.image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image.setObjectName("filePreview")
-        self.image.setFrameShape(QFrame.Shape.Box)    # Etiketten sind weiß: Rand zeigt die Fläche
+        self.image.setFrameShape(QFrame.Shape.Box)    # labels are white: the border shows the area
         layout.addWidget(self.image)
         self.pages = QWidget()
         row = QHBoxLayout(self.pages)
@@ -271,7 +271,7 @@ class PreviewPane(QWidget):
         layout.addWidget(self.info, 1)
 
     def show_file(self, path: str | None) -> None:
-        """Vorschau einer Datei zeigen (neue Datei: erste Seite)."""
+        """Show the preview of a file (new file: first page)."""
         if path != self.path:
             self.page = 1
         self.path = path
@@ -285,16 +285,16 @@ class PreviewPane(QWidget):
         self.generation += 1
         if not self.path:
             self.show_result(self.generation, Preview(None, ""))
-        elif Path(self.path).suffix.lower() == ".pdf":    # PDFium: nur im GUI-Thread
+        elif Path(self.path).suffix.lower() == ".pdf":    # PDFium: only in the GUI thread
             self.show_result(self.generation,
                              make_preview(self.path, self.page, PREVIEW_PX, self._model))
         else:
-            _threads().clear()                    # noch nicht begonnene Aufträge sind veraltet
+            _threads().clear()                    # jobs not yet started are outdated
             _threads().start(_Job(self.generation, self.path, self.page, self._model,
                                   self._emitter))
 
     def show_result(self, generation: int, preview: Preview) -> None:
-        """Ergebnis zeigen – nur das des letzten Auftrags."""
+        """Show the result – only that of the last job."""
         if generation != self.generation:
             return
         self.page, self._count = preview.page, preview.pages
@@ -302,7 +302,7 @@ class PreviewPane(QWidget):
             self.image.setPixmap(QPixmap.fromImage(preview.image))
         else:
             self.image.clear()
-        self.image.setVisible(preview.image is not None)   # Tabelle/Text: oben beginnen
+        self.image.setVisible(preview.image is not None)   # table/text: start at the top
         self.info.setText(preview.text)
         many = self._pages_allowed and preview.image is not None and preview.pages > 1
         self.pages.setVisible(many)
@@ -312,8 +312,8 @@ class PreviewPane(QWidget):
 
 
 class PreviewFileDialog(QFileDialog):
-    """Qt-Dialog „Öffnen“ (nicht der des Systems) mit Vorschau der markierten Datei rechts.
-    ``pages``: bei PDF lässt sich die Seite wählen (``page_for``)."""
+    """Qt dialog “Open” (not the system's) with a preview of the selected file on the right.
+    ``pages``: for PDFs the page can be chosen (``page_for``)."""
 
     def __init__(self, parent, title: str, folder: str, filters: str, pages: bool = False,
                  model: str = "QL-600"):
@@ -325,10 +325,10 @@ class PreviewFileDialog(QFileDialog):
         layout = self.layout()
         if isinstance(layout, QGridLayout):
             layout.addWidget(self.pane, 0, layout.columnCount(), layout.rowCount(), 1)
-        # Qt speichert den Stand des Dialogs für alle Programme (QtProject.conf): Spalten, Seitenleiste
-        # und Splitter nur für labelwerk einrichten, beim Schließen zurückstellen
+        # Qt stores the dialog's state for all programs (QtProject.conf): set up columns, sidebar
+        # and splitter only for labelwerk, restore when closing
         self._qt_state = self.saveState()
-        self._arrange()                         # nach Qts Wiederherstellung des letzten Stands
+        self._arrange()                         # after Qt's restoration of the last state
         self._pending: str | None = None
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -337,8 +337,8 @@ class PreviewFileDialog(QFileDialog):
         self.currentChanged.connect(self._current_changed)
 
     def _arrange(self) -> None:
-        """Platz für die Dateiliste: Orte links schmal, Spalte Name dehnt sich, Typ entfällt,
-        Größe und Datum so breit wie nötig; Fenster höchstens 90 % des Bildschirms."""
+        """Room for the file list: places on the left narrow, column Name stretches, Type is dropped,
+        size and date as wide as needed; window at most 90 % of the screen."""
         sidebar = self.findChild(QListView, "sidebar")
         if sidebar is not None:
             sidebar.setMinimumWidth(SIDEBAR_PX)
@@ -348,12 +348,12 @@ class PreviewFileDialog(QFileDialog):
             header = tree.header()
             metrics = tree.fontMetrics()
             header.setStretchLastSection(False)
-            header.setSectionHidden(2, True)                        # Typ
+            header.setSectionHidden(2, True)                        # type
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             for column, sample in ((1, "9999,99 KiB"), (3, "00.00.0000 00:00")):
                 title = str(tree.model().headerData(column, Qt.Orientation.Horizontal) or "")
                 width = max(metrics.horizontalAdvance(sample),
-                            header.fontMetrics().horizontalAdvance(title) * 1.15)   # Kopf fett
+                            header.fontMetrics().horizontalAdvance(title) * 1.15)   # header bold
                 header.setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
                 header.resizeSection(column, round(width) + 28)
         screen = self.screen().availableGeometry()
@@ -369,28 +369,28 @@ class PreviewFileDialog(QFileDialog):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        self._split()                           # erst sichtbar gelten die Breiten
+        self._split()                           # widths only apply once visible
 
     def restore_qt_state(self) -> None:
-        """Stand des Qt-Dialogs wie vor ``_arrange`` (Qt speichert ihn beim Zerstören)."""
+        """State of the Qt dialog as before ``_arrange`` (Qt stores it when destroyed)."""
         self.restoreState(self._qt_state)
 
     def done(self, result: int) -> None:
         self._timer.stop()
-        _threads().clear()                      # nur den laufenden Auftrag abwarten
-        wait_for_previews()                     # kein Ergebnis mehr nach dem Schließen
+        _threads().clear()                      # only wait for the running job
+        wait_for_previews()                     # no result after closing
         self.restore_qt_state()
         super().done(result)
 
     def _current_changed(self, path: str) -> None:
         self._pending = path
-        self._timer.start()                     # Pfeiltasten: erst die stehende Auswahl lesen
+        self._timer.start()                     # arrow keys: first read the settled selection
 
     def show_preview(self, path: str | None) -> None:
         self.pane.show_file(path or None)
 
     def page_for(self, path: str) -> int | None:
-        """Im Dialog gewählte Seite, wenn ``path`` die gezeigte PDF mit Seitenwahl ist."""
+        """Page chosen in the dialog if ``path`` is the shown PDF with page selection."""
         shown = self.pane.path
         if not self.pane.pages.isHidden() and shown and Path(shown).resolve() == Path(path).resolve():
             return self.pane.page
@@ -402,21 +402,21 @@ def _plugins_path() -> str:
 
 
 def system_dialog_available() -> bool:
-    """Bringt diese Qt-Installation das Platform-Theme „xdgdesktopportal“ mit (Dialog des
-    Desktops über das XDG-Portal)? Ohne es gibt es nur den eigenen Dialog."""
+    """Does this Qt installation bring the platform theme “xdgdesktopportal” (the desktop's
+    dialog via the XDG portal)? Without it there is only the own dialog."""
     return any((Path(_plugins_path()) / "platformthemes").glob("*xdgdesktopportal*"))
 
 
 def exec_dialog(dialog: QFileDialog) -> bool:
-    """Dialog zeigen und warten (in Tests ersetzt: kein echter modaler Dialog)."""
+    """Show the dialog and wait (replaced in tests: no real modal dialog)."""
     return bool(dialog.exec())
 
 
 def ask_open(parent, title: str, folder: str, filters: str, *, system: bool = False,
              pages: bool = False, model: str = "QL-600") -> Chosen | None:
-    """Datei zum Öffnen wählen: eigener Dialog mit Vorschau (``pages``: PDF-Seite im Dialog
-    wählbar) bzw. die Dateiauswahl des Systems (``system``; Seite dann nicht gewählt).
-    None = abgebrochen."""
+    """Choose a file to open: own dialog with preview (``pages``: PDF page selectable in the dialog)
+    or the system's file selection (``system``; page then not chosen).
+    None = cancelled."""
     if system:
         path, _filter = QFileDialog.getOpenFileName(parent, title, folder, filters)
         return Chosen(path) if path else None
@@ -427,5 +427,5 @@ def ask_open(parent, title: str, folder: str, filters: str, *, system: bool = Fa
         path = dialog.selectedFiles()[0]
         return Chosen(path, dialog.page_for(path) if pages else None)
     finally:
-        dialog.restore_qt_state()               # auch ohne done() (Tests): Qt-Stand unverändert
+        dialog.restore_qt_state()               # even without done() (tests): Qt state unchanged
         dialog.deleteLater()

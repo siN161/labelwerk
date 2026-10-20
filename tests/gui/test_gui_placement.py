@@ -1,4 +1,4 @@
-"""Arbeitsfläche mit Objekten: Auswahl, Ziehen, Einrasten, Anfasser, Tastatur (Etappe 3d-1)."""
+"""Canvas with objects: selection, dragging, snapping, handles, keyboard (stage 3d-1)."""
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QImage, QKeySequence, QMouseEvent
@@ -66,7 +66,7 @@ def _center(canvas, index):
     return canvas.view_rect(index).center()
 
 
-# --- Elemente ---------------------------------------------------------------------
+# --- Elements ---------------------------------------------------------------------
 def test_canvas_shows_one_item_per_object(window):
     items = window.canvas.objects
     assert len(items) == 2 and all(isinstance(item, ObjectItem) for item in items)
@@ -77,7 +77,7 @@ def test_canvas_shows_one_item_per_object(window):
 def test_canvas_shows_the_object_images_that_are_printed(qtbot, orientation):
     doc = _doc(orientation)
     doc.objects.append(TextObject("Mitte"))
-    doc.objects.append(TextObject.plain("Jahr", size_pt=12, underline=True))   # Tinte über den Rahmen
+    doc.objects.append(TextObject.plain("Jahr", size_pt=12, underline=True))   # ink beyond the frame
     doc.objects[-1].x_mm, doc.objects[-1].y_mm = 30, 10
     win = _window(qtbot, doc)
     for obj, item in zip(doc.objects, win.canvas.objects):
@@ -93,13 +93,13 @@ def test_canvas_shows_the_object_images_that_are_printed(qtbot, orientation):
 def test_horizontal_view_shows_objects_in_reading_direction(qtbot):
     win = _window(qtbot, _doc("horizontal", length_mm=60))
     first, second = win.canvas.view_rect(0), win.canvas.view_rect(1)
-    assert second.top() > first.bottom()                   # „Zwei“ steht unter „Eins“
-    assert first.width() > first.height()                  # Text liegt waagrecht
+    assert second.top() > first.bottom()                   # "Zwei" is below "Eins"
+    assert first.width() > first.height()                  # text lies horizontally
 
 
 def _count_rendering(monkeypatch):
-    """Zählt das Messen (``_prepare``) und Zeichnen (``_finish``) je Objekttext – alle Wege
-    zum Rendern (Etikettgröße, Objekte, „ragt hinaus“, Fläche) laufen darüber."""
+    """Counts measuring (``_prepare``) and drawing (``_finish``) per object text – all paths
+    to rendering (label size, objects, "object sticks out", area) go through it."""
     calls = []
     for name in ("_prepare", "_finish"):
         real = getattr(render, name)
@@ -116,12 +116,12 @@ def test_render_without_change_renders_nothing(window, monkeypatch):
     image = window.image
     window.render_now()
     assert calls == []
-    assert window.image is image                            # Druckbild nicht neu zusammengesetzt
+    assert window.image is image                            # print image not reassembled
 
 
 def test_only_changed_objects_are_rendered_again(qtbot, monkeypatch):
     doc = _doc()
-    doc.objects.append(TextObject("Mitte"))                 # ohne Position: hängt an der Größe
+    doc.objects.append(TextObject("Mitte"))                 # without position: depends on the size
     win = _window(qtbot, doc)
     calls = _count_rendering(monkeypatch)
     win.doc.objects[1] = layout.place(win.doc.objects[1], layout.Rect(10, 25, 0, 0))
@@ -154,12 +154,12 @@ def test_outside_hint_and_area_come_from_the_rendered_objects(qtbot, monkeypatch
     win = _window(qtbot, doc)
     calls = _count_rendering(monkeypatch)
     win.canvas.set_selection([1])
-    win.align_selected("left", paper=True)                  # Fläche ohne neues Messen
+    win.align_selected("left", paper=True)                  # area without new measuring
     assert calls == [("_prepare", "Zwei"), ("_finish", "Zwei")]
     assert win.doc.objects[1].x_mm == pytest.approx(layout.printable_area(win.doc).x)
 
 
-# --- Auswahl ----------------------------------------------------------------------
+# --- Selection --------------------------------------------------------------------
 def test_click_selects_ctrl_click_toggles_empty_click_clears(window):
     canvas = window.canvas
     seen = []
@@ -190,20 +190,20 @@ def test_selection_survives_rendering(window):
     assert window.canvas.selection() == [1]
 
 
-# --- Verschieben ------------------------------------------------------------------
+# --- Moving -----------------------------------------------------------------------
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
 def test_drag_moves_object_and_updates_model_on_release(qtbot, orientation):
     win = _window(qtbot, _doc(orientation, length_mm=60))
     canvas = win.canvas
     ppm = canvas.px_per_mm()
     start = _center(canvas, 0)
-    end = start + QPointF(80, 40)                          # rechts und unten in Leserichtung
+    end = start + QPointF(80, 40)                          # right and down in reading direction
     _press_move(canvas, start, end, ALT)
     assert canvas.view_rect(0).center().x() == pytest.approx(end.x(), abs=1)
-    assert win.doc.objects[0].x_mm == 4                   # Modell erst beim Loslassen
+    assert win.doc.objects[0].x_mm == 4                   # model only on release
     _send(canvas, QMouseEvent.Type.MouseButtonRelease, end, Qt.MouseButton.NoButton, ALT)
     obj = win.doc.objects[0]
-    assert obj.x_mm == pytest.approx(4 + 80 / ppm, abs=0.051)   # auf 0,1 mm gerundet
+    assert obj.x_mm == pytest.approx(4 + 80 / ppm, abs=0.051)   # rounded to 0.1 mm
     assert obj.y_mm == pytest.approx(4 + 40 / ppm, abs=0.051)
     assert win.doc.objects[1].x_mm == 4
     assert canvas.view_rect(0).center().x() == pytest.approx(end.x(), abs=1)
@@ -249,7 +249,7 @@ def test_drag_snaps_to_label_center_unless_alt(window, modifiers):
     ppm = canvas.px_per_mm()
     label = layout.label_rect(window.doc)
     rect = layout.object_rect(canvas.objects[0].rendered)
-    # Mitte des Objekts landet 2 Bildschirmpixel neben der Etikettmitte (Toleranz 6 px)
+    # centre of the object ends up 2 screen pixels next to the label centre (tolerance 6 px)
     dx = round((label.cx - rect.cx) * ppm) + 2
     start = _center(canvas, 0)
     _press_move(canvas, start, start + QPointF(dx, 0), modifiers)
@@ -262,9 +262,9 @@ def test_drag_snaps_to_label_center_unless_alt(window, modifiers):
         assert offset == pytest.approx(2 / ppm, abs=0.6 / ppm)
         assert guides == []
     else:
-        assert abs(offset) <= DOT_MM                       # genauer geht der Druck nicht
+        assert abs(offset) <= DOT_MM                       # the print cannot be more exact
         assert ("x", pytest.approx(label.cx)) in guides
-    assert canvas.guides() == []                           # Hilfslinien nur beim Ziehen
+    assert canvas.guides() == []                           # guides only while dragging
 
 
 def test_render_waits_while_dragging(window):
@@ -272,14 +272,14 @@ def test_render_waits_while_dragging(window):
     start = _center(canvas, 0)
     _press_move(canvas, start, start + QPointF(30, 0), ALT)
     item = canvas.objects[0]
-    window.render_now()                                    # z. B. verzögertes Rendern
+    window.render_now()                                    # e.g. delayed rendering
     assert canvas.objects[0] is item and canvas.is_dragging()
     _send(canvas, QMouseEvent.Type.MouseButtonRelease, start + QPointF(30, 0),
           Qt.MouseButton.NoButton, ALT)
     assert window.doc.objects[0].x_mm > 4
 
 
-# --- Anfasser ---------------------------------------------------------------------
+# --- Handles ----------------------------------------------------------------------
 def test_selected_object_has_eight_handles(window):
     window.canvas.set_selection([0])
     handles = window.canvas.handle_points(0)
@@ -309,7 +309,7 @@ def test_edge_drag_turns_fixed_frame_on(window):
     assert obj.fit
     assert obj.w_mm == pytest.approx(before.w + 10, abs=0.2)
     assert obj.h_mm == pytest.approx(before.h, abs=0.01)
-    assert window.panel("text").fit.isChecked()            # Panel zeigt das Modell
+    assert window.panel("text").fit.isChecked()            # panel shows the model
 
 
 def test_handle_drag_on_fixed_frame_changes_frame(qtbot):
@@ -326,7 +326,7 @@ def test_handle_drag_on_fixed_frame_changes_frame(qtbot):
     assert obj.size_pt == 14
 
 
-# --- Tastatur ---------------------------------------------------------------------
+# --- Keyboard ---------------------------------------------------------------------
 def _focus(window, qtbot):
     window.activateWindow()
     window.canvas.setFocus()
@@ -355,7 +355,7 @@ def test_delete_removes_selected_objects(window, qtbot):
     QTest.keyClick(window.canvas, Qt.Key.Key_Delete)
     assert [o.text for o in window.doc.objects] == ["Zwei"]
     assert window.canvas.selection() == []
-    assert window.panel("text").index is None              # nichts mehr ausgewählt
+    assert window.panel("text").index is None              # nothing selected any more
     assert len(window.canvas.objects) == 1
 
 
@@ -377,7 +377,7 @@ def test_shortcuts_come_from_settings(qtbot):
     assert win.doc.objects[0].x_mm == pytest.approx(3.9)
 
 
-# --- Hinweise ---------------------------------------------------------------------
+# --- Hints ------------------------------------------------------------------------
 def test_object_outside_label_shows_status_hint(qtbot):
     doc = _doc()
     doc.objects[1] = TextObject("Zwei", size_pt=14, x_mm=55, y_mm=20)
@@ -390,13 +390,13 @@ def test_object_outside_label_shows_status_hint(qtbot):
 
 def test_no_snapping_to_moving_end_of_auto_length_label(qtbot):
     doc = _doc(length_mm=None)
-    doc.margin_mm = 8                                       # Bandende 5 mm hinter „Zwei“ (8 − 3 mm Vorschub)
+    doc.margin_mm = 8                                       # end of tape 5 mm behind "Zwei" (8 − 3 mm feed)
     win = _window(qtbot, doc)
     canvas = win.canvas
     ppm = canvas.px_per_mm()
     label = layout.label_rect(win.doc)
     rect = layout.object_rect(canvas.objects[0].rendered)
-    dy = round((label.bottom - rect.bottom) * ppm) - 2      # 2 px vor dem Bandende
+    dy = round((label.bottom - rect.bottom) * ppm) - 2      # 2 px before the end of the tape
     start = _center(canvas, 0)
     _press_move(canvas, start, start + QPointF(0, dy))
     guides = canvas.guides()
@@ -407,7 +407,7 @@ def test_no_snapping_to_moving_end_of_auto_length_label(qtbot):
     assert moved.bottom == pytest.approx(label.bottom - 2 / ppm, abs=0.1)
 
 
-# --- Änderungen während des Ziehens -------------------------------------------------
+# --- Changes while dragging ---------------------------------------------------------
 def _release(canvas, pos, modifiers=ALT):
     _send(canvas, QMouseEvent.Type.MouseButtonRelease, pos, Qt.MouseButton.NoButton, modifiers)
 
@@ -418,9 +418,9 @@ def test_delete_while_dragging_cancels_the_drag(window, qtbot):
     end = start + QPointF(30, 10)
     _press_move(canvas, start, end, ALT)
     assert canvas.is_dragging() and canvas.selection() == [1]
-    window.delete_selected()                                # z. B. Entf während des Ziehens
+    window.delete_selected()                                # e.g. Del while dragging
     assert not canvas.is_dragging()
-    assert len(canvas.objects) == 1                         # gleich neu gezeichnet
+    assert len(canvas.objects) == 1                         # redrawn right away
     _release(canvas, end)
     assert [(o.text, o.x_mm, o.y_mm) for o in window.doc.objects] == [("Eins", 4, 4)]
 
@@ -429,7 +429,7 @@ def test_delete_while_dragging_cancels_the_drag(window, qtbot):
 def test_structure_change_while_dragging_cancels_the_drag(window, change):
     canvas = window.canvas
     canvas.set_selection([0])
-    window.nudge(1, 0)                                      # ein Schritt zum Rückgängigmachen
+    window.nudge(1, 0)                                      # one step to undo
     window.copy_selected()
     start = _center(canvas, 1)
     end = start + QPointF(30, 10)
@@ -441,7 +441,7 @@ def test_structure_change_while_dragging_cancels_the_drag(window, change):
     after = [(o.text, o.x_mm, o.y_mm) for o in window.doc.objects]
     _release(canvas, end)
     assert [(o.text, o.x_mm, o.y_mm) for o in window.doc.objects] == after
-    assert ("Zwei", 4, 20) in after                         # das gezogene Objekt blieb
+    assert ("Zwei", 4, 20) in after                         # the dragged object stayed
 
 
 def test_moved_signal_with_stale_indices_is_ignored(window):
@@ -450,7 +450,7 @@ def test_moved_signal_with_stale_indices_is_ignored(window):
     assert [(o.x_mm, o.y_mm) for o in window.doc.objects] == [(4, 4), (4, 20)]
 
 
-# --- Raster 0,1 mm nach dem Ziehen --------------------------------------------------
+# --- Grid 0.1 mm after dragging -----------------------------------------------------
 def _on_grid(value):
     return value == pytest.approx(round(value, 1), abs=1e-9)
 
@@ -475,7 +475,7 @@ def test_edge_drag_rounds_only_the_moved_edge(window):
     _drag(canvas, edge, edge + QPointF(37, 0))
     obj = window.doc.objects[0]
     assert obj.fit and _on_grid(obj.w_mm)
-    assert obj.h_mm == pytest.approx(height, abs=1e-3)      # Höhe wie gerendert, nicht gerundet
+    assert obj.h_mm == pytest.approx(height, abs=1e-3)      # height as rendered, not rounded
     assert (obj.x_mm, obj.y_mm) == (4, 4)
 
 

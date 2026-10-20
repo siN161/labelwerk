@@ -1,5 +1,5 @@
-"""Zebra direkt (ZPL) in der GUI: Druckermenü, Etiketten in seiner Auflösung, Modus im Reiter SERIE
-(je Drucker gespeichert), Netzwerk-Zebra in den Einstellungen, Druck mit Modus."""
+"""Zebra direct (ZPL) in the GUI: printer menu, labels at its resolution, mode in the SERIES tab
+(saved per printer), network Zebra in the settings, printing with mode."""
 from PySide6.QtWidgets import QTableWidgetItem
 
 from labelwerk.document import Document, Numbering, Series, TextObject
@@ -8,10 +8,10 @@ from labelwerk.gui.settings_dialog import SettingsDialog
 from labelwerk.printers import Printer
 from labelwerk.settings import Settings, load_settings
 
-from test_gui_printers import QL600, _labels, _window, workers  # noqa: F401  (Fixture)
+from test_gui_printers import QL600, _labels, _window, workers  # noqa: F401  (fixture)
 
 ZEBRA = Printer("zpl+file:///dev/usb/lp2", "zpl:300", "ZTC ZD420-300dpi · lp2", "zebra")
-L57 = "57x32mm@305"                                       # 300 dpi = 12 Punkte/mm
+L57 = "57x32mm@305"                                       # 300 dpi = 12 dots/mm
 
 
 def _zebra_window(qtbot, monkeypatch, found=(ZEBRA,), **kw):
@@ -23,7 +23,7 @@ def test_zebra_is_chosen_and_brings_its_labels(qtbot, monkeypatch):
     win = _zebra_window(qtbot, monkeypatch)
     assert win.printer.uri == ZEBRA.uri and win.model == "zpl:300"
     assert _labels(win)[:2] == ["51x25mm@305", L57]
-    assert win.doc.label_id == "51x25mm@305"                  # neues Etikett folgt dem Drucker
+    assert win.doc.label_id == "51x25mm@305"                  # new label follows the printer
     assert win.printer_status.text() == "● ZTC ZD420-300dpi · lp2 · ungeprüft"
     assert not win.panel("paper").check.isEnabled()
     assert win.canvas.dpi == 305
@@ -45,9 +45,9 @@ def test_mode_in_the_series_tab(qtbot, monkeypatch):
     assert [combo.itemText(i) for i in range(combo.count())] == [
         "Wie am Drucker eingestellt", "Abreißen", "Schneiden (nur mit Abschneider)",
         "Ablösen (nur mit Spender)"]
-    assert combo.currentData() == ""                          # sendet kein ^MM
+    assert combo.currentData() == ""                          # sends no ^MM
     combo.setCurrentIndex(2)
-    assert load_settings().printer_options == {"zpl:300": {"mode": "C"}}   # je Modell, nicht lpN
+    assert load_settings().printer_options == {"zpl:300": {"mode": "C"}}   # per model, not lpN
 
 
 def test_series_to_zebra_with_its_mode(qtbot, monkeypatch, workers):
@@ -71,7 +71,7 @@ def test_network_zebra_in_the_settings(qtbot, tmp_path):
     dialog.network.setItem(0, 1, QTableWidgetItem("10.0.0.8"))
     combo = dialog.network.cellWidget(0, 2)
     assert combo.findText("Zebra (ZPL) 203 dpi – ungeprüft") >= 0
-    assert dialog.printer_model.findData("zpl:203") < 0            # Ersatzmodell: nur Brother
+    assert dialog.printer_model.findData("zpl:203") < 0            # substitute model: Brother only
     combo.setCurrentIndex(combo.findData("zpl:203"))
     dialog.accept()
     assert load_settings(path).network_printers == [
@@ -100,7 +100,7 @@ def test_chosen_zebra_survives_a_restart(qtbot, monkeypatch):
     s = load_settings()
     assert s.printer == ZEBRA.uri and s.warnings == []
     win.panel("series").driver_cuts["mode"].setCurrentIndex(1)
-    win.panel("series").driver_cuts["mode"].setCurrentIndex(0)   # zurück: wie am Drucker
+    win.panel("series").driver_cuts["mode"].setCurrentIndex(0)   # back: as on the printer
     assert load_settings().printer_options == {"zpl:300": {"mode": ""}}
 
 

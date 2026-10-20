@@ -1,5 +1,5 @@
-"""Dateiauswahl mit Vorschau (Etappe Oberfläche): Vorschau je Dateiart, eigener Dialog mit
-Seitenwahl für PDF, Dateiauswahl des Systems als Einstellung – nie ein echter modaler Dialog."""
+"""File chooser with preview (UI stage): preview per file type, own dialog with
+page selection for PDF, system file chooser as a setting – never a real modal dialog."""
 import time
 from pathlib import Path
 
@@ -28,7 +28,7 @@ def _pdf(tmp_path, sizes=((300, 150), (150, 300), (200, 200))) -> Path:
     return path
 
 
-# --- Vorschau je Dateiart -------------------------------------------------------------
+# --- Preview per file type -------------------------------------------------------------
 def test_image_preview_is_scaled_and_names_the_size(tmp_path):
     preview = make_preview(_png(tmp_path), size=100)
     assert preview.image is not None and max(preview.image.width(), preview.image.height()) <= 100
@@ -39,7 +39,7 @@ def test_image_preview_is_scaled_and_names_the_size(tmp_path):
 def test_jpeg_preview_follows_the_exif_orientation(tmp_path):
     path = tmp_path / "foto.jpg"
     exif = Image.Exif()
-    exif[0x0112] = 6                                   # 90° gedreht aufgenommen
+    exif[0x0112] = 6                                   # taken rotated by 90°
     Image.new("RGB", (400, 200), "gray").save(path, exif=exif)
     preview = make_preview(path, size=100)
     assert preview.image.height() > preview.image.width()
@@ -60,7 +60,7 @@ def test_pdf_preview_shows_the_chosen_page(tmp_path):
     assert first.image.width() > first.image.height()
     assert second.image.height() > second.image.width()
     assert "Seite 2 von 3" in second.text
-    assert make_preview(path, 9, size=100).page == 3          # außerhalb → letzte Seite
+    assert make_preview(path, 9, size=100).page == 3          # outside → last page
 
 
 def test_label_file_preview(tmp_path):
@@ -82,7 +82,7 @@ def test_table_preview_shows_the_first_rows(tmp_path):
 
 
 def test_large_pictures_are_not_decoded(tmp_path, monkeypatch):
-    """Pixelgrenze vor dem Dekodieren (Speicher) – JPEG wird verkleinert dekodiert und darf."""
+    """Pixel limit before decoding (memory) – JPEG is decoded downscaled and may pass."""
     monkeypatch.setattr(file_dialog, "MAX_PREVIEW_PIXELS", 1000)
     preview = make_preview(_png(tmp_path))
     assert preview.image is None and "Keine Vorschau" in preview.text and "400 × 200" in preview.text
@@ -126,7 +126,7 @@ def test_other_files_and_folders_show_name_and_size(tmp_path):
     assert make_preview(tmp_path).image is None
 
 
-# --- eigener Dialog ---------------------------------------------------------------------
+# --- own dialog ---------------------------------------------------------------------
 def test_dialog_is_not_native_and_shows_the_preview_of_the_current_file(qtbot, tmp_path):
     dialog = PreviewFileDialog(None, "Bild einfügen", str(tmp_path), "Alle (*)")
     qtbot.addWidget(dialog)
@@ -146,12 +146,12 @@ def test_preview_is_read_in_the_background_and_stale_results_are_dropped(qtbot, 
     pane.show_file(str(second))
     assert pane.generation == generation + 1
     qtbot.waitUntil(lambda: "b.png" in pane.info.text(), timeout=3000)
-    pane.show_result(generation, make_preview(first))        # verspätetes Ergebnis von a.png
+    pane.show_result(generation, make_preview(first))        # late result of a.png
     assert "b.png" in pane.info.text()
 
 
 def test_pdf_preview_comes_at_once(qtbot, tmp_path):
-    """PDFium ist nicht threadsicher: PDF-Vorschau im GUI-Thread (klein, schnell)."""
+    """PDFium is not thread-safe: PDF preview in the GUI thread (small, fast)."""
     from labelwerk.gui.file_dialog import PreviewPane
     pane = PreviewPane(pages=True)
     qtbot.addWidget(pane)
@@ -165,7 +165,7 @@ def test_dialog_layout_leaves_room_for_the_file_list(qtbot, tmp_path):
     qtbot.addWidget(dialog)
     assert dialog.findChild(QListView, "sidebar").minimumWidth() >= 160
     header = dialog.findChild(QTreeView, "treeView").header()
-    assert header.isSectionHidden(2)                          # Spalte Typ
+    assert header.isSectionHidden(2)                          # Type column
     assert header.sectionResizeMode(0) == header.ResizeMode.Stretch
     screen = dialog.screen().availableGeometry()
     assert dialog.width() <= 0.9 * screen.width() + 1 and dialog.height() <= 0.9 * screen.height() + 1
@@ -192,7 +192,7 @@ def test_pdf_page_is_chosen_in_the_dialog(qtbot, tmp_path):
     dialog.pane.next.click()
     assert dialog.pane.page_label.text() == "2/3" and dialog.pane.page == 2
     dialog.pane.next.click()
-    dialog.pane.next.click()                                  # bleibt auf der letzten
+    dialog.pane.next.click()                                  # stays on the last one
     assert dialog.pane.page == 3 and not dialog.pane.next.isEnabled()
     dialog.pane.prev.click()
     assert dialog.page_for(str(path)) == 2
@@ -236,7 +236,7 @@ def test_system_dialog_uses_the_qt_dialog_and_asks_the_page_later(tmp_path, monk
     assert seen == [("Bild einfügen", str(tmp_path))]
 
 
-# --- Hauptfenster ----------------------------------------------------------------------
+# --- Main window ----------------------------------------------------------------------
 def _window(qtbot, **settings):
     win = MainWindow(doc=Document("62", objects=[TextObject("A")]),
                      settings=Settings(check_media_on_start=False, **settings))
@@ -263,7 +263,7 @@ def test_insert_image_takes_the_page_from_the_dialog(qtbot, tmp_path, monkeypatc
 
 
 def test_with_system_dialog_the_page_is_asked_afterwards(qtbot, tmp_path, monkeypatch):
-    monkeypatch.setattr(file_dialog, "system_dialog_available", lambda: True)   # ohne Plugin-Abhängigkeit
+    monkeypatch.setattr(file_dialog, "system_dialog_available", lambda: True)   # without plugin dependency
     path = _pdf(tmp_path)
     monkeypatch.setattr(file_dialog.QFileDialog, "getOpenFileName",
                         lambda *args: (str(path), ""))
@@ -285,7 +285,7 @@ def test_series_table_and_open_label_use_the_preview_dialog(qtbot, tmp_path, mon
     assert seen[1][0] == "Etikett öffnen" and seen[1][1].startswith("labelwerk-Etiketten (")
 
 
-# --- Einstellung „Dateiauswahl des Systems verwenden“ -----------------------------------
+# --- Setting “Use the system file chooser” -----------------------------------
 def test_setting_in_the_dialog_needs_a_restart(qtbot, tmp_path, monkeypatch):
     monkeypatch.setattr(file_dialog, "system_dialog_available", lambda: True)
     from labelwerk.gui.settings_dialog import SettingsDialog
@@ -299,8 +299,8 @@ def test_setting_in_the_dialog_needs_a_restart(qtbot, tmp_path, monkeypatch):
 
 
 def test_system_dialog_is_chosen_by_a_qt_argument_without_touching_the_environment(monkeypatch):
-    """Platform-Theme „xdgdesktopportal“ (Dialog des Desktops über das XDG-Portal) als Argument
-    der Anwendung – Kindprozesse erben nichts."""
+    """Platform theme "xdgdesktopportal" (the desktop's dialog via the XDG portal) as an argument
+    of the application – child processes inherit nothing."""
     from labelwerk.gui.app import qt_arguments
     monkeypatch.setenv("QT_QPA_PLATFORMTHEME", "qt5ct")
     assert qt_arguments(["labelwerk-gui", "a.labelwerk"], True) == [
@@ -335,19 +335,19 @@ def test_without_plugin_the_setting_is_locked_and_the_own_dialog_is_used(qtbot, 
 
 
 def test_the_dialog_kind_is_fixed_at_start(qtbot, tmp_path, monkeypatch):
-    """Die Einstellung wirkt erst nach einem Neustart – bis dahin bleibt der Weg vom Start."""
+    """The setting only takes effect after a restart – until then the path from startup stays."""
     seen = []
     monkeypatch.setattr(file_dialog, "exec_dialog", lambda d: seen.append(d) and False)
     monkeypatch.setattr(file_dialog.QFileDialog, "getOpenFileName",
                         lambda *a: pytest.fail("Systemdialog vor dem Neustart"))
     win = _window(qtbot)
-    win.settings.system_file_dialog = True                     # gespeichert, noch nicht neu gestartet
+    win.settings.system_file_dialog = True                     # saved, not restarted yet
     assert win.ask_image_file() is None and win.ask_series_file() is None
     assert win.files.ask_open_file() is None and len(seen) == 3
 
 
 def test_save_as_with_the_system_dialog_asks_before_replacing(qtbot, tmp_path, monkeypatch):
-    monkeypatch.setattr(file_dialog, "system_dialog_available", lambda: True)   # ohne Plugin-Abhängigkeit
+    monkeypatch.setattr(file_dialog, "system_dialog_available", lambda: True)   # without plugin dependency
     """Dialoge des Desktops fragen nicht immer vor dem Ersetzen – labelwerk fragt selbst."""
     target = tmp_path / "da.labelwerk"
     storage.save(Document("62", objects=[TextObject("alt")]), target)
@@ -370,7 +370,7 @@ def test_save_dialog_is_not_native_with_the_own_dialog(qtbot, monkeypatch):
     assert seen == [True]
 
 
-# --- Abschluss-Review ------------------------------------------------------------------
+# --- Final review ------------------------------------------------------------------
 def _slow(monkeypatch, seconds):
     original = file_dialog.make_preview
 
@@ -395,7 +395,7 @@ def test_show_file_returns_at_once_and_only_the_last_result_appears(qtbot, tmp_p
     start = time.monotonic()
     pane.show_file(str(_png(tmp_path, "a.png")))
     pane.show_file(str(_png(tmp_path, "b.png")))
-    assert time.monotonic() - start < 0.2                       # liest nicht im GUI-Thread
+    assert time.monotonic() - start < 0.2                       # does not read in the GUI thread
     qtbot.waitUntil(lambda: shown == ["b.png"], timeout=3000)
     file_dialog.wait_for_previews()
     QApplication.processEvents()
@@ -406,19 +406,19 @@ def test_closing_waits_only_for_the_running_preview(qtbot, tmp_path, monkeypatch
     _slow(monkeypatch, 0.2)
     dialog = PreviewFileDialog(None, "Bild einfügen", str(tmp_path), "Alle (*)")
     qtbot.addWidget(dialog)
-    for n in range(10):                                         # schnelles Durchblättern
+    for n in range(10):                                         # flipping through quickly
         dialog.show_preview(str(_png(tmp_path, f"b{n}.png")))
     start = time.monotonic()
     dialog.done(0)
-    assert time.monotonic() - start < 0.5                       # nicht 10 × 0,2 s
+    assert time.monotonic() - start < 0.5                       # not 10 × 0.2 s
 
 
 def test_the_saved_state_of_the_qt_dialog_is_not_changed(qtbot, tmp_path, monkeypatch):
-    """Spalten, Seitenleiste und Splitter richtet labelwerk nur für sich ein – Qt speichert den
-    Stand des Dialogs (QtProject.conf), andere Programme sähen sonst keine Spalte Typ mehr."""
+    """labelwerk sets up columns, sidebar and splitter only for itself – Qt saves the
+    state of the dialog (QtProject.conf), otherwise other programs would no longer see a Type column."""
     from PySide6.QtCore import QCoreApplication, QEvent, QSettings
     from PySide6.QtWidgets import QTreeView
-    QSettings("QtProject").remove("FileDialog")                 # Qt-Standard: Typ sichtbar
+    QSettings("QtProject").remove("FileDialog")                 # Qt default: type visible
     monkeypatch.setattr(file_dialog, "exec_dialog", lambda dialog: False)
     assert ask_open(None, "Etikett öffnen", str(tmp_path), "Alle (*)") is None
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)

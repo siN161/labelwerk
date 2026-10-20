@@ -1,9 +1,9 @@
-"""Serien: Tabellen aus CSV/Excel bzw. Nummerierung und Platzhalter ``{Spalte}`` im Text und im
-Inhalt von Barcodes.
+"""Series: tables from CSV/Excel or numbering, and placeholders ``{Column}`` in the text and in
+the content of barcodes.
 
-Qt-frei. Tabellendateien sind fremde Eingabe: Größe, Zeilen und Spalten sind begrenzt (Zeilen
-werden gestreamt, leere sofort verworfen), jeder Fehler wird zur deutschen ``SeriesError`` –
-nie ein Traceback.
+Qt-free. Table files are foreign input: size, rows and columns are limited (rows are
+streamed, empty ones discarded at once), every error becomes a translated ``SeriesError`` –
+never a traceback.
 """
 from __future__ import annotations
 
@@ -26,45 +26,45 @@ from . import i18n
 from .i18n import NP_, N_, _, pgettext
 from .storage import LINE_BREAKS
 
-MAX_BYTES = 20 * 1024 * 1024        # Tabellendatei
-MAX_UNPACKED = 200 * 1024 * 1024    # Excel: ausgepackt (gegen Zip-Bomben)
-MAX_ROWS = MAX_SERIES_ROWS          # Zeilen ohne Spaltennamen (leere zählen nicht)
+MAX_BYTES = 20 * 1024 * 1024        # table file
+MAX_UNPACKED = 200 * 1024 * 1024    # Excel: unpacked (against zip bombs)
+MAX_ROWS = MAX_SERIES_ROWS          # rows without column names (empty ones do not count)
 MAX_COLUMNS = 200
-MAX_CELL = 100_000                  # Zeichen je Zelle (CSV)
-MAX_RAW_ROWS = 100_000              # Excel: Zeilen samt leeren (verirrte Zelle weit unten)
+MAX_CELL = 100_000                  # characters per cell (CSV)
+MAX_RAW_ROWS = 100_000              # Excel: rows including empty ones (stray cell far below)
 CSV_SUFFIXES = (".csv", ".tsv", ".txt")
 EXCEL_SUFFIXES = (".xlsx", ".xlsm")
 # Translators: name of the numbering column, used as placeholder {Number} on labels
-NUMBER_COLUMN = NP_("series", "Number")   # Spalte der Nummerierung – in jeder Sprache gültig
+NUMBER_COLUMN = NP_("series", "Number")   # column of the numbering – valid in every language
 # Translators: column without a name in the table header: "Column 3"
-COLUMN_WORD = NP_("series", "Column")     # Spalte ohne Namen in der Kopfzeile: „Spalte 3“
-# bei Gleichstand gewinnt das frühere: Tab steht kaum je im Text, deutsches Excel nimmt „;“
+COLUMN_WORD = NP_("series", "Column")     # column without a name in the header row: “Column 3”
+# on a tie the earlier one wins: Tab hardly ever appears in text, German Excel uses ";"
 _SEPARATORS = ("\t", ";", ",", "|")
 _SNIFF_LINES = 20
-_BREAKS = re.compile("[" + re.escape(LINE_BREAKS) + "\t]+")   # werden Leerzeichen
+_BREAKS = re.compile("[" + re.escape(LINE_BREAKS) + "\t]+")   # become spaces
 _PLACEHOLDER = re.compile(r"\{([^{}\n]+)\}")
 
 
 class SeriesError(ValueError):
-    """Tabelle oder Serie unbrauchbar (Meldung auf Deutsch, mit Dateiname)."""
+    """Table or series unusable (translated message, with file name)."""
 
 
 @dataclass
 class Table:
-    """Spaltennamen und Zeilen (Texte, jede Zeile so lang wie ``columns``); Excel: gelesenes
-    Blatt und alle Arbeitsblätter (zählen beim Vergleich nicht)."""
+    """Column names and rows (texts, every row as long as ``columns``); Excel: the sheet read
+    and all worksheets (not counted in comparisons)."""
     columns: list[str]
     rows: list[list[str]]
     sheet: str | None = field(default=None, compare=False)
     sheets: list[str] = field(default_factory=list, compare=False)
-    more: bool = field(default=False, compare=False)   # nur der Anfang gelesen (limit), es folgen weitere
+    more: bool = field(default=False, compare=False)   # only the beginning read (limit), more follow
 
 
-# --- Tabellen lesen ----------------------------------------------------------------------------
+# --- Reading tables ----------------------------------------------------------------------------
 def load_table(path: str | Path, sheet: str | None = None, limit: int | None = None) -> Table:
-    """CSV oder Excel; erste Zeile = Spaltennamen; leere Zeilen entfallen (auch mittendrin).
-    ``sheet``: Excel-Blatt (None = erstes sichtbares Arbeitsblatt); ``limit``: nur so viele
-    Zeilen lesen (Vorschau), ``Table.more`` sagt, ob weitere folgen."""
+    """CSV or Excel; first row = column names; empty rows are dropped (also in the middle).
+    ``sheet``: Excel sheet (None = first visible worksheet); ``limit``: read only that many
+    rows (preview), ``Table.more`` says whether more follow."""
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix in EXCEL_SUFFIXES:
@@ -76,7 +76,7 @@ def load_table(path: str | Path, sheet: str | None = None, limit: int | None = N
 
 
 def sheet_names(path: str | Path) -> list[str]:
-    """Arbeitsblätter einer Excel-Datei (ohne Diagrammblätter); CSV: keine."""
+    """Worksheets of an Excel file (without chart sheets); CSV: none."""
     path = Path(path)
     if path.suffix.lower() not in EXCEL_SUFFIXES:
         return []
@@ -88,7 +88,7 @@ def sheet_names(path: str | Path) -> list[str]:
 
 
 def _read_bytes(path: Path) -> bytes:
-    """Datei ganz lesen – nur eine reguläre (ein FIFO würde hängen), höchstens ``MAX_BYTES``."""
+    """Read a file completely – only a regular one (a FIFO would hang), at most ``MAX_BYTES``."""
     try:
         info = os.stat(path)
         if not stat.S_ISREG(info.st_mode):
@@ -101,12 +101,12 @@ def _read_bytes(path: Path) -> bytes:
         raise
     except FileNotFoundError as e:
         raise SeriesError(_("Table not found: {path}").format(path=path)) from e
-    except (OSError, ValueError) as e:         # ValueError: NUL-Zeichen im Pfad
+    except (OSError, ValueError) as e:         # ValueError: NUL character in the path
         raise SeriesError(_("{name} cannot be read").format(name=path.name or path)) from e
 
 
 def _decode(data: bytes, path: Path) -> str:
-    if data.startswith((b"\xff\xfe", b"\xfe\xff")):          # „Unicode-Text“ aus Excel
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):          # “Unicode text” from Excel
         try:
             return data.decode("utf-16")
         except UnicodeDecodeError as e:
@@ -117,11 +117,11 @@ def _decode(data: bytes, path: Path) -> str:
             return data.decode(encoding)
         except UnicodeDecodeError:
             continue
-    return data.decode("latin-1")                             # nimmt jedes Byte
+    return data.decode("latin-1")                             # accepts every byte
 
 
 def _separator(text: str) -> str:
-    """Trennzeichen, mit dem die ersten Zeilen gleich viele Felder (mehr als eines) ergeben."""
+    """Separator with which the first lines yield the same number of fields (more than one)."""
     sample = "\n".join(itertools.islice((line for line in text.splitlines() if line.strip()),
                                         _SNIFF_LINES))
     best, best_score = ";", (False, 0)
@@ -140,7 +140,7 @@ def _separator(text: str) -> str:
 
 def _read_csv(path: Path, limit: int | None = None) -> Table:
     text = _decode(_read_bytes(path), path)
-    if "\x00" in text:                                   # Binärdatei mit falscher Endung
+    if "\x00" in text:                                   # binary file with the wrong extension
         raise SeriesError(_("{name}: table not readable (not a text file)").format(name=path.name))
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=_separator(text))
     field_limit = csv.field_size_limit()
@@ -157,9 +157,9 @@ def _read_csv(path: Path, limit: int | None = None) -> Table:
 
 
 def _open_excel(path: Path):
-    """Arbeitsmappe aus den einmal gelesenen Bytes (kein zweites Öffnen des Pfads)."""
+    """Workbook from the bytes read once (no second opening of the path)."""
     import openpyxl
-    if not openpyxl.DEFUSEDXML:                # ohne defusedxml wären XML-Angriffe möglich
+    if not openpyxl.DEFUSEDXML:                # without defusedxml, XML attacks would be possible
         raise SeriesError(_("{name}: reading Excel files is disabled without protection "
                             "(defusedxml missing)").format(name=path.name))
     data = io.BytesIO(_read_bytes(path))
@@ -170,14 +170,14 @@ def _open_excel(path: Path):
         return openpyxl.load_workbook(data, read_only=True, data_only=True)
     except SeriesError:
         raise
-    except Exception as e:  # openpyxl/zipfile werfen je nach Schaden verschiedene Fehler
+    except Exception as e:  # openpyxl/zipfile raise different errors depending on the damage
         raise SeriesError(_("{name}: Excel file not readable").format(name=path.name)) from e
 
 
 def _read_excel(path: Path, sheet: str | None, limit: int | None = None) -> Table:
     book = _open_excel(path)
     try:
-        sheets = book.worksheets                          # ohne Diagrammblätter
+        sheets = book.worksheets                          # without chart sheets
         if sheet is not None:
             chosen = next((ws for ws in sheets if ws.title == sheet), None)
             if chosen is None:
@@ -188,9 +188,9 @@ def _read_excel(path: Path, sheet: str | None, limit: int | None = None) -> Tabl
                           sheets[0] if sheets else None)
         if chosen is None:
             raise SeriesError(_("{name}: table is empty").format(name=path.name))
-        # leere Zeilen kosten auch: openpyxl liefert jede Lücke (Zelle in Zeile 1 048 576 → 35 s)
+        # empty rows cost time too: openpyxl yields every gap (cell in row 1 048 576 → 35 s)
         width = MAX_COLUMNS + 1
-        if chosen.max_column:                             # Dimension der Datei, falls angegeben
+        if chosen.max_column:                             # dimension of the file, if given
             width = max(1, min(width, chosen.max_column))
         rows = ([_cell(cell.value, getattr(cell, "number_format", "General")) for cell in row]
                 for row in _limited(chosen.iter_rows(max_col=width), path))
@@ -206,7 +206,7 @@ def _read_excel(path: Path, sheet: str | None, limit: int | None = None) -> Tabl
 
 
 def _limited(rows, path: Path):
-    """Höchstens ``MAX_RAW_ROWS`` Zeilen (auch leere) – sonst Meldung statt minutenlangem Lesen."""
+    """At most ``MAX_RAW_ROWS`` rows (empty ones too) – otherwise a message instead of minutes of reading."""
     for number, row in enumerate(rows, start=1):
         if number > MAX_RAW_ROWS:
             raise SeriesError(_("{name}: too many empty rows (data up to row {limit}) – delete "
@@ -216,8 +216,8 @@ def _limited(rows, path: Path):
 
 
 def _cell(value, number_format: str = "General") -> str:
-    """Zellwert wie das deutsche Excel ihn zeigt: führende Nullen („000“), Prozent, feste
-    Nachkommastellen, Komma; Datum TT.MM.JJJJ (mit Uhrzeit nur, wenn nicht 0:00)."""
+    """Cell value as German Excel shows it: leading zeros (“000”), percent, fixed
+    decimal places, comma; date DD.MM.YYYY (with time only if not 0:00)."""
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -237,7 +237,7 @@ def _cell(value, number_format: str = "General") -> str:
 
 
 def _number(value: int | float, number_format: str) -> str:
-    fmt = number_format.split(";")[0]                     # nur der Teil für positive Zahlen
+    fmt = number_format.split(";")[0]                     # only the part for positive numbers
     if "%" in fmt:
         value, suffix = value * 100, "%"
     else:
@@ -257,9 +257,9 @@ def _number(value: int | float, number_format: str) -> str:
 
 
 def _collect(rows: Iterable[list], path: Path, limit: int | None = None) -> Table:
-    """Zeilen einsammeln: Zellen als Text (Umbrüche → Leerzeichen), leere Zellen am Zeilenende
-    und leere Zeilen weg, Spaltennamen eindeutig, Grenzen sofort prüfen; ``limit``: nach so
-    vielen Zeilen aufhören (``more``: es folgt noch eine)."""
+    """Collect rows: cells as text (line breaks → spaces), empty cells at the end of a row
+    and empty rows dropped, column names unique, check limits at once; ``limit``: stop after
+    that many rows (``more``: another one follows)."""
     header: list[str] | None = None
     data: list[list[str]] = []
     more = False
@@ -295,13 +295,13 @@ def _collect(rows: Iterable[list], path: Path, limit: int | None = None) -> Tabl
     return Table(columns, [(row + [""] * width)[:width] for row in data], more=more)
 
 
-# --- Nummerierung und Serie --------------------------------------------------------------------
+# --- Numbering and series --------------------------------------------------------------------
 def _whole(value) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
 def check_numbering(numbering: Numbering) -> None:
-    """Grenzen der Nummerierung – auch die letzte Zahl bleibt bei höchstens ``MAX_NUMBER``."""
+    """Limits of the numbering – even the last number stays at most ``MAX_NUMBER``."""
     limit = i18n.thousands(MAX_NUMBER)
     for value, message in ((numbering.start, N_("Numbering start: whole number up to {limit}")),
                            (numbering.step, N_("Numbering step: whole number up to {limit}"))):
@@ -319,8 +319,8 @@ def check_numbering(numbering: Numbering) -> None:
 
 
 def numbering_table(numbering: Numbering) -> Table:
-    """Spalte „Nummer“ (Name in der Sprache, ``number_column``): ``start``, ``start + step`` … – mit
-    Nullen auf ``digits`` Stellen."""
+    """Column “Number” (name in the language, ``number_column``): ``start``, ``start + step`` … –
+    padded with zeros to ``digits`` digits."""
     check_numbering(numbering)
 
     def text(n: int) -> str:
@@ -331,7 +331,7 @@ def numbering_table(numbering: Numbering) -> Table:
 
 
 def check(value: Series) -> None:
-    """Serie prüfen: genau eins von Tabelle und Nummerierung, bekannter Schnitt."""
+    """Check a series: exactly one of table and numbering, known cut."""
     if (value.source is None) == (value.numbering is None):
         raise SeriesError(_("A series needs exactly one: table or numbering"))
     if value.source is not None and (not isinstance(value.source, str) or not value.source
@@ -347,7 +347,7 @@ def check(value: Series) -> None:
 
 
 def table_for(value: Series, base: str | Path | None = None) -> Table:
-    """Zeilen der Serie: Tabelle (relativer Pfad zu ``base``) bzw. Nummerierung."""
+    """Rows of the series: table (path relative to ``base``) or numbering."""
     check(value)
     if value.numbering is not None:
         return numbering_table(value.numbering)
@@ -357,29 +357,29 @@ def table_for(value: Series, base: str | Path | None = None) -> Table:
     return load_table(path, value.sheet)
 
 
-# --- Platzhalter -------------------------------------------------------------------------------
+# --- Placeholders -------------------------------------------------------------------------------
 def placeholders(doc: Document) -> list[str]:
-    """Namen der Platzhalter ``{Name}`` in Textobjekten und Barcodes (Reihenfolge, jeder einmal)."""
+    """Names of the placeholders ``{Name}`` in text objects and barcodes (in order, each once)."""
     names: list[str] = []
     for obj in doc.objects:
         text = (obj.text if isinstance(obj, TextObject) else obj.data
                 if isinstance(obj, BarcodeObject) else "")
         for name in _PLACEHOLDER.findall(text):
-            name = name.strip()                  # { Klemme } passt zur Spalte „Klemme“
+            name = name.strip()                  # { Klemme } matches the column “Klemme”
             if name not in names:
                 names.append(name)
     return names
 
 
 def number_column() -> str:
-    """Name der Spalte der Nummerierung in der Sprache („Nummer“ / „Number“)."""
+    """Name of the numbering column in the language (“Nummer” / “Number”)."""
     return pgettext("series", NUMBER_COLUMN)
 
 
 def _aliases(columns: list[str]) -> dict[str, str]:
-    """Namen in anderen Sprachen → Spalte: die Nummerierung heißt in jeder Sprache gleich gut
-    („{Nummer}“ = „{Number}“), ebenso Spalten ohne Namen („Spalte 3“ = „Column 3“) – Etiketten
-    bleiben gültig, wenn jemand die Sprache wechselt."""
+    """Names in other languages → column: the numbering works equally well under every name
+    (“{Nummer}” = “{Number}”), likewise columns without a name (“Spalte 3” = “Column 3”) –
+    labels stay valid when someone changes the language."""
     numbers = i18n.all_translations("series", NUMBER_COLUMN)
     words = i18n.all_translations("series", COLUMN_WORD)
     out: dict[str, str] = {}
@@ -394,20 +394,20 @@ def _aliases(columns: list[str]) -> dict[str, str]:
 
 
 def missing(doc: Document, columns: list[str]) -> list[str]:
-    """Platzhalter ohne passende Spalte (Namen der Nummerierung in jeder Sprache zählen)."""
+    """Placeholders without a matching column (numbering names in every language count)."""
     known = set(columns) | set(_aliases(columns))
     return [name for name in placeholders(doc) if name not in known]
 
 
 def fill(doc: Document, columns: list[str], row: list[str], keep: int | None = None) -> Document:
-    """``doc`` mit den Werten der Zeile statt der Platzhalter – **nur zum Lesen** (Rendern,
-    Drucken): Objekte ohne Platzhalter, Bilder und ``keep`` sind dieselben wie im Original
-    (Renderer-Cache trifft), nur gefüllte Text- und Barcode-Objekte sind neu; ``doc`` bleibt
-    unverändert.
+    """``doc`` with the values of the row instead of the placeholders – **read-only use**
+    (rendering, printing): objects without placeholders, images and ``keep`` are the same as in
+    the original (renderer cache hits), only filled text and barcode objects are new; ``doc``
+    stays unchanged.
 
-    Der Wert übernimmt die Formatierung des Stücks, in dem sein Platzhalter beginnt (auch über
-    Stückgrenzen hinweg); unbekannte Platzhalter bleiben stehen; Zeilenumbrüche und Tabs im
-    Wert werden Leerzeichen. ``keep``: Objekt, das unverändert bleibt (wird gerade bearbeitet).
+    The value takes the formatting of the span in which its placeholder begins (also across
+    span boundaries); unknown placeholders are left in place; line breaks and tabs in the
+    value become spaces. ``keep``: object that stays unchanged (is being edited right now).
     """
     values = {name: _BREAKS.sub(" ", value) for name, value in zip(columns, row)}
     values.update({alias: values[column] for alias, column in _aliases(columns).items()
@@ -434,7 +434,7 @@ def _fill_text(obj: TextObject, values: dict[str, str]) -> TextObject:
 
 
 def _fill_paragraph(para: Paragraph, values: dict[str, str]) -> Paragraph:
-    # Zeichen mit dem Index ihres Stücks; Ersetzen von hinten, damit Positionen gelten
+    # characters with the index of their span; replace from the back so positions stay valid
     chars = [(c, i) for i, span in enumerate(para.spans) for c in span.text]
     text = "".join(c for c, __ in chars)
     matches = [m for m in _PLACEHOLDER.finditer(text) if m.group(1).strip() in values]
@@ -444,20 +444,21 @@ def _fill_paragraph(para: Paragraph, values: dict[str, str]) -> Paragraph:
         style = chars[m.start()][1]
         chars[m.start():m.end()] = [(c, style) for c in values[m.group(1).strip()]]
     spans: list[Span] = []
-    styles: list[int] = []                          # Stück, dessen Formatierung jedes neue trägt
+    styles: list[int] = []                          # span whose formatting each new one carries
     for c, i in chars:
         if styles and styles[-1] == i:
             spans[-1].text += c
         else:
             spans.append(replace(para.spans[i], text=c))
             styles.append(i)
-    if not spans:                                   # nur leere Werte: eine leere Zeile, formatiert
+    if not spans:                                   # only empty values: one empty line, formatted
         spans = [replace(para.spans[_span_at(para, matches[0].start())], text="")]
     return Paragraph(spans, para.align)
 
 
 def _span_at(para: Paragraph, pos: int) -> int:
-    """Index des Stücks, in dem die Position ``pos`` des Absatztexts liegt."""
+    """Index of the span in which position ``pos`` of the paragraph text lies."""
+
     for i, span in enumerate(para.spans):
         if pos < len(span.text):
             return i

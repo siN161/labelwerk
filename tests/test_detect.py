@@ -12,7 +12,7 @@ def _fake_lp(sys_root, devices, name, vendor):
 
 def test_finds_brother_printer_among_lp_devices(tmp_path):
     sys_root, devices = tmp_path / "usbmisc", tmp_path / "devices"
-    _fake_lp(sys_root, devices, "lp0", "03f0")   # z. B. HP
+    _fake_lp(sys_root, devices, "lp0", "03f0")   # e.g. HP
     _fake_lp(sys_root, devices, "lp1", "04f9")   # Brother
     assert find_brother_lp(sys_root, "/dev/usb") == "file:///dev/usb/lp1"
 
@@ -43,7 +43,7 @@ def _fake_usb_device(root, name, vendor, driver):
     iface = dev / f"{name}:1.0"
     iface.mkdir(parents=True)
     (dev / "idVendor").write_text(vendor + "\n")
-    (iface / "bInterfaceClass").write_text("07\n")   # Drucker
+    (iface / "bInterfaceClass").write_text("07\n")   # printer
     if driver:
         drv = root / "drivers" / driver
         drv.mkdir(parents=True, exist_ok=True)

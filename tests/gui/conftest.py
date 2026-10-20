@@ -1,20 +1,20 @@
 import os
 
-os.environ["QT_QPA_PLATFORM"] = "offscreen"   # immer, auch wenn die Sitzung wayland/xcb vorgibt
-# Sitzungsbus ins Leere: kein Test erreicht echte Dienste (Bildschirmfoto-Portal öffnete eine
-# Auswahl auf dem Bildschirm); Tests mit D-Bus nutzen einen eigenen Bus mit eigener Adresse
+os.environ["QT_QPA_PLATFORM"] = "offscreen"   # always, even if the session prescribes wayland/xcb
+# Session bus pointed at nothing: no test reaches real services (the screenshot portal opened a
+# selection on screen); tests with D-Bus use their own bus with its own address
 os.environ["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/labelwerk-test-bus"
 
 try:
     import PySide6  # noqa: F401
-except ImportError:  # reine CLI-Umgebung: GUI-Tests überspringen
+except ImportError:  # pure CLI environment: skip GUI tests
     collect_ignore_glob = ["test_*.py"]
 else:
     import pytest
 
     @pytest.fixture(autouse=True)
     def german_numbers(qapp):
-        """Zahlenfelder wie in einer deutschen Sitzung (Komma) – passend zur Sprache der Tests."""
+        """Number fields as in a German session (comma) – matching the tests' language."""
         from PySide6.QtCore import QLocale
         QLocale.setDefault(QLocale("de"))
         yield
@@ -22,30 +22,30 @@ else:
 
     @pytest.fixture(autouse=True)
     def no_leftover_theme(qapp):
-        """Speichern der Einstellungen setzt das Design der ganzen Anwendung – danach zurück,
-        damit jeder Test im Qt-Grundstil startet."""
+        """Saving the settings sets the design of the whole application – reset afterwards,
+        so that every test starts in the basic Qt style."""
         yield
         qapp.setStyleSheet("")
 
     @pytest.fixture(autouse=True)
     def empty_clipboard(qapp):
-        """Jeder Test beginnt mit leerer Zwischenablage des Systems – „Einfügen“ folgt ihr."""
+        """Every test starts with an empty system clipboard – “Paste” follows it."""
         qapp.clipboard().clear()
         yield
 
     @pytest.fixture(autouse=True)
     def no_session_bus(monkeypatch):
-        """Zusätzlich zur Adresse ins Leere: das Bildschirmfoto-Modul bekommt statt des
-        Sitzungsbusses eine nie verbundene Verbindung."""
+        """In addition to the address pointing at nothing: the screenshot module gets a never-connected
+        connection instead of the session bus."""
         from PySide6.QtDBus import QDBusConnection
         monkeypatch.setattr("labelwerk.gui.screenshot.session_bus",
                             lambda: QDBusConnection("labelwerk-test-kein-bus"))
 
     @pytest.fixture(autouse=True, scope="session")
     def discard_changes_on_close():
-        """Schließen mit Änderungen fragt nach – in Tests ohne Dialog: verwerfen (einzelne Tests
-        ersetzen die Antwort selbst). Für die ganze Sitzung: auch Fenster, die erst am Ende
-        geschlossen werden, dürfen keinen echten Dialog öffnen (der hinge)."""
+        """Closing with changes asks – in tests without a dialog: discard (individual tests
+        replace the answer themselves). For the whole session: windows that are only closed at the
+        end must not open a real dialog either (it would hang)."""
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr("labelwerk.gui.file_session.FileSession.ask_save_changes",
                           lambda self: "discard")
@@ -53,8 +53,8 @@ else:
 
     @pytest.fixture(autouse=True, scope="session")
     def no_real_file_dialog():
-        """Kein Test öffnet einen echten (modalen) Dateidialog – er hinge; Tests, die ihn
-        brauchen, ersetzen ``exec_dialog`` selbst."""
+        """No test opens a real (modal) file dialog – it would hang; tests that need
+        one replace ``exec_dialog`` themselves."""
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr("labelwerk.gui.file_dialog.exec_dialog",
                           lambda dialog: pytest.fail("echter Dateidialog"))
@@ -62,13 +62,13 @@ else:
 
     @pytest.fixture(autouse=True)
     def no_file_manager(monkeypatch):
-        """Kein Test öffnet den echten Dateimanager (Ordner öffnen ist sonst ersetzt)."""
+        """No test opens the real file manager (opening a folder is otherwise replaced)."""
         monkeypatch.setattr("PySide6.QtGui.QDesktopServices.openUrl",
                             lambda url: pytest.fail(f"Dateimanager geöffnet: {url}"))
 
     @pytest.fixture(autouse=True)
     def no_printer(monkeypatch):
-        """Kein Test liest echte Druckerdaten aus /sys."""
+        """No test reads real printer data from /sys."""
         for module in ("labelwerk.gui.print_worker", "labelwerk.gui.media_worker"):
             monkeypatch.setattr(f"{module}.find_brother_lp", lambda: None)
             monkeypatch.setattr(f"{module}.brother_busy", lambda: False)
@@ -78,7 +78,7 @@ else:
         calls = []
 
         def no_hardware(printer):
-            # Der Worker schluckt Exceptions, daher Aufruf merken und im Teardown scheitern
+            # The worker swallows exceptions, so remember the call and fail in teardown
             calls.append(printer)
             raise RuntimeError("Test darf den Drucker nicht abfragen")
         monkeypatch.setattr("labelwerk.gui.media_worker.read_media", no_hardware)

@@ -1,5 +1,5 @@
-"""Drucker-Kompatibilität: Erkennung (sysfs), Fähigkeiten je Modell, Etiketten, Wahl, Netzwerk,
-Abschneider, Rot/Schwarz, Einstellungen."""
+"""Printer compatibility: detection (sysfs), capabilities per model, labels, choice, network,
+cutter, red/black, settings."""
 import pytest
 from PIL import Image, ImageDraw
 
@@ -29,7 +29,7 @@ def _fake_lp(sys_root, devices, name, vendor="04f9", product_id="", product="", 
     (sys_root / name / "device").symlink_to(iface)
 
 
-# --- Erkennung -------------------------------------------------------------------------------
+# --- Detection -------------------------------------------------------------------------------
 def test_model_from_the_ieee1284_id_first(tmp_path):
     sys_root, devices = tmp_path / "usbmisc", tmp_path / "devices"
     _fake_lp(sys_root, devices, "lp1", product_id="2042", product="QL-700",
@@ -42,7 +42,7 @@ def test_model_from_the_product_name_then_the_product_id(tmp_path):
     _fake_lp(sys_root, devices, "lp0", product_id="2042", product="QL-720NW")
     _fake_lp(sys_root, devices, "lp1", product_id="2042")
     _fake_lp(sys_root, devices, "lp2", product_id="ffff")
-    _fake_lp(sys_root, devices, "lp3", vendor="03f0", product="LaserJet")   # anderer Hersteller
+    _fake_lp(sys_root, devices, "lp3", vendor="03f0", product="LaserJet")   # other manufacturer
     found = usb_printers(sys_root)
     assert [(p.uri, p.model, p.name) for p in found] == [
         ("file:///dev/usb/lp0", "QL-720NW", "QL-720NW · lp0"),
@@ -66,7 +66,7 @@ def test_known_model(name, model):
     assert known_model(name) == model
 
 
-# --- Fähigkeiten und Etiketten -------------------------------------------------------------------
+# --- Capabilities and labels ---------------------------------------------------------------------
 def test_capabilities_from_brother_ql():
     assert capabilities("QL-600") == Capabilities("QL-600", True, False, 62, (150, 11811), True)
     assert not capabilities("QL-500").cutter
@@ -95,7 +95,7 @@ def test_labels_follow_the_model():
         labels_for_model("PT-P700")
 
 
-# --- Wahl und Modell ----------------------------------------------------------------------------
+# --- Choice and model ---------------------------------------------------------------------------
 USB = Printer("file:///dev/usb/lp1", "QL-600", "QL-600 · lp1")
 NET = Printer("tcp://10.0.0.5:9100", "QL-720NW", "Büro · Netzwerk", "network")
 
@@ -103,7 +103,7 @@ NET = Printer("tcp://10.0.0.5:9100", "QL-720NW", "Büro · Netzwerk", "network")
 def test_choose_the_wanted_printer_else_the_first_usb():
     assert choose([NET, USB]) == USB
     assert choose([NET, USB], NET.uri) == NET
-    assert choose([NET, USB], "file:///dev/usb/lp9") is None        # gewählter fehlt: keiner
+    assert choose([NET, USB], "file:///dev/usb/lp9") is None        # selected one is missing: none
     assert choose([NET]) == NET and choose([]) is None
 
 
@@ -125,7 +125,7 @@ def test_network_printers_and_backends():
     assert backend_for("file:///dev/usb/lp1") == "linux_kernel"
 
 
-# --- Drucken ------------------------------------------------------------------------------------
+# --- Printing -----------------------------------------------------------------------------------
 def _image(red=False):
     img = Image.new("RGB", (696, 120), "white")
     ImageDraw.Draw(img).rectangle((10, 10, 100, 100), fill=(255, 0, 0) if red else (0, 0, 0))
@@ -140,7 +140,7 @@ def test_without_cutter_nothing_is_cut():
 
 
 def _plane_ink(data: bytes, plane: int) -> int:
-    """Gesetzte Bytes in den Rasterzeilen einer Ebene (w 01 schwarz, w 02 rot)."""
+    """Set bytes in the raster lines of a plane (w 01 black, w 02 red)."""
     marker, total, start = b"w" + bytes([plane]), 0, 0
     while (i := data.find(marker, start)) >= 0:
         size = data[i + 2]
@@ -193,7 +193,7 @@ def test_unreachable_network_printer_is_a_print_error(monkeypatch, error, reason
         print_image(_image(), "62", model="QL-720NW", printer="tcp://10.0.0.5:9100")
 
 
-# --- Farbe --------------------------------------------------------------------------------------
+# --- Colour -------------------------------------------------------------------------------------
 def test_red_objects_print_red_only_on_red_labels():
     obj = TextObject.plain("Achtung", size_pt=20)
     obj.color = "red"
@@ -201,8 +201,8 @@ def test_red_objects_print_red_only_on_red_labels():
     colors = {c for _, c in img.getcolors(1 << 20)}
     assert (255, 0, 0) in colors and (0, 0, 0) not in colors
     plain = render_document(Document("62", objects=[obj]), "QL-820NWB")
-    assert (255, 0, 0) not in {c for _, c in plain.getcolors(1 << 20)}     # Vorschau = Druck
-    single = render_document(Document("62red", objects=[obj]), "QL-600")  # Modell ohne Rot
+    assert (255, 0, 0) not in {c for _, c in plain.getcolors(1 << 20)}     # preview = print
+    single = render_document(Document("62red", objects=[obj]), "QL-600")  # model without red
     assert (255, 0, 0) not in {c for _, c in single.getcolors(1 << 20)}
 
 
@@ -234,7 +234,7 @@ def test_color_is_saved():
         storage.from_dict(data)
 
 
-# --- Einstellungen ------------------------------------------------------------------------------
+# --- Settings -----------------------------------------------------------------------------------
 def test_printer_settings_round_trip(tmp_path):
     path = tmp_path / "s.json"
     settings = Settings(printer="tcp://10.0.0.5:9100", printer_model="",
@@ -242,7 +242,7 @@ def test_printer_settings_round_trip(tmp_path):
                         network_printers=[{"name": "Büro", "host": "10.0.0.5",
                                            "model": "QL-720NW"}])
     save_settings(settings, path)
-    loaded = load_settings(path)                    # Etikett 102 gilt für das letzte Modell
+    loaded = load_settings(path)                    # label 102 applies to the last model
     assert (loaded.printer, loaded.printer_model, loaded.last_model, loaded.label_id) == (
         "tcp://10.0.0.5:9100", "", "QL-1100", "102")
     assert network_entries(loaded) == [NetworkEntry("Büro", "10.0.0.5", "QL-720NW")]
@@ -262,16 +262,16 @@ def test_invalid_printer_settings_fall_back(tmp_path):
 
 
 def test_saved_label_survives_another_model(tmp_path):
-    """Wer zwei Drucker abwechselnd nutzt, behält sein Etikett – ob es passt, prüft GUI/CLI."""
+    """Whoever alternates between two printers keeps their label – whether it fits is checked by GUI/CLI."""
     path = tmp_path / "s.json"
     save_settings(Settings(printer_model="QL-700", last_model="QL-600", label_id="102"), path)
     loaded = load_settings(path)
     assert loaded.label_id == "102" and loaded.warnings == []
     path.write_text('{"label_id": "pt12"}')
-    assert load_settings(path).label_id == "62"         # P-touch-Band: kein QL-Etikett
+    assert load_settings(path).label_id == "62"         # P-touch tape: no QL label
 
 
-# --- Nachbesserungen nach dem Review --------------------------------------------------------------
+# --- Fixes after the review -----------------------------------------------------------------------
 def test_choose_prefers_a_recognised_model():
     laser = Printer("file:///dev/usb/lp0", None, "Brother-Drucker · lp0")
     assert choose([laser, USB]) == USB
@@ -294,7 +294,7 @@ def test_label_must_fit_the_model():
 
 
 def test_red_labels_use_the_same_threshold_as_black_and_white():
-    """Antialiasing-Graustufen werden auf 62red genauso schwarz wie auf 62 (Vorschau = Druck)."""
+    """Anti-aliasing greys become just as black on 62red as on 62 (preview = print)."""
     text = TextObject.plain("Grauer Rand 8 pt", size_pt=8)
     plain = to_print_mode(render_document(Document("62", objects=[text]), "QL-820NWB"))
     red = to_print_mode(render_document(Document("62red", objects=[text]), "QL-820NWB"), red=True)

@@ -1,13 +1,13 @@
-"""Nachgebautes XDG-Screenshot-Portal für Tests auf einem privaten D-Bus (nie dem der Sitzung).
+"""Mock XDG screenshot portal for tests on a private D-Bus (never the one of the session).
 
-Läuft mit dem System-Python (PyGObject/Gio): ``python3 fake_portal.py ART CODE URI``.
-ART: ``normal`` (Antwort nach 50 ms), ``early`` (Antwort schon vor dem Rückgabewert),
-``other`` (eigener Request-Pfad wie ältere Portale), ``twice`` (zwei Antworten),
-``never`` (antwortet nie).
-URI „-“ = Antwort ohne ``uri``; „{n}“ in der URI wird zur Nummer des Aufrufs.
-Gibt „READY“ aus, sobald der Name belegt ist, und je Aufruf
-„CALL interactive=… modal=… token=…“ sowie „CLOSE <pfad>“, wenn jemand ``Request.Close`` an
-einen Request-Pfad schickt (nach dem Aufruf, der ihn lieferte); ohne Namen endet es mit Code 1.
+Runs with the system Python (PyGObject/Gio): ``python3 fake_portal.py KIND CODE URI``.
+KIND: ``normal`` (answer after 50 ms), ``early`` (answer already before the return value),
+``other`` (own request path like older portals), ``twice`` (two answers),
+``never`` (never answers).
+URI "-" = answer without ``uri``; "{n}" in the URI becomes the number of the call.
+Prints "READY" as soon as the name is taken, and per call
+"CALL interactive=… modal=… token=…" as well as "CLOSE <path>" when someone sends ``Request.Close`` to
+a request path (after the call that delivered it); without the name it ends with code 1.
 """
 import sys
 
@@ -66,6 +66,6 @@ bus = Gio.bus_get_sync(Gio.BusType.SESSION)
 bus.register_object("/org/freedesktop/portal/desktop", INFO, call, get_property, None)
 Gio.bus_own_name_on_connection(bus, "org.freedesktop.portal.Desktop", 0,
                                lambda conn, name: print("READY", flush=True),
-                               lambda conn, name: loop.quit())    # Name nicht (mehr) belegt
+                               lambda conn, name: loop.quit())    # name not (or no longer) taken
 loop.run()
 sys.exit(1)

@@ -1,5 +1,5 @@
-"""Werkzeug „Bild“ (Etappe 3d-2a): einfügen aus Datei, Zwischenablage und per Ablegen,
-Bild-Panel, Bilder auf der Arbeitsfläche wie Text."""
+"""IMAGE tool (stage 3d-2a): insert from file, clipboard and by drop,
+image panel, images on the canvas like text."""
 import io
 import math
 
@@ -20,11 +20,11 @@ from labelwerk.settings import Settings
 NO_MOD = Qt.KeyboardModifier.NoModifier
 CTRL = Qt.KeyboardModifier.ControlModifier
 LEFT = Qt.MouseButton.LeftButton
-MM = 300 / 25.4                                # Pixel je mm bei 300 dpi
+MM = 300 / 25.4                                # pixels per mm at 300 dpi
 
 
 def _picture(w=300, h=150, border=30, gray=0) -> Image.Image:
-    """Weißes Bild mit Rand ``border`` und einem Schachbrett (wie ein QR-Code) darin."""
+    """White image with margin ``border`` and a checkerboard (like a QR code) in it."""
     img = Image.new("RGB", (w, h), "white")
     draw = ImageDraw.Draw(img)
     draw.rectangle((border, border, w - border - 1, h - border - 1), fill=(gray,) * 3)
@@ -110,8 +110,8 @@ def _focus_canvas(win, qtbot):
 
 
 def _drop(canvas, mime, pos, process=True):
-    """Ablegen; verarbeitet wird erst nach dem Ereignis (``process``: gleich abwarten)."""
-    try:                    # QDragEnterEvent nimmt erst ab PySide6 6.12 QPointF (CI 3.10: 6.11)
+    """Drop; processing only happens after the event (``process``: wait right away)."""
+    try:                    # QDragEnterEvent only takes QPointF from PySide6 6.12 on (CI 3.10: 6.11)
         QDragEnterEvent(pos, Qt.DropAction.CopyAction, mime, LEFT, NO_MOD)
     except TypeError:
         pos = pos.toPoint()
@@ -130,7 +130,7 @@ def _status(win):
     return win.result.text()
 
 
-# --- Werkzeug und Panel -------------------------------------------------------------
+# --- Tool and panel -----------------------------------------------------------------
 def test_image_tool_comes_after_text(window):
     assert [tool.key for tool in TOOLS] == ["file", "paper", "text", "image", "barcode", "layout",
                                            "series", "parcel"]
@@ -148,12 +148,12 @@ def test_insert_action_is_in_the_shortcut_registry(window):
     assert "Ctrl+Shift+I" in window.panel("image").from_file.toolTip()
 
 
-# --- Aus Datei ----------------------------------------------------------------------
+# --- From file ----------------------------------------------------------------------
 def test_file_is_inserted_one_to_one_centred_cropped_and_selected(window, tmp_path):
     _insert_file(window, _file(tmp_path))
     obj = window.doc.objects[1]
     assert isinstance(obj, ImageObject) and obj.source == "code.png"
-    assert obj.crop == (30, 30, 270, 120)                    # Rand fällt weg
+    assert obj.crop == (30, 30, 270, 120)                    # margin is dropped
     assert (obj.w_mm, obj.h_mm) == pytest.approx((240 / MM, 90 / MM))
     rect = layout.exact_rect(obj, window.rendered[1])
     area = window._area
@@ -161,7 +161,7 @@ def test_file_is_inserted_one_to_one_centred_cropped_and_selected(window, tmp_pa
     assert window.canvas.selection() == [1]
     assert window.panels.currentWidget() is window.panel("image")
     assert window.panel("image").index == 1
-    window.undo()                                            # ein Schritt
+    window.undo()                                            # one step
     assert len(window.doc.objects) == 1
 
 
@@ -179,9 +179,9 @@ def test_too_large_image_is_fitted_with_hint(window, tmp_path):
     assert obj.w_mm / obj.h_mm == pytest.approx(3000 / 400, rel=1e-4)
     percent = math.floor(area.w / (3000 / MM) * 100)
     assert _status(window) == f"Bild auf {percent} % verkleinert – Codes ggf. nicht mehr lesbar"
-    # eingepasst: höchstens 600 dpi bezogen auf die neue Druckgröße, 1:1-Größe bleibt
+    # fitted: 600 dpi at most relative to the new print size, 1:1 size stays
     assert obj.image().width == pytest.approx(600 * obj.w_mm / 25.4, abs=1)
-    assert obj.natural_mm() == pytest.approx((3000 / MM, 400 / MM), abs=0.1)    # ganze Pixel
+    assert obj.natural_mm() == pytest.approx((3000 / MM, 400 / MM), abs=0.1)    # whole pixels
 
 
 def test_shrink_hint_never_says_zero_percent(window, tmp_path):
@@ -191,7 +191,7 @@ def test_shrink_hint_never_says_zero_percent(window, tmp_path):
 
 
 def test_shrink_hint_never_says_hundred_percent(window, tmp_path):
-    """Knapp zu groß (99,8 %): abgerundet, nie „auf 100 % verkleinert“."""
+    """Just slightly too large (99.8 %): rounded down, never "reduced to 100 %"."""
     width = round(window._area.w * MM / 0.998)
     _insert_file(window, _file(tmp_path, _picture(width, 60, border=0)))
     assert window.doc.objects[1].rotation == 0
@@ -202,19 +202,19 @@ def test_shrink_hint_mentions_codes_only_in_line_mode():
     from labelwerk.gui.main_window import shrunk_hint
     assert shrunk_hint(0.372, "line") == "Bild auf 37 % verkleinert – Codes ggf. nicht mehr lesbar"
     assert shrunk_hint(0.372, "photo") == "Bild auf 37 % verkleinert"
-    assert shrunk_hint(0.289, "photo") == "Bild auf 28 % verkleinert"      # abgerundet
-    assert shrunk_hint(0.29, "photo") == "Bild auf 29 % verkleinert"       # ohne Rundungsfehler
+    assert shrunk_hint(0.289, "photo") == "Bild auf 28 % verkleinert"      # rounded down
+    assert shrunk_hint(0.29, "photo") == "Bild auf 29 % verkleinert"       # without rounding error
     assert shrunk_hint(0.9999, "photo") == "Bild auf 99 % verkleinert"
     assert shrunk_hint(0.001, "photo") == "Bild auf < 1 % verkleinert"
 
 
 def _stamp_doc():
-    """Endlosband 62 mm, automatische Länge, senkrecht (Standard) mit einem Absender."""
+    """Continuous tape 62 mm, automatic length, vertical (default) with a sender."""
     return Document("62", objects=[TextObject("Absender", size_pt=10, x_mm=3, y_mm=3)])
 
 
 def test_wide_image_is_turned_instead_of_shrunk(qtbot, tmp_path):
-    """70 × 34 mm (wie eine Internetmarke) auf 62 mm senkrecht: gedreht 1:1 statt 81 %."""
+    """70 × 34 mm (like a stamp) on 62 mm vertical: rotated 1:1 instead of 81 %."""
     win = _window(qtbot, _stamp_doc(), image_rotate=True)
     _insert_file(win, _file(tmp_path, _picture(827, 402, border=0)))
     obj = win.doc.objects[1]
@@ -249,7 +249,7 @@ def test_wide_image_stays_unturned_when_horizontal(qtbot, tmp_path):
 
 
 def test_wide_image_is_shrunk_unturned_by_default(qtbot, tmp_path):
-    """Standard (Einstellung „drehen“ aus): quer und verkleinert – spart Band."""
+    """Default (setting "rotate" off): landscape and reduced – saves tape."""
     win = _window(qtbot, _stamp_doc())
     _insert_file(win, _file(tmp_path, _picture(827, 402, border=0)))
     obj = win.doc.objects[1]
@@ -290,7 +290,7 @@ def test_pdf_with_several_pages_asks_for_the_page(window, tmp_path):
     obj = window.doc.objects[1]
     assert asked == [2]
     assert (obj.source, obj.page) == ("marken.pdf", 2)
-    assert (obj.w_mm, obj.h_mm) == pytest.approx((90 / MM, 90 / MM), abs=0.6)   # PDF: Kanten geglättet
+    assert (obj.w_mm, obj.h_mm) == pytest.approx((90 / MM, 90 / MM), abs=0.6)   # PDF: edges smoothed
     assert window.panel("image").source.text() == "marken.pdf · Seite 2"
 
 
@@ -321,7 +321,7 @@ def test_svg_is_rasterized_at_300_dpi(window, tmp_path):
 @pytest.mark.parametrize("width, height", [("25.4mm", "12.7mm"), ("1in", "0.5in"),
                                            ("2.54cm", "36pt"), ("6pc", "48px")])
 def test_svg_with_physical_units_keeps_its_size(window, tmp_path, width, height):
-    """mm/cm/in/pt/pc nach CSS (96 px je Zoll) – Qt rechnete mit 90 dpi (6 % zu klein)."""
+    """mm/cm/in/pt/pc per CSS (96 px per inch) – Qt used 90 dpi (6 % too small)."""
     path = tmp_path / "masse.svg"
     path.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
                     'viewBox="0 0 20 10"><rect width="20" height="10" fill="black"/></svg>')
@@ -361,7 +361,7 @@ def test_file_dialog_filter_accepts_uppercase_names():
 
 
 def test_file_dialog_filter_in_the_language(qtbot, monkeypatch):
-    """Der Dialog „Bild einfügen“ bekommt den Filter in der Sprache der Oberfläche."""
+    """The "Insert image" dialog gets the filter in the language of the interface."""
     from labelwerk import i18n
     from labelwerk.gui import file_dialog
     seen = []
@@ -384,7 +384,7 @@ def test_missing_file_and_missing_page_show_a_message(window, tmp_path):
 
 
 def test_light_image_is_kept_whole(window, tmp_path):
-    """Helles Foto ohne Weiß: alles ist Inhalt („nicht weiß“), nichts wird abgeschnitten."""
+    """Light photo without white: everything is content ("not white"), nothing is cut off."""
     _insert_file(window, _file(tmp_path, Image.new("RGB", (300, 150), (220, 220, 220))))
     obj = window.doc.objects[1]
     assert obj.crop == (0, 0, 300, 150) and (obj.w_mm, obj.h_mm) == pytest.approx((300 / MM, 150 / MM))
@@ -405,12 +405,12 @@ def test_white_image_is_not_cropped_with_hint(window, tmp_path):
     assert _status(window) == "Bild nicht zugeschnitten – nur weiße Fläche gefunden"
     panel = window.panel("image")
     assert not panel.crop.isChecked()
-    panel.crop.click()                                      # Zuschnitt: findet nichts
+    panel.crop.click()                                      # crop: finds nothing
     assert not panel.crop.isChecked() and window.doc.objects[1].crop is None
     assert _status(window) == "Bild nicht zugeschnitten – nur weiße Fläche gefunden"
 
 
-# --- Zwischenablage -----------------------------------------------------------------
+# --- Clipboard ----------------------------------------------------------------------
 def test_clipboard_button_follows_the_clipboard(window):
     button = window.panel("image").from_clipboard
     assert not button.isEnabled()
@@ -430,7 +430,7 @@ def test_clipboard_image_via_panel(window):
     window.panel("image").from_clipboard.click()
     obj = window.doc.objects[1]
     assert isinstance(obj, ImageObject) and obj.source == CLIPBOARD
-    assert (obj.w_mm, obj.h_mm) == pytest.approx((240 / MM, 90 / MM))   # 300 dpi, zugeschnitten
+    assert (obj.w_mm, obj.h_mm) == pytest.approx((240 / MM, 90 / MM))   # 300 dpi, cropped
     assert window.canvas.selection() == [1]
 
 
@@ -456,7 +456,7 @@ def test_copy_marks_the_system_clipboard_and_ctrl_v_pastes_objects(window, qtbot
     assert mime.hasFormat(MIME_OBJECTS) and mime.text() == "Eins"
     QTest.keyClick(window.canvas, Qt.Key.Key_V, CTRL)
     assert [type(o) for o in window.doc.objects] == [TextObject, TextObject]
-    assert window.doc.objects[1].x_mm == pytest.approx(6)    # Objekt, kein neuer Textrahmen
+    assert window.doc.objects[1].x_mm == pytest.approx(6)    # object, no new text frame
 
 
 def test_other_clipboard_content_wins_over_older_copy(window, qtbot):
@@ -470,7 +470,7 @@ def test_other_clipboard_content_wins_over_older_copy(window, qtbot):
 def test_paste_uses_last_copy_when_system_clipboard_is_empty(window):
     window.canvas.set_selection([0])
     window.copy_selected()
-    QApplication.clipboard().clear()                          # z. B. Zwischenablage nicht erreichbar
+    QApplication.clipboard().clear()                          # e.g. clipboard not reachable
     assert window.shortcut_actions["edit.paste"].isEnabled()
     window.paste()
     assert [o.text for o in window.doc.objects] == ["Eins", "Eins"]
@@ -522,7 +522,7 @@ def _set_clipboard(text=None, image=None, files=()):
 
 def test_ctrl_v_with_local_files_inserts_the_images(window, tmp_path):
     path = _file(tmp_path)
-    _set_clipboard(text=str(path), files=[path])           # wie aus dem Dateimanager
+    _set_clipboard(text=str(path), files=[path])           # as from the file manager
     assert window.shortcut_actions["edit.paste"].isEnabled()
     window.paste()
     obj = window.doc.objects[1]
@@ -539,8 +539,8 @@ def test_ctrl_v_with_other_local_file_says_so(window, tmp_path):
 
 
 def test_ctrl_v_text_wins_over_image(window):
-    """Tabellenzellen bringen auch ein Bild mit – Strg+V nimmt den Text; das Bild gibt es über
-    „Aus Zwischenablage“."""
+    """Table cells also bring an image – Ctrl+V takes the text; the image is available via
+    FROM CLIPBOARD."""
     _set_clipboard(text="A1\tB1", image=_picture())
     window.paste()
     obj = window.doc.objects[1]
@@ -569,7 +569,7 @@ def test_repeated_text_paste_is_offset_like_objects(window):
     area = window._area
     xs = [(o.x_mm, o.y_mm) for o in window.doc.objects[1:]]
     assert xs == [pytest.approx((area.x + 2 * i, area.y + 2 * i), abs=0.01) for i in range(3)]
-    QApplication.clipboard().setText("Neu")                 # neuer Inhalt: wieder links oben
+    QApplication.clipboard().setText("Neu")                 # new content: top left again
     window.paste()
     assert (window.doc.objects[4].x_mm, window.doc.objects[4].y_mm) == \
         pytest.approx((area.x, area.y), abs=0.01)
@@ -583,7 +583,7 @@ def test_copied_image_leaves_no_text_on_the_system_clipboard(window, tmp_path):
 
 
 class _SpyMime(QMimeData):
-    """Zwischenablage, die mitschreibt, ob ihre Daten gelesen werden."""
+    """Clipboard that records whether its data is read."""
 
     def __init__(self):
         super().__init__()
@@ -607,17 +607,17 @@ def test_edit_actions_do_not_read_clipboard_data(window, monkeypatch):
     from PySide6.QtGui import QClipboard
     spy = _SpyMime()
     monkeypatch.setattr(QClipboard, "mimeData", lambda self, *args: spy)
-    window._clipboard_changed()                             # einmal beim Ändern: ohne Daten
+    window._clipboard_changed()                             # once on change: without data
     spy.reads.clear()
     window.canvas.set_selection([0])
     for _ in range(3):
         window._update_edit_actions()
-        window.nudge(0.1, 0)                                # jeder Schritt prüft die Knöpfe
+        window.nudge(0.1, 0)                                # every step checks the buttons
     assert window.shortcut_actions["edit.paste"].isEnabled()
     assert spy.reads == []
 
 
-# --- Ablegen ------------------------------------------------------------------------
+# --- Drop ---------------------------------------------------------------------------
 def _point(win, x_mm, y_mm):
     return win.canvas._view_point(x_mm * MM, y_mm * MM)
 
@@ -654,8 +654,8 @@ def test_dropped_pdf_asks_for_the_page_after_the_drop(window, tmp_path):
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(str(_pdf(tmp_path)))])
     _drop(window.canvas, mime, _point(window, 30, 25), process=False)
-    assert asked == [] and len(window.doc.objects) == 1     # kein Dialog im Ablegen
-    del mime                                               # Daten sind schon kopiert
+    assert asked == [] and len(window.doc.objects) == 1     # no dialog while dropping
+    del mime                                               # data is already copied
     QTest.qWait(0)
     assert asked == [2] and window.doc.objects[1].page == 2
 
@@ -669,7 +669,7 @@ def test_dropped_unsupported_file_shows_message(window, tmp_path):
     assert len(window.doc.objects) == 1 and "Dateityp" in _status(window)
 
 
-# --- Bild-Panel: Umwandlung, Größe --------------------------------------------------
+# --- Image panel: conversion, size --------------------------------------------------
 def test_panel_shows_selected_image(qtbot, tmp_path):
     win = _with_image(qtbot, tmp_path)
     panel = win.panel("image")
@@ -677,12 +677,12 @@ def test_panel_shows_selected_image(qtbot, tmp_path):
     assert panel.line.isChecked() and panel.threshold.value() == 128
     assert panel.threshold_value.value() == 128
     assert panel.crop.isChecked() and panel.keep_ratio.isChecked() and not panel.invert.isChecked()
-    assert not panel.position.spins["w"].isReadOnly()        # Größe immer änderbar
+    assert not panel.position.spins["w"].isReadOnly()        # size always changeable
 
 
 def test_threshold_changes_image_and_is_undoable(qtbot, tmp_path):
     win = _with_image(qtbot, tmp_path, _picture(gray=150))
-    assert _ink(win, 1) == 0                                 # Grau 150 > Schwelle 128
+    assert _ink(win, 1) == 0                                 # grey 150 > threshold 128
     win.panel("image").threshold_value.setValue(200)
     win.render_now()
     assert win.doc.objects[1].threshold == 200 and _ink(win, 1) > 0
@@ -715,7 +715,7 @@ def test_invert_and_photo_change_the_image(qtbot, tmp_path):
     ink = _ink(win, 1)
     panel.photo.click()
     win.render_now()
-    assert win.doc.objects[1].mode == "photo" and 0 < _ink(win, 1) < ink   # Grau gerastert
+    assert win.doc.objects[1].mode == "photo" and 0 < _ink(win, 1) < ink   # grey rasterised
     win.undo()
     assert win.doc.objects[1].mode == "line" and panel.line.isChecked()
 
@@ -757,7 +757,7 @@ def test_width_field_keeps_ratio(qtbot, tmp_path):
     assert (obj.w_mm, obj.h_mm) == pytest.approx((40, 20))
 
 
-# --- Auswahl, Schreibmodus, Layout --------------------------------------------------
+# --- Selection, edit mode, LAYOUT ---------------------------------------------------
 def test_selection_switches_between_text_and_image_panel(qtbot, tmp_path):
     win = _with_image(qtbot, tmp_path)
     win.canvas.set_selection([0])
@@ -792,7 +792,7 @@ def test_double_click_and_f2_on_image_do_not_start_edit_mode(qtbot, tmp_path):
 def test_undo_with_image_and_text_keeps_panels_working(qtbot, tmp_path):
     win = _with_image(qtbot, tmp_path)
     win.canvas.set_selection([0])
-    win.delete_selected()                                    # Bild rutscht auf Platz 0
+    win.delete_selected()                                    # image moves up to position 0
     win.canvas.set_selection([0])
     assert win.panel("image").index == 0
     win.undo()
@@ -831,12 +831,12 @@ def test_image_panel_rotates_the_image(qtbot, tmp_path):
     panel.rotate_left.click()
     assert win.doc.objects[1].rotation == 270
     win.undo()
-    assert win.doc.objects[1].rotation == 0                 # jede Drehung ein Schritt
+    assert win.doc.objects[1].rotation == 0                 # every rotation is one step
 
 
 def test_image_panel_rotate_is_disabled_without_image(qtbot):
     win = _window(qtbot)
-    win.canvas.set_selection([0])                          # Text gewählt, Bild-Panel leer
+    win.canvas.set_selection([0])                          # text selected, image panel empty
     win.tool_actions["image"].trigger()
     panel = win.panel("image")
     assert not panel.rotate_right.isEnabled() and not panel.rotate_left.isEnabled()
@@ -883,8 +883,8 @@ def test_resize_preview_keeps_ratio_at_the_edge(qtbot, tmp_path):
 @pytest.mark.parametrize("handle", ["tl", "t", "tr", "r", "br", "b", "bl", "l"])
 def test_image_does_not_jump_after_releasing_a_handle(qtbot, tmp_path, handle, orientation,
                                                       rotation):
-    """Vorschau beim Ziehen = Rahmen nach dem Loslassen, an allen Anfassern – bis auf das
-    Einrasten der gezogenen Kanten auf 0,1 mm (``to_grid``) und ½ Druckpunkt Rundung."""
+    """Preview while dragging = frame after releasing, at all handles – except for the
+    snapping of the dragged edges to 0.1 mm (``to_grid``) and ½ dot of rounding."""
     win = _window(qtbot, Document("62", length_mm=60, orientation=orientation,
                                   objects=[TextObject("Eins", size_pt=14, x_mm=4, y_mm=4)]))
     _insert_file(win, _file(tmp_path))
@@ -903,16 +903,16 @@ def test_image_does_not_jump_after_releasing_a_handle(qtbot, tmp_path, handle, o
     preview = canvas.objects[1].frame()
     _send(canvas, QMouseEvent.Type.MouseButtonRelease, end, Qt.MouseButton.NoButton)
     win.render_now()
-    after = layout.exact_rect(win.doc.objects[1], win.rendered[1])     # Rahmen im Modell, mm
-    assert max(after.w, after.h) > 240 / MM + 3                # gewachsen
+    after = layout.exact_rect(win.doc.objects[1], win.rendered[1])     # frame in the model, mm
+    assert max(after.w, after.h) > 240 / MM + 3                # grown
     for a, b in ((after.x, preview.left()), (after.y, preview.top()),
                  (after.right, preview.right()), (after.bottom, preview.bottom())):
         assert a * MM == pytest.approx(b, abs=0.1 * MM + 0.5)
 
 
 def test_insert_on_growing_tape_goes_behind_existing_text(qtbot):
-    """Endlosband, automatische Länge: ein Bild ohne Ablagepunkt liegt nicht auf dem Text
-    am Anfang, sondern dahinter; das Etikett wächst mit."""
+    """Continuous tape, automatic length: an image without a drop point does not lie on the text
+    at the start, but behind it; the label grows with it."""
     win = _window(qtbot, Document("62", length_mm=None, objects=[
         TextObject("Absender", size_pt=14, x_mm=4, y_mm=2)]))
     win.render_now()
@@ -924,15 +924,15 @@ def test_insert_on_growing_tape_goes_behind_existing_text(qtbot):
     assert layout.label_rect(win.doc).h > before
 
 
-# --- Standard für neue Bilder (Einstellungen) ---------------------------------------
+# --- Default for new images (settings) ----------------------------------------------
 def test_new_images_take_mode_and_threshold_from_the_settings(qtbot, tmp_path):
     win = _window(qtbot, image_mode="photo", image_threshold=90)
-    _insert_file(win, _file(tmp_path))                              # aus Datei
+    _insert_file(win, _file(tmp_path))                              # from file
     QApplication.clipboard().setImage(_qimage(_picture()))
-    win.panel("image").from_clipboard.click()                       # aus der Zwischenablage
+    win.panel("image").from_clipboard.click()                       # from the clipboard
     mime = QMimeData()
     mime.setImageData(_qimage(_picture()))
-    _drop(win.canvas, mime, QPointF(win.canvas.viewport().rect().center()))   # abgelegt
+    _drop(win.canvas, mime, QPointF(win.canvas.viewport().rect().center()))   # dropped
     assert len(win.doc.objects) == 4
     assert [(o.mode, o.threshold) for o in win.doc.objects[1:]] == [("photo", 90)] * 3
 
@@ -958,5 +958,5 @@ def test_image_panel_without_selection_shows_the_default(qtbot):
     panel.refresh()
     assert panel.photo.isChecked() and panel.threshold.value() == 90
     assert panel.threshold_value.value() == 90
-    panel.set_defaults("line", 200)                                  # nach dem Speichern
+    panel.set_defaults("line", 200)                                  # after saving
     assert panel.line.isChecked() and panel.threshold.value() == 200

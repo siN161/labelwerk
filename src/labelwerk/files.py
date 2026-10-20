@@ -1,5 +1,5 @@
-"""Lädt fertige Dateien (PDF, PNG, JPG) und bringt sie 1:1 aufs Etikett; lädt Bilder für
-Bild-Objekte (``load_image``)."""
+"""Loads finished files (PDF, PNG, JPG) and puts them 1:1 onto the label; loads images for
+image objects (``load_image``)."""
 from __future__ import annotations
 
 import struct
@@ -15,24 +15,24 @@ from .imaging import MAX_PIXELS, limit_size, on_white, to_8bit
 from .labels import DPI, format_mm, get_label, length_limits
 from .render import MARGIN
 
-# PDFium ist nicht threadsicher: jeder Aufruf (hier, Vorschau im Dateidialog, Paketmarken) hält diese Sperre
+# PDFium is not thread-safe: every call (here, preview in the file dialog, parcel labels) holds this lock
 PDFIUM_LOCK = threading.RLock()
 
 _IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
-# Bild-Objekte: zusätzlich GIF (erstes Bild), BMP, WebP; SVG rastert die Oberfläche
+# Image objects: additionally GIF (first frame), BMP, WebP; the GUI rasterises SVG
 _OBJECT_SUFFIXES = (*_IMAGE_SUFFIXES, ".gif", ".bmp", ".webp")
-_IMAGE_FORMATS = ["PNG", "JPEG"]                       # Pillow-Formate zu den Endungen
+_IMAGE_FORMATS = ["PNG", "JPEG"]                       # Pillow formats for the extensions
 _OBJECT_FORMATS = [*_IMAGE_FORMATS, "GIF", "BMP", "WEBP"]
 
-INK = 128            # dunkler gilt als bedruckt
-INK_LEVEL = 250      # Symbole: heller als das zählt beim Zuschneiden als Papier
-NOT_WHITE = 245      # Bild-Objekte: alles, was nicht (fast) weiß ist, gehört zum Inhalt
+INK = 128            # darker counts as printed
+INK_LEVEL = 250      # symbols: lighter than this counts as paper when cropping
+NOT_WHITE = 245      # image objects: everything that is not (almost) white belongs to the content
 _PDFIUM_PASSWORD = 4   # FPDF_ERR_PASSWORD
-MM = DPI / 25.4      # Punkte pro mm
+MM = DPI / 25.4      # dots per mm
 
 
 def load_file(path: str | Path, page: int = 1, dpi: int = DPI) -> Image.Image:
-    """Datei als Graustufenbild bei ``dpi`` (Auflösung des Etiketts; Größe in mm bleibt)."""
+    """File as a greyscale image at ``dpi`` (resolution of the label; size in mm stays)."""
     path = _checked(path, _IMAGE_SUFFIXES, "PDF, PNG, JPG", page)
     with _readable(path):
         return (_load_pdf(path, page, dpi) if path.suffix.lower() == ".pdf"
@@ -41,41 +41,41 @@ def load_file(path: str | Path, page: int = 1, dpi: int = DPI) -> Image.Image:
 
 def load_image(path: str | Path, page: int = 1,
                dpi: float | None = None) -> tuple[Image.Image, float]:
-    """Bild für ein Bild-Objekt: (RGB-Bild in Originalauflösung, dpi).
+    """Image for an image object: (RGB image at original resolution, dpi).
 
-    PNG, JPG, GIF (erstes Bild), BMP, WebP und PDF (Seite ``page``, gerendert bei 300 dpi).
-    Transparenz wird weiß, die EXIF-Lage (Handyfotos) wird angewandt; ohne DPI-Angabe
-    gelten 300 dpi (auf 0,01 gerundet: PNG speichert Punkte je Meter). Ist die Auflösung
-    hoch und quer verschieden (Fax: 204 × 98 dpi), wird die Höhe passend skaliert – die
-    Druckgröße stimmt, ``dpi`` ist die waagrechte. Sehr große Bilder werden begrenzt
-    (``imaging.limit_size``: höchstens 600 dpi bzw. 6000 px längste Seite) – PDF-Seiten
-    werden gleich passend gerendert. Mit ``dpi`` gilt die Auflösung der Datei nicht: das
-    Bild zählt quadratisch mit dieser Auflösung (keine Streckung, kein Verkleinern wegen
-    einer hohen Dateiangabe), begrenzt wird wie sonst, bezogen auf ``dpi``; PDF-Seiten
-    bleiben unberührt.
+    PNG, JPG, GIF (first frame), BMP, WebP and PDF (page ``page``, rendered at 300 dpi).
+    Transparency becomes white, the EXIF orientation (phone photos) is applied; without a DPI
+    value 300 dpi applies (rounded to 0.01: PNG stores dots per metre). If the resolution is
+    high and differs across and along (fax: 204 × 98 dpi), the height is scaled to match – the
+    print size is right, ``dpi`` is the horizontal one. Very large images are limited
+    (``imaging.limit_size``: at most 600 dpi or 6000 px on the longest side) – PDF pages
+    are rendered at a suitable size right away. With ``dpi`` the resolution of the file does not
+    apply: the image counts as square with this resolution (no stretching, no shrinking because of
+    a high value in the file), limited as usual, relative to ``dpi``; PDF pages
+    stay untouched.
     """
     path = _checked(path, _OBJECT_SUFFIXES, "PNG, JPG, GIF, BMP, WebP, PDF", page)
     with _readable(path):
         if path.suffix.lower() == ".pdf":
             return _load_pdf_page(path, page)
-        # Formate fest: Pillow erkennt sie sonst am Inhalt (EPS liefe durch Ghostscript)
-        with Image.open(path, formats=_OBJECT_FORMATS) as src:     # GIF: erstes Bild
+        # fixed formats: Pillow otherwise detects them by content (EPS would run through Ghostscript)
+        with Image.open(path, formats=_OBJECT_FORMATS) as src:     # GIF: first frame
             x_dpi, y_dpi = _file_dpi(src) if dpi is None else (dpi, dpi)
-            if src.getexif().get(0x0112, 1) in (5, 6, 7, 8):   # EXIF dreht um 90°
+            if src.getexif().get(0x0112, 1) in (5, 6, 7, 8):   # EXIF rotates by 90°
                 x_dpi, y_dpi = y_dpi, x_dpi
-            img = on_white(ImageOps.exif_transpose(src))   # Handyfotos: Lage aus EXIF
-        return limit_size(img, x_dpi, x_dpi / y_dpi)    # Höhe passend, Grenzen vor dem Strecken
+            img = on_white(ImageOps.exif_transpose(src))   # phone photos: orientation from EXIF
+        return limit_size(img, x_dpi, x_dpi / y_dpi)    # height adjusted, limits before stretching
 
 
 def _file_dpi(src: Image.Image) -> tuple[float, float]:
-    """Auflösung (waagrecht, senkrecht) aus der Datei, auf 0,01 gerundet; fehlt sie oder
-    ist sie 0, gelten 300 dpi."""
+    """Resolution (horizontal, vertical) from the file, rounded to 0.01; if it is missing or
+    0, 300 dpi applies."""
     dpi = src.info.get("dpi", (DPI, DPI))
     return tuple(round(float(v), 2) or float(DPI) for v in dpi[:2])
 
 
 def page_count(path: str | Path) -> int:
-    """Seitenzahl einer PDF-Datei (für die Seitenwahl vor ``load_image``)."""
+    """Page count of a PDF file (for the page choice before ``load_image``)."""
     path = _checked(path, (), "PDF", 1)
     with _readable(path), PDFIUM_LOCK:
         import pypdfium2 as pdfium
@@ -88,7 +88,7 @@ def page_count(path: str | Path) -> int:
 
 
 def _checked(path: str | Path, suffixes: tuple[str, ...], allowed: str, page: int) -> Path:
-    """Dateityp, Vorhandensein und Seitenzahl prüfen."""
+    """Check file type, existence and page count."""
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix != ".pdf" and suffix not in suffixes:
@@ -103,8 +103,8 @@ def _checked(path: str | Path, suffixes: tuple[str, ...], allowed: str, page: in
 
 @contextmanager
 def _readable(path: Path):
-    """Lesefehler als verständliche deutsche Meldung (``ValueError``, fehlende Datei
-    ``FileNotFoundError``) – ohne englischen Text aus Betriebssystem, Pillow oder PDFium."""
+    """Read errors as a readable message (``ValueError``, missing file
+    ``FileNotFoundError``) – without English text from the operating system, Pillow or PDFium."""
     try:
         yield
     except FileNotFoundError:
@@ -116,7 +116,7 @@ def _readable(path: Path):
 
 
 def _reason(error: Exception) -> str:
-    """Grund eines Lesefehlers auf Deutsch."""
+    """Reason for a read error (translated)."""
     if isinstance(error, IsADirectoryError):
         return _("is a folder")
     if isinstance(error, PermissionError):
@@ -141,7 +141,7 @@ def _load_pdf(path: Path, page: int, dpi: int = DPI) -> Image.Image:
 
 
 def _load_pdf_page(path: Path, page: int) -> tuple[Image.Image, float]:
-    """PDF-Seite in Farbe bei 300 dpi – bei sehr großen Seiten gröber (``MAX_PIXELS``)."""
+    """PDF page in colour at 300 dpi – coarser for very large pages (``MAX_PIXELS``)."""
     with _pdf_page(path, page) as pdf_page:
         dpi = min(DPI, MAX_PIXELS * 72 / max(pdf_page.get_size()))
         return pdf_page.render(scale=dpi / 72).to_pil().convert("RGB"), dpi
@@ -166,7 +166,7 @@ def _pdf_page(path: Path, page: int):
 def _load_image(path: Path, target: int = DPI) -> Image.Image:
     with Image.open(path, formats=_IMAGE_FORMATS) as src:
         dpi = float(src.info.get("dpi", (DPI, DPI))[0]) or DPI
-        img = to_8bit(src).convert("RGBA")             # 16-Bit-Graustufen skalieren
+        img = to_8bit(src).convert("RGBA")             # scale 16-bit greyscale
     img = Image.alpha_composite(Image.new("RGBA", img.size, "white"), img).convert("L")
     if round(dpi) != target:
         f = target / dpi
@@ -176,20 +176,20 @@ def _load_image(path: Path, target: int = DPI) -> Image.Image:
 
 
 def crop(img: Image.Image, dpi: int = DPI) -> Image.Image:
-    """Auf den Inhalt zuschneiden; liegen vier Eck-Schnittmarken außen, ohne die Marken."""
+    """Crop to the content; if four corner crop marks lie outside, without the marks."""
     return img.crop(_content_box(img, dpi, INK))
 
 
 def crop_box(img: Image.Image, dpi: float = DPI,
              ink: int = INK) -> tuple[int, int, int, int] | None:
-    """Ausschnitt (l, t, r, b) mit dem Inhalt; liegen vier Eck-Schnittmarken außen, ohne die
-    Marken und den Leerraum dazwischen – None, wenn das Bild keinen Inhalt hat.
+    """Section (l, t, r, b) with the content; if four corner crop marks lie outside, without the
+    marks and the empty space between them – None if the image has no content.
 
-    Inhalt ist, was dunkler als ``ink`` ist (Standard wie ``crop()``; Bild-Objekte nehmen
-    ``NOT_WHITE``, damit helle Fotos und gelbe Logos nicht abgeschnitten werden). Die Marken
-    selbst werden immer mit ``INK`` gesucht – helle Elemente außerhalb stören nicht. Bilder in
-    Farbe zählen nach ihrer Helligkeit, Transparenz zuerst auf Weiß; ``dpi``: Auflösung des
-    Bilds (Maße der Marken in mm).
+    Content is what is darker than ``ink`` (default as in ``crop()``; image objects use
+    ``NOT_WHITE`` so that light photos and yellow logos are not cut off). The marks
+    themselves are always searched with ``INK`` – light elements outside do not disturb. Colour
+    images count by their brightness, transparency first onto white; ``dpi``: resolution of the
+    image (size of the marks in mm).
     """
     try:
         return _content_box(img, dpi, ink)
@@ -198,21 +198,21 @@ def crop_box(img: Image.Image, dpi: float = DPI,
 
 
 def ink_box(img: Image.Image) -> tuple[int, int, int, int] | None:
-    """Umriss alles Nicht-Weißen (heller als ``INK_LEVEL`` ist Papier), ohne Schnittmarken-
-    Erkennung – für Symbole, deren umrandete Zeichen ``crop_box`` sonst innen schnitte;
-    ganz weiß: None."""
+    """Outline of everything not white (lighter than ``INK_LEVEL`` is paper), without crop-mark
+    detection – for symbols whose outlined glyphs ``crop_box`` would otherwise cut inside;
+    entirely white: None."""
     return on_white(img).convert("L").point(lambda v: 255 if v < INK_LEVEL else 0).getbbox()
 
 
 def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, int, int]:
-    """``crop_box``, ohne Inhalt aber ``ValueError`` mit Meldung (für ``crop()``)."""
+    """``crop_box``, but without content ``ValueError`` with a message (for ``crop()``)."""
     gray = img if img.mode == "L" else on_white(img).convert("L")
     ink = gray.point(lambda v: 255 if v < level else 0)
     box = ink.getbbox()
     if box is None:
         raise ValueError(_("The file has no printable content."))
-    # Schnittmarken sind schwarz: immer auf der Maske mit ``INK`` suchen, damit helle
-    # Elemente anderswo auf der Seite (graue Textzeile) sie nicht vom Rand verdrängen
+# Crop marks are black: always search on the mask with ``INK`` so that light
+# elements elsewhere on the page (grey line of text) do not displace them from the edge
     marks = ink if level == INK else gray.point(lambda v: 255 if v < INK else 0)
     marks_box = marks.getbbox()
     if marks_box is None:
@@ -230,7 +230,7 @@ def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, in
     right, bottom = w - max(tr[0], br[0]), h - max(bl[1], br[1])
     x0, y0 = marks_box[:2]
     inner = (x0 + left, y0 + top, x0 + right, y0 + bottom)
-    trimmed = ink.crop(inner).getbbox()  # Leerraum innerhalb der Marken entfernen
+    trimmed = ink.crop(inner).getbbox()  # remove empty space inside the marks
     if trimmed is None:
         raise ValueError(_("There is no printable content between the crop marks."))
     return (inner[0] + trimmed[0], inner[1] + trimmed[1],
@@ -238,11 +238,11 @@ def _content_box(img: Image.Image, dpi: float, level: int) -> tuple[int, int, in
 
 
 def _corner_mark(ink: Image.Image, mm: float = MM) -> tuple[int, int] | None:
-    """Innenkante (x, y) eines Schnittmarken-Kreuzes in der Ecke oben links, sonst None.
+    """Inner corner (x, y) of a crop-mark cross in the top-left corner, otherwise None.
 
-    Linien müssen am Rand des Inhalts beginnen, auf den ersten 3 mm zu 40 % dunkel
-    (auch gepunktet) und höchstens 1 mm dick sein – so gilt Text oder ein Logo nicht als Marke.
-    ``mm``: Pixel je mm.
+    Lines must start at the edge of the content, be 40 % dark over the first 3 mm
+    (also dotted) and at most 1 mm thick – so text or a logo does not count as a mark.
+    ``mm``: pixels per mm.
     """
     span, window = round(3 * mm), round(10 * mm)
     w, h = ink.size
@@ -263,17 +263,17 @@ ROTATIONS = ("auto", 0, 90, 180, 270)
 def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
                  model: str = "QL-600", rotate: str | int = "auto",
                  dpi: int = DPI) -> Image.Image:
-    """Motiv (``dpi`` wie bei ``load_file``) 1:1 mittig aufs Etikett setzen – in der Auflösung
-    des Etiketts (andere wird umgerechnet); verkleinern nur mit fit.
+    """Place the motif (``dpi`` as in ``load_file``) 1:1 centred on the label – at the resolution
+    of the label (others are converted); shrink only with fit.
 
-    rotate: "auto" dreht nur wenn nötig (90° gegen den Uhrzeigersinn), sonst feste
-    Drehung in Grad im Uhrzeigersinn (0, 90, 180, 270).
+    rotate: "auto" rotates only when needed (90° counter-clockwise), otherwise a fixed
+    rotation in degrees clockwise (0, 90, 180, 270).
     """
     if rotate not in ROTATIONS:
         raise ValueError(_("Rotation {rotate!r} not possible – allowed: auto, 0, 90, 180, 270").format(
             rotate=rotate))
     label = get_label(label_id)
-    if label.dpi != dpi:                         # gleiche Größe in den Punkten des Druckers
+    if label.dpi != dpi:                         # same size in the printer's dots
         f = label.dpi / dpi
         img = img.resize((max(1, round(img.width * f)), max(1, round(img.height * f))),
                          Image.LANCZOS)
@@ -307,7 +307,7 @@ def fit_to_label(img: Image.Image, label_id: str, fit: bool = False,
 
 
 def _shrink(img: Image.Image, max_w: int, max_h: int, may_rotate: bool = True) -> Image.Image:
-    """Proportional verkleinern; mit may_rotate in der Lage, die größer bleibt."""
+    """Scale down proportionally; with may_rotate in the orientation that stays larger."""
     def scale(w: int, h: int) -> float:
         return min(max_w / w, max_h / h)
 

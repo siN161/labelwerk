@@ -1,14 +1,15 @@
-"""Übersetzbare Texte einsammeln und die Sprachdateien pflegen.
+"""Collect translatable texts and maintain the language files.
 
-    python tools/i18n.py extract   # src/labelwerk/po/labelwerk.pot aus dem Code neu schreiben
-    python tools/i18n.py update    # neue Texte in jede .po übernehmen, entfallene als veraltet (#~)
-    python tools/i18n.py check     # wie der Test: .pot aktuell, jede Sprache vollständig
+    python tools/i18n.py extract   # rewrite src/labelwerk/po/labelwerk.pot from the code
+    python tools/i18n.py update    # carry new texts into every .po, mark dropped ones obsolete (#~)
+    python tools/i18n.py check     # like the test: .pot up to date, every language complete
 
-Gefunden werden Aufrufe von ``_``, ``N_``, ``NP_``, ``ngettext`` und ``pgettext`` mit festem Text (AST,
-ohne den Code auszuführen); Kommentare „# Translators: …“ direkt darüber gehen als Hinweis mit (``#.``),
-Texte mit ``{name}`` bekommen ``#, python-brace-format`` (Weblate/Poedit prüfen dann die Platzhalter).
-``update`` behält, was Übersetzer eingetragen haben: Kommentare, unsichere (fuzzy) und veraltete Einträge. Die Ausgabe ist sortiert, ohne Datum und ohne Zeilennummern (Fundstelle = Datei) – sie
-ändert sich nur, wenn sich Texte ändern.
+Calls of ``_``, ``N_``, ``NP_``, ``ngettext`` and ``pgettext`` with a literal text are found (AST,
+without executing the code); "# Translators: …" comments directly above are carried along as a hint
+(``#.``), texts with ``{name}`` get ``#, python-brace-format`` (Weblate/Poedit then check the
+placeholders). ``update`` keeps what translators entered: comments, uncertain (fuzzy) and obsolete
+entries. The output is sorted, without date and without line numbers (location = file) – it only
+changes when texts change.
 """
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ class Message:
     plural: str | None = None
     context: str = ""
     places: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)       # Hinweise für Übersetzer (#.)
+    notes: list[str] = field(default_factory=list)       # hints for translators (#.)
 
     @property
     def brace_format(self) -> bool:
@@ -47,11 +48,11 @@ def _text(node) -> str | None:
 
 
 def extract(src: Path = SRC) -> dict[tuple[str, str], Message]:
-    """Alle übersetzbaren Texte unter ``src``: (Kontext, Text) → Message mit Fundstellen."""
+    """All translatable texts under ``src``: (context, text) → Message with locations."""
     found: dict[tuple[str, str], Message] = {}
     for path in sorted(src.rglob("*.py")):
         source = path.read_text(encoding="utf-8")
-        lines = source.split("\n")           # wie der Parser zählt (nicht splitlines: U+2028 …)
+        lines = source.split("\n")           # the way the parser counts (not splitlines: U+2028 …)
         tree = ast.parse(source, str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -68,8 +69,8 @@ def extract(src: Path = SRC) -> dict[tuple[str, str], Message]:
                 message = Message(args[0], plural=args[1])
             if message is None:
                 continue
-            place = str(path.relative_to(src.parent.parent))   # ohne Zeile: stabil beim Umbauen
-            number = node.lineno - 2                              # Kommentar direkt darüber
+            place = str(path.relative_to(src.parent.parent))   # without line: stable when refactoring
+            number = node.lineno - 2                              # comment directly above
             notes = []
             while number >= 0 and lines[number].strip().startswith("#"):
                 notes.insert(0, lines[number].strip().lstrip("#").strip())
@@ -131,8 +132,8 @@ def pot_text(messages: dict) -> str:
 
 def po_text(language: str, messages: dict, translations: dict, obsolete: dict,
             raw: dict | None = None, header: str | None = None) -> str:
-    """Sprachdatei: Kopf (vorhandener bleibt), alle Texte des Codes mit Übersetzung, Kommentaren und
-    Markierungen der Übersetzer (``raw``), danach veraltete (``#~``)."""
+    """Language file: header (an existing one stays), all texts of the code with translation, comments and
+    translators' flags (``raw``), then obsolete ones (``#~``)."""
     head = header or ('msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=UTF-8\\n"\n'
                       f'"Language: {language}\\n"\n'
                       f'"Plural-Forms: {HEADER.get(language, "nplurals=2; plural=(n != 1);")}\\n"\n')
@@ -147,8 +148,8 @@ def po_text(language: str, messages: dict, translations: dict, obsolete: dict,
 
 
 def read_raw(text: str) -> tuple[str, dict]:
-    """Rohe Einträge einer Sprachdatei, auch unsichere und veraltete: Kopf (Text) und
-    (Kontext, Text) → {comments, flags, forms, plural, obsolete}."""
+    """Raw entries of a language file, including uncertain and obsolete ones: header (text) and
+    (context, text) → {comments, flags, forms, plural, obsolete}."""
     sys.path.insert(0, str(ROOT / "src"))
     from labelwerk.i18n import unquote
     header, entries, block = "", {}, []
@@ -166,7 +167,7 @@ def read_raw(text: str) -> tuple[str, dict]:
             elif line.startswith("# ") or line == "#":
                 comments.append(line[2:])
             elif line.startswith("#"):
-                continue                                    # #: und #. schreibt extract neu
+                continue                                    # extract rewrites #: and #.
             elif line.startswith('"'):
                 fields[key] += unquote(line, "")
             else:
@@ -202,7 +203,7 @@ def languages() -> list[str]:
 
 
 def placeholders(text: str) -> list[str]:
-    """Benannte Platzhalter ``{name}``/``{name!r}``/``{name:.1f}`` und %-Angaben eines Texts."""
+    """Named placeholders ``{name}``/``{name!r}``/``{name:.1f}`` and %-specifiers of a text."""
     return sorted(re.findall(r"\{[^{}]*\}", text.replace("{{", "").replace("}}", ""))
                   + re.findall(r"%(?:\([a-z_]+\))?[srd]", text))
 
@@ -210,14 +211,14 @@ def placeholders(text: str) -> list[str]:
 GERMAN = re.compile(r"[äöüÄÖÜß]|\b(der|das|und|nicht|kein|keine|ist|mit|für|oder|auf|bei|wird|"
                     r"Etikett|Drucker|Datei|Fehler|Bild|Seite|Zeile|Spalte|Rand|Rahmen|Schrift|"
                     r"Größe|Zwischenablage|Bildschirmfoto|Serie|Vorlage|Einstellung)\b")
-# Deutsche Texte, die bewusst keine Übersetzung sind (gespeichert/verglichen): Datei → Texte
+# German texts that are deliberately not translations (stored/compared): file → texts
 GERMAN_OK = {"src/labelwerk/gui/image_import.py": {"Abgelegtes Bild", "Zwischenablage",
                                                    "Bildschirmfoto"}}
 
 
 def german_leftovers(src: Path = SRC) -> list[str]:
-    """Deutsch aussehende Texte außerhalb von ``_()`` & Co. (ohne Docstrings) – Nutzertexte, die
-    die Umstellung auf Englisch übersehen hat; Ausnahmen in ``GERMAN_OK``."""
+    """German-looking texts outside ``_()`` & co. (without docstrings) – user texts that the
+    switch to English missed; exceptions in ``GERMAN_OK``."""
     calls, found = {"_", "N_", "pgettext", "ngettext"}, []
     for path in sorted(src.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -239,36 +240,36 @@ def german_leftovers(src: Path = SRC) -> list[str]:
 
 
 def problems(messages: dict | None = None) -> list[str]:
-    """Was der Test prüft: .pot aktuell, jede Sprache vollständig, Platzhalter gleich."""
+    """What the test checks: .pot up to date, every language complete, placeholders equal."""
     messages = extract() if messages is None else messages
     found = []
     if not POT.exists() or POT.read_text(encoding="utf-8") != pot_text(messages):
-        found.append("labelwerk.pot veraltet – python tools/i18n.py extract")
+        found.append("labelwerk.pot out of date – python tools/i18n.py extract")
     for language in languages():
         catalog = _load(language)
         header = re.search(r"nplurals\s*=\s*(\d+)", (PO_DIR / f"{language}.po").read_text(
             encoding="utf-8-sig"))
         if header is None:
-            found.append(f"{language}: Kopf ohne „Plural-Forms: nplurals=…“")
+            found.append(f"{language}: header without \"Plural-Forms: nplurals=…\"")
             continue
         nplurals = int(header[1])
         for key, m in sorted(messages.items()):
             forms = catalog.messages.get(key)
             if not forms:
-                found.append(f"{language}: fehlt {m.msgid!r}" + (f" ({m.context})" if m.context else ""))
+                found.append(f"{language}: missing {m.msgid!r}" + (f" ({m.context})" if m.context else ""))
                 continue
             if m.plural is not None and len(forms) != nplurals:
-                found.append(f"{language}: {len(forms)} statt {nplurals} Mehrzahlformen in {m.msgid!r}")
+                found.append(f"{language}: {len(forms)} instead of {nplurals} plural forms in {m.msgid!r}")
             for index, form in enumerate(forms):
                 original = m.msgid if index == 0 or m.plural is None else m.plural
                 if set(placeholders(form)) != set(placeholders(original)):
-                    found.append(f"{language}: Platzhalter anders in {m.msgid!r}: {form!r}")
+                    found.append(f"{language}: placeholders differ in {m.msgid!r}: {form!r}")
     return found
 
 
 def update() -> None:
-    """Vorlage neu; jede Sprachdatei: neue Texte dazu (leer), vorhandene Übersetzungen samt
-    Kommentaren und Markierungen (fuzzy) bleiben, entfallene werden veraltet (``#~``)."""
+    """New template; every language file: new texts added (empty), existing translations along with
+    comments and flags (fuzzy) stay, dropped ones become obsolete (``#~``)."""
     messages = extract()
     POT.write_text(pot_text(messages), encoding="utf-8")
     for language in languages():
@@ -285,14 +286,14 @@ def main(argv: list[str]) -> int:
     command = argv[0] if argv else "check"
     if command == "extract":
         POT.write_text(pot_text(extract()), encoding="utf-8")
-        print(f"geschrieben: {POT}")
+        print(f"written: {POT}")
         return 0
     if command == "update":
         update()
-        print("aktualisiert: " + ", ".join([POT.name, *(f"{lang}.po" for lang in languages())]))
+        print("updated: " + ", ".join([POT.name, *(f"{lang}.po" for lang in languages())]))
         return 0
     found = problems()
-    print("\n".join(found) if found else "vollständig")
+    print("\n".join(found) if found else "complete")
     return 1 if found else 0
 
 

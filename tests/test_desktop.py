@@ -4,7 +4,7 @@ import pytest
 
 from labelwerk import desktop
 
-# ohne externe Programme (update-mime-database …): nichts gefunden
+# without external programs (update-mime-database …): nothing found
 install = functools.partial(desktop.install, which=lambda name: None)
 uninstall = functools.partial(desktop.uninstall, which=lambda name: None)
 
@@ -47,7 +47,7 @@ def test_uninstall_removes_files(tmp_path, gui_exe):
     installed = install(gui_exe, data)
     assert set(uninstall(data)) == set(installed)
     assert not any(p.exists() for p in installed)
-    assert uninstall(data) == []                       # zweites Mal: nichts zu tun
+    assert uninstall(data) == []                       # second time: nothing to do
 
 
 def test_display_name_comes_from_app_name(tmp_path, gui_exe, monkeypatch):
@@ -55,9 +55,9 @@ def test_display_name_comes_from_app_name(tmp_path, gui_exe, monkeypatch):
     assert "Name=Neuer Name\n" in desktop.desktop_entry(gui_exe)
 
 
-# --- Dateityp *.labelwerk (Etappe 3c) ---------------------------------------------------
+# --- File type *.labelwerk (stage 3c) ---------------------------------------------------
 class Runner:
-    """Ersatz für externe Programme: merkt die Aufrufe, startet nichts."""
+    """Replacement for external programs: records the calls, starts nothing."""
 
     def __init__(self, available=True):
         self.calls = []
@@ -111,7 +111,7 @@ def test_failing_update_tool_is_no_error(tmp_path, gui_exe):
 
 
 def test_exec_path_with_spaces_and_special_characters_is_quoted(tmp_path):
-    """Desktop-Entry-Spezifikation: Pfad in Anführungszeichen, \\ " ` $ maskiert, % verdoppelt."""
+    """Desktop Entry specification: path in quotes, \\ " ` $ escaped, % doubled."""
     exe = tmp_path / "mein Ordner $x 100%" / "labelwerk-gui"
     exe.parent.mkdir()
     exe.write_text("#!/bin/sh\n")
@@ -140,7 +140,7 @@ def test_failing_update_tool_is_reported(tmp_path, gui_exe, error):
             raise subprocess.TimeoutExpired(args, kwargs.get("timeout"))
         raise error
     failed = desktop.update_databases(tmp_path, which=Runner().which, run=broken)
-    assert failed == []                                  # Ordner fehlen: nichts aufgerufen
+    assert failed == []                                  # folders missing: nothing called
     desktop.install(gui_exe, tmp_path / "share", which=lambda n: None)
     failed = desktop.update_databases(tmp_path / "share", which=Runner().which, run=broken)
     assert failed == ["update-mime-database", "update-desktop-database"]

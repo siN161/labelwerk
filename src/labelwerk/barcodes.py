@@ -1,9 +1,9 @@
-"""Barcodes ohne Qt: Strichcodes (Code 128, Code 39, EAN-13, EAN-8) selbst kodiert (Tabellen aus
-den Normen), QR-Codes über ``segno``.
+"""Barcodes without Qt: linear codes (Code 128, Code 39, EAN-13, EAN-8) encoded here (tables from
+the standards), QR codes via ``segno``.
 
-Gezeichnet wird in ganzen Druckpunkten: Ein Modul (schmalster Strich bzw. QR-Quadrat) ist
-``module`` Punkte breit – kein Skalieren, keine Kantenglättung in den Strichen, so bleibt der Code
-bei 300 dpi lesbar. Fehler (Inhalt, Einstellungen) → ``BarcodeError`` mit deutscher Meldung.
+Drawing uses whole dots: one module (narrowest bar or QR square) is ``module`` dots wide – no
+scaling, no anti-aliasing in the bars, so the code stays readable at 300 dpi. Errors (content,
+settings) → ``BarcodeError`` with a translated message.
 """
 from __future__ import annotations
 
@@ -24,33 +24,33 @@ from .labels import DPI
 TITLES = {"qr": N_("QR code"), "code128": "Code 128", "code39": "Code 39", "ean13": "EAN-13",
           "ean8": "EAN-8"}
 SAMPLES = {"qr": "labelwerk", "code128": "ABC-123", "code39": "ABC-123", "ean13": "590123412345",
-           "ean8": "9638507"}                 # Beispielinhalt beim Einfügen
-INSERT_MODULE = {"qr": 6}    # Modulbreite beim Einfügen bei 300 dpi (sonst 3 Druckpunkte = 0,25 mm)
-MAX_LINEAR = 80              # Zeichen je Strichcode
-# Ruhezone in Modulen außerhalb des Rahmens (sonst 10) – EAN-13 links 11, davon 7 für die erste Ziffer
+           "ean8": "9638507"}                 # sample content when inserting
+INSERT_MODULE = {"qr": 6}    # module width when inserting at 300 dpi (otherwise 3 dots = 0.25 mm)
+MAX_LINEAR = 80              # characters per linear code
+# quiet zone in modules outside the frame (otherwise 10) – EAN-13 left 11, 7 of them for the first digit
 QUIET = {"qr": 4, "ean13": 11, "ean8": 7}
-MIN_BARS_MM = 1.0            # kürzeste Strichhöhe
-TEXT_MODULES = 9             # Klartext: Schriftgröße in Modulen …
-MIN_TEXT_DOTS = 25           # … mindestens 6 pt …
-TEXT_SHARE = 0.4             # … höchstens 40 % der Höhe …
-MIN_FIT_DOTS = 8             # … beim Einpassen (Breite, Höhe) höchstens bis hierher verkleinert
-WIDE = 3                     # Code 39: breit = 3 × schmal
+MIN_BARS_MM = 1.0            # shortest bar height
+TEXT_MODULES = 9             # human-readable text: font size in modules …
+MIN_TEXT_DOTS = 25           # … at least 6 pt …
+TEXT_SHARE = 0.4             # … at most 40 % of the height …
+MIN_FIT_DOTS = 8             # … when fitting (width, height) shrunk at most this far
+WIDE = 3                     # Code 39: wide = 3 × narrow
 
 
 class BarcodeError(ValueError):
-    """Inhalt oder Einstellung lässt sich nicht als Barcode darstellen."""
+    """Content or setting cannot be shown as a barcode."""
 
 
 @dataclass(frozen=True)
 class Code:
-    """Kodierter Inhalt.
+    """Encoded content.
 
-    ``rows``: QR – Zeilen der Matrix, Strichcode – eine Zeile; je Modul „1“ (dunkel) oder „0“.
-    ``text``: Klartext-Gruppen (Text, erstes Modul, Ende) relativ zum Codeanfang; ``guards``:
-    Module der verlängerten Randzeichen (EAN); ``lead``: Module links vor dem Code für die erste
-    EAN-13-Ziffer; ``glyphs``: alle Zeichen, die im Klartext der Art vorkommen können (ihre Höhe
-    und Unterlänge bestimmen den Platz – gleich für jeden Inhalt, auch in einer Serie);
-    ``readable``: der ganze Inhalt, wie er kodiert ist (EAN mit Prüfziffer).
+    ``rows``: QR – rows of the matrix, linear code – one row; per module "1" (dark) or "0".
+    ``text``: human-readable groups (text, first module, end) relative to the start of the code;
+    ``guards``: modules of the extended guard bars (EAN); ``lead``: modules left of the code for the
+    first EAN-13 digit; ``glyphs``: all characters that can appear in the human-readable text of the
+    kind (their height and descender determine the space – the same for any content, also in a series);
+    ``readable``: the whole content as encoded (EAN with check digit).
     """
     rows: tuple[str, ...]
     matrix: bool = False
@@ -61,9 +61,9 @@ class Code:
     readable: str = ""
 
 
-# --- Kodieren --------------------------------------------------------------------------------
+# --- Encoding --------------------------------------------------------------------------------
 def encode(kind: str, data: str, error: str = "M") -> Code:
-    """Inhalt kodieren (``error``: QR-Fehlerkorrektur, sonst ohne Bedeutung)."""
+    """Encode the content (``error``: QR error correction, irrelevant otherwise)."""
     if not isinstance(kind, str) or kind not in BARCODE_KINDS:
         raise BarcodeError(_("Unknown barcode type {kind!r}").format(kind=kind))
     if not isinstance(data, str):
@@ -101,11 +101,11 @@ def _qr(data: str, error: str) -> Code:
 
 
 def _bars(pattern: str) -> str:
-    """Breiten abwechselnd Strich/Lücke („212222“) → Module („11011001100“)."""
+    """Alternating bar/space widths ("212222") → modules ("11011001100")."""
     return "".join(("1" if i % 2 == 0 else "0") * int(w) for i, w in enumerate(pattern))
 
 
-# Code 128 (ISO/IEC 15417): Werte 0–105 als Breiten Strich/Lücke/…, je 11 Module; Stopp 13
+# Code 128 (ISO/IEC 15417): values 0–105 as bar/space widths/…, 11 modules each; stop 13
 _C128 = (
     "212222", "222122", "222221", "121223", "121322", "131222", "122213", "122312", "132212",
     "221213", "221312", "231212", "112232", "122132", "122231", "113222", "123122", "123221",
@@ -137,15 +137,15 @@ def _code128(data: str) -> Code:
 
 
 def _code128_values(data: str) -> list[int]:
-    """Werte samt Startzeichen mit den wenigsten Zeichen: Zeichensatz B (ein Zeichen je Wert) und
-    C (zwei Ziffern je Wert), Wechsel kostet einen Wert – kürzester Weg über alle Positionen."""
+    """Values including the start character with the fewest characters: code set B (one character per
+    value) and C (two digits per value), switching costs one value – shortest path over all positions."""
     n = len(data)
     inf = n * 4 + 8
-    cost = [[inf, inf] for __ in range(n + 1)]   # [B, C]: Werte, bis Position i kodiert ist
+    cost = [[inf, inf] for __ in range(n + 1)]   # [B, C]: values until position i is encoded
     prev: list[list[tuple[int, int] | None]] = [[None, None] for __ in range(n + 1)]
-    cost[0] = [1, 1]                            # Startzeichen B bzw. C
+    cost[0] = [1, 1]                            # start character B or C
     for i in range(n + 1):
-        for s in (0, 1):                        # Wechsel an dieser Stelle
+        for s in (0, 1):                        # switch at this point
             if cost[i][1 - s] + 1 < cost[i][s]:
                 cost[i][s], prev[i][s] = cost[i][1 - s] + 1, (i, 1 - s)
         if i == n:
@@ -170,7 +170,7 @@ def _code128_values(data: str) -> list[int]:
     return values[::-1]
 
 
-# Code 39 (ISO/IEC 16388): 9 Elemente Strich/Lücke/…, „1“ = breit (drei von neun)
+# Code 39 (ISO/IEC 16388): 9 elements bar/space/…, "1" = wide (three of nine)
 _C39 = {
     "0": "000110100", "1": "100100001", "2": "001100001", "3": "101100000", "4": "000110001",
     "5": "100110000", "6": "001110000", "7": "000100101", "8": "100100100", "9": "001100100",
@@ -186,19 +186,19 @@ _C39 = {
 def _code39(data: str) -> Code:
     text = ""
     for c in data:
-        upper = c.upper() if "a" <= c <= "z" else c    # Kleinbuchstaben werden groß gedruckt
+        upper = c.upper() if "a" <= c <= "z" else c    # lowercase letters are printed as capitals
         if upper not in _C39 or upper == "*":
             raise BarcodeError(_("Code 39 cannot encode “{char}” (allowed: 0–9, A–Z, space and "
                                  "- . $ / + %)").format(char=c))
         text += upper
     parts = ["".join(("1" if k % 2 == 0 else "0") * (WIDE if w == "1" else 1)
                      for k, w in enumerate(_C39[c])) for c in f"*{text}*"]
-    bars = "0".join(parts)                      # schmale Lücke zwischen den Zeichen
+    bars = "0".join(parts)                      # narrow space between the characters
     return Code((bars,), text=((text, 0, len(bars)),), glyphs="".join(_C39), readable=text)
 
 
-# EAN (ISO/IEC 15420): Zeichensätze L/G (links) und R (rechts); Parität der linken Hälfte
-# von EAN-13 aus der ersten Ziffer
+# EAN (ISO/IEC 15420): character sets L/G (left) and R (right); parity of the left half
+# of EAN-13 from the first digit
 _L = ("0001101", "0011001", "0010011", "0111101", "0100011", "0110001", "0101111", "0111011",
       "0110111", "0001011")
 _R = tuple("".join("1" if b == "0" else "0" for b in code) for code in _L)
@@ -208,14 +208,14 @@ _PARITY = ("LLLLLL", "LLGLGG", "LLGGLG", "LLGGGL", "LGLLGG", "LGGLLG", "LGGGLL",
 
 
 def check_digit(digits: str) -> int:
-    """EAN-Prüfziffer zu den Ziffern davor (von rechts abwechselnd × 3, × 1)."""
+    """EAN check digit for the digits before it (from the right alternately × 3, × 1)."""
     total = sum(int(d) * (3 if i % 2 == 0 else 1) for i, d in enumerate(reversed(digits)))
     return (10 - total % 10) % 10
 
 
 def _ean_digits(kind: str, data: str) -> str:
     title, length = _(TITLES[kind]), 13 if kind == "ean13" else 8
-    digits = "".join(data.split())              # Leerzeichen zählen nicht
+    digits = "".join(data.split())              # spaces do not count
     for c in digits:
         if c not in _DIGITS:
             raise BarcodeError(_("{title} can only encode digits, not “{char}”").format(title=title,
@@ -249,7 +249,7 @@ def _ean8(data: str) -> Code:
     return Code((bars,), text=((d[:4], 3, 31), (d[4:], 36, 64)), guards=guards, readable=d)
 
 
-# --- Maße und Zeichnen -----------------------------------------------------------------------
+# --- Dimensions and drawing -----------------------------------------------------------------
 def _dots(mm: float, dpi: int = DPI) -> int:
     return round(mm * dpi / 25.4)
 
@@ -259,7 +259,7 @@ def _number(v) -> bool:
 
 
 def check(obj: BarcodeObject) -> Code:
-    """Einstellungen prüfen und den Inhalt kodieren."""
+    """Check the settings and encode the content."""
     if obj.rotation not in ROTATIONS:
         raise BarcodeError(_("Unknown rotation {rotation!r} – allowed: 0, 90, 180, 270 degrees").format(
             rotation=obj.rotation))
@@ -280,25 +280,25 @@ def check(obj: BarcodeObject) -> Code:
 
 
 def modules(obj: BarcodeObject) -> int:
-    """Module in der Breite (ungedreht) – EAN-13 mit Klartext samt Platz für die erste Ziffer."""
+    """Modules in the width (unrotated) – EAN-13 with text including space for the first digit."""
     code = check(obj)
     return len(code.rows) if code.matrix else len(code.rows[0]) + (code.lead if obj.text else 0)
 
 
 def quiet_mm(obj: BarcodeObject, dpi: int = DPI) -> float:
-    """Ruhezone links und rechts (mm) außerhalb des Rahmens, die frei bleiben sollte."""
+    """Quiet zone left and right (mm) outside the frame that should stay free."""
     modules = 7 if obj.kind == "ean13" and obj.text else QUIET.get(obj.kind, 10)
     return modules * obj.module * 25.4 / dpi
 
 
-# höchstens so viele Module breit (QR: Version 40; Code 128 ganz in B; Code 39 mit Lücken)
+# at most this many modules wide (QR: version 40; Code 128 entirely in B; Code 39 with spaces)
 MAX_MODULES = {"qr": 177, "code128": 11 * (MAX_LINEAR + 2) + 13, "code39": 16 * (MAX_LINEAR + 2),
                "ean13": 102, "ean8": 67}
 
 
 def max_size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
-    """Obere Schranke der Größe (Druckpunkte, ungedreht) ohne Kodieren – für die Grenzen fremder
-    Dateien, auch wenn erst die Serie den Inhalt füllt."""
+    """Upper bound of the size (dots, unrotated) without encoding – for the limits of foreign
+    files, even when only the series fills in the content."""
     side = MAX_MODULES.get(obj.kind, 0) * obj.module
     return (side, side) if obj.kind == "qr" else (side, _dots(obj.h_mm, dpi))
 
@@ -307,14 +307,14 @@ def max_size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
 class _Layout:
     width: int
     height: int
-    bars: int                   # Höhe der Striche
-    guards: int                 # Höhe der verlängerten Randzeichen
-    font: object = None         # Klartext (None = keiner)
+    bars: int                   # height of the bars
+    guards: int                 # height of the extended guard bars
+    font: object = None         # human-readable text (None = none)
     baseline: int = 0
 
 
 def size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
-    """Größe (Breite, Höhe) in Druckpunkten bei ``dpi``, ungedreht."""
+    """Size (width, height) in dots at ``dpi``, unrotated."""
     layout = _layout(obj, check(obj), dpi)
     return layout.width, layout.height
 
@@ -342,24 +342,24 @@ def _font_path() -> str:
 
 
 def scaled(dots: int, dpi: int) -> int:
-    """Druckpunkte bei 300 dpi in der Auflösung ``dpi`` (gleiche Größe in mm, mindestens 1)."""
+    """Dots at 300 dpi in the resolution ``dpi`` (same size in mm, at least 1)."""
     return dots if dpi == DPI else max(1, round(dots * dpi / DPI))
 
 
 def insert_module(kind: str, dpi: int = DPI) -> int:
-    """Modulbreite beim Einfügen in Druckpunkten bei ``dpi`` (gleiche mm wie bei 300 dpi)."""
+    """Module width when inserting, in dots at ``dpi`` (same mm as at 300 dpi)."""
     return scaled(INSERT_MODULE.get(kind, 3), dpi)
 
 
 def max_module(dpi: int = DPI) -> int:
-    """Größte Modulbreite, die Einpassen und Eingabe bei ``dpi`` zulassen (1,7 mm)."""
+    """Largest module width that fitting and input allow at ``dpi`` (1.7 mm)."""
     return min(scaled(MAX_MODULE, dpi), MODULE_LIMIT)
 
 
 def _text_font(code: Code, m: int, height: int, dpi: int = DPI):
-    """Klartext-Schrift und ihr Platz (Schrift, über und unter der Grundlinie, Abstand zu den
-    Strichen): rund ``TEXT_MODULES`` Module groß (mindestens 6 pt), verkleinert, bis jede Gruppe in
-    ihre Breite passt und der Klartext höchstens ``TEXT_SHARE`` der Höhe braucht."""
+    """Human-readable font and its space (font, above and below the baseline, distance to the
+    bars): about ``TEXT_MODULES`` modules large (at least 6 pt), shrunk until each group fits its
+    width and the text needs at most ``TEXT_SHARE`` of the height."""
     dots = max(TEXT_MODULES * m, scaled(MIN_TEXT_DOTS, dpi))
     path = _font_path()
     while True:
@@ -374,7 +374,7 @@ def _text_font(code: Code, m: int, height: int, dpi: int = DPI):
 
 
 def draw(obj: BarcodeObject, dpi: int = DPI) -> Image.Image:
-    """Barcode als Graustufenbild (L, weißer Grund, Tinte schwarz) in ``size(obj)``, ungedreht."""
+    """Barcode as a greyscale image (L, white background, black ink) in ``size(obj)``, unrotated."""
     code = check(obj)
     layout = _layout(obj, code, dpi)
     img = Image.new("L", (layout.width, layout.height), 255)
@@ -397,8 +397,8 @@ def draw(obj: BarcodeObject, dpi: int = DPI) -> Image.Image:
 
 
 def placeholder_size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
-    """Größe (Druckpunkte, ungedreht) für einen Barcode, der sich nicht kodieren lässt – etwa so
-    groß, wie er mit diesem Inhalt würde (Arbeitsfläche: bleibt sichtbar und wählbar)."""
+    """Size (dots, unrotated) for a barcode that cannot be encoded – about as large as it would
+    be with this content (canvas: stays visible and selectable)."""
     m = (obj.module if isinstance(obj.module, int) and 1 <= obj.module <= MODULE_LIMIT
          else scaled(3, dpi))
     n = len(obj.data) if isinstance(obj.data, str) else 1
@@ -413,7 +413,7 @@ def placeholder_size(obj: BarcodeObject, dpi: int = DPI) -> tuple[int, int]:
 
 
 def placeholder(width: int, height: int) -> Image.Image:
-    """Schraffierter Kasten (L) statt eines Barcodes, der sich nicht kodieren lässt."""
+    """Hatched box (L) instead of a barcode that cannot be encoded."""
     img = Image.new("L", (width, height), 255)
     pen = ImageDraw.Draw(img)
     for x in range(-height, width, 12):
@@ -423,7 +423,7 @@ def placeholder(width: int, height: int) -> Image.Image:
 
 
 def _runs(row: str) -> list[tuple[int, int]]:
-    """Abschnitte dunkler Module (Anfang, Ende) einer Zeile."""
+    """Runs of dark modules (start, end) of a row."""
     runs, start = [], None
     for i, v in enumerate(row + "0"):
         if v == "1" and start is None:

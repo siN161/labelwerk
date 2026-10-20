@@ -1,6 +1,6 @@
-"""Referenztests je Druckermodell: Die Rasterdaten eines festen Testetiketts ändern sich nur
-gewollt (dann ``python tools/golden.py --update``). Beweist, was gesendet wird – nicht, was
-gedruckt wird."""
+"""Reference tests per printer model: the raster data of a fixed test label only change
+on purpose (then ``python tools/golden.py --update``). Proves what is sent – not what
+is printed."""
 import importlib.util
 import json
 from pathlib import Path
@@ -31,6 +31,6 @@ def test_raster_data_is_unchanged(model):
 def test_cases_cover_cut_width_and_red():
     assert "62-ohne-schnitt" in STORED["QL-600"] and "102" not in STORED["QL-600"]
     assert "102" in STORED["QL-1100"] and "62red" in STORED["QL-820NWB"]
-    # ohne Abschneider: mit und ohne Schnitt gleich
+    # without cutter: same with and without cut
     assert STORED["QL-500"]["62"] == STORED["QL-500"]["62-ohne-schnitt"]
     assert STORED["QL-600"]["62"] != STORED["QL-600"]["62-ohne-schnitt"]

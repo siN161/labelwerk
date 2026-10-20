@@ -1,7 +1,7 @@
-"""Panel „Datei“: Neu/Öffnen/Speichern, Favoriten (mit Vorschau, ⎙ je Favorit) und Zuletzt geöffnet.
+"""Panel “File”: New/Open/Save, favourites (with preview, ⎙ per favourite) and Recently opened.
 
-Nur Anzeige: Knöpfe lösen die Aktionen des Hauptfensters aus, Listen melden per Signal, was
-gewählt wurde – ausgeführt wird in ``gui.file_session.FileSession``.
+Display only: buttons trigger the main window's actions, lists report via signal what
+was chosen – execution is in ``gui.file_session.FileSession``.
 """
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ from ...i18n import N_, _
 from ...storage import exists
 from . import Panel
 
-PREVIEW = QSize(110, 46)            # Vorschau eines Favoriten (eingepasst)
-FAVORITE_ROWS = 5                   # so viele Favoriten sichtbar, mehr per Bildlauf
+PREVIEW = QSize(110, 46)            # preview of a favourite (fitted)
+FAVORITE_ROWS = 5                   # this many favourites visible, more by scrolling
 RECENT_ROWS = 6
 FAVORITES_HINT = N_("No favorites yet – design a label and press “+ CURRENT”.")
 BROKEN = N_("unreadable")
 
 
 class _FavoriteRow(QWidget):
-    """Zeile: Vorschau, Name, ⎙ (druckt diesen Favoriten)."""
+    """Row: preview, name, ⎙ (prints this favourite)."""
 
     def __init__(self, favorite: Favorite, preview: QPixmap | None, start: bool, on_print):
         super().__init__()
@@ -40,7 +40,7 @@ class _FavoriteRow(QWidget):
         else:
             self.preview.setText(_(BROKEN))
         self.name = QLabel(_("{name}  ▸ Start").format(name=favorite.name) if start else favorite.name)
-        self.name.setTextFormat(Qt.TextFormat.PlainText)    # „<b>“ im Namen bleibt Text
+        self.name.setTextFormat(Qt.TextFormat.PlainText)    # “<b>” in the name stays text
         self.name.setWordWrap(True)
         self.print = QToolButton()
         self.print.setText("⎙")
@@ -52,14 +52,14 @@ class _FavoriteRow(QWidget):
 
 
 class FilePanel(Panel):
-    favorite_open = Signal(object)        # Favorite → als neues Etikett öffnen
-    favorite_print = Signal(object)       # Favorite → drucken
+    favorite_open = Signal(object)        # Favorite → open as a new label
+    favorite_print = Signal(object)       # favourite → print
     favorite_rename = Signal(object)
     favorite_remove = Signal(object)
-    favorite_start = Signal(object)       # Favorite → „Beim Start öffnen“ an/aus
-    favorites_folder = Signal()           # Ordner öffnen
-    favorite_add = Signal()               # „+ AKTUELL“
-    recent_open = Signal(str)             # Pfad
+    favorite_start = Signal(object)       # Favorite → “Open at startup” on/off
+    favorites_folder = Signal()           # open folder
+    favorite_add = Signal()               # "+ CURRENT"
+    recent_open = Signal(str)             # path
 
     def __init__(self, doc: Document):
         super().__init__(doc, _("File"))
@@ -75,7 +75,7 @@ class FilePanel(Panel):
         self.layout_.addLayout(row)
         self.save = QPushButton(_("SAVE"))
         self.save_as = QPushButton(_("SAVE AS …"))
-        for button in (self.save, self.save_as):          # volle Breite: lange Beschriftung
+        for button in (self.save, self.save_as):          # full width: long caption
             self.layout_.addWidget(button)
 
         self.section(_("Favorites"))
@@ -102,7 +102,7 @@ class FilePanel(Panel):
         self.layout_.addStretch()
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
-        """Knöpfe lösen die Datei-Aktionen aus (Kürzel im Tooltip, auch nach dem Umbelegen)."""
+        """Buttons trigger the file actions (shortcut in the tooltip, also after remapping)."""
         for button, key in ((self.new, "file.new"), (self.open, "file.open"),
                             (self.save, "file.save"), (self.save_as, "file.save_as")):
             action = actions[key]
@@ -110,11 +110,11 @@ class FilePanel(Panel):
             button.setToolTip(action.toolTip())
             action.changed.connect(lambda b=button, a=action: b.setToolTip(a.toolTip()))
 
-    # --- Favoriten --------------------------------------------------------
+    # --- Favourites -------------------------------------------------------
     def set_favorites(self, favorites: list[tuple[Favorite, QPixmap | None]],
                       start: str | None) -> None:
-        """Liste neu füllen: (Favorit, Vorschau oder None = nicht lesbar); ``start`` = Name
-        des Start-Favoriten."""
+        """Refill the list: (favourite, preview or None = not readable); ``start`` = name
+        of the startup favourite."""
         self._favorites = [f for f, __ in favorites]
         self._start = start
         self.favorites.clear()
@@ -132,7 +132,7 @@ class FilePanel(Panel):
         _fit_height(self.favorites, min(len(favorites), FAVORITE_ROWS), PREVIEW.height() + 8)
 
     def set_printing(self, printing: bool) -> None:
-        """Während eines Drucks sind die ⎙-Knöpfe gesperrt (wie DRUCKEN)."""
+        """While printing the ⎙ buttons are locked (like PRINT)."""
         self._printing = printing
         for row in range(self.favorites.count()):
             self.favorites.itemWidget(self.favorites.item(row)).print.setEnabled(not printing)
@@ -152,7 +152,7 @@ class FilePanel(Panel):
         self.favorite_print.emit(self._favorites[row])
 
     def favorite_menu(self, row: int) -> QMenu:
-        """Kontextmenü eines Favoriten."""
+        """Context menu of a favourite."""
         favorite = self._favorites[row]
         menu = QMenu(self)
         menu.addAction(_("Open as new label"), lambda: self.favorite_open.emit(favorite))
@@ -171,9 +171,9 @@ class FilePanel(Panel):
             self.favorite_menu(self.favorites.row(item)).exec(
                 self.favorites.viewport().mapToGlobal(pos))
 
-    # --- Zuletzt geöffnet -------------------------------------------------
+    # --- Recently opened -------------------------------------------------
     def set_recent(self, paths: list[str]) -> None:
-        """Zuletzt geöffnet: Name, Pfad im Tooltip; fehlt die Datei, ausgegraut."""
+        """Recently opened: name, path in the tooltip; if the file is missing, greyed out."""
         self._recent = list(paths)
         self.recent.clear()
         grey = self.palette().color(self.palette().ColorRole.PlaceholderText)
@@ -195,8 +195,8 @@ class FilePanel(Panel):
 
 
 def _open_on_click(view: QListWidget, open_row) -> None:
-    """Klick und Aktivieren (Eingabe, Doppelklick) öffnen die Zeile – einmal: Stile, die schon
-    per Einzelklick aktivieren (z. B. KDE), melden dazu zusätzlich ``itemActivated``."""
+    """Click and activate (Enter, double-click) open the row – once: styles that already
+    activate on single click (e.g. KDE) additionally emit ``itemActivated``."""
     def clicked(item) -> None:
         if not view.style().styleHint(QStyle.StyleHint.SH_ItemView_ActivateItemOnSingleClick,
                                       None, view):
@@ -207,6 +207,6 @@ def _open_on_click(view: QListWidget, open_row) -> None:
 
 
 def _fit_height(view: QListWidget, rows: int, row_height: int) -> None:
-    """Liste so hoch wie ``rows`` Zeilen (mehr per Bildlauf) – der Rest des Panels bleibt sichtbar."""
+    """List as high as ``rows`` rows (more by scrolling) – the rest of the panel stays visible."""
     frame = 2 * view.frameWidth()
     view.setFixedHeight(rows * row_height + frame + (4 if rows else 0))

@@ -1,13 +1,13 @@
-"""Fenster „Symbol einfügen“ (wie die ClipArt-Auswahl im P-touch Editor).
+"""“Insert symbol” window (like the clip-art picker in the P-touch Editor).
 
-Nicht modal und bleibt offen: Suche oben (über die ganze Bibliothek), Gruppen links (Zuletzt verwendet, Favoriten,
-Eigene, Elektro, Versand, Sicherheit, Allgemein; Untergruppe als Auswahl), Raster rechts.
-Einfügen per Doppelklick, Enter (im Raster und im Suchfeld: erster Treffer), Kontextmenü oder
-Ziehen aufs Etikett (MIME ``MIME_SYMBOL`` = id); Pfeil runter im Suchfeld führt ins Raster, Esc
-schließt. Werkzeugfenster: die Kürzel des Hauptfensters (Strg+Z …) wirken weiter.
-Vorschaubilder rastert das Modell erst, wenn sie zu sehen sind – auch bei ca. 5000 Icons
-flüssig. Gerechnet (Katalog, Suche) wird im Kern (``clipart``); Einfügen, Zuletzt verwendet
-und Favoriten (Einstellungen) führt das Hauptfenster.
+Non-modal and stays open: search on top (across the whole library), groups on the left (Recently used,
+Favorites, My symbols, Electrical, Shipping, Safety, General; subgroup as a choice), grid on the right.
+Insert by double click, Enter (in the grid and in the search field: first hit), context menu or
+dragging onto the label (MIME ``MIME_SYMBOL`` = id); arrow down in the search field moves into the grid, Esc
+closes. Tool window: the shortcuts of the main window (Ctrl+Z …) keep working.
+The model only rasterises preview images when they become visible – smooth even with about 5000 icons.
+Computing (catalogue, search) is done in the core (``clipart``); inserting, recently used
+and favourites (settings) are handled by the main window.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from ..clipart import Symbol
 from ..i18n import N_, _
 from .image_import import MIME_SYMBOL
 ICON_PX = 48
-ICON_CACHE = 800               # höchstens so viele Vorschauen gemerkt (je 96 × 96 × 4 Byte, ca. 30 MB)
+ICON_CACHE = 800               # at most this many previews remembered (96 × 96 × 4 bytes each, about 30 MB)
 SPECIAL = (("zuletzt", N_("Recently used")), ("favoriten", N_("Favorites")))
 ALL_SUBGROUPS = N_("All")
 EMPTY_OWN = N_("No own symbols yet. Put SVG or PNG files into this folder "
@@ -31,12 +31,12 @@ EMPTY_OWN = N_("No own symbols yet. Put SVG or PNG files into this folder "
 EMPTY_FAVORITES = N_("No favorites yet – choose a symbol and press ★.")
 EMPTY_RECENT = N_("Nothing inserted yet.")
 NO_RESULTS = N_("Nothing found.")
-FAVORITE = (N_("☆ FAVORITE"), N_("★ FAVORITE"))          # nicht / schon Favorit
+FAVORITE = (N_("☆ FAVORITE"), N_("★ FAVORITE"))          # not / already a favourite
 WINDOW_SIZE = (720, 520)
 
 
 class SymbolModel(QAbstractListModel):
-    """Symbole als Liste; Vorschau (48 px) erst bei Bedarf gerastert und gemerkt."""
+    """Symbols as a list; preview (48 px) rasterised and remembered only on demand."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -84,13 +84,13 @@ class SymbolModel(QAbstractListModel):
         if icon is None:
             if len(self._icons) >= ICON_CACHE:
                 self._icons.clear()
-            # doppelt so fein gerastert: scharf auch auf HiDPI-Bildschirmen
+            # rasterised twice as fine: sharp on HiDPI screens as well
             icon = self._icons[symbol.id] = QIcon(preview(symbol, 2 * ICON_PX))
         return icon
 
 
 def preview(symbol: Symbol, px: int) -> QPixmap:
-    """Symbol eingepasst in ``px`` × ``px`` auf Weiß (unlesbar: leeres Feld)."""
+    """Symbol fitted into ``px`` × ``px`` on white (unreadable: empty field)."""
     image = QImage(px, px, QImage.Format.Format_RGB32)
     image.fill(Qt.GlobalColor.white)
     try:
@@ -115,10 +115,10 @@ def preview(symbol: Symbol, px: int) -> QPixmap:
 
 
 class SymbolDialog(QWidget):
-    """Eigenes Fenster (Werkzeugfenster des Hauptfensters), eine Instanz je Hauptfenster."""
+    """Own window (tool window of the main window), one instance per main window."""
 
-    chosen = Signal(object)             # Symbol einfügen (Doppelklick, Enter, Knopf)
-    favorites_changed = Signal(list)    # neue Favoriten (ids)
+    chosen = Signal(object)             # insert symbol (double click, Enter, button)
+    favorites_changed = Signal(list)    # new favourites (ids)
 
     def __init__(self, recent: list[str], favorites: list[str], parent=None):
         super().__init__(parent, Qt.WindowType.Tool)
@@ -155,7 +155,7 @@ class SymbolDialog(QWidget):
         self.grid.setUniformItemSizes(True)
         self.grid.setResizeMode(QListView.ResizeMode.Adjust)
         self.grid.setMovement(QListView.Movement.Static)
-        self.grid.setLayoutMode(QListView.LayoutMode.Batched)    # große Gruppen schrittweise
+        self.grid.setLayoutMode(QListView.LayoutMode.Batched)    # large groups step by step
         self.grid.setBatchSize(200)
         self.grid.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.grid.setDragEnabled(True)
@@ -171,7 +171,7 @@ class SymbolDialog(QWidget):
         self.open_folder = QPushButton(_("OPEN FOLDER"))
         self.open_folder.setToolTip(_("Open the folder for your own symbols (created if needed)"))
         self.favorite = QPushButton(_(FAVORITE[0]))
-        self.favorite.setObjectName("formatButton")     # RawBlock: gedrückt schwarz
+        self.favorite.setObjectName("formatButton")     # RawBlock: pressed is black
         self.favorite.setCheckable(True)
         self.insert = QPushButton(_("INSERT"))
         for button in (self.open_folder, self.favorite):
@@ -179,17 +179,17 @@ class SymbolDialog(QWidget):
         buttons.addStretch()
         buttons.addWidget(self.insert)
         right.addLayout(buttons)
-        self.info = QLabel()                      # Name · Quelle · Lizenz des gewählten
+        self.info = QLabel()                      # name · source · licence of the selected one
         self.info.setWordWrap(True)
         right.addWidget(self.info)
 
         self.search.textChanged.connect(lambda _text: self.refresh())
-        self.search.returnPressed.connect(self.choose)            # erster Treffer ist gewählt
+        self.search.returnPressed.connect(self.choose)            # the first hit is selected
         self.search.installEventFilter(self)
         self.groups.currentRowChanged.connect(lambda _row: self._group_changed())
         self.subgroup.currentIndexChanged.connect(lambda _index: self.refresh())
-        # nur doppelklicken – „activated“ käme nach dem Doppelklick noch einmal (bzw. bei
-        # Einfachklick-Einstellung schon beim Auswählen); Enter: eventFilter
+        # only double-click – "activated" would fire once more after the double click (or, with the
+        # single-click setting, already on selecting); Enter: eventFilter
         self.grid.doubleClicked.connect(lambda _index: self.choose())
         self.grid.installEventFilter(self)
         self.grid.customContextMenuRequested.connect(self._context_menu)
@@ -200,7 +200,7 @@ class SymbolDialog(QWidget):
         start = "zuletzt" if clipart.resolve(self.recent) else "elektro"
         self.groups.setCurrentRow(self._group_keys.index(start))
 
-    # --- Inhalt -----------------------------------------------------------
+    # --- Content -----------------------------------------------------------
     def group(self) -> str:
         return self._group_keys[max(0, self.groups.currentRow())]
 
@@ -215,14 +215,14 @@ class SymbolDialog(QWidget):
         return super().eventFilter(watched, event)
 
     def keyPressEvent(self, event) -> None:
-        if event.key() == Qt.Key.Key_Escape:       # Suchfeld und Raster reichen Esc weiter
+        if event.key() == Qt.Key.Key_Escape:       # search field and grid pass Esc on
             self.close()
         else:
             super().keyPressEvent(event)
 
     def _group_changed(self) -> None:
         if self.search.text():
-            self.search.blockSignals(True)       # Gruppe gewählt: die Suche endet
+            self.search.blockSignals(True)       # group chosen: the search ends
             self.search.clear()
             self.search.blockSignals(False)
         group = self.group()
@@ -245,15 +245,15 @@ class SymbolDialog(QWidget):
         return clipart.symbols(group)
 
     def refresh(self) -> None:
-        """Raster neu füllen: mit Suchtext die Treffer der ganzen Bibliothek, sonst Gruppe und
-        Untergruppe."""
+        """Refill the grid: with search text the hits of the whole library, otherwise group and
+        subgroup."""
         text = self.search.text().strip()
         if text:
             pool = clipart.search(text)
         else:
             pool = self._pool()
             sub = self.subgroup.currentText()
-            if self.subgroup.currentIndex() > 0:             # 0 = alle
+            if self.subgroup.currentIndex() > 0:             # 0 = all
                 pool = [s for s in pool if s.subgroup == sub]
         self.subgroup.setEnabled(not text)
         self.model.set_symbols(pool)
@@ -286,19 +286,19 @@ class SymbolDialog(QWidget):
                           f"{symbol.name} · {symbol.source}"
                           + (f" · {symbol.license}" if symbol.license else ""))
 
-    # --- Aktionen ---------------------------------------------------------
+    # --- Actions -----------------------------------------------------------
     def choose(self) -> None:
         if (symbol := self.current()) is not None:
             self.chosen.emit(symbol)
 
     def set_recent(self, recent: list[str]) -> None:
-        """Nach dem Einfügen: neue Liste; die Gruppe „Zuletzt verwendet“ folgt."""
+        """After inserting: new list; the group "Recently used" follows."""
         self.recent = list(recent)
         if self.group() == "zuletzt":
             self.refresh()
 
     def menu_for(self, index: QModelIndex) -> QMenu:
-        """Kontextmenü eines Symbols: Einfügen, Zu Favoriten / Aus Favoriten entfernen."""
+        """Context menu of a symbol: Insert, Add to favourites / Remove from favourites."""
         self.grid.setCurrentIndex(index)
         menu = QMenu(self)
         menu.addAction(_("Insert"), self.choose)
@@ -327,17 +327,17 @@ class SymbolDialog(QWidget):
             self._current_changed()
 
     def show_own_folder(self) -> None:
-        """Ordner für eigene Symbole anlegen und im Dateimanager öffnen."""
+        """Create the folder for own symbols and open it in the file manager."""
         folder = clipart.own_dir()
         folder.mkdir(parents=True, exist_ok=True)
         self.open_url(QUrl.fromLocalFile(str(folder)))
 
     def open_url(self, url: QUrl) -> None:
-        """Im Dateimanager öffnen (in Tests ersetzbar)."""
+        """Open in the file manager (replaceable in tests)."""
         QDesktopServices.openUrl(url)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         if self.group() == "eigene":
-            self.refresh()                     # neu abgelegte Dateien zeigen
+            self.refresh()                     # show newly added files
         self.search.setFocus()

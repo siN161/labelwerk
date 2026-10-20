@@ -7,7 +7,7 @@ build/
 *.egg-info/
 .pytest_cache/
 /*.png
-# Pflege der Paketmarken (tools/parcel): Ausgaben und echte Marken nie einchecken
+# Parcel label maintenance (tools/parcel): never commit outputs or real parcel labels
 check/
 result/
 analyse/

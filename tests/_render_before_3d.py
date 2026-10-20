@@ -1,6 +1,6 @@
-"""Eingefrorene Kopie von render.py vor Etappe 3d-1 (Bezug für den Pixelvergleich).
+"""Frozen copy of render.py before stage 3d-1 (reference for the pixel comparison).
 
-Nur die Importe sind auf absolut umgestellt; sonst unverändert. Nicht weiterentwickeln.
+Only the imports were changed to absolute; otherwise unchanged. Do not develop further.
 """
 from __future__ import annotations
 
@@ -14,19 +14,19 @@ from labelwerk.document import (ALIGNMENTS, MAX_MARGIN_MM, MIN_PT, ORIENTATIONS,
                                 Span, TextObject)
 from labelwerk.labels import DPI, get_label, length_limits
 
-MARGIN = 12            # Punkte, ca. 1 mm
-PT = DPI / 72          # Druckpunkte pro typografischem Punkt
-REF_PT = 12.0          # Bezugsgröße für automatische Skalierung von Stücken mit eigener Größe
-MIN_DOTS = 8           # kleinste Schrift in Druckpunkten
-_LINE_GAP = 4          # wie Pillow multiline_text
-_SLANT = 0.2           # Ersatzkursive: Scherung, wenn die Schrift keine echte Kursive hat
+MARGIN = 12            # dots, about 1 mm
+PT = DPI / 72          # dots per typographic point
+REF_PT = 12.0          # reference size for automatic scaling of pieces with their own size
+MIN_DOTS = 8           # smallest font in dots
+_LINE_GAP = 4          # like Pillow multiline_text
+_SLANT = 0.2           # substitute italic: shear when the font has no real italic
 
 
 class TextTooLarge(ValueError):
-    """Text passt bei fester Schriftgröße nicht aufs Etikett."""
+    """Text does not fit on the label at a fixed font size."""
 
     def __init__(self, size_pt: float, max_pt: float | None, label_id: str):
-        if max_pt is None:                     # passt nicht einmal in der kleinsten Größe
+        if max_pt is None:                     # does not fit even at the smallest size
             message = (f"Text passt nicht auf Etikett {label_id!r} – auch nicht in der "
                        "kleinsten Schriftgröße.")
         else:
@@ -42,13 +42,13 @@ def _fmt_pt(value: float) -> str:
 
 def render_text(text: str, label_id: str, size_pt: float | None = None,
                 font_path: str | None = None) -> Image.Image:
-    """Reinen Text rendern (Standardformatierung)."""
+    """Render plain text (default formatting)."""
     obj = TextObject.plain(text, size_pt=size_pt, font_path=font_path)
     return render_document(Document(label_id, objects=[obj]))
 
 
 def font_warnings(doc: Document) -> list[str]:
-    """Hinweise zu ersetzten Schriften (je Familie einmal)."""
+    """Notes on substituted fonts (once per family)."""
     warnings: list[str] = []
     for obj in doc.objects:
         for para in obj.paragraphs:
@@ -63,11 +63,11 @@ def font_warnings(doc: Document) -> list[str]:
 
 
 def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
-    """Dokument als Druckbild in exakter Auflösung (Vorschau = Druck).
+    """Document as print image in exact resolution (preview = print).
 
-    Gerendert wird in Leserichtung; bei Ausrichtung „horizontal“ (Text längs zum Band)
-    wird das Bild danach für den Drucker um 90° im Uhrzeigersinn gedreht – so kommt der
-    Textanfang zuerst aus dem Drucker und das veränderliche Ende liegt in Leserichtung rechts.
+    Rendered in reading direction; with orientation “horizontal” (text along the tape)
+    the image is then rotated by 90° clockwise for the printer – so the start of the text
+    comes out of the printer first and the variable end lies on the right in reading direction.
     """
     if doc.orientation not in ORIENTATIONS:
         raise ValueError(f"Unbekannte Ausrichtung {doc.orientation!r} – erlaubt: horizontal, vertical")
@@ -75,18 +75,18 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     label = get_label(doc.label_id)
     min_len, max_len = length_limits(model)
     margin = round(min(max(doc.margin_mm, 0.0), MAX_MARGIN_MM) * DPI / 25.4)
-    # später: Rand ringsum ab Papierkante (der unbedruckbare Streifen zählt mit)
+    # later: margin all around from the paper edge (the unprintable strip counts)
     side = max(0, margin - (label.total_width - label.width) // 2)
     if label.height is not None:
         margin = max(0, margin - (label.total_height - label.height) // 2)
-    # später: längs zählt der Vorschub des Druckers mit, feste Länge = abgeschnittenes Stück
+    # later: lengthwise the printer's feed counts too, fixed length = cut piece
     margin = max(0, margin - label.feed_margin)
-    across = label.width                      # quer zum Band (fest)
+    across = label.width                      # across the tape (fixed)
     side = min(side, max(0, (across - 2 * MARGIN) // 2))
-    feed = label.height                       # in Bandlaufrichtung; None = automatisch
+    feed = label.height                       # along the tape; None = automatic
     if feed is None and doc.length_mm is not None:
         feed = min(max(round(doc.length_mm * DPI / 25.4) - 2 * label.feed_margin, min_len), max_len)
-    if feed is not None:                      # feste Länge: Rand darf nicht alles aufbrauchen
+    if feed is not None:                      # fixed length: the margin must not use up everything
         margin = min(margin, max(0, (feed - 2 * MARGIN) // 2))
     obj = doc.objects[0] if doc.objects else TextObject("")
     for para in obj.paragraphs:
@@ -108,20 +108,20 @@ def render_document(doc: Document, model: str = "QL-600") -> Image.Image:
     img = Image.new("RGB", (width, height), "white")
     x0 = (width - text_w) // 2 - l
     if any(para.align != "center" for para in obj.paragraphs):
-        # Textrahmen über die volle Breite in Leserichtung: Absätze richten sich am Rahmen aus
+        # Text frame over the full width in reading direction: paragraphs align to the frame
         start = margin if horizontal else side
         frame = width - 2 * start
         lines = _shape(obj, base, frame=frame)
         fl, ft, fr, fb = _block_box(lines)
-        x0 = min(max(start, -fl), width - fr)            # Tinte bleibt im Bild
+        x0 = min(max(start, -fl), width - fr)            # ink stays in the image
         t, text_h = ft, fb - ft
     _draw(img, lines, x0, (height - text_h) // 2 - t)
     return img.rotate(-90, expand=True) if horizontal else img
 
 
-# --- Schriftgrößen ----------------------------------------------------------
+# --- Font sizes ---------------------------------------------------------
 def _span_dots(obj: TextObject, span: Span, base: int) -> int:
-    """Größe eines Stücks in Druckpunkten bei Grundgröße ``base`` (gemeinsam skaliert)."""
+    """Size of a piece in dots at base size ``base`` (scaled together)."""
     if span.size_pt is None:
         return base
     ref = obj.size_pt or REF_PT
@@ -129,7 +129,7 @@ def _span_dots(obj: TextObject, span: Span, base: int) -> int:
 
 
 def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str) -> int:
-    """Grundgröße in Druckpunkten: fest, oder größte passende ≤ auto_start (Halbierung)."""
+    """Base size in dots: fixed, or the largest fitting one ≤ auto_start (halving)."""
     def fits(base: int) -> bool:
         l, t, r, b = _block_box(_shape(obj, base, mode="1"))
         return (r - l) <= max_w and (b - t) <= max_h
@@ -145,41 +145,41 @@ def _fit(obj: TextObject, auto_start: int, max_w: int, max_h: int, label_id: str
         else:
             hi = mid - 1
     if not obj.auto:
-        # Meldung in der größten eingestellten Größe – die sieht der Nutzer im Editor
+        # Message at the largest size set – that is what the user sees in the editor
         largest = max((span.size_pt or obj.size_pt for para in obj.paragraphs
                        for span in para.spans), default=obj.size_pt)
         max_pt = int(best / PT * largest / obj.size_pt) if best else None
         if max_pt is not None and max_pt < MIN_PT:
-            max_pt = None                      # kleiner als erlaubt: zählt als „passt nicht“
+            max_pt = None                      # smaller than allowed: counts as “does not fit”
         raise TextTooLarge(largest, max_pt, label_id)
-    return best if best else MIN_DOTS          # passt nicht einmal klein – kleinste Größe zeigen
+    return best if best else MIN_DOTS          # does not fit even small – show the smallest size
 
 
-# --- Zeilensatz ---------------------------------------------------------------
+# --- Line layout --------------------------------------------------------------
 @dataclass
 class _Piece:
     text: str
     font: object
     dots: int
     underline: bool
-    slant: bool                # Ersatzkursive
-    x: float = 0.0             # links, relativ zum Block
-    y: float = 0.0             # Oberkante (Ascender-Linie), relativ zum Block
+    slant: bool                # substitute italic
+    x: float = 0.0             # left, relative to the block
+    y: float = 0.0             # top edge (ascender line), relative to the block
 
 
 def _font_for(obj: TextObject, span: Span, dots: int):
     if span.family is None and obj.font_path:
-        return fonts.load(obj.font_path, dots), span.italic   # feste Datei: Ersatzkursive
+        return fonts.load(obj.font_path, dots), span.italic   # fixed file: substitute italic
     match = fonts.resolve(span.family, span.bold, span.italic)
     return fonts.load(match.path, dots), span.italic and not match.italic
 
 
 def _shape(obj: TextObject, base: int, mode: str = "L",
            frame: float | None = None) -> list[list[_Piece]]:
-    """Stücke mit Position im Block (mode „1“ zum Messen, „L“ zum Zeichnen – wie Pillow).
+    """Pieces with position in the block (mode “1” for measuring, “L” for drawing – like Pillow).
 
-    Ohne ``frame`` richten sich die Zeilen an der breitesten Zeile aus; mit ``frame``
-    (Rahmenbreite) an dieser Breite – Blocksatz dehnt weiter auf die breiteste Zeile."""
+    Without ``frame`` the lines align to the widest line; with ``frame``
+    (frame width) to that width – justified text still stretches to the widest line."""
     rows = []
     for para in obj.paragraphs:
         spans = para.spans or [Span("")]
@@ -191,7 +191,7 @@ def _shape(obj: TextObject, base: int, mode: str = "L",
         rows.append((para, pieces))
 
     widths = [sum(p.font.getlength(p.text, mode) for p in pieces) for _, pieces in rows]
-    # Unterlängen großer Stücke brauchen Platz unter der Zeile; bei einheitlicher Schrift 0
+    # Descenders of large pieces need room below the line; with uniform font 0
     min_descent = min(p.font.getmetrics()[1] for _, pieces in rows for p in pieces)
     max_width = max(widths, default=0)
     ref = max_width if frame is None else frame
@@ -209,14 +209,14 @@ def _shape(obj: TextObject, base: int, mode: str = "L",
                 p.x = x
                 x += p.font.getlength(p.text, mode)
         for p in pieces:
-            p.y = top + ascent - p.font.getmetrics()[0]    # gemeinsame Grundlinie
+            p.y = top + ascent - p.font.getmetrics()[0]    # common baseline
         lines.append(pieces)
         top += spacing + max(p.font.getmetrics()[1] for p in pieces) - min_descent
     return lines
 
 
 def _justify(pieces: list[_Piece], max_width: float, mode: str) -> list[_Piece]:
-    """Wortabstände dehnen, bis die Zeile die Blockbreite füllt (ein Wort: linksbündig)."""
+    """Stretch word spacing until the line fills the block width (one word: left-aligned)."""
     words: list[_Piece] = []
     gaps_before: list[bool] = []
     for p in pieces:
@@ -236,7 +236,7 @@ def _justify(pieces: list[_Piece], max_width: float, mode: str) -> list[_Piece]:
 
 
 def _block_box(lines: list[list[_Piece]]) -> tuple[int, int, int, int]:
-    """Tintenbox des Blocks (wie Pillow multiline_textbbox), auf ganze Punkte gerundet."""
+    """Ink box of the block (like Pillow multiline_textbbox), rounded to whole dots."""
     boxes = []
     for pieces in lines:
         for p in pieces:
@@ -254,7 +254,7 @@ def _block_box(lines: list[list[_Piece]]) -> tuple[int, int, int, int]:
 
 
 def _underline(dots: int) -> tuple[int, int]:
-    """(Abstand unter der Grundlinie, Stärke) in Druckpunkten."""
+    """(Distance below the baseline, thickness) in dots."""
     return max(1, round(dots * 0.10)), max(1, round(dots * 0.06))
 
 
@@ -276,14 +276,14 @@ def _draw(img: Image.Image, lines: list[list[_Piece]], x0: int, y0: int) -> None
 
 
 def _slant_pad(p: _Piece) -> int:
-    """Platz links für die Ersatzkursive: nach links gescherte Unterlänge und negative
-    linke Seitenpeilung."""
+    """Room on the left for the substitute italic: descender sheared to the left and negative
+    left side bearing."""
     left = p.font.getbbox(p.text, anchor="la")[0] if p.text else 0
     return math.ceil(_SLANT * p.font.getmetrics()[1]) + max(0, -left)
 
 
 def _draw_slanted(img: Image.Image, p: _Piece, x: float, y: float) -> None:
-    """Ersatzkursive: Stück einzeln zeichnen und um die Grundlinie nach rechts scheren."""
+    """Substitute italic: draw the piece individually and shear it to the right around the baseline."""
     ascent, descent = p.font.getmetrics()
     pad = _slant_pad(p)
     width = pad + int(p.font.getlength(p.text) + _SLANT * ascent) + 2

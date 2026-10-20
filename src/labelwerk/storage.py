@@ -1,13 +1,13 @@
-"""Etiketten als Datei (*.labelwerk): JSON, versioniert, ohne Qt.
+"""Labels as a file (*.labelwerk): JSON, versioned, without Qt.
 
-``{"format": "labelwerk", "version": 1, "document": {…}}`` – Objekte mit ``"type"`` (``text`` |
-``image`` | ``barcode``) und ihren Feldern; Bilddaten (PNG, SVG) Base64. Eine Datei kann von irgendwoher
-stammen: beim Laden wird jedes Feld nach Art, Wertebereich und Struktur geprüft (``StorageError``
-mit deutscher Meldung statt Traceback; was angenommen wird, scheitert beim Rendern höchstens
-verständlich). Bilddaten müssen PNG sein (Pillow erkennt Formate am Inhalt – EPS liefe sonst
-durch Ghostscript) und werden ganz dekodiert. Unbekannte Felder werden übergangen, fehlende
-bekommen den Standardwert. Die Schemata nennen jedes Feld der Dataclasses (ein Test hält sie
-gleich).
+``{"format": "labelwerk", "version": 1, "document": {…}}`` – objects with ``"type"`` (``text`` |
+``image`` | ``barcode``) and their fields; image data (PNG, SVG) Base64. A file can come from
+anywhere: on loading every field is checked by kind, value range and structure (``StorageError``
+with a translated message instead of a traceback; what is accepted fails at most
+comprehensibly when rendering). Image data must be PNG (Pillow detects formats by content – EPS would
+otherwise run through Ghostscript) and is decoded completely. Unknown fields are skipped, missing
+ones get the default value. The schemas name every field of the dataclasses (a test keeps them
+in sync).
 """
 from __future__ import annotations
 
@@ -38,21 +38,21 @@ FORMAT = "labelwerk"
 VERSION = 1
 SUFFIX = ".labelwerk"
 RECENT_FILES = 10
-MAX_FILE_BYTES = 32 * 1024 * 1024     # größere Dateien werden nicht gelesen
-MAX_OBJECTS = 500                     # Objekte je Etikett
-MAX_FRAME_DOTS = 100_000_000          # Summe der Rahmenflächen in Druckpunkten (in Etikett-dpi)
-MAX_BARCODE_TOTAL = 20_000            # Zeichen aller Barcode-Inhalte (Kodieren beim Laden bleibt billig)
-MAX_SIZE_MM = 1_000.0                 # Rahmen, Etikettlänge (QL: höchstens 1 m)
-MAX_SIZE_PT = 1_000.0                 # Schriftgröße (über MAX_PT hinaus, wie scale_text es lässt)
-LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "   # gehören zwischen Absätze, nicht in Stücke
+MAX_FILE_BYTES = 32 * 1024 * 1024     # larger files are not read
+MAX_OBJECTS = 500                     # objects per label
+MAX_FRAME_DOTS = 100_000_000          # sum of the frame areas in dots (at label dpi)
+MAX_BARCODE_TOTAL = 20_000            # characters of all barcode contents (encoding on loading stays cheap)
+MAX_SIZE_MM = 1_000.0                 # frame, label length (QL: at most 1 m)
+MAX_SIZE_PT = 1_000.0                 # font size (beyond MAX_PT, as scale_text allows)
+LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85  "   # belong between paragraphs, not inside pieces
 _TMP_PREFIX = ".labelwerk-"
 
-# Feld → Art (siehe ``_KINDS``)
+# Field → kind (see ``_KINDS``)
 SPAN = {"text": "span_text", "family": "str?", "size_pt": "pt?", "bold": "bool", "italic": "bool",
         "underline": "bool"}
-PARAGRAPH = {"align": "align"}                                    # dazu „spans“
+PARAGRAPH = {"align": "align"}                                    # plus “spans”
 TEXT = {"size_pt": "pt?", "font_path": "str?", "fit": "bool", "x_mm": "pos?", "y_mm": "pos?",
-        "w_mm": "size?", "h_mm": "size?", "rotation": "rotation", "color": "color"}  # dazu „paragraphs“
+        "w_mm": "size?", "h_mm": "size?", "rotation": "rotation", "color": "color"}  # plus “paragraphs”
 IMAGE = {"png": "bytes", "source": "str", "page": "page?", "crop": "crop", "x_mm": "pos",
          "y_mm": "pos", "w_mm": "size", "h_mm": "size", "rotation": "rotation", "mode": "mode",
          "threshold": "threshold", "invert": "bool", "keep_ratio": "bool", "dpi": "dpi",
@@ -63,9 +63,9 @@ BARCODE = {"kind": "barcode_kind", "data": "barcode_data", "x_mm": "pos", "y_mm"
 FRAME = {"style": "frame_style", "rounded": "bool", "line_mm": "frame_line",
          "inset_mm": "frame_mm", "padding_mm": "frame_mm"}
 NUMBERING = {"start": "number", "step": "step", "count": "count", "digits": "digits"}
-SERIES = {"source": "path?", "sheet": "str?", "cut": "cut"}       # dazu „numbering“
+SERIES = {"source": "path?", "sheet": "str?", "cut": "cut"}       # plus “numbering”
 DOCUMENT = {"label_id": "label", "length_mm": "size?", "orientation": "orientation",
-            "margin_mm": "margin"}                                # dazu „objects“, „frame“, „series“
+            "margin_mm": "margin"}                                # plus “objects”, “frame”, “series”
 
 
 def _num(v) -> bool:
@@ -77,7 +77,7 @@ def _int(v) -> bool:
 
 
 def _text(v) -> bool:
-    """Text, der sich als UTF-8 schreiben lässt (keine einzelnen Surrogates)."""
+    """Text that can be written as UTF-8 (no lone surrogates)."""
     if not isinstance(v, str):
         return False
     try:
@@ -128,11 +128,11 @@ _KINDS = {
 
 
 class StorageError(ValueError):
-    """Datei lässt sich nicht als Etikett lesen (Meldung auf Deutsch, mit Dateiname)."""
+    """File cannot be read as a label (translated message, with file name)."""
 
 
 def os_reason(error: OSError) -> str:
-    """Grund eines Datei-Fehlers auf Deutsch (statt englischem Text des Betriebssystems)."""
+    """Reason for a file error in the current language (not the operating system's English text)."""
     if isinstance(error, FileNotFoundError):
         return _("folder missing")
     if isinstance(error, IsADirectoryError):
@@ -147,14 +147,14 @@ def os_reason(error: OSError) -> str:
 
 
 def exists(path: str | Path) -> bool:
-    """Gibt es den Pfad? Auch ein unerreichbarer (EACCES, ENOTCONN, EIO …) wirft nicht."""
+    """Does the path exist? Even an unreachable one (EACCES, ENOTCONN, EIO …) does not raise."""
     try:
         return Path(path).exists()
     except OSError:
         return False
 
 
-# --- Schreiben ---------------------------------------------------------------------------
+# --- Writing -----------------------------------------------------------------------------
 def _dump(obj, schema: dict) -> dict:
     out = {}
     for key, kind in schema.items():
@@ -168,8 +168,8 @@ def _dump(obj, schema: dict) -> dict:
 
 
 def to_dict(doc: Document, base: str | Path | None = None) -> dict:
-    """``base``: Ordner der Datei – eine Tabelle darin oder darunter wird relativ gespeichert
-    (kein Benutzername in weitergegebenen Etiketten, Ordner mitsamt Tabelle verschiebbar)."""
+    """``base``: folder of the file – a table in or below it is saved relative
+    (no user name in forwarded labels, folder movable together with the table)."""
     objects = []
     for obj in doc.objects:
         if isinstance(obj, TextObject):
@@ -194,16 +194,16 @@ def to_dict(doc: Document, base: str | Path | None = None) -> dict:
 
 
 def save(doc: Document, path: str | Path) -> Path:
-    """Atomar speichern (temporäre Datei im selben Ordner, dann ersetzen): ein Abbruch
-    hinterlässt die alte Datei. Ein Symlink wird verfolgt (das Ziel ändert sich), Rechte einer
-    vorhandenen Datei bleiben, neue Dateien bekommen die Rechte nach umask. Fehler:
-    ``OSError`` mit deutscher Meldung."""
+    """Save atomically (temporary file in the same folder, then replace): an abort
+    leaves the old file. A symlink is followed (the target changes), permissions of an
+    existing file stay, new files get the permissions per umask. Errors:
+    ``OSError`` with a translated message."""
     path = Path(path)
     target = Path(os.path.realpath(path))
     try:
         text = json.dumps(to_dict(doc, target.parent), ensure_ascii=False, indent=1,
                           allow_nan=False) + "\n"
-        text.encode("utf-8")                # einzelne Surrogates lassen sich nicht schreiben
+        text.encode("utf-8")                # single surrogates cannot be written
     except UnicodeEncodeError as e:
         raise OSError(_("{name} was not saved: invalid characters in the text").format(
             name=path.name)) from e
@@ -212,10 +212,10 @@ def save(doc: Document, path: str | Path) -> Path:
             name=path.name)) from e
     tmp = None
     try:
-        for attempt in range(100):          # freier Name für die temporäre Datei
+        for attempt in range(100):          # free name for the temporary file
             tmp = target.with_name(f"{_TMP_PREFIX}{os.getpid()}-{attempt}.tmp")
             try:
-                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)   # umask gilt
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)   # umask applies
                 break
             except FileExistsError:
                 continue
@@ -238,9 +238,9 @@ def save(doc: Document, path: str | Path) -> Path:
     return path
 
 
-# --- Lesen -------------------------------------------------------------------------------
+# --- Reading -----------------------------------------------------------------------------
 def _check(value, kind: str, key: str, where: str):
-    """Wert prüfen und umwandeln (Base64 → bytes); ungültig → StorageError."""
+    """Check and convert a value (Base64 → bytes); invalid → StorageError."""
     optional = kind.endswith("?")
     kind = kind.rstrip("?")
     if value is None and optional:
@@ -297,10 +297,10 @@ def _image(data: dict, where: str) -> ImageObject:
                 raise StorageError(_("Image{where} too large ({width} × {height} pixels, at most "
                                      "{limit})").format(where=where, width=size[0], height=size[1],
                                                         limit=MAX_PIXELS))
-            img.load()                      # ganz dekodieren: kaputte Daten fallen jetzt auf
+            img.load()                      # decode completely: broken data shows up now
     except StorageError:
         raise
-    except Exception as e:  # Pillow wirft je nach Schaden verschiedene Fehler
+    except Exception as e:  # Pillow raises different errors depending on the damage
         # Translators: {where} is a location with a leading space, e.g. " in object 3" (or empty)
         raise StorageError(_("Image data{where} not readable (PNG only)").format(where=where)) from e
     crop = values.get("crop")
@@ -327,25 +327,25 @@ def _series(data) -> Series:
 def _is_file(path: str) -> bool:
     try:
         return stat.S_ISREG(os.stat(path).st_mode)
-    except (OSError, ValueError):       # ValueError: Pfad mit NUL-Zeichen
+    except (OSError, ValueError):       # ValueError: path with NUL character
         return False
 
 
 def _text_object(item: dict, where: str) -> TextObject:
     values = _load(item, TEXT, where)
     if values.get("font_path") is not None and not _is_file(values["font_path"]):
-        values["font_path"] = None      # nur eine vorhandene, reguläre Datei geht an FreeType
+        values["font_path"] = None      # only an existing, regular file goes to FreeType
     paragraphs = []
     for p in _list(item, "paragraphs", where):
         align = _load(p, PARAGRAPH, where)
         spans = [Span(**_load(s, SPAN, where, required=("text",)))
                  for s in _list(p, "spans", where)]
         paragraphs.append(Paragraph(spans, **align))
-    return TextObject(paragraphs or [Paragraph([Span("")])], **values)   # leer = eine Zeile
+    return TextObject(paragraphs or [Paragraph([Span("")])], **values)   # empty = one line
 
 
 def _relative(source: str, base: str | Path) -> str:
-    """Pfad relativ zu ``base`` (mit „/“), wenn er darin liegt – sonst wie er ist."""
+    """Path relative to ``base`` (with “/”) if it lies within it – otherwise as it is."""
     try:
         return Path(source).relative_to(Path(os.path.realpath(base))).as_posix()
     except ValueError:
@@ -353,7 +353,7 @@ def _relative(source: str, base: str | Path) -> str:
 
 
 def from_dict(data, base: str | Path | None = None) -> Document:
-    """``base``: Ordner der Datei – relative Tabellenpfade gelten von dort aus."""
+    """``base``: folder of the file – relative table paths apply from there."""
     if not isinstance(data, dict) or data.get("format") != FORMAT:
         raise StorageError(_("not a labelwerk file"))
     version = data.get("version")
@@ -366,10 +366,10 @@ def from_dict(data, base: str | Path | None = None) -> Document:
     document = data.get("document")
     values = _load(document, DOCUMENT, "")
     frame = document.get("frame")
-    if frame is not None:                   # fehlt oder null: kein Rahmen
+    if frame is not None:                   # missing or null: no frame
         # Translators: location inserted into file error messages (leading space): "Invalid value for \"x\" in object 3"
         values["frame"] = Frame(**_load(frame, FRAME, _(" in the border")))
-    if document.get("series") is not None:  # fehlt oder null: keine Serie
+    if document.get("series") is not None:  # missing or null: no series
         values["series"] = _series(document["series"])
         source = values["series"].source
         if base is not None and source is not None and not Path(source).is_absolute():
@@ -407,11 +407,11 @@ def from_dict(data, base: str | Path | None = None) -> Document:
 
 
 def _dots(obj, dpi: int) -> float:
-    """Rahmenfläche in Druckpunkten (Grenze „Etikett zu groß“); Barcodes mit ihrer echten Fläche,
-    mit Platzhaltern der Serie oder ungültigem Inhalt mit der größtmöglichen (``barcodes.max_size``)
-    – was gespeichert wurde, lässt sich wieder öffnen."""
+    """Frame area in dots (limit “Label too large”); barcodes with their real area,
+    with series placeholders or invalid content with the largest possible one
+    (``barcodes.max_size``) – what was saved can be opened again."""
     if isinstance(obj, BarcodeObject):
-        from .series import placeholders            # series liest storage – erst hier
+        from .series import placeholders            # series reads storage – only here
         w, h = barcodes.max_size(obj, dpi)
         if not placeholders(Document(objects=[obj])):
             try:
@@ -423,21 +423,21 @@ def _dots(obj, dpi: int) -> float:
 
 
 def _reject_constant(name: str):
-    raise ValueError(f"{name} is not a number")      # nur intern (json)
+    raise ValueError(f"{name} is not a number")      # only internal (json)
 
 
 def load(path: str | Path) -> Document:
-    """Etikett aus einer Datei; jeder Fehler als ``StorageError`` mit Dateiname."""
+    """Label from a file; every error as ``StorageError`` with file name."""
     path = Path(path)
     try:
         info = path.stat()
         if stat.S_ISDIR(info.st_mode):
             raise IsADirectoryError(path)
-        if not stat.S_ISREG(info.st_mode):      # ein FIFO o. Ä. würde beim Lesen hängen
+        if not stat.S_ISREG(info.st_mode):      # a FIFO or similar would hang on reading
             raise StorageError(_("{name}: not a file").format(name=path.name))
         if info.st_size > MAX_FILE_BYTES:
             raise StorageError(_("{name}: file too large").format(name=path.name))
-        text = path.read_text(encoding="utf-8-sig")       # auch mit BOM (Windows-Editoren)
+        text = path.read_text(encoding="utf-8-sig")       # also with BOM (Windows editors)
     except FileNotFoundError as e:
         raise StorageError(_("File not found: {path}").format(path=path)) from e
     except OSError as e:
@@ -458,9 +458,9 @@ def load(path: str | Path) -> Document:
     except StorageError as e:
         raise StorageError(f"{path.name}: {e}") from e
     except (TypeError, AttributeError, KeyError, RecursionError, OverflowError) as e:
-        raise StorageError(_("{name}: file damaged").format(name=path.name)) from e   # Sicherheitsnetz
+        raise StorageError(_("{name}: file damaged").format(name=path.name)) from e   # safety net
 
 
 def add_recent_file(recent: list[str], path: str, limit: int = RECENT_FILES) -> list[str]:
-    """„Zuletzt geöffnet“: ``path`` nach vorn, ohne Doppelte, höchstens ``limit``."""
+    """“Recently opened”: ``path`` to the front, without duplicates, at most ``limit``."""
     return [path, *(p for p in recent if p != path)][:limit]

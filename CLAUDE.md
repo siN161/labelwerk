@@ -90,7 +90,7 @@ Primäre Hardware: **Brother QL-600G** (USB, `04f9:20c0`), Rolle **DK-22205 (62 
   über, „»“ hervorgehoben, solange der aktive Reiter dort liegt – _mark_overflow; Leisten nicht über das Kontextmenü
   ausblendbar); Fenster beim Start so breit, dass alles passt (fit_toolbars nach dem Design und nach jedem
   Designwechsel ohne Größenänderung, höchstens Bildschirmbreite).
-- 3014 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
+- 3018 Tests grün (`pytest -q`), GitHub Actions CI (`.github/workflows/tests.yml`).
 
 ## Architektur
 ```
@@ -420,7 +420,8 @@ nur Entwicklung: `zxing-cpp` (Apache-2.0, liest Barcodes in Tests; ab Python 3.1
 - **TDD**: erst fehlschlagenden Test schreiben, dann implementieren. Tests laufen **ohne Drucker** (Rasterdaten prüfen, sysfs per `tmp_path` faken, Druckfunktionen per `monkeypatch` ersetzen). Kein Test darf echte Hardware ansprechen.
 - Benutzer-Meldungen **englisch mit `_()`** (benannte Platzhalter, Tabellen mit `N_` und `_()` beim Anzeigen),
   Deutsch in `po/de.po` (`python tools/i18n.py update`, dann übersetzen); Tests laufen auf Deutsch (conftest).
-  Kommentare und Docstrings vorerst deutsch (vor Veröffentlichung ggf. auf Englisch umstellen).
+  Kommentare und Docstrings **englisch** (umgestellt 2026-10-20; README kurz und englisch). UI-Texte in Kommentaren
+  mit dem englischen Quelltext zitieren ("Save changes?", Reiter PAPER/SERIES/PARCEL).
 - Fehler für Nutzer verständlich abfangen, keine Tracebacks (Exit-Code 2 bei Hardware-/Rechteproblemen).
 
 ## Hardware-Wissen (hart erarbeitet)

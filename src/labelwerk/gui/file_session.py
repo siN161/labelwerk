@@ -1,10 +1,10 @@
-"""Datei-Sitzung des Hauptfensters: Neu/Öffnen/Speichern, ungespeicherte Änderungen,
-Favoriten und Zuletzt geöffnet (Reiter Datei).
+"""File session of the main window: New/Open/Save, unsaved changes, favourites and recently
+opened files (FILE tab).
 
-Gerechnet wird im Kern (``storage``, ``favorites``); hier liegen Dialoge, Rückfragen und das
-Ersetzen des Dokuments. Das Dokument-Objekt bleibt dasselbe (Panels halten es fest) – es wird
-an Ort und Stelle auf den neuen Stand gesetzt, der Rückgängig-Verlauf beginnt neu. Alle
-Dialoge sind Methoden ``ask_*`` und in Tests ersetzbar.
+The computing happens in the core (``storage``, ``favorites``); this module holds the dialogs,
+confirmation prompts and the replacing of the document. The document object stays the same
+(panels hold on to it) – it is set to the new state in place, and the undo history starts
+afresh. All dialogs are ``ask_*`` methods and can be replaced in tests.
 """
 from __future__ import annotations
 
@@ -30,14 +30,14 @@ from . import file_dialog
 from .history import restore
 from .panels.file import PREVIEW
 
-UNTITLED = N_("Untitled")                     # englisch, angezeigt wird _(UNTITLED)
+UNTITLED = N_("Untitled")                     # English, _(UNTITLED) is displayed
 MODIFIED = "• "
-NAME_LENGTH = 40               # vorgeschlagener Favoriten-Name: höchstens so lang
-PREVIEW_ERRORS = Exception     # Vorschau eines Favoriten: jeder Fehler → „nicht lesbar“
+NAME_LENGTH = 40               # suggested favourite name: at most this long
+PREVIEW_ERRORS = Exception     # preview of a favourite: any error → “not readable”
 
 
 def answer_for(button: int) -> str:
-    """Knopf der Rückfrage „Änderungen speichern?“ → „save“ | „discard“ | „cancel“."""
+    """Button of the “Save changes?” prompt → "save" | "discard" | "cancel"."""
     return {QMessageBox.StandardButton.Save.value: "save",
             QMessageBox.StandardButton.Discard.value: "discard"}.get(button, "cancel")
 
@@ -46,11 +46,11 @@ class FileSession(QObject):
     def __init__(self, window):
         super().__init__(window)
         self.window = window
-        self.path: Path | None = None               # gespeicherte Datei; None = unbenannt
-        self.origin = "new"                         # „new“ | „file“ | „favorite“ | „parcel“ (Herkunft)
-        self._template: str | None = None           # Name des Favoriten, solange unbenannt
-        self._saved = copy.deepcopy(window.doc)     # Stand beim Öffnen/Speichern
-        self._dir = ""                              # Ordner des letzten Öffnens/Speicherns
+        self.path: Path | None = None               # saved file; None = unnamed
+        self.origin = "new"                         # "new" | "file" | "favorite" | "parcel" (origin)
+        self._template: str | None = None           # name of the favourite while unnamed
+        self._saved = copy.deepcopy(window.doc)     # state when opened/saved
+        self._dir = ""                              # folder of the last open/save
         self._previews: dict[tuple[str, float], QPixmap | None] = {}
         panel = window.panel("file")
         panel.favorite_open.connect(self.open_favorite)
@@ -63,14 +63,14 @@ class FileSession(QObject):
         panel.recent_open.connect(self.open_recent)
         self.refresh_lists()
 
-    # --- Dialoge (in Tests ersetzbar) -------------------------------------
+    # --- Dialogs (replaceable in tests) -------------------------------------
     def ask_save_file(self, suggested: str) -> str | None:
-        """Dialog ergänzt die Endung selbst – so fragt er vor dem Ersetzen nach dem vollen Namen."""
+        """The dialog adds the extension itself – so it asks about the full name before replacing."""
         dialog = QFileDialog(self.window, _("Save label"), suggested, _file_filter())
         dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
         dialog.setDefaultSuffix(SUFFIX[1:])
-        # eigener Weg: Qts Dialog (fragt selbst vor dem Ersetzen); mit Dateiauswahl des Systems der
-        # des Desktops – save_as fragt dann selbst nach
+        # own path: Qt's dialog (asks before replacing itself); with the system file chooser that of
+        # the desktop – save_as then asks itself
         dialog.setOption(QFileDialog.Option.DontUseNativeDialog, not self.window.system_dialog)
         try:
             return dialog.selectedFiles()[0] if dialog.exec() and dialog.selectedFiles() else None
@@ -78,7 +78,7 @@ class FileSession(QObject):
             dialog.deleteLater()
 
     def _ask_yes_no(self, title: str, text: str) -> bool:
-        """Ja/Nein-Frage (Standard: Nein); der Text ist reiner Text, auch mit „<b>“ im Namen."""
+        """Yes/No question (default: No); the text is plain text, even with “<b>” in the name."""
         box = QMessageBox(QMessageBox.Icon.Question, title, text,
                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                           self.window)
@@ -102,7 +102,7 @@ class FileSession(QObject):
                                     model=self.window.model)
 
     def ask_save_changes(self) -> str:
-        """„save“ | „discard“ | „cancel“."""
+        """"save" | "discard" | "cancel"."""
         box = QMessageBox(QMessageBox.Icon.Question, _("Unsaved changes"),
                           _("“{name}” has been changed. Save the changes?").format(
                               name=self.name()),
@@ -128,22 +128,22 @@ class FileSession(QObject):
     def open_url(self, url: QUrl) -> None:
         QDesktopServices.openUrl(url)
 
-    # --- Zustand ----------------------------------------------------------
+    # --- State ----------------------------------------------------------
     def name(self) -> str:
         return self.path.stem if self.path is not None else _(UNTITLED)
 
     def modified(self) -> bool:
-        """Anders als beim Öffnen/Speichern? Leere Textrahmen zählen nicht: ein frisch angelegter
-        entfällt beim Beenden des Schreibmodus ohnehin (wie ``MainWindow._drop_empty_frames``)."""
+        """Different from when opened/saved? Empty text frames do not count: a freshly created one
+        is dropped anyway when edit mode ends (like ``MainWindow._drop_empty_frames``)."""
         return _without_empty_frames(self.window.doc) != _without_empty_frames(self._saved)
 
     def may_follow_roll(self) -> bool:
-        """Darf „Medium prüfen“ das Etikett umstellen? Nur bei einem neuen Etikett – eine
-        geöffnete Datei oder ein Favorit gehört zu ihrer Rolle (Panel zeigt „passt nicht“)."""
-        return self.origin == "new"      # Speichern macht aus „new“ „file“
+        """May “Check media” switch the label? Only for a new label – an opened file or a
+        favourite belongs to its roll (the panel shows “does not fit”)."""
+        return self.origin == "new"      # saving turns "new" into "file"
 
     def mark_unchanged(self) -> None:
-        """Aktueller Stand gilt als Ausgangsstand (z. B. Rolle bei einem unberührten Etikett)."""
+        """The current state counts as the baseline (e.g. roll for an untouched label)."""
         self._saved = copy.deepcopy(self.window.doc)
         self.update_title()
 
@@ -152,8 +152,8 @@ class FileSession(QObject):
         self.window.setWindowTitle(f"{mark}{self.name()} – {APP_NAME}")
 
     def maybe_save(self) -> bool:
-        """Vor Neu/Öffnen/Schließen: bei Änderungen fragen; False = abbrechen (der Schreibmodus
-        läuft dann weiter). Das Dokument ist auch beim Tippen aktuell."""
+        """Before New/Open/Close: ask if there are changes; False = cancel (edit mode then
+        continues). The document is up to date even while typing."""
         self.window.accept_pending_input()
         if not self.modified():
             return True
@@ -163,7 +163,7 @@ class FileSession(QObject):
         return answer == "discard"
 
     def _fits_printer(self, doc: Document, name: str) -> bool:
-        """Etikett muss zum Drucker passen (sonst gäbe es dafür keine Auswahl im Reiter Papier)."""
+        """The label must fit the printer (otherwise the PAPER tab would offer no choice for it)."""
         if doc.label_id in {label.id for label in labels_for_model(self.window.model)}:
             return True
         self.window._set_result(_("{name}: label “{label}” does not fit the {model}").format(
@@ -172,17 +172,17 @@ class FileSession(QObject):
 
     def _replace(self, doc: Document, path: Path | None, origin: str = "new",
                  template: str | None = None) -> None:
-        """Dokument an Ort und Stelle ersetzen, Verlauf neu, nichts ausgewählt."""
+        """Replace the document in place, new history, nothing selected."""
         window = self.window
         window.finish_editing()
         window.canvas.set_selection([])
-        window._structure_changing()    # Renderfehler: keine Bilder des alten Etiketts stehen lassen
+        window._structure_changing()    # render error: do not leave images of the old label
         restore(window.doc, doc)
         window.history.reset(window.doc)
         for key, panel in window._panel_by_key.items():
             if key != "series":
                 panel.refresh()
-        window.panel("series").reload()     # Tabelle frisch lesen (einmal), alle Zeilen gewählt
+        window.panel("series").reload()     # read the table afresh (once), all rows selected
         window.render_now()
         self.path = path
         self.origin = "file" if path is not None else origin
@@ -191,9 +191,9 @@ class FileSession(QObject):
         self.update_title()
         window._update_edit_actions()
 
-    # --- Neu, Öffnen, Speichern -------------------------------------------
+    # --- New, Open, Save -------------------------------------------
     def new(self) -> None:
-        """Leeres Etikett nach den Einstellungen – auf der eingelegten Rolle, wenn bekannt."""
+        """Empty label per the settings – on the inserted roll, if known."""
         if self.maybe_save():
             doc = new_document(self.window.settings)
             loaded = self.window.panel("paper").media_label
@@ -208,19 +208,19 @@ class FileSession(QObject):
                         label=wanted, model=self.window.model, new=doc.label_id), "warn")
 
     def open_document(self, doc: Document) -> bool:
-        """Fertiges Etikett (z. B. Umwandlung einer Paketmarke) als neues, ungespeichertes
-        öffnen – Rückfrage bei Änderungen wie bei Neu; folgt nicht der Rolle; gilt als geändert
-        (Rückfrage beim Schließen/Neu). False = abgebrochen."""
+        """Open a finished label (e.g. conversion of a parcel label) as a new, unsaved one –
+        prompt on changes as with New; does not follow the roll; counts as modified (prompt on
+        close/New). False = cancelled."""
         if not self.maybe_save():
             return False
         self._replace(doc, None, origin="parcel")
-        self._saved = Document(doc.label_id)      # nirgends gespeichert: gilt als geändert
+        self._saved = Document(doc.label_id)      # saved nowhere: counts as modified
         self.update_title()
         return True
 
     def fitting_label(self, label_id: str) -> str:
-        """``label_id``, wenn es zum Drucker passt, sonst die eingelegte Rolle, sonst 62 mm endlos
-        bzw. das erste Etikett des Modells."""
+        """``label_id`` if it fits the printer, else the inserted roll, else 62 mm continuous
+        or the first label of the model."""
         fitting = [label.id for label in labels_for_model(self.window.model)]
         for candidate in (label_id, self.window.panel("paper").media_label, "62"):
             if candidate in fitting:
@@ -228,13 +228,13 @@ class FileSession(QObject):
         return fitting[0]
 
     def open(self, path: str | None = None, ask: bool = True) -> bool:
-        """Datei öffnen (ohne ``path``: Dialog); Fehler → Statusleiste, Etikett bleibt."""
+        """Open a file (without ``path``: dialog); error → status bar, label stays."""
         if ask and not self.maybe_save():
             return False
         path = path or self.ask_open_file()
         if not path:
             return False
-        path = Path(path).resolve()          # gleiche Datei = gleicher Eintrag in „Zuletzt“
+        path = Path(path).resolve()          # same file = same entry in “Recently opened”
         try:
             doc = storage.load(path)
         except StorageError as e:
@@ -245,10 +245,10 @@ class FileSession(QObject):
         self._replace(doc, path)
         self._dir = str(path.parent)
         self._remember(path)
-        error = self.window._render_error     # render_now im Ersetzen hat ihn schon gemeldet
+        error = self.window._render_error     # render_now in the replacement has already reported it
         series_panel = self.window.panel("series")
         if error is None and doc.series is not None and series_panel.error:
-            error = _("Series: {error}").format(error=series_panel.error)   # z. B. Tabelle fehlt
+            error = _("Series: {error}").format(error=series_panel.error)   # e.g. table missing
         if error is None:
             self.window._set_result(_("Opened: {name}").format(name=path.name), "ok")
         else:
@@ -257,7 +257,7 @@ class FileSession(QObject):
         return True
 
     def save(self) -> bool:
-        self.window.accept_pending_input()          # eben getippte Zahl gehört dazu
+        self.window.accept_pending_input()          # a number just typed belongs to it
         if self.path is None:
             return self.save_as()
         return self._write(self.path)
@@ -272,10 +272,10 @@ class FileSession(QObject):
         path = Path(path)
         if path.suffix.lower() != SUFFIX:
             path = path.with_name(path.name + SUFFIX)
-            if path.exists() and not self.ask_replace_file(path):   # Dialog sah den Namen ohne
+            if path.exists() and not self.ask_replace_file(path):   # the dialog saw the name without
                 return False
         elif self.window.system_dialog and path.exists() and not self.ask_replace_file(path):
-            return False                    # Dialoge des Desktops fragen nicht immer selbst
+            return False                    # desktop dialogs do not always ask themselves
         return self._write(path)
 
     def _write(self, path: Path) -> bool:
@@ -285,7 +285,7 @@ class FileSession(QObject):
             self.window._set_result(str(e), "error")
             return False
         self.path = path.resolve()
-        self.origin = "file"            # gespeichert: gehört zu seiner Rolle, folgt ihr nicht mehr
+        self.origin = "file"            # saved: belongs to its roll, no longer follows it
         self._dir = str(path.parent)
         self._saved = copy.deepcopy(self.window.doc)
         self.update_title()
@@ -310,10 +310,10 @@ class FileSession(QObject):
             return
         self.open(path)
 
-    # --- Favoriten --------------------------------------------------------
+    # --- Favourites --------------------------------------------------------
     def suggested_name(self) -> str:
-        """Vorschlag für einen Namen: Dateiname bzw. Favorit, sonst die erste Textzeile (ohne
-        Pfadzeichen)."""
+        """Suggestion for a name: file name or favourite, else the first line of text (without
+        path characters)."""
         if self.path is not None:
             return self.path.stem
         if self._template is not None:
@@ -350,8 +350,8 @@ class FileSession(QObject):
             return None
 
     def open_favorite(self, favorite: Favorite) -> bool:
-        """Als neues, unbenanntes Etikett öffnen (Vorlage) – das Original bleibt unverändert.
-        Erst laden und prüfen, dann nach Änderungen fragen."""
+        """Open as a new, unnamed label (template) – the original stays unchanged.
+        Load and check first, then ask about changes."""
         doc = self._load_favorite(favorite)
         if doc is None or not self._fits_printer(doc, favorite.name) or not self.maybe_save():
             return False
@@ -359,8 +359,8 @@ class FileSession(QObject):
         return True
 
     def print_favorite(self, favorite: Favorite) -> None:
-        """Direkt drucken: Etikett muss zum Drucker passen; liegt bekannt eine andere Rolle ein,
-        erst fragen (sonst meldete der Drucker nur „Replace media“)."""
+        """Print directly: the label must fit the printer; if another roll is known to be inserted,
+        ask first (otherwise the printer would only report “Replace media”)."""
         doc = self._load_favorite(favorite)
         if doc is None or not self._fits_printer(doc, favorite.name):
             return
@@ -413,19 +413,19 @@ class FileSession(QObject):
             return
         self.open_url(QUrl.fromLocalFile(str(folder)))
 
-    # --- Listen im Panel --------------------------------------------------
+    # --- Lists in the panel --------------------------------------------------
     def refresh_lists(self) -> None:
         panel = self.window.panel("file")
         current = favorites.favorites()
         panel.set_favorites([(f, self._preview(f)) for f in current],
                             self.window.settings.start_favorite)
         panel.set_recent(self.window.settings.recent_files)
-        paths = {str(f.path) for f in current}       # Vorschauen alter Stände vergessen
+        paths = {str(f.path) for f in current}       # forget previews of old states
         self._previews = {k: v for k, v in self._previews.items() if k[0] in paths}
 
     def _preview(self, favorite: Favorite) -> QPixmap | None:
-        """Bild des Favoriten, eingepasst (gemerkt je Datei und Änderungszeit); ein Barcode mit
-        Platzhalter der Serie erscheint als Platzhalter."""
+        """Image of the favourite, fitted (cached per file and modification time); a barcode with
+        a series placeholder appears as a placeholder."""
         try:
             key = (str(favorite.path), favorite.path.stat().st_mtime)
         except OSError:
@@ -434,7 +434,7 @@ class FileSession(QObject):
             try:
                 image = Renderer().render(storage.load(favorite.path), self.window.model,
                                           placeholders=True).image
-            except PREVIEW_ERRORS:  # eine kaputte Vorschau darf das Fenster nicht aufhalten
+            except PREVIEW_ERRORS:  # a broken preview must not hold up the window
                 self._previews[key] = None
             else:
                 self._previews[key] = _pixmap(image).scaled(
@@ -444,12 +444,13 @@ class FileSession(QObject):
 
 
 def _file_filter() -> str:
-    """Dateifilter der Dialoge (übersetzt beim Anzeigen)."""
+    """File filters of the dialogs (translated when displayed)."""
     return _("labelwerk labels (*{suffix})").format(suffix=SUFFIX)
 
 
 def _without_empty_frames(doc: Document) -> Document:
-    """Dokument ohne leere, frei platzierte Textrahmen (Flachkopie, nur zum Vergleichen)."""
+    """Document without empty, freely placed text frames (shallow copy, for comparison only)."""
+
     return replace(doc, objects=[o for o in doc.objects
                                  if not (isinstance(o, TextObject) and o.positioned
                                          and o.is_empty())])

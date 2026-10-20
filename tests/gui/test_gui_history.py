@@ -1,4 +1,4 @@
-"""Rückgängig/Wiederherstellen: Dokument-Schnappschüsse (Etappe 3d-1)."""
+"""Undo/redo: document snapshots (stage 3d-1)."""
 from labelwerk.document import Document, TextObject
 from labelwerk.gui.history import LIMIT, History, restore
 
@@ -37,7 +37,7 @@ def test_push_without_change_is_no_step():
 
 
 def test_undo_commits_pending_changes_first():
-    """Noch nicht festgehaltene Änderungen (z. B. Tippen) werden selbst ein Schritt."""
+    """Changes not yet recorded (e.g. typing) become a step by themselves."""
     doc = _doc("A")
     history = History(doc)
     doc.objects[0] = TextObject("A getippt")
@@ -86,7 +86,7 @@ def test_consecutive_pushes_with_same_merge_key_form_one_step():
     history.push(_doc("D"), merge="nudge")
     assert _texts(history.undo(_doc("D"))) == ["A"]
     history.redo(_doc("A"))
-    history.push(_doc("E"), merge="nudge")       # nach Rückgängig/Wiederherstellen: neuer Schritt
+    history.push(_doc("E"), merge="nudge")       # after undo/redo: new step
     assert _texts(history.undo(_doc("E"))) == ["D"]
 
 
@@ -100,11 +100,11 @@ def test_different_merge_key_starts_new_step():
 def test_snapshots_are_independent_copies():
     doc = _doc("A")
     history = History(doc)
-    doc.objects[0].paragraphs[0].spans[0].text = "verändert"   # Original nach dem Schnappschuss
+    doc.objects[0].paragraphs[0].spans[0].text = "verändert"   # original after the snapshot
     history.push(doc)
     restored = history.undo(doc)
     assert _texts(restored) == ["A"]
-    restored.objects[0].paragraphs[0].spans[0].text = "kaputt"     # Kopie, nicht der Verlauf
+    restored.objects[0].paragraphs[0].spans[0].text = "kaputt"     # copy, not the history
     assert _texts(history.redo(_doc("A"))) == ["verändert"]
     assert _texts(history.undo(_doc("verändert"))) == ["A"]
 
@@ -121,7 +121,7 @@ def test_changed_signal_reports_every_change(qtbot):
 
 
 def test_restore_keeps_the_document_object():
-    """Panels halten das Dokument fest – Rückgängig ändert es an Ort und Stelle."""
+    """Panels hold on to the document – undo changes it in place."""
     doc = Document("62", length_mm=40, objects=[TextObject("A")])
     snapshot = Document("29", orientation="horizontal", margin_mm=3,
                         objects=[TextObject("B"), TextObject("C")])
@@ -130,10 +130,10 @@ def test_restore_keeps_the_document_object():
     assert (doc.label_id, doc.length_mm, doc.orientation) == ("29", None, "horizontal")
 
 
-# --- Auswahl je Stand -------------------------------------------------------------
+# --- Selection per state -------------------------------------------------------------
 def test_undo_and_redo_restore_selection_of_each_state():
     history = History(_doc("A"))
-    history.push(_doc("A"), selection=[0])          # nur Auswahl geändert: kein Schritt
+    history.push(_doc("A"), selection=[0])          # only selection changed: no step
     assert not history.can_undo()
     history.push(_doc("B"), selection=[1])
     history.undo(_doc("B"), selection=[1])
@@ -160,7 +160,7 @@ def test_reset_clears_selection():
 def test_select_updates_current_state_only_without_pending_change():
     history = History(_doc("A"))
     history.select(_doc("A"), [0])
-    history.select(_doc("A geändert"), [5])         # gehört schon zum nächsten Schritt
+    history.select(_doc("A geändert"), [5])         # already belongs to the next step
     history.push(_doc("B"), selection=[1])
     history.undo(_doc("B"), selection=[1])
     assert history.selection == [0]
@@ -170,9 +170,9 @@ def test_merged_series_back_to_start_leaves_no_step():
     history = History(_doc("A"))
     history.push(_doc("B"))
     history.push(_doc("C"), merge="nudge")
-    history.push(_doc("B"), merge="nudge", selection=[0])   # Pfeile hin und zurück
+    history.push(_doc("B"), merge="nudge", selection=[0])   # arrows back and forth
     assert history.selection == [0]
-    assert _texts(history.undo(_doc("B"))) == ["A"]          # nur der Schritt davor
+    assert _texts(history.undo(_doc("B"))) == ["A"]          # only the step before
     assert history.undo(_doc("A")) is None
 
 
@@ -200,7 +200,7 @@ def test_amend_replaces_current_state_without_step():
 
 
 def test_amend_back_to_previous_state_drops_the_step():
-    """Leerer Textrahmen angelegt und wieder verlassen: kein Schritt bleibt übrig."""
+    """Empty text frame created and left again: no step remains."""
     history = History(_doc("A"))
     history.push(_doc("X"), merge="nudge")
     history.push(_doc("A+leer"))
@@ -208,5 +208,5 @@ def test_amend_back_to_previous_state_drops_the_step():
     assert history.is_current(_doc("X")) and history.selection == [1]
     assert _texts(history.undo(_doc("X"))) == ["A"]
     history.redo(_doc("A"))
-    history.push(_doc("Y"), merge="nudge")                  # keine Zusammenfassung über den Wegfall
+    history.push(_doc("Y"), merge="nudge")                  # no merging across the removal
     assert _texts(history.undo(_doc("Y"))) == ["X"]

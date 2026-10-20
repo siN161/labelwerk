@@ -1,5 +1,5 @@
-"""Drucker über CUPS: nachgebildete Ausgaben von lpstat/lpoptions/lp und PPDs – kein Test ruft
-echte Befehle (conftest ersetzt ``cups._run``)."""
+"""Printers via CUPS: simulated output of lpstat/lpoptions/lp and PPDs – no test calls
+real commands (conftest replaces ``cups._run``)."""
 import subprocess
 
 import pytest
@@ -9,7 +9,7 @@ from labelwerk import cups, printers
 from labelwerk.labels import get_label, labels_for_model
 from labelwerk.printer import PrintError, print_image
 
-REAL_RUN = cups._run                               # vor dem Ersetzen durch conftest
+REAL_RUN = cups._run                               # before conftest replaces it
 
 LPSTAT_E = "Dymo_LabelWriter_450\nBuero\nQL600\n"
 LPSTAT_V = ("device for Dymo_LabelWriter_450: usb://DYMO/LabelWriter%20450?serial=01010112345600\n"
@@ -34,7 +34,7 @@ PPD = """*PPD-Adobe: "4.3"
 
 @pytest.fixture
 def fake(monkeypatch, tmp_path):
-    """CUPS nachgebildet: Ausgaben je Befehl, aufgezeichnete Aufrufe."""
+    """Simulated CUPS: output per command, recorded calls."""
     calls, outputs = [], {"lpstat -e": LPSTAT_E, "lpstat -v": LPSTAT_V,
                           "lpoptions": LPOPTIONS, "lp": "request id is Dymo_LabelWriter_450-12 (2 file(s))\n"}
 
@@ -42,11 +42,11 @@ def fake(monkeypatch, tmp_path):
         calls.append(args)
         key = " ".join(args[:2]) if args[0] == "lpstat" else args[0]
         if args[0] == "lpoptions" and f"lpoptions {args[2]}" in outputs:
-            key = f"lpoptions {args[2]}"                   # je Warteschlange eigene Ausgabe
+            key = f"lpoptions {args[2]}"                   # own output per queue
         out = outputs[key]
         if isinstance(out, Exception):
             raise out
-        if args[0] == "lp":                        # PDF: Seitenzahl und Seitengröße in Punkt
+        if args[0] == "lp":                        # PDF: page count and page size in points
             import pypdfium2
             pdf = pypdfium2.PdfDocument(args[-1])
             calls[-1] = args + ((len(pdf), tuple(round(v, 2) for v in pdf[0].get_size())),)
@@ -68,10 +68,10 @@ def test_queues_with_devices(fake):
 def test_queues_are_read_in_the_background(fake, monkeypatch):
     calls, _, _ = fake
     monkeypatch.setattr(cups, "BACKGROUND", True)
-    assert cups.queues() == []                         # die Oberfläche wartet nicht
+    assert cups.queues() == []                         # the UI does not wait
     cups._queues_thread.join(5)
     assert [q.name for q in cups.queues()][0] == "Dymo_LabelWriter_450"
-    assert len(calls) == 2 + 3        # lpstat -e/-v, je Warteschlange lpoptions; gemerkt, nicht jedes Mal
+    assert len(calls) == 2 + 3        # lpstat -e/-v, lpoptions per queue; remembered, not every time
 
 
 def test_localized_output_is_understood(fake):
@@ -99,7 +99,7 @@ def test_cups_failure_is_not_remembered_for_long(fake):
     outputs["lpoptions"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
     assert cups.queue_info("Dymo_LabelWriter_450").source == "list"
     outputs["lpoptions"] = LPOPTIONS
-    cups.forget()                                      # z. B. nach FAILED_MAX_AGE_S
+    cups.forget()                                      # e.g. after FAILED_MAX_AGE_S
     assert cups.queue_info("Dymo_LabelWriter_450").source == "options"
 
 
@@ -115,7 +115,7 @@ def test_media_from_the_ppd(fake):
     info = cups.queue_info("Dymo_LabelWriter_450")
     assert info.source == "ppd" and info.dpi == 300
     assert info.media == (("w154h64.8", 54.3, 22.9), ("99012", 36.0, 88.9),
-                          ("w288h432", 101.6, 152.4))          # „Tiny“ zu klein: entfällt
+                          ("w288h432", 101.6, 152.4))          # “Tiny” too small: dropped
     assert info.label_ids() == ["54.3x22.9mm@300", "36x88.9mm@300", "101.6x152.4mm@300"]
     assert info.media_key(36, 88.9) == "99012" and info.media_key(50, 30) == "Custom.50x30mm"
 
@@ -123,7 +123,7 @@ def test_media_from_the_ppd(fake):
 def test_media_from_option_names_without_ppd(fake):
     info = cups.queue_info("Dymo_LabelWriter_450")
     assert info.source == "options" and info.dpi == 300
-    assert [m[0] for m in info.media] == ["w79h252", "w154h64.8", "w162h90"]   # Namen ohne Maß entfallen
+    assert [m[0] for m in info.media] == ["w79h252", "w154h64.8", "w162h90"]   # names without size dropped
     assert info.media[0][1:] == (27.9, 88.9)
 
 
@@ -138,7 +138,7 @@ def test_media_list_per_maker_as_last_resort(fake):
 
 @pytest.mark.parametrize("text, dpi", [("*DefaultResolution: 203dpi", 203),
                                        ("*DefaultResolution: 300x600dpi", 300),
-                                       ("*DefaultResolution: 4800dpi", 300),     # außerhalb: 300
+                                       ("*DefaultResolution: 4800dpi", 300),     # out of range: 300
                                        ("", 300)])
 def test_resolution_from_the_ppd(text, dpi):
     assert cups._parse_ppd(text)[0] == dpi
@@ -163,7 +163,7 @@ def test_print_one_job_with_all_labels(fake):
                        "-o", "print-scaling=none", "-o", "orientation-requested=3",
                        "-o", "fit-to-page=false", "-o", "PageSize=99012",
                        "-o", "DymoCutOptions=ChainMarks")
-    assert lp[-3] == "--" and lp[-2].endswith(".pdf")          # ein PDF, eine Seite je Etikett
+    assert lp[-3] == "--" and lp[-2].endswith(".pdf")          # one PDF, one page per label
     pages, size = lp[-1]
     assert pages == 2 and size == (round(label.width * 72 / 300, 2), round(label.height * 72 / 300, 2))
 
@@ -183,7 +183,7 @@ def test_label_must_fit_the_queue(fake):
 
 
 def test_commands_have_a_time_limit(monkeypatch):
-    seen = {}                                      # echtes _run, aber subprocess ersetzt
+    seen = {}                                      # real _run, but subprocess replaced
 
     def run(args, **kw):
         seen.update(kw)
@@ -206,10 +206,10 @@ def test_missing_commands_and_failures(monkeypatch):
         REAL_RUN("lp", "-d", "x")
 
 
-# --- Bürodrucker ------------------------------------------------------------------------------
-# Papiergrößen wie von lpoptions -l (Standard mit „*“), Namen aus echten Treibern
+# --- Office printers ------------------------------------------------------------------------------
+# Paper sizes as from lpoptions -l (default marked with “*”), names from real drivers
 CANON = ("PageSize/Media Size: 3.5x5 4x6 4x6.Borderless 55x91mm 89x89mm 5x7 8x10 *A4 A4.Borderless "
-         "A5 B5 Env10 EnvDL Letter Legal\n")                   # driverless: Standard A4
+         "A5 B5 Env10 EnvDL Letter Legal\n")                   # driverless: default A4
 ZEBRA = ("PageSize/Media Size: A4 A5 A5Rotated w90h18 w162h90 w216h360 *w288h360 w288h432 "
          "w576h468\n")                                          # sample.drv zebra.ppd
 PTOUCH_QL = "PageSize/Media Size: 12mm 29mm 62mm 17x54mm 29x90mm 62x29mm 62x100mm *Custom\n"
@@ -245,17 +245,17 @@ def test_the_ppd_is_read_first(fake, default, office):
 def test_silent_queue_is_unknown(fake):
     _, outputs, _ = fake
     outputs["lpoptions QL600"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
-    assert [q.office for q in cups.queues()] == [False, False, None]   # keine Antwort: angezeigt
+    assert [q.office for q in cups.queues()] == [False, False, None]   # no answer: shown
 
 
 def test_office_check_is_remembered(fake, monkeypatch):
     calls, outputs, _ = fake
     outputs["lpoptions Buero"] = GENERIC
     cups.queues()
-    cups.queues(max_age=0)                             # Liste neu, Einordnung gemerkt
+    cups.queues(max_age=0)                             # list refreshed, classification remembered
     assert sum(c[0] == "lpoptions" for c in calls) == 3
     monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 0)
-    cups.queues(max_age=0)                             # zu alt: neu gefragt
+    cups.queues(max_age=0)                             # too old: asked again
     assert sum(c[0] == "lpoptions" for c in calls) == 6
 
 
@@ -271,27 +271,28 @@ def test_silent_queue_is_asked_again_only_after_a_while(fake, monkeypatch):
 
 
 def test_known_office_printer_stays_hidden_when_cups_is_slow_later(fake, monkeypatch):
-    """Nach 5 Minuten neu gefragt, antwortet CUPS nicht (Zeitlimit oder Fehler): der bekannte
-    Wert bleibt (sonst tauchte der Bürodrucker kurz im Menü auf); erst kurz danach neu fragen."""
+    """Asked again after 5 minutes, CUPS does not answer (timeout or error): the
+    known value stays (otherwise the office printer would briefly show up in the menu); ask again
+    only shortly after."""
     import threading
     calls, outputs, _ = fake
     outputs["lpoptions Buero"] = GENERIC
     assert cups.queues()[1].office is True
     monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 0)
     outputs["lpoptions Buero"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
-    assert cups.queues(max_age=0)[1].office is True              # Fehler: bekannt bleibt
+    assert cups.queues(max_age=0)[1].office is True              # error: the known value stays
     release = threading.Event()
     real = cups._run
 
     def run(*args, **kw):
         if args[0] == "lpoptions":
-            release.wait(5)                                     # hängt
+            release.wait(5)                                     # hangs
         return real(*args, **kw)
     monkeypatch.setattr(cups, "_run", run)
     monkeypatch.setattr(cups, "TIMEOUT_S", 0.2)
     monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 300)
     monkeypatch.setattr(cups, "FAILED_MAX_AGE_S", 0)
-    assert cups.queues(max_age=0)[1].office is True              # Zeitlimit: bekannt bleibt
+    assert cups.queues(max_age=0)[1].office is True              # timeout: the known value stays
     release.set()
 
 
@@ -303,17 +304,17 @@ def test_known_value_is_asked_again_soon_after_a_failed_answer(fake, monkeypatch
     outputs["lpoptions Buero"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
     cups.queues(max_age=0)
     asked = sum(c[:3] == ("lpoptions", "-p", "Buero") for c in calls)
-    monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 300)            # sonst fünf Minuten gemerkt …
+    monkeypatch.setattr(cups, "INFO_MAX_AGE_S", 300)            # otherwise remembered for five minutes …
     cups.queues(max_age=0)
-    assert sum(c[:3] == ("lpoptions", "-p", "Buero") for c in calls) == asked   # … kurz: gemerkt
+    assert sum(c[:3] == ("lpoptions", "-p", "Buero") for c in calls) == asked   # … briefly: remembered
     monkeypatch.setattr(cups, "FAILED_MAX_AGE_S", 0)
     outputs["lpoptions Buero"] = PTOUCH_QL
-    assert cups.queues(max_age=0)[1].office is False             # danach wieder gefragt
+    assert cups.queues(max_age=0)[1].office is False             # asked again afterwards
 
 
 def test_slow_queues_do_not_hold_up_the_list(fake, monkeypatch):
-    """lpoptions je Warteschlange parallel, zusammen höchstens TIMEOUT_S; wer nicht rechtzeitig
-    antwortet, ist unbekannt (angezeigt) – die Antwort zählt, sobald sie da ist."""
+    """lpoptions per queue in parallel, together at most TIMEOUT_S; whoever does not answer in
+    time is unknown (shown) – the answer counts as soon as it arrives."""
     import threading
     import time
     _, outputs, _ = fake
@@ -322,16 +323,16 @@ def test_slow_queues_do_not_hold_up_the_list(fake, monkeypatch):
 
     def run(*args, **kw):
         if args[0] == "lpoptions":
-            release.wait(5)                            # alle hängen
+            release.wait(5)                            # all hang
         return real(*args, **kw)
     monkeypatch.setattr(cups, "_run", run)
     monkeypatch.setattr(cups, "TIMEOUT_S", 0.3)
     outputs["lpoptions Buero"] = GENERIC
     start = time.monotonic()
     assert [q.office for q in cups.queues()] == [None, None, None]
-    assert time.monotonic() - start < 1.5              # nicht 3 × nacheinander gewartet
+    assert time.monotonic() - start < 1.5              # not waited 3 × in sequence
     release.set()
-    for _ in range(50):                                # späte Antworten werden gemerkt
+    for _ in range(50):                                # late answers are remembered
         if all(cups._office_cache.get(n, (0, None, False, False))[2]
                for n in ("Dymo_LabelWriter_450", "Buero", "QL600")):
             break
@@ -356,15 +357,15 @@ def test_office_printers_are_hidden_unless_wanted_or_chosen(fake):
     cups.forget()
     calls.clear()
     assert "cups:Buero" in [p.uri for p in printers.cups_printers([], wait=True, office=True)]
-    assert not any(c[0] == "lpoptions" for c in calls)  # alle zeigen: keine Einordnung nötig
+    assert not any(c[0] == "lpoptions" for c in calls)  # show all: no classification needed
 
 
-# --- Drucker und Modelle -----------------------------------------------------------------------
+# --- Printers and models -----------------------------------------------------------------------
 def test_queues_are_printers_without_doubling_the_brother(fake):
     direct = [printers.Printer("file:///dev/usb/lp1", "QL-600", "QL-600 · lp1", "usb")]
     names = [p.uri for p in printers.cups_printers(direct)]
     assert names == ["cups:Dymo_LabelWriter_450", "cups:Buero"]
-    assert len(printers.cups_printers([])) == 3        # ohne Direktweg auch die Brother-Warteschlange
+    assert len(printers.cups_printers([])) == 3        # without the direct path also the Brother queue
     p = printers.cups_printers([])[0]
     assert (p.model, p.name, p.source) == ("cups:Dymo_LabelWriter_450",
                                            "Dymo_LabelWriter_450 · CUPS", "cups")
@@ -372,7 +373,7 @@ def test_queues_are_printers_without_doubling_the_brother(fake):
 
 def test_cups_models(fake):
     assert printers.is_model("cups:Buero") and not printers.is_model("cups:")
-    caps = printers.capabilities("cups:Dymo_LabelWriter_450")    # fragt CUPS nicht
+    caps = printers.capabilities("cups:Dymo_LabelWriter_450")    # does not ask CUPS
     assert not caps.cutter and not caps.two_color and not caps.tested
     assert not printers.is_model("cups:-x") and not printers.is_model("cups:../etc/x")
     assert printers.effective_model(printers.printer_for("cups:Buero", [])) == "cups:Buero"
@@ -415,7 +416,7 @@ def test_silent_cups_is_asked_again_only_after_a_while(fake, monkeypatch):
     outputs["lpoptions"] = cups.CupsError("CUPS antwortet nicht (lpoptions)")
     for _ in range(5):
         assert cups.queue_info("Dymo_LabelWriter_450").source == "list"
-    assert sum(1 for c in calls if c[0] == "lpoptions") == 1   # nicht bei jeder Abfrage warten
+    assert sum(1 for c in calls if c[0] == "lpoptions") == 1   # do not wait on every query
     monkeypatch.setattr(cups.time, "monotonic", lambda: 10 ** 9)
     outputs["lpoptions"] = LPOPTIONS
     assert cups.queue_info("Dymo_LabelWriter_450").source == "options"

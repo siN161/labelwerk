@@ -1,4 +1,4 @@
-"""Reiter beim Start (Einstellung „Reiter beim Start“: fester Reiter oder zuletzt benutzter)."""
+"""Tab at startup (setting “Tab at startup”: fixed tab or last used)."""
 import pytest
 
 from labelwerk.document import Document, TextObject
@@ -50,11 +50,11 @@ def test_switching_tabs_remembers_the_last_tool_and_saves_it_on_close(qtbot, mon
     win = _window(qtbot)
     win.tool_actions["series"].trigger()
     assert win.settings.last_tool == "series"
-    win._show_tool("barcode")                                         # auch ohne Klick
+    win._show_tool("barcode")                                         # also without a click
     assert win.settings.last_tool == "barcode"
-    assert saved == [] and win.result.text() == ""                    # im Speicher, still
+    assert saved == [] and win.result.text() == ""                    # in memory, silently
     win.close()
-    assert saved == ["barcode"]                                       # beim Schließen, einmal
+    assert saved == ["barcode"]                                       # when closing, once
 
 
 def test_last_tool_is_not_saved_on_close_when_unchanged(qtbot, monkeypatch):
@@ -63,7 +63,7 @@ def test_last_tool_is_not_saved_on_close_when_unchanged(qtbot, monkeypatch):
     monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f["last_tool"]))
     win = _window(qtbot, start_tool="last", last_tool="image")
     win.tool_actions["text"].trigger()
-    win.tool_actions["image"].trigger()                               # wieder wie beim Start
+    win.tool_actions["image"].trigger()                               # again as at startup
     win.close()
     assert saved == []
 
@@ -84,7 +84,7 @@ def test_save_error_on_close_is_ignored(qtbot, monkeypatch):
     monkeypatch.setattr(mw, "update_settings", fail)
     win = _window(qtbot)
     win.tool_actions["layout"].trigger()
-    win.close()                                                       # kein Absturz
+    win.close()                                                       # no crash
     assert not win.isVisible()
 
 
@@ -95,7 +95,7 @@ def test_close_cancelled_saves_nothing(qtbot, monkeypatch):
     win = _window(qtbot)
     win.show()
     win.tool_actions["layout"].trigger()
-    monkeypatch.setattr(win.files, "maybe_save", lambda: False)       # Rückfrage: Abbrechen
+    monkeypatch.setattr(win.files, "maybe_save", lambda: False)       # prompt: Cancel
     win.close()
     assert saved == [] and win.isVisible()
     monkeypatch.setattr(win.files, "maybe_save", lambda: True)
@@ -110,8 +110,8 @@ def test_start_in_text_tab_creates_text(qtbot):
 
 
 def test_settings_dialog_keeps_the_last_tool(qtbot, monkeypatch):
-    """Der Dialog verändert den zuletzt benutzten Reiter nicht (auch wenn er sich ändert,
-    während der Dialog offen ist)."""
+    """The dialog does not change the last used tab (even if it changes
+    while the dialog is open)."""
     from labelwerk.gui import main_window as mw
     win = _window(qtbot)
     win.tool_actions["layout"].trigger()
@@ -123,7 +123,7 @@ def test_settings_dialog_keeps_the_last_tool(qtbot, monkeypatch):
             self.saved = Settings(**{**vars(settings), "last_tool": "file", "warnings": []})
 
         def exec(self):
-            win.tool_actions["text"].trigger()                     # während der Dialog offen ist
+            win.tool_actions["text"].trigger()                     # while the dialog is open
             return self.DialogCode.Accepted
 
         def deleteLater(self):
@@ -135,23 +135,23 @@ def test_settings_dialog_keeps_the_last_tool(qtbot, monkeypatch):
 
 
 def test_last_tool_on_close_keeps_settings_saved_by_another_instance(qtbot):
-    """Zweite Instanz (Doppelklick auf eine Datei) ändert das Design und speichert; schließt
-    danach die erste, bleibt das Design – nur der Reiter kommt dazu."""
+    """A second instance (double-click on a file) changes the theme and saves; if the first one
+    closes afterwards, the theme stays – only the tab is added."""
     from labelwerk.settings import save_settings
     save_settings(Settings(theme="rawblock"))
     win = _window(qtbot, theme="rawblock")
     win.tool_actions["layout"].trigger()
-    save_settings(Settings(theme="classic"))                       # zweite Instanz
+    save_settings(Settings(theme="classic"))                       # second instance
     win.close()
     s = load_settings()
     assert (s.theme, s.last_tool) == ("classic", "layout")
 
 
 def test_silent_saves_keep_settings_saved_by_another_instance(qtbot, tmp_path):
-    """Stilles Speichern (Zuletzt geöffnet, Drucker gewählt) schreibt nur sein Feld."""
+    """Silent saving (Recently opened, printer chosen) writes only its field."""
     from labelwerk.settings import save_settings
     win = _window(qtbot, theme="rawblock")
-    save_settings(Settings(theme="classic"))                       # zweite Instanz
+    save_settings(Settings(theme="classic"))                       # second instance
     win.choose_printer("tcp://192.0.2.1")
     s = load_settings()
     assert (s.theme, s.printer) == ("classic", "tcp://192.0.2.1")

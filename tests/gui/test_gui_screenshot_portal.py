@@ -1,5 +1,5 @@
-"""Bildschirmfoto über das XDG-Portal (Etappe 3d-2b): Hilfsfunktionen und D-Bus-Ablauf –
-gegen ein nachgebautes Portal auf einem privaten Bus, nie gegen das echte."""
+"""Screenshot via the XDG portal (stage 3d-2b): helper functions and D-Bus flow –
+against a mock portal on a private bus, never against the real one."""
 import functools
 import select
 import shutil
@@ -19,7 +19,7 @@ SYSTEM_PYTHON = "/usr/bin/python3"
 START_TIMEOUT_S = 10
 
 
-# --- Hilfsfunktionen ----------------------------------------------------------------
+# --- Helper functions ---------------------------------------------------------------
 def test_request_path_from_unique_name():
     assert request_path(":1.42", "labelwerk_ab12") == \
         "/org/freedesktop/portal/desktop/request/1_42/labelwerk_ab12"
@@ -35,10 +35,10 @@ def test_cancelled_response_is_silent():
 
 
 @pytest.mark.parametrize("code, results", [
-    (2, {}),                                         # Portal: anderer Fehler/abgelehnt
-    (0, {}),                                         # Erfolg ohne Datei
-    (0, {"uri": "https://example.org/bild.png"}),    # keine lokale Datei
-    (7, {"uri": "file:///tmp/a.png"}),               # unbekannter Code
+    (2, {}),                                         # portal: other error/rejected
+    (0, {}),                                         # success without a file
+    (0, {"uri": "https://example.org/bild.png"}),    # not a local file
+    (7, {"uri": "file:///tmp/a.png"}),               # unknown code
 ])
 def test_failed_responses_give_german_error(code, results):
     path, error = parse_response(code, results)
@@ -57,10 +57,10 @@ def test_dbus_errors_are_german(name, text):
     assert error_text(name) == f"Bildschirmfoto fehlgeschlagen – {text}"
 
 
-# --- ohne Portal ----------------------------------------------------------------------
+# --- without portal -------------------------------------------------------------------
 def test_tests_never_reach_the_session_bus():
     assert not screenshot.session_bus().isConnected()
-    assert not QDBusConnection.sessionBus().isConnected()     # conftest: Adresse ins Leere
+    assert not QDBusConnection.sessionBus().isConnected()     # conftest: address points nowhere
 
 
 def test_without_bus_portal_is_unavailable_and_take_reports_error(qtbot):
@@ -72,7 +72,7 @@ def test_without_bus_portal_is_unavailable_and_take_reports_error(qtbot):
     assert path is None and error.startswith("Bildschirmfoto fehlgeschlagen")
 
 
-# --- privater Bus mit nachgebautem Portal ------------------------------------------
+# --- private bus with mock portal --------------------------------------------------
 @functools.cache
 def _has_gio() -> bool:
     try:
@@ -82,8 +82,8 @@ def _has_gio() -> bool:
         return False
 
 
-# Eigene Bus-Konfiguration OHNE Service-Verzeichnisse: die Sitzungs-Standardkonfiguration würde
-# beim Aufruf das echte Portal des Systems auf dem Testbus starten (Auswahl auf dem Bildschirm)
+# Own bus configuration WITHOUT service directories: the default session configuration would
+# start the real portal of the system on the test bus on the call (selection on the screen)
 BUS_CONFIG = """<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
@@ -100,8 +100,8 @@ BUS_CONFIG = """<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Config
 
 
 def _read_line(proc: subprocess.Popen) -> str:
-    """Nächste Zeile der Ausgabe, höchstens ``START_TIMEOUT_S`` warten ("" = keine). Der Fake
-    läuft ungepuffert (Bytes): ein Puffer von Python würde ``select`` später Zeilen verbergen."""
+    """Next line of the output, wait at most ``START_TIMEOUT_S`` ("" = none). The fake
+    runs unbuffered (bytes): a Python buffer would hide lines from ``select`` later."""
     ready, _, _ = select.select([proc.stdout], [], [], START_TIMEOUT_S)
     if not ready:
         return ""
@@ -120,7 +120,7 @@ def _stop(proc: subprocess.Popen) -> None:
 
 @pytest.fixture
 def private_bus(tmp_path):
-    """Eigener D-Bus-Daemon nur für den Test: (Adresse, Verbindung); startet keine Dienste."""
+    """Own D-Bus daemon only for the test: (address, connection); starts no services."""
     if not (shutil.which("dbus-daemon") and _has_gio()):
         pytest.skip("dbus-daemon oder PyGObject (System-Python) fehlt")
     config = tmp_path / "bus.conf"
@@ -136,7 +136,7 @@ def private_bus(tmp_path):
         names = bus.call(QDBusMessage.createMethodCall(
             "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
             "ListActivatableNames")).arguments()[0]
-        assert names == ["org.freedesktop.DBus"], names       # nichts auf dem Testbus startbar
+        assert names == ["org.freedesktop.DBus"], names       # nothing startable on the test bus
         yield address, bus
     finally:
         QDBusConnection.disconnectFromBus(name)
@@ -145,7 +145,7 @@ def private_bus(tmp_path):
 
 @pytest.fixture
 def fake_portal(private_bus):
-    """Nachgebautes Portal starten: ``fake_portal(art, code, uri) -> Prozess`` (Ausgabe: CALL …)."""
+    """Start the mock portal: ``fake_portal(kind, code, uri) -> process`` (output: CALL …)."""
     address, _ = private_bus
     started = []
 
@@ -175,7 +175,7 @@ def test_portal_on_private_bus_delivers_the_file(qtbot, private_bus, fake_portal
     assert _take(qtbot, portal) == [Path("/tmp/Bild ä.png"), None]
     call = _read_line(fake)
     assert "interactive=True modal=True token=labelwerk_" in call
-    assert portal._request is None and portal._path is None          # Abo gelöst
+    assert portal._request is None and portal._path is None          # subscription released
 
 
 def test_portal_on_private_bus_cancel(qtbot, private_bus, fake_portal):
@@ -184,7 +184,7 @@ def test_portal_on_private_bus_cancel(qtbot, private_bus, fake_portal):
 
 
 def test_answer_before_the_call_returns_is_not_lost(qtbot, private_bus, fake_portal):
-    """Das Portal darf schon antworten, bevor der Aufruf zurückkommt – darum vorher abonniert."""
+    """The portal may answer before the call returns – so it is subscribed beforehand."""
     fake_portal("early")
     assert _take(qtbot, ScreenshotPortal(private_bus[1])) == [Path("/tmp/Bild ä.png"), None]
 
@@ -206,8 +206,8 @@ def test_two_answers_give_one_result(qtbot, private_bus, fake_portal):
 
 
 def test_new_take_drops_the_open_one_even_with_queued_answer(qtbot, private_bus, fake_portal):
-    """Die Antwort der ersten Aufnahme steht schon in der Ereignisschlange (Qt verarbeitet
-    während ``sleep`` nichts) – gemeldet wird trotzdem nur die zweite."""
+    """The answer of the first capture is already in the event queue (Qt processes
+    nothing during ``sleep``) – still only the second one is reported."""
     fake_portal(uri="file:///tmp/bild{n}.png")
     portal = ScreenshotPortal(private_bus[1])
     results = []
@@ -221,7 +221,7 @@ def test_new_take_drops_the_open_one_even_with_queued_answer(qtbot, private_bus,
 
 
 def test_new_take_closes_the_open_selection(qtbot, private_bus, fake_portal):
-    """Die Auswahl der ersten Aufnahme bleibt sonst auf dem Bildschirm stehen."""
+    """Otherwise the selection of the first capture stays on the screen."""
     fake = fake_portal("never")
     portal = ScreenshotPortal(private_bus[1])
     portal.take()
@@ -232,7 +232,7 @@ def test_new_take_closes_the_open_selection(qtbot, private_bus, fake_portal):
 
 
 class _NoSubscribeAtOwnPath:
-    """Bus, auf dem das Abonnieren des abweichenden Request-Pfads (Fake „other“: …/alt1) scheitert."""
+    """Bus on which subscribing to the deviating request path (fake "other": …/alt1) fails."""
 
     def __init__(self, bus):
         self._bus = bus

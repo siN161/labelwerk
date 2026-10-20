@@ -103,7 +103,7 @@ def test_render_document_with_unloadable_font_raises_valueerror(monkeypatch):
     fonts.load.cache_clear()
 
 
-# --- kurze Liste (fontconfig-Ausgabe gefälscht) --------------------------------------
+# --- short list (fontconfig output faked) --------------------------------------
 _GERMAN = "\n".join([
     "DejaVu Sans|False", "DejaVu Sans|False", "Liberation Sans|False", "Fira Sans Condensed|False",
     "DejaVu Sans Mono for Powerline|False", "Ubuntu Mono derivative Powerline|False",
@@ -130,7 +130,7 @@ def fake_fc(monkeypatch):
 def test_short_list_only_german_fonts_without_copies_symbols_and_cjk_regions(fake_fc):
     assert fonts.families() == ["DejaVu Sans", "Fira Sans Condensed", "Liberation Sans",
                                 "Noto Sans", "Ubuntu"]
-    assert fake_fc[0][-1] == ":lang=de"                  # nur Schriften mit deutschen Zeichen
+    assert fake_fc[0][-1] == ":lang=de"                  # only fonts with German characters
 
 
 def test_all_fonts_lists_every_family(fake_fc):
@@ -160,18 +160,18 @@ def test_families_cache_one_entry_per_list_however_called(fake_fc):
                  lambda: fonts.families(all=False), lambda: fonts.families(True),
                  lambda: fonts.families(all=True), lambda: fonts.families(all=1)):
         call()
-    assert len(fake_fc) == 2                         # je Liste ein fc-list-Aufruf
+    assert len(fake_fc) == 2                         # one fc-list call per list
 
 
-# --- alte Qt-Namen „Name [Hersteller]“ (aus QFontComboBox in Dateien/Einstellungen) --------
+# --- old Qt names “Name [foundry]” (from QFontComboBox in files/settings) --------
 def test_canonical_strips_foundry_of_installed_family(monkeypatch):
     monkeypatch.setattr(fonts, "families",
                         lambda all=False: ["C059", "Nimbus Sans", "Foo [Bar]"] if all else ["C059"])
     assert fonts.canonical("C059 [UKWN]") == "C059"
-    assert fonts.canonical("Nimbus Sans [urw]") == "Nimbus Sans"   # auch nicht in der kurzen Liste
-    assert fonts.canonical("Foo [Bar]") == "Foo [Bar]"             # heißt wirklich so
-    assert fonts.canonical("Fehlt [urw]") == "Fehlt [urw]"         # Name ohne Hersteller fehlt auch
-    assert fonts.canonical("Sans Serif") == "Sans Serif"           # Qt-Sammelname bleibt fremd
+    assert fonts.canonical("Nimbus Sans [urw]") == "Nimbus Sans"   # not in the short list either
+    assert fonts.canonical("Foo [Bar]") == "Foo [Bar]"             # is really called that
+    assert fonts.canonical("Fehlt [urw]") == "Fehlt [urw]"         # the name without foundry is missing too
+    assert fonts.canonical("Sans Serif") == "Sans Serif"           # Qt collective name stays foreign
     assert fonts.canonical(None) is None
 
 
@@ -184,4 +184,4 @@ def test_resolve_and_warnings_understand_qt_foundry_names():
     doc = Document(objects=[TextObject([Paragraph([Span("A", family="DejaVu Serif [PfEd]"),
                                                    Span("B", family="Sans Serif")])])])
     warnings = font_warnings(doc)
-    assert len(warnings) == 1 and "Sans Serif" in warnings[0]       # nur der Sammelname
+    assert len(warnings) == 1 and "Sans Serif" in warnings[0]       # only the collective name

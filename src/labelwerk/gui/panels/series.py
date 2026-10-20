@@ -1,9 +1,9 @@
-"""Panel „Serie“: Tabelle (CSV/Excel) oder Nummerierung, Spalten, Zeilen mit Häkchen, Vorschau.
+"""SERIES panel: table (CSV/Excel) or numbering, columns, rows with checkmarks, preview.
 
-Die Tabelle liest der Kern (``series.table_for``); das Panel merkt sich, woraus sie stammt
-(Quelle, Blatt, Nummerierung) und liest nur bei Änderung neu – nicht als Nebenwirkung von
-Rückgängig. Eine geänderte Datei liest ``check_file`` (vor dem Drucken), ``reload`` (Öffnen) liest
-immer. Die Häkchen gehören zur Anzeige, nicht zum Etikett (nach dem Öffnen ist jede Zeile gewählt).
+The core reads the table (``series.table_for``); the panel remembers where it came from
+(source, sheet, numbering) and rereads only on change – not as a side effect of
+undo. ``check_file`` rereads a changed file (before printing), ``reload`` (open) always rereads.
+The checkmarks belong to the display, not to the label (after opening, every row is chosen).
 """
 from __future__ import annotations
 
@@ -28,24 +28,24 @@ NUMBERING = N_("Numbering")
 CUT_TITLES = {"each": N_("After each label"), "end": N_("Only at the end")}
 NO_CUTTER = N_("Printer without cutter – separate the labels by hand")
 DRIVER_CUTS = N_("Cutting is set by the printer driver (system printer settings)")
-SHOWN_COLUMNS = 3                   # Spalten in der Zeilentabelle (die Häkchen sitzen in der ersten)
+SHOWN_COLUMNS = 3                   # columns in the row table (the checkmarks sit in the first)
 ROWS_HEIGHT = 180
 
 
 class SeriesPanel(Panel):
-    table_requested = Signal()          # TABELLE … – das Hauptfenster fragt nach der Datei
-    insert_column = Signal(str)         # Spaltenname → als {Name} ins Etikett
-    driver_cut_chosen = Signal(str, str)   # CUPS: Treiber-Option zum Schneiden, gewählter Wert
+    table_requested = Signal()          # TABLE … – the main window asks for the file
+    insert_column = Signal(str)         # column name → into the label as {Name}
+    driver_cut_chosen = Signal(str, str)   # CUPS: driver option for cutting, chosen value
 
     def __init__(self, doc: Document):
         super().__init__(doc, _("Series"))
         self.table: Table | None = None
-        self.error: str | None = None        # Tabelle nicht lesbar
-        self._field_error: str | None = None  # Nummerierungsfeld ungültig (nicht übernommen)
-        self._missing: list[str] = []         # Platzhalter ohne Spalte
-        self._key = None                      # woraus ``table`` stammt
-        self._stamp = None                    # Änderungszeit der Datei beim Lesen
-        self._current = 0                     # Vorschau-Zeile
+        self.error: str | None = None        # table not readable
+        self._field_error: str | None = None  # numbering field invalid (not applied)
+        self._missing: list[str] = []         # placeholders without a column
+        self._key = None                      # where ``table`` came from
+        self._stamp = None                    # modification time of the file when read
+        self._current = 0                     # preview row
 
         self.section(_("Source"))
         self.table_button = QPushButton(_("TABLE …"))
@@ -53,7 +53,7 @@ class SeriesPanel(Panel):
         self.numbering_button = QPushButton(_("NUMBERING"))
         self.numbering_button.setToolTip(_("Numbers without a file: column “{column}”").format(
             column=series.number_column()))
-        for button in (self.table_button, self.numbering_button):   # volle Breite: lange Texte
+        for button in (self.table_button, self.numbering_button):   # full width: long texts
             self.layout_.addWidget(button)
         self.source_label = QLabel(_(NO_SERIES))
         self.source_label.setWordWrap(True)
@@ -138,7 +138,7 @@ class SeriesPanel(Panel):
         self.no_cutter.setWordWrap(True)
         self.no_cutter.hide()
         self.layout_.addWidget(self.no_cutter)
-        # Treiber-Optionen zum Schneiden (Drucker über CUPS): je Option eine Auswahl
+        # Driver options for cutting (printer via CUPS): one choice per option
         self.driver_box = QWidget()
         self.driver_grid = QGridLayout(self.driver_box)
         self.driver_grid.setContentsMargins(0, 0, 0, 0)
@@ -154,7 +154,7 @@ class SeriesPanel(Panel):
         self.sheet.currentIndexChanged.connect(self._choose_sheet)
         for box in (self.start, self.step, self.count, self.digits):
             box.valueChanged.connect(self._apply_numbering)
-        # Doppelklick bzw. Enter (je nach Stil auch Einfachklick) – nur dieses Signal, sonst doppelt
+        # Double-click or Enter (depending on the style also single click) – only this signal, otherwise twice
         self.columns.itemActivated.connect(lambda item: self.insert_column.emit(item.text()))
         self.rows.itemChanged.connect(lambda _item: self._update_count())
         self.rows.currentCellChanged.connect(lambda row, *_args: self._go_to(row))
@@ -170,18 +170,18 @@ class SeriesPanel(Panel):
         box = SpinBox()
         box.setRange(low, high)
         box.setToolTip(tip)
-        box.setKeyboardTracking(False)          # erst bei Enter/Verlassen: ein Rückgängig-Schritt
+        box.setKeyboardTracking(False)          # only on Enter/leaving: one undo step
         return box
 
-    # --- Stand aus dem Dokument -------------------------------------------------------------
+    # --- State from the document ------------------------------------------------------------
     def refresh(self) -> None:
-        """Felder aus ``doc.series``; die Tabelle nur neu lesen, wenn sich Quelle, Blatt,
-        Nummerierung oder die Datei geändert haben."""
+        """Fields from ``doc.series``; reread the table only if the source, sheet,
+        numbering or the file have changed."""
         value = self.doc.series
         widgets = (self.sheet, self.start, self.step, self.count, self.digits, self.cut)
         for w in widgets:
             w.blockSignals(True)
-        self._field_error = None                     # Felder zeigen wieder den gültigen Stand
+        self._field_error = None                     # fields show the valid state again
         key = _key(value)
         if key != self._key:
             self._key = key
@@ -208,12 +208,12 @@ class SeriesPanel(Panel):
         self._show_error()
 
     def reload(self) -> None:
-        """Tabelle neu lesen (Öffnen): Häkchen alle gesetzt, erste Zeile in der Vorschau."""
+        """Reread the table (open): all checkmarks set, first row in the preview."""
         self._key = object()
         self.refresh()
 
     def check_file(self) -> bool:
-        """Tabellendatei seit dem Lesen geändert? Dann neu lesen (Häkchen neu) – True."""
+        """Table file changed since reading? Then reread (checkmarks reset) – True."""
         value = self.doc.series
         if value is None or value.source is None or _stamp(value.source) == self._stamp:
             return False
@@ -221,8 +221,8 @@ class SeriesPanel(Panel):
         return True
 
     def _load(self, value: Series | None, table: Table | None = None) -> None:
-        """Tabelle lesen (``table``: schon gelesen) und anzeigen; Blätter auch, wenn das
-        gewählte fehlt – dann lässt sich ein anderes wählen."""
+        """Read and show the table (``table``: already read); sheets too, even if the
+        chosen one is missing – then another can be chosen."""
         self.table, self.error = table, None
         if value is not None:
             self._stamp = _stamp(value.source) if value.source is not None else None
@@ -231,7 +231,7 @@ class SeriesPanel(Panel):
                     self.table = series.table_for(value)
                 except SeriesError as e:
                     self.error = str(e)
-        # Blätter aus der gelesenen Mappe; scheitert das Lesen (Blatt fehlt), eigens holen
+        # Sheets from the workbook that was read; if reading fails (sheet missing), fetch them separately
         sheets = self.table.sheets if self.table is not None else []
         if self.table is None and value is not None and value.source is not None:
             try:
@@ -239,7 +239,7 @@ class SeriesPanel(Panel):
             except SeriesError:
                 sheets = []
         shown = self.table.sheet if self.table is not None else value.sheet if value else None
-        self.sheet.blockSignals(True)               # Füllen ist keine Wahl des Nutzers
+        self.sheet.blockSignals(True)               # filling is not a choice by the user
         self.sheet.clear()
         self.sheet.addItems(sheets)
         if sheets:
@@ -271,19 +271,19 @@ class SeriesPanel(Panel):
         self._update_count()
         self._update_row_label()
 
-    # --- Abfragen des Hauptfensters --------------------------------------------------------------
+    # --- Queries from the main window ------------------------------------------------------------
     def current_row(self) -> int:
-        """Vorschau-Zeile (ab 1)."""
+        """Preview row (from 1)."""
         return self._current + 1
 
     def preview(self) -> tuple[list[str], list[str]] | None:
-        """(Spalten, Zeile) für die Arbeitsfläche – None ohne Serie oder ohne Zeilen."""
+        """(Columns, row) for the canvas – None without a series or without rows."""
         if self.doc.series is None or self.table is None or not self.table.rows:
             return None
         return self.table.columns, self.table.rows[min(self._current, len(self.table.rows) - 1)]
 
     def checked_rows(self) -> list[tuple[int, list[str]]]:
-        """Gewählte Zeilen als (Nummer ab 1, Werte)."""
+        """Chosen rows as (number from 1, values)."""
         if self.table is None:
             return []
         return [(r + 1, values) for r, values in enumerate(self.table.rows)
@@ -291,7 +291,7 @@ class SeriesPanel(Panel):
                 or self.rows.item(r, 0).checkState() == Qt.CheckState.Checked]
 
     def show_missing(self, names: list[str]) -> None:
-        """Platzhalter ohne Spalte anzeigen (nach jedem Rendern)."""
+        """Show placeholders without a column (after every render)."""
         if names != self._missing:
             self._missing = names
             self._show_error()
@@ -308,9 +308,9 @@ class SeriesPanel(Panel):
         self.error_label.setText("\n".join(lines))
         self.error_label.setVisible(bool(lines))
 
-    # --- Änderungen ----------------------------------------------------------------------------
+    # --- Changes -------------------------------------------------------------------------------
     def set_series(self, value: Series | None, table: Table | None = None) -> None:
-        """Serie setzen (ein Rückgängig-Schritt) und anzeigen; ``table``: schon gelesen."""
+        """Set the series (one undo step) and show it; ``table``: already read."""
         self.doc.series = value
         if table is not None:
             self._key = _key(value)
@@ -337,7 +337,7 @@ class SeriesPanel(Panel):
         numbering = Numbering(self.start.value(), self.step.value(), self.count.value(),
                               self.digits.value())
         try:
-            series.check_numbering(numbering)    # ungültig: nicht übernehmen, Hinweis zeigen
+            series.check_numbering(numbering)    # invalid: do not apply, show the hint
         except SeriesError as e:
             self._field_error = str(e)
             self._show_error()
@@ -346,7 +346,7 @@ class SeriesPanel(Panel):
         self.set_series(replace(value, numbering=numbering))
 
     def set_cutter(self, cutter: bool) -> None:
-        """Drucker mit bzw. ohne Abschneider: ohne gibt es keine Schnitt-Auswahl, nur den Hinweis."""
+        """Printer with or without cutter: without one there is no cut choice, only the hint."""
         self.cut_title.setVisible(cutter)
         self.cut.setVisible(cutter)
         self.no_cutter.setText(_(NO_CUTTER))
@@ -354,16 +354,16 @@ class SeriesPanel(Panel):
         self.driver_box.hide()
 
     def set_driver_cuts(self, options, chosen: dict[str, str]) -> None:
-        """Drucker über CUPS bzw. Zebra: statt „Nach jedem Etikett/Nur am Ende“ die Schnitt-Optionen
-        seines Treibers bzw. der Modus (``cups.CutOption``), gewählt wie in ``chosen`` (sonst der
-        Standard); ohne solche Optionen der Hinweis, dass der Treiber das bestimmt."""
+        """Printer via CUPS or Zebra: instead of “After each label/Only at the end” the cut options
+        of its driver or the mode (``cups.CutOption``), chosen as in ``chosen`` (otherwise the
+        default); without such options the hint that the driver decides."""
         while self.driver_grid.count():
             self.driver_grid.takeAt(0).widget().deleteLater()
         self.driver_cuts = {}
         for row, option in enumerate(options):
             combo = QComboBox()
             for choice, text in zip(option.choices, option.labels or option.choices):
-                combo.addItem(text, choice)          # Treibertexte bleiben, Zebra schon übersetzt
+                combo.addItem(text, choice)          # driver texts stay, Zebra already translated
             combo.setCurrentIndex(max(0, combo.findData(chosen.get(option.key, option.default))))
             combo.currentIndexChanged.connect(
                 lambda _unused=0, key=option.key, box=combo: self.driver_cut_chosen.emit(
@@ -395,7 +395,7 @@ class SeriesPanel(Panel):
             return
         self._current = row
         self._update_row_label()
-        self.changed.emit()                  # Arbeitsfläche zeigt die Zeile (kein Rückgängig-Schritt)
+        self.changed.emit()                  # the canvas shows the row (no undo step)
 
     def _update_count(self) -> None:
         total = self.rows.rowCount()
@@ -404,7 +404,7 @@ class SeriesPanel(Panel):
 
     def _update_row_label(self) -> None:
         total = len(self.table.rows) if self.table is not None else 0
-        if total and self.rows.currentRow() != self._current:   # Vorschau-Zeile in der Tabelle zeigen
+        if total and self.rows.currentRow() != self._current:   # show the preview row in the table
             self.rows.blockSignals(True)
             self.rows.setCurrentCell(self._current, 0)
             self.rows.blockSignals(False)
@@ -415,12 +415,12 @@ class SeriesPanel(Panel):
 
 
 def _key(value: Series | None):
-    """Woraus die Tabelle stammt (Schnitt zählt nicht)."""
+    """Where the table came from (cut does not count)."""
     return None if value is None else (value.source, value.sheet, value.numbering)
 
 
 def _stamp(source: str):
-    """Änderungszeit der Tabellendatei (fehlt → eigener Wert)."""
+    """Modification time of the table file (missing → own value)."""
     try:
         return os.stat(source).st_mtime_ns
     except (OSError, ValueError):

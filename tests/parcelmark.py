@@ -1,5 +1,5 @@
-"""Erzeugte Test-Paketmarken (keine echten Daten): kleine PDFs mit Text (Helvetica) und schwarzen
-Flächen, von Hand geschrieben – ohne Qt und ohne zusätzliche Bibliothek."""
+"""Generated test parcel labels (no real data): small PDFs with text (Helvetica) and black
+areas, written by hand – without Qt and without an additional library."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,9 +8,9 @@ PT = 72 / 25.4
 
 
 def make_pdf(path: Path, size_mm=(210, 297), texts=(), rects=(), images=()) -> Path:
-    """PDF mit einer Seite ``size_mm``. ``texts``: (x_mm, y_mm, Text) – y von oben;
-    ``rects``: (x0, y0, x1, y1) in mm, schwarz gefüllt; ``images``: (x_mm, y_mm, PIL-Bild „L“,
-    dpi) – als Graustufenbild eingebettet (Barcodes)."""
+    """PDF with one page of ``size_mm``. ``texts``: (x_mm, y_mm, text) – y from the top;
+    ``rects``: (x0, y0, x1, y1) in mm, filled black; ``images``: (x_mm, y_mm, PIL image “L”,
+    dpi) – embedded as a grayscale image (barcodes)."""
     w, h = size_mm[0] * PT, size_mm[1] * PT
     ops = ["0 g"]
     for x0, y0, x1, y1 in rects:

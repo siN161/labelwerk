@@ -7,8 +7,8 @@ from labelwerk.printer import PrintError, build_instructions, print_image
 def test_build_instructions_produces_brother_raster_data():
     data = build_instructions(render_text("Test", "62"), "62", model="QL-600")
     assert isinstance(data, bytes)
-    assert b"\x1b@" in data          # ESC @ = Initialisieren
-    assert data.endswith(b"\x1a")    # Drucken mit Vorschub
+    assert b"\x1b@" in data          # ESC @ = initialise
+    assert data.endswith(b"\x1a")    # printing with feed
 
 
 def _send_returning(status):
@@ -60,21 +60,21 @@ def test_missing_permission_raises_friendly_error(monkeypatch):
         _print(monkeypatch, _send_raising(PermissionError(13, "Permission denied")))
 
 
-# --- Serien: mehrere Etiketten in einem Auftrag -------------------------------------------------
+# --- Series: several labels in one job -------------------------------------------------
 from PIL import Image  # noqa: E402
 
 from labelwerk.printer import cut_interval  # noqa: E402
 
-AUTOCUT = b"\x1biM\x40"          # ESC i M: automatisch schneiden
+AUTOCUT = b"\x1biM\x40"          # ESC i M: cut automatically
 
 
 def _blank(n):
-    """Leere Etiketten – ihre Rasterdaten enthalten keine Befehlsbytes."""
+    """Empty labels – their raster data contain no command bytes."""
     return [Image.new("RGB", (696, 300), "white") for _ in range(n)]
 
 
 def _cut_every(data):
-    """Werte n aus ESC i A n (schneiden alle n Etiketten), je Seite einer."""
+    """Values n from ESC i A n (cut every n labels), one per page."""
     out, start = [], 0
     while (i := data.find(b"\x1biA", start)) >= 0:
         out.append(data[i + 3])
@@ -84,9 +84,9 @@ def _cut_every(data):
 
 def test_several_labels_are_one_job_cut_after_each():
     data = build_instructions(_blank(3), "62", cut_every=1)
-    assert data.count(b"\x1b@") == 1                    # ein Auftrag
+    assert data.count(b"\x1b@") == 1                    # one job
     assert data.count(AUTOCUT) == 3 and _cut_every(data) == [1, 1, 1]
-    assert data.count(b"\x1biK\x08") == 3               # am Ende schneiden
+    assert data.count(b"\x1biK\x08") == 3               # cut at the end
     assert data.endswith(b"\x1a") and data.count(b"\x0c") >= 2
 
 
@@ -135,12 +135,12 @@ def test_print_image_sends_all_labels(monkeypatch):
     assert _cut_every(sent["data"]) == [4, 4, 4, 4]
 
 
-# --- Nachbesserungen nach dem Review ------------------------------------------------------------
+# --- Improvements after the review ------------------------------------------------------------
 from labelwerk.printer import MAX_JOB_EACH, _Raster  # noqa: E402
 
 
 def _pages(data):
-    """Byte n9 (Startseite 0, weitere 1) aus jedem ESC i z."""
+    """Byte n9 (start page 0, further 1) from each ESC i z."""
     out, start = [], 0
     while (i := data.find(b"\x1biz", start)) >= 0:
         out.append(data[i + 3 + 8])
@@ -159,7 +159,7 @@ def test_later_pages_are_marked_as_such():
 
 
 def test_raster_data_grows_without_copying():
-    """bytes += kopiert bei jedem Befehl alles – lange Serien würden quadratisch langsam."""
+    """bytes += copies everything on every command – long series would get quadratically slow."""
     raster = _Raster("QL-600", 1)
     assert isinstance(raster.data, bytearray)
     assert isinstance(build_instructions(_blank(2), "62"), bytes)
@@ -225,21 +225,21 @@ def test_error_in_a_part_stops_and_names_the_labels(monkeypatch):
 
 
 def test_print_mode_images_print_exactly_the_same():
-    """1-Bit-Bilder (Serien: wenig Speicher) ergeben dieselben Rasterdaten wie das Druckbild."""
+    """1-bit images (series: little memory) give the same raster data as the print image."""
     from PIL import ImageDraw
     from labelwerk.printer import to_print_mode
     img = Image.new("RGB", (696, 120), "white")
     draw = ImageDraw.Draw(img)
     for x in range(0, 256):
-        draw.line((x * 2, 0, x * 2, 119), fill=(x, x, x))        # alle Grautöne
+        draw.line((x * 2, 0, x * 2, 119), fill=(x, x, x))        # all grey levels
     small = to_print_mode(img)
     assert small.mode == "1"
     assert build_instructions(small, "62") == build_instructions(img, "62")
 
 
 def test_single_label_is_byte_identical_to_plain_brother_ql():
-    """Golden: ein Etikett wie vor den Serien (BrotherQLRaster + convert) – _Raster ändert nur
-    Serien."""
+    """Golden: a label as before the series (BrotherQLRaster + convert) – _Raster changes only
+    series."""
     from brother_ql.conversion import convert
     from brother_ql.raster import BrotherQLRaster
     image = render_text("Test", "62")
@@ -250,12 +250,12 @@ def test_single_label_is_byte_identical_to_plain_brother_ql():
     assert build_instructions(image, "62") == bytes(expected)
 
 
-# --- Abbrechen ---------------------------------------------------------------------------------
+# --- Cancelling --------------------------------------------------------------------------------
 from labelwerk.printer import PrintCancelled  # noqa: E402
 
 
 def test_parts_are_small_enough_to_cancel_quickly():
-    assert MAX_JOB_EACH == 10                    # „Abbrechen“ wirkt nach höchstens 10 Etiketten
+    assert MAX_JOB_EACH == 10                    # “Cancel” takes effect after at most 10 labels
 
 
 def test_series_can_be_cancelled_between_parts(monkeypatch):
@@ -269,7 +269,7 @@ def test_series_can_be_cancelled_between_parts(monkeypatch):
     assert (exc.value.printed, exc.value.total) == (MAX_JOB_EACH, total)
     assert str(exc.value) == f"Abgebrochen – {MAX_JOB_EACH} von {total} Etiketten gedruckt"
     assert done == [(MAX_JOB_EACH, total)]
-    assert not isinstance(exc.value, PrintError)          # kein Fehler: eigene Meldung
+    assert not isinstance(exc.value, PrintError)          # no error: own message
 
 
 def test_cancel_before_the_first_part_sends_nothing(monkeypatch):

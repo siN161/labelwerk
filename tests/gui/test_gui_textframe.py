@@ -1,4 +1,4 @@
-"""Text-Panel bearbeitet den gewählten Rahmen, Bereich „Position“ (Etappe 3d-1)."""
+"""TEXT panel edits the selected frame, area "Position" (stage 3d-1)."""
 import pytest
 from PySide6.QtTest import QTest
 
@@ -39,7 +39,7 @@ def _values(panel):
     return tuple(spin.value() for spin in _spins(panel))
 
 
-# --- Panel folgt der Auswahl -------------------------------------------------------
+# --- Panel follows the selection ---------------------------------------------------
 def test_without_selection_panel_shows_hint(window):
     panel = window.panel("text")
     assert window.canvas.selection() == [] and panel.index is None
@@ -71,7 +71,7 @@ def test_nothing_is_selected_at_start_and_no_frame_is_drawn(qtbot):
     qtbot.addWidget(win)
     assert win.canvas.selection() == [] and win.panel("text").index is None
     assert win.panels.currentWidget() is win.panel("paper")
-    win.tool_actions["text"].trigger()                       # TEXT-Reiter: Text anlegen
+    win.tool_actions["text"].trigger()                       # TEXT tab: create text
     assert win.canvas.tool() == "text"
     assert win.shortcut_actions["tool.text"].isChecked()
     win.create_text(5, 5)
@@ -104,7 +104,7 @@ def test_typing_goes_into_newly_created_text(window, qtbot):
     qtbot.waitUntil(editor.hasFocus, timeout=1000)
     QTest.keyClicks(editor, "Neu")
     assert [o.text for o in window.doc.objects] == ["Eins", "Zwei", "Neu"]
-    # neuer Text linksbündig: Zeilenanfang und Oberkante der Schrift bleiben am Klickpunkt
+    # new text left-aligned: line start and top edge of the font stay at the click point
     assert window.doc.objects[2].paragraphs[0].align == "left"
     rendered = window.rendered[2]
     x, y = layout.from_object(rendered.layout.anchor("left"), rendered, 0)
@@ -122,7 +122,7 @@ def test_deleting_last_object_leaves_label_empty(qtbot):
     assert [o.text for o in win.doc.objects] == ["Allein"]
 
 
-# --- Bereich „Position“ ------------------------------------------------------------
+# --- Area "Position" ---------------------------------------------------------------
 def test_position_shows_frame_of_selected_object(window):
     window.canvas.set_selection([1])
     shown = window.canvas.objects[1].frame_mm()
@@ -178,7 +178,7 @@ def test_width_and_height_only_editable_with_fixed_frame(window):
 
 
 def test_size_edit_without_fixed_frame_is_ignored_by_the_panel(window):
-    """Auch wenn der Bereich Position eine Größe meldet: ohne feste Rahmengröße nicht."""
+    """Even if the Position area reports a size: not without a fixed frame size."""
     window.canvas.set_selection([0])
     panel = window.panel("text")
     seen = []
@@ -207,7 +207,7 @@ def test_position_follows_nudge(window):
 
 def test_panels_scroll_instead_of_growing_the_window(window):
     window.canvas.set_selection([0])
-    assert window.minimumSizeHint().height() < 600          # passt auch auf 768-px-Bildschirme
+    assert window.minimumSizeHint().height() < 600          # also fits 768 px screens
     assert window.panels.parentWidget().parentWidget().objectName() == "panelScroll"
 
 

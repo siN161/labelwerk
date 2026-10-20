@@ -1,5 +1,5 @@
-"""Vektorbilder in der GUI (Etappe 3d-2c): Qt rastert SVG in Rahmengröße – auch SVG-Dateien
-aus „Aus Datei …“ bleiben beim Vergrößern scharf."""
+"""Vector images in the GUI (stage 3d-2c): Qt rasterises SVG at frame size – SVG files
+from FROM FILE … also stay sharp when enlarged."""
 import pytest
 from PIL import Image
 
@@ -10,7 +10,7 @@ from labelwerk.gui.image_import import rasterize_svg
 from labelwerk.gui.main_window import MainWindow
 from labelwerk.settings import Settings
 
-# Linie 1 Einheit dick quer durch die Mitte eines 100 × 50 Blatts
+# line 1 unit thick straight across the middle of a 100 × 50 sheet
 LINE = (b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50" viewBox="0 0 100 50">'
         b'<rect x="0" y="24.5" width="100" height="1" fill="black"/></svg>')
 
@@ -25,7 +25,7 @@ def window(qtbot):
 
 
 def _gray_rows(img: Image.Image) -> list[int]:
-    """Zeilen, die irgendwo dunkler als Weiß sind."""
+    """Rows that are darker than white anywhere."""
     gray = img.convert("L")
     return [y for y in range(gray.height)
             if gray.crop((0, y, gray.width, y + 1)).getextrema()[0] < 250]
@@ -34,7 +34,7 @@ def _gray_rows(img: Image.Image) -> list[int]:
 def test_rasterize_svg_renders_the_whole_sheet_scaled(qapp):
     img = rasterize_svg(LINE, (1000, 500), (0, 0, 1000, 500))
     assert img.mode == "RGB" and img.size == (1000, 500)
-    assert _gray_rows(img) == list(range(245, 255))          # 10 Pixel dick, scharf
+    assert _gray_rows(img) == list(range(245, 255))          # 10 pixels thick, sharp
 
 
 def test_rasterize_svg_region_equals_crop_of_the_sheet(qapp):
@@ -66,7 +66,7 @@ def test_svg_file_becomes_a_vector_image(window, tmp_path):
     window.panel("image").from_file.click()
     obj = window.doc.objects[1]
     assert obj.svg == LINE
-    assert obj.image().size == (round(100 * 300 / 96), round(50 * 300 / 96))   # Vorschau 300 dpi
+    assert obj.image().size == (round(100 * 300 / 96), round(50 * 300 / 96))   # preview 300 dpi
 
 
 BARS = (b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50" viewBox="0 0 100 50">'
@@ -75,15 +75,15 @@ BARS = (b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50" viewBo
 
 
 def _soft_rows(img: Image.Image) -> int:
-    """Zeilen mit Graustufen (Kantensaum) in der Bildmitte."""
+    """Rows with greys (edge fringe) in the middle of the image."""
     gray = img.convert("L")
     column = [gray.getpixel((gray.width // 2, y)) for y in range(gray.height)]
     return sum(30 < v < 225 for v in column)
 
 
 def test_enlarged_svg_stays_sharp(window, tmp_path):
-    """4× so groß: das Vektorbild wird neu gerastert – an jeder der vier Kanten höchstens eine
-    graue Zeile; die hochskalierte Vorschau hätte einen breiten Saum."""
+    """4× as large: the vector image is rasterised anew – at each of the four edges at most one
+    grey row; the upscaled preview would have a wide fringe."""
     path = tmp_path / "balken.svg"
     path.write_bytes(BARS)
     window.ask_image_file = lambda: str(path)
@@ -97,7 +97,7 @@ def test_enlarged_svg_stays_sharp(window, tmp_path):
 
 
 def test_window_renders_vectors_in_frame_size(window, tmp_path):
-    """Die Arbeitsfläche nimmt den Vektorweg: nach dem Vergrößern wird in Rahmengröße gerastert."""
+    """The canvas takes the vector path: after enlarging, it is rasterised at frame size."""
     path = tmp_path / "balken.svg"
     path.write_bytes(BARS)
     window.ask_image_file = lambda: str(path)
@@ -115,7 +115,7 @@ def test_window_renders_vectors_in_frame_size(window, tmp_path):
 
 
 def test_svg_preview_is_the_same_raster_as_the_vector(window, tmp_path):
-    """Vorschau-PNG und Raster stammen aus denselben Bytes – Zuschnitt und Druck passen."""
+    """Preview PNG and raster come from the same bytes – crop and print match."""
     path = tmp_path / "balken.svg"
     path.write_bytes(BARS)
     image, _ = image_import.load(path)
@@ -123,7 +123,7 @@ def test_svg_preview_is_the_same_raster_as_the_vector(window, tmp_path):
 
 
 def test_svg_with_linked_file_is_inserted_as_pixel_image(window, tmp_path):
-    """Verweise auf andere Dateien gelten nur neben der SVG – als Pixelbild bleibt das Bild drin."""
+    """References to other files apply only next to the SVG – as a pixel image the image stays in."""
     Image.new("RGB", (40, 40), "black").save(tmp_path / "bild.png")
     path = tmp_path / "mit-bild.svg"
     path.write_text('<svg xmlns="http://www.w3.org/2000/svg" '
@@ -133,7 +133,7 @@ def test_svg_with_linked_file_is_inserted_as_pixel_image(window, tmp_path):
     window.panel("image").from_file.click()
     obj = window.doc.objects[1]
     assert obj.svg is None
-    assert obj.image().convert("L").getextrema()[0] == 0      # das verlinkte Bild ist drin
+    assert obj.image().convert("L").getextrema()[0] == 0      # the linked image is in
 
 
 @pytest.mark.parametrize("href", ["#teil", "data:image/png;base64,iVBORw0KGgo="])

@@ -1,18 +1,17 @@
-# Paketmarken-Typen (`catalog.json`)
+# Parcel label types (`catalog.json`)
 
-Welche Bereiche einer Paketmarke (DHL, Hermes …) auf das Etikett kommen und wohin, steht hier als Daten –
-labelwerk (`parcel.py`) liest nur diese Datei. Neue Länder, Dienste und Typen brauchen keinen Code.
+Which areas of a parcel label (DHL, Hermes …) go onto the label and where is stored here as data – labelwerk
+(`parcel.py`) only reads this file. New countries, carriers and types need no code.
 
-## Herkunft
+## Origin
 
-Die Bereiche (`src`) sind gemessene Tatsachen über die Marken; die Anordnung (`dst`) ist nach dem Vorbild
-von paketikett.de nachgemessen. Ermittelt wurden beide mit Testblättern
-(`tools/parcel/make_sheets.py`: 10-mm-Raster, in jeder Zelle ein QR-Code mit ihrer Lage), die ein
-Umwandlungsdienst (paketikett.de) wie eine Marke verarbeitet hat; `tools/parcel/analyze.py` und
-`extract.py` lesen aus dem Ergebnis ab, welcher Bereich mit welcher Drehung und welchem Maßstab wohin
-kam. Es wurde kein Code des Dienstes übernommen. `verified: true` heißt: an einer echten Marke
-nachgeprüft (Original und Ergebnis); alle anderen Typen sind „ungeprüft“ – labelwerk rückt ihre Kanten
-an der echten Marke bis zum nächsten weißen Rand (höchstens 3 mm).
+The areas (`src`) are measured facts about the parcel labels; the arrangement (`dst`) is measured after the
+example of paketikett.de. Both were determined with test sheets (`tools/parcel/make_sheets.py`: 10 mm grid, a QR
+code with its position in every cell) that a conversion service (paketikett.de) processed like a parcel label;
+`tools/parcel/analyze.py` and `extract.py` read from the result which area went where, with which rotation and
+scale. No code of the service was taken over. `verified: true` means: checked against a real parcel label
+(original and result); all other types are "untested" – labelwerk moves their edges on the real label out to
+the next white margin (at most 3 mm).
 
 ## Format
 
@@ -30,46 +29,50 @@ an der echten Marke bis zum nächsten weißen Rand (höchstens 3 mm).
  }]}
 ```
 
-- **source**: mögliche Seitengrößen der Marke in mm (± 4 mm, auch quer); `raster` nur für Marken, die als
-  Bild kommen (z. B. GIF): in dieser Auflösung (`dpi`) an diese Stelle der Seite gelegt (`x_mm`, `y_mm`); `px`
-  ist die erwartete Pixelgröße (Breite, Höhe) – nur Bilder mit diesem Seitenverhältnis gelten als dieser Typ.
-- **detect**: Begriffe im Text der PDF – `all` müssen vorkommen, `any` zählen dafür, `none` dagegen.
-- **layouts**: `"62"` = Referenz 62 mm endlos (Seite quer: x längs des Bands, y quer), `"100x150"` =
-  Etikett 100 × 150 mm (hochkant). Je Layout ein oder mehrere Ausgabe-Etiketten (Retoure: zwei).
-- **pieces** (Malreihenfolge = Reihenfolge, spätere liegen oben): `src` Rechteck auf der Marke in mm (Ursprung
-  oben links), `rotation` Drehung im Uhrzeigersinn, `dst` Rechteck nach dem Drehen auf dem Ausgabe-Etikett in
-  mm (das Stück wird genau darauf skaliert), `kind` `barcode` (nicht verkleinert gemeint) oder `text`.
+- **source**: possible page sizes of the parcel label in mm (± 4 mm, also landscape); `raster` only for labels
+  that come as an image (e.g. GIF): placed at this resolution (`dpi`) at this position of the page (`x_mm`,
+  `y_mm`); `px` is the expected pixel size (width, height) – only images with this aspect ratio count as this type.
+- **detect**: terms in the text of the PDF – `all` must occur, `any` count in favour, `none` against.
+- **layouts**: `"62"` = reference 62 mm continuous (page landscape: x along the tape, y across), `"100x150"` =
+  label 100 × 150 mm (portrait). One or more output labels per layout (returns: two).
+- **pieces** (paint order = list order, later ones lie on top): `src` rectangle on the parcel label in mm (origin
+  top left), `rotation` clockwise, `dst` rectangle after rotating on the output label in mm (the piece is scaled
+  exactly onto it), `kind` `barcode` (meant not to be shrunk) or `text`. Pieces with the same `src` span whose
+  `dst` agree within 0.5 mm are one column (parts of a long barcode with its middle cut out) – labelwerk gives
+  them exactly the same `dst` span so the bars do not kink at the seam.
 
-labelwerk skaliert das Layout auf die bedruckbare Breite des Etiketts (breiteres Band → größer) bzw. passt es in
-ein festes Etikett ein – ein Maßstab für alle Etiketten einer Umwandlung, Referenz-Layouts nach ihrer Etiketthöhe
-(60/62 mm wie paketikett.de, auf 58,9 mm bedruckbar also 95–98 %); Barcodes unter 94 % ergeben einen Hinweis.
+labelwerk scales the layout to the printable width of the label (wider tape → larger) or fits it into a fixed-size
+label – one scale for all labels of a conversion, reference layouts by their label height (60/62 mm like
+paketikett.de, so 95–98 % on 58.9 mm printable); barcodes below 94 % give a note.
 
-## Neuen Typ beisteuern
+## Contributing a new type
 
-Arbeitsordner außerhalb des Repositorys, z. B. `export LABELWERK_PARCEL_DIR=~/paketmarken-pflege`:
+Work folder outside the repository, e.g. `export LABELWERK_PARCEL_DIR=~/parcel-maintenance`:
 
-1. Testblätter erzeugen: `QT_QPA_PLATFORM=offscreen python tools/parcel/make_sheets.py`.
-2. Das passende Blatt beim Dienst als Marke dieses Typs umwandeln, Ergebnis in den Arbeitsordner legen.
-3. In `tools/parcel/extract.py` den Typ in `TYPES` eintragen, dann `python tools/parcel/extract.py TYPID` und
-   `python tools/parcel/assemble.py` (braucht numpy, scipy, zxing-cpp – nur zum Pflegen, nicht für labelwerk).
+1. Create test sheets: `QT_QPA_PLATFORM=offscreen python tools/parcel/make_sheets.py`.
+2. Convert the matching sheet with the service as a label of this type, put the result into the work folder.
+3. Add the type to `TYPES` in `tools/parcel/extract.py`, then run `python tools/parcel/extract.py TYPEID` and
+   `python tools/parcel/assemble.py` (needs numpy, scipy, zxing-cpp – only for maintenance, not for labelwerk).
 4. `python tools/parcel/catalog.py "$LABELWERK_PARCEL_DIR/templates.json" src/labelwerk/parcel_data/catalog.json`
-   (Erkennungsbegriffe dort ergänzen), Vergleichsbilder in `check/` ansehen, Tests laufen lassen.
+   (add the recognition terms there), look at the comparison images in `check/`, run the tests.
 
-## Eigene Typen
+## Own types
 
-In labelwerk angelegte Typen liegen als `$XDG_DATA_HOME/labelwerk/paketmarken/<id>.json` – nur Bereiche, die
-Anordnung macht labelwerk selbst (Spalten längs des Bands, Barcodes 1:1, Texte höchstens auf Bandbreite verkleinert):
+Types created in labelwerk are stored as `$XDG_DATA_HOME/labelwerk/paketmarken/<id>.json` – areas only, labelwerk
+arranges them itself (columns along the tape, barcodes 1:1, texts shrunk at most to the tape width):
 
 ```json
-{"version": 1, "id": "meine-marke", "names": {"de": "Meine Marke"},
- "source": {"sizes_mm": [[210, 297]], "pages_mm": [[210, 297]]}, "detect": {"all": ["Meine Firma"]},
- "pieces": [{"page": 1, "src": [10, 10, 110, 60], "rotation": 0, "kind": "text"}]}
+{"version": 1, "id": "my-label", "names": {"en": "My label"},
+ "source": {"sizes_mm": [[210, 297]], "pages_mm": [[210, 297]]}, "detect": {"all": ["My company"]},
+ "pieces": [{"page": 1, "src": [10, 10, 110, 60], "rotation": 0, "kind": "text", "space_after_mm": 10},
+            {"page": 1, "src": [10, 100, 60, 130], "rotation": 0, "kind": "barcode"}]}
 ```
 
-`sizes_mm`: Seitengrößen für die Erkennung; `pages_mm` (optional): Größe je Seite – Bereiche werden gegen ihre Seite
-geprüft und so gelegt (Marken mit Seiten verschiedener Größe). Der Dateiname ist die Kennung (`<id>.json`).
-Geprüft beim Lesen: Kennung (Kleinbuchstaben, Ziffern, Bindestrich; keine mitgelieferte), Namen, Seitengrößen
-(5–2000 mm), Begriffe, 1–30 Bereiche mit Kanten ≥ 1 mm innerhalb der Seite, Drehung 0/90/180/270, Art
-`barcode`/`text`. Kaputte Dateien werden übergangen (Hinweis).
+`sizes_mm`: page sizes for recognition; `pages_mm` (optional): size per page – areas are checked against their
+page and placed that way (labels with pages of different sizes). `space_after_mm` (optional, 0–500): blank tape
+after this area – the next area starts a new column at this distance; after the last area it does not count.
+The file name is the identifier (`<id>.json`). Checked when reading: identifier (lower-case letters, digits,
+hyphen; not a bundled one), names, page sizes (5–2000 mm), terms, 1–30 areas with edges ≥ 1 mm inside the page,
+rotation 0/90/180/270, kind `barcode`/`text`, space. Broken files are skipped (with a note).
 
-Echte Marken enthalten Namen und Adressen – sie gehören nie ins Repository.
+Real parcel labels contain names and addresses – they never belong in the repository.

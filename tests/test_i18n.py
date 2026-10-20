@@ -1,4 +1,4 @@
-"""Übersetzungen: .po-Leser, Sprachwahl, Zahlen, Vollständigkeit der Sprachdateien."""
+"""Translations: .po reader, language choice, numbers, completeness of the language files."""
 import importlib.util
 import sys
 from pathlib import Path
@@ -10,7 +10,7 @@ from labelwerk import i18n
 ROOT = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location("i18n_tool", ROOT / "tools" / "i18n.py")
 tool = importlib.util.module_from_spec(_spec)
-sys.modules["i18n_tool"] = tool                  # dataclasses brauchen das Modul
+sys.modules["i18n_tool"] = tool                  # dataclasses need the module
 _spec.loader.exec_module(tool)
 
 PO = r'''
@@ -94,9 +94,9 @@ def test_set_language_and_numbers(monkeypatch):
     assert i18n.number(3.5) == "3.5" and i18n.number(2, 1) == "2.0" and i18n.decimal() == "."
     assert i18n.set_language("de") == "de"
     assert i18n.number(3.5) == "3,5" and i18n.decimal() == ","
-    assert i18n.set_language("xx") == "en"                     # unbekannt: Englisch
+    assert i18n.set_language("xx") == "en"                     # unknown: English
     monkeypatch.setenv("LANGUAGE", "de")
-    assert i18n.set_language("") == "de"                       # "" = Systemsprache
+    assert i18n.set_language("") == "de"                       # "" = system language
     assert i18n.available() == ["de", "en"]
 
 
@@ -107,7 +107,7 @@ def test_broken_language_file_falls_back(tmp_path, monkeypatch, capsys):
     assert "unreadable" in capsys.readouterr().err
 
 
-# --- Sprachdateien ------------------------------------------------------------------------------
+# --- Language files ----------------------------------------------------------------------------
 def test_every_text_is_translated():
     assert tool.problems() == []
 
@@ -145,7 +145,7 @@ def test_no_german_text_outside_the_translation():
 
 
 def test_english_samples(monkeypatch):
-    """Stichproben: Meldungen auf Englisch, wenn die Sprache Englisch ist."""
+    """Spot checks: messages in English when the language is English."""
     from labelwerk import zpl
     from labelwerk.labels import get_label
     from labelwerk.printer import PrintError, print_image
@@ -161,7 +161,7 @@ def test_english_samples(monkeypatch):
 
 
 def test_update_keeps_translator_work(tmp_path, monkeypatch):
-    """``update`` behält Kommentare, unsichere (fuzzy) und veraltete Einträge der Übersetzer."""
+    """``update`` keeps the translators' comments, uncertain (fuzzy) and obsolete entries."""
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "m.py").write_text('from labelwerk.i18n import _\nA = _("Hello")\nB = _("New")\n')
     po_dir = tmp_path / "po"
@@ -184,7 +184,7 @@ def test_po_escapes_like_c():
     with pytest.raises(i18n.PoError):
         i18n.unquote('"a \\q"', "")
     with pytest.raises(i18n.PoError):
-        i18n.unquote('"a" "b"', "")                 # keine Python-Syntax
+        i18n.unquote('"a" "b"', "")                 # not Python syntax
 
 
 @pytest.mark.parametrize("env, code", [({"LANGUAGE": "de", "LC_ALL": "C"}, "en"),
@@ -207,7 +207,7 @@ def test_restart_pending():
 
     def pending(**changed):
         return restart_pending({**started, **changed}, started)
-    assert not pending(language="")                           # Automatisch = Systemsprache (de)
+    assert not pending(language="")                           # automatic = system language (de)
     assert not pending()
     assert pending(language="en")
     assert pending(start_zoom=150)

@@ -1,4 +1,4 @@
-"""Zierrahmen in der GUI: Bereich „Rahmen“ im Reiter Papier, Arbeitsfläche, Ausrichten am Innenraum."""
+"""Decorative frame in the GUI: area “Border” in the PAPER tab, canvas, aligning to the interior."""
 import pytest
 from PIL import Image
 from PySide6.QtCore import QPointF, Qt
@@ -71,7 +71,7 @@ def test_field_limits_follow_the_core(qtbot):
     qtbot.addWidget(paper)
     assert (paper.frame_line.minimum(), paper.frame_line.maximum()) == FRAME_LINE_MM
     assert paper.frame_inset.maximum() == paper.frame_padding.maximum() == MAX_FRAME_MM
-    assert not paper.frame_line.keyboardTracking()       # erst bei Enter/Verlassen ein Schritt
+    assert not paper.frame_line.keyboardTracking()       # only on Enter/leaving one step
 
 
 def test_each_change_is_one_undo_step(qtbot):
@@ -165,7 +165,7 @@ def test_canvas_snaps_to_the_inner_room(qtbot):
     inner = layout.frame_area(win.doc)
     rect = layout.object_rect(canvas.objects[0].rendered)
     start = canvas.view_rect(0).center()
-    end = start + QPointF(round((inner.x - rect.x) * canvas.px_per_mm()) + 2, 0)   # 2 px daneben
+    end = start + QPointF(round((inner.x - rect.x) * canvas.px_per_mm()) + 2, 0)   # 2 px beside it
     left = Qt.MouseButton.LeftButton
     _send(canvas, QMouseEvent.Type.MouseButtonPress, start, left)
     _send(canvas, QMouseEvent.Type.MouseMove, (start + end) / 2, left)
@@ -178,9 +178,9 @@ def test_canvas_snaps_to_the_inner_room(qtbot):
     assert win.canvas._inner is None
 
 
-# --- Nachbesserungen nach dem Review ------------------------------------------------------
+# --- Improvements after the review ---------------------------------------------------
 def _type(box, value):
-    """Wert ins Feld tippen, ohne Enter (Feld hat den Fokus, meldet aber noch nichts)."""
+    """Type a value into the field without Enter (field has focus but does not report anything yet)."""
     box.lineEdit().selectAll()
     box.lineEdit().insert(box.textFromValue(value))
 
@@ -216,7 +216,7 @@ def test_canvas_frame_is_smoothed_and_reused(qtbot):
     assert item.transformationMode() == Qt.TransformationMode.SmoothTransformation
     pixmap = item.pixmap().cacheKey()
     win.doc.objects[0] = TextObject("Anders")
-    win.render_now()                                   # Rahmen unverändert: Bild bleibt
+    win.render_now()                                   # frame unchanged: image stays
     assert win.canvas.frame_item.pixmap().cacheKey() == pixmap
 
 
@@ -246,7 +246,7 @@ def test_values_stay_when_switching_to_none_and_back(qtbot):
     _choose(paper, "Einfach")
     paper.frame_line.setValue(1.5)
     _choose(paper, "Kein")
-    paper.refresh()                                    # z. B. Rückgängig eines anderen Schritts
+    paper.refresh()                                    # e.g. undo of another step
     _choose(paper, "Einfach")
     assert win.doc.frame == Frame("single", line_mm=1.5)
 
@@ -287,13 +287,13 @@ def test_pasted_text_starts_in_the_inner_room(qtbot):
 
 
 def test_typed_font_size_counts_when_printing_right_away(qtbot, monkeypatch):
-    """Auch eine editierbare Auswahlliste (Schriftgröße) übernimmt Getipptes vor dem Drucken."""
+    """An editable selection list (font size) also takes typed input before printing."""
     win = _window(qtbot, Document("62x29", objects=[TextObject("Hallo", size_pt=10, x_mm=3, y_mm=3)]))
     win.canvas.set_selection([0])
     text = win.panel("text")
     combo = text.size
     combo.lineEdit().setText("24")
-    monkeypatch.setattr(main_window.QApplication, "focusWidget", lambda: combo)   # Fokus liegt am Feld
+    monkeypatch.setattr(main_window.QApplication, "focusWidget", lambda: combo)   # focus is on the field
     printed = []
     monkeypatch.setattr(win, "_print", lambda image, doc, outside: printed.append(doc.objects[0]))
     win.print_label()

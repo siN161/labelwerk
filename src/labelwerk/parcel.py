@@ -1,18 +1,18 @@
-"""Paketmarken umwandeln ohne Qt: Markentypen je Land, Laden, Erkennen, Umwandeln für den Etikettendrucker.
+"""Convert parcel labels without Qt: label types per country, loading, detecting, converting.
 
-Eine Paketmarke (DHL, Hermes …) kommt als A4/A5/100×150-PDF oder als Bild. Jeder Markentyp schneidet
-feste Bereiche aus (``Piece.src`` in mm auf der Marke), dreht sie (im Uhrzeigersinn) und setzt sie auf
-ein Ausgabe-Etikett (``Piece.dst`` in mm, Rechteck nach dem Drehen) – Barcodes in Originalgröße,
-Adressen und Infotexte kleiner. Die mitgelieferten Typen stehen in ``parcel_data/catalog.json``
-(Herkunft: ``parcel_data/README.md``), eigene Typen in ``$XDG_DATA_HOME/labelwerk/paketmarken``
-(nur die Bereiche; ``arrange`` ordnet sie auf dem Band an).
+A parcel label (DHL, Hermes …) arrives as an A4/A5/100×150 PDF or as an image. Each label type cuts out
+fixed areas (``Piece.src`` in mm on the label), rotates them (clockwise) and places them on an output
+label (``Piece.dst`` in mm, rectangle after rotation) – barcodes at original size, addresses and info
+texts smaller. The bundled types are in ``parcel_data/catalog.json`` (origin: ``parcel_data/README.md``),
+custom types in ``$XDG_DATA_HOME/labelwerk/paketmarken`` (areas only; ``arrange`` lays them out on the
+tape).
 
-Ungeprüfte Typen (Bereiche nur aus Testblättern) rücken ihre Kanten an der echten Marke bis zum
-nächsten weißen Rand (``snap``), geprüfte nicht – ihre Kanten sind genau.
+Untested types (areas taken only from test sheets) move their edges on the real label out to the
+nearest white margin (``snap``), tested ones do not – their edges are exact.
 
-``convert`` macht daraus gewöhnliche Etiketten (``Document`` mit einem ``ImageObject`` je Stück):
-das Layout wird auf die bedruckbare Breite des Etiketts skaliert (breiteres Band → größer), bei
-festen Etiketten so weit verkleinert, dass es passt.
+``convert`` turns this into ordinary labels (``Document`` with one ``ImageObject`` per piece): the
+layout is scaled to the printable width of the label (wider tape → larger), and for fixed labels
+reduced just enough to fit.
 """
 from __future__ import annotations
 
@@ -34,61 +34,61 @@ from .labels import get_label, length_limits
 from .render import label_size
 
 CATALOG = Path(__file__).with_name("parcel_data") / "catalog.json"
-LAYOUTS = ("62", "100x150")        # Referenz-Layouts: 62 mm endlos (quer = Seitenhöhe), 100 × 150 mm
-KINDS = ("barcode", "text")        # Barcodes werden nie verkleinert angeordnet
+LAYOUTS = ("62", "100x150")        # Reference layouts: 62 mm continuous (across = page height), 100 × 150 mm
+KINDS = ("barcode", "text")        # Barcodes are never arranged scaled down
 SUFFIXES = (".pdf", ".png", ".jpg", ".jpeg", ".gif")
 _IMAGE_FORMATS = ["PNG", "JPEG", "GIF"]
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_PAGES = 20
 MAX_DPI = 600
-MIN_PIECE_MM = 1.0                 # eigene Bereiche: Kanten mindestens so lang
-EDGE_TOLERANCE_MM = 0.5            # eigene Bereiche dürfen so weit über den Seitenrand (Rundung)
-MAX_SPACE_MM = 500.0               # Freiraum nach einem Bereich höchstens so lang
-SNAP_MM = 3.0                      # Kante höchstens so weit nach außen bis zum weißen Rand
+MIN_PIECE_MM = 1.0                 # custom areas: edges at least this long
+EDGE_TOLERANCE_MM = 0.5            # custom areas may extend this far beyond the page edge (rounding)
+MAX_SPACE_MM = 500.0               # space after an area at most this long
+SNAP_MM = 3.0                      # edge moved outwards at most this far to the white margin
 SIZE_TOLERANCE_MM = 4.0
-WIDE_MM = 95.0                     # ab dieser bedruckbaren Breite gilt ein 100×150-Layout
-BARCODE_MIN = 0.94                 # darunter Hinweis: Barcodes verkleinert (62 mm hohe Layouts auf
-                                   # 58,9 mm bedruckbar = 95 % – so druckt sie auch paketikett.de)
-WHITE = 200                        # Grauwert ab dem ein Pixel als weiß gilt (Kanten anpassen)
-MAX_PAGE_PIXELS = 80_000_000       # Seite gerendert höchstens (A4 bei 600 dpi: 35 Mio.)
-MAX_IMAGE_PIXELS = 50_000_000      # Bildmarke höchstens (vor dem Dekodieren geprüft)
-DPI_PLAUSIBLE = (50, 1200)         # andere Angaben in Bildern gelten als fehlend
-ALIGN_MM = 0.5                     # Stücke einer Spalte: so nah gemessene Ziele sind dieselben
-ASPECT_TOLERANCE = 0.03            # Bild passt zur Seite/Regel, wenn das Seitenverhältnis ±3 % stimmt
-TURN_MARGIN = 1.15                 # quer liegende Marke: bessere Drehung muss so viel mehr Tinte treffen
+WIDE_MM = 95.0                     # from this printable width on a 100×150 layout applies
+BARCODE_MIN = 0.94                 # below this a note: barcodes scaled down (62 mm high layouts on
+                                   # 58.9 mm printable = 95 % – paketikett.de prints them that way too)
+WHITE = 200                        # gray value from which a pixel counts as white (adjusting edges)
+MAX_PAGE_PIXELS = 80_000_000       # page rendered at most this large (A4 at 600 dpi: 35 million)
+MAX_IMAGE_PIXELS = 50_000_000      # image label at most this large (checked before decoding)
+DPI_PLAUSIBLE = (50, 1200)         # other values in images count as missing
+ALIGN_MM = 0.5                     # pieces of a column: targets measured this close are the same
+ASPECT_TOLERANCE = 0.03            # image fits the page/rule if the aspect ratio is within ±3 %
+TURN_MARGIN = 1.15                 # label lying across: the better rotation must hit this much more ink
 _ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _own_warnings: list[str] = []
 
 
 class ParcelError(ValueError):
-    """Paketmarke oder Markentyp unbrauchbar (Meldung für Nutzer, übersetzt)."""
+    """Parcel label or label type unusable (message for users, translated)."""
 
 
 @dataclass(frozen=True)
 class Piece:
-    """Ein Stück der Marke: ``src`` (x0, y0, x1, y1) in mm auf Seite ``page``, im Uhrzeigersinn um
-    ``rotation`` gedreht auf ``dst`` (x0, y0, x1, y1) in mm des Ausgabe-Etiketts gesetzt."""
+    """A piece of the label: ``src`` (x0, y0, x1, y1) in mm on page ``page``, rotated clockwise by
+    ``rotation`` and placed on ``dst`` (x0, y0, x1, y1) in mm of the output label."""
     page: int
     src: tuple[float, float, float, float]
     rotation: int
     dst: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
     kind: str = "text"
-    space_after: float = 0.0          # eigene Typen: Freiraum danach in mm (leeres Band, 0 = keiner)
+    space_after: float = 0.0          # custom types: space after it in mm (empty tape, 0 = none)
 
     def turned_mm(self) -> tuple[float, float]:
-        """Größe des Ausschnitts nach dem Drehen (Breite, Höhe) in mm."""
+        """Size of the area after rotation (width, height) in mm."""
         w, h = self.src[2] - self.src[0], self.src[3] - self.src[1]
         return (h, w) if self.rotation in (90, 270) else (w, h)
 
     def scale(self) -> float:
-        """Maßstab vom Ausschnitt zum Ziel (Mittel aus beiden Achsen)."""
+        """Scale from the area to the target (mean of both axes)."""
         w, h = self.turned_mm()
         return ((self.dst[2] - self.dst[0]) / w + (self.dst[3] - self.dst[1]) / h) / 2
 
 
 @dataclass(frozen=True)
 class Sheet:
-    """Ein Ausgabe-Etikett eines Layouts: Größe (Breite, Höhe) in mm und Stücke in Malreihenfolge."""
+    """An output label of a layout: size (width, height) in mm and pieces in painting order."""
     size_mm: tuple[float, float]
     pieces: tuple[Piece, ...]
 
@@ -96,26 +96,26 @@ class Sheet:
 @dataclass(frozen=True)
 class ParcelType:
     id: str
-    names: dict = field(compare=False)                 # {Sprache: Name}
+    names: dict = field(compare=False)                 # {language: name}
     country: str = ""
     carrier: str = ""
-    source_sizes: tuple[tuple[float, float], ...] = ()  # mögliche Seitengrößen der Marke in mm
-    raster: dict | None = field(default=None, compare=False)   # Bildmarke: {"dpi", "x_mm", "y_mm"}
-    detect: dict = field(default_factory=dict, compare=False)  # {"all", "any", "none"}: Begriffe
+    source_sizes: tuple[tuple[float, float], ...] = ()  # possible page sizes of the label in mm
+    raster: dict | None = field(default=None, compare=False)   # image label: {"dpi", "x_mm", "y_mm"}
+    detect: dict = field(default_factory=dict, compare=False)  # {"all", "any", "none"}: terms
     layouts: dict = field(default_factory=dict, compare=False)  # "62"/"100x150" → (Sheet, …)
-    pieces: tuple[Piece, ...] = ()                      # eigene Typen: nur Bereiche (arrange)
+    pieces: tuple[Piece, ...] = ()                      # custom types: areas only (arrange)
     verified: bool = False
     own: bool = False
-    page_sizes: tuple[tuple[float, float], ...] = ()    # eigene Typen: Größe je Seite (mm)
+    page_sizes: tuple[tuple[float, float], ...] = ()    # custom types: size per page (mm)
 
     @property
     def name(self) -> str:
-        """Name in der Sprache von labelwerk (sonst Englisch, sonst der erste)."""
+        """Name in the language of labelwerk (otherwise English, otherwise the first)."""
         return (self.names.get(i18n.language()) or self.names.get("en")
                 or next(iter(self.names.values()), self.id))
 
 
-# --- Katalog ---------------------------------------------------------------------------
+# --- Catalogue -------------------------------------------------------------------------
 @lru_cache(maxsize=1)
 def _catalog() -> dict:
     return json.loads(CATALOG.read_text(encoding="utf-8"))
@@ -143,7 +143,7 @@ def _piece(p: dict) -> Piece:
 
 
 def _span_sides(piece: Piece, axis: int) -> tuple[int, int]:
-    """Kanten des Ausschnitts (Index in ``src``), die auf Etikett-x (0) bzw. -y (1) fallen."""
+    """Edges of the area (index in ``src``) that fall on label x (0) or y (1)."""
     return (0, 2) if (piece.rotation in (0, 180)) == (axis == 0) else (1, 3)
 
 
@@ -153,9 +153,9 @@ def _column_key(piece: Piece, axis: int):
 
 
 def _aligned(pieces) -> tuple[Piece, ...]:
-    """Layouts schneiden die Mitte langer Balken heraus und setzen die Teile aneinander. Stücke mit
-    derselben Spanne im Ausschnitt, deren Ziele auf ``ALIGN_MM`` übereinstimmen (Messgenauigkeit),
-    bekommen genau dasselbe Ziel (Mittel) – sonst knicken die Balken an der Naht."""
+    """Layouts cut the middle out of long bars and join the parts. Pieces with the same span in the
+    area whose targets agree within ``ALIGN_MM`` (measuring accuracy) get exactly the same target
+    (mean) – otherwise the bars kink at the seam."""
     pieces = list(pieces)
     for axis in (0, 1):
         done = set()
@@ -180,12 +180,12 @@ def _aligned(pieces) -> tuple[Piece, ...]:
 
 
 def countries() -> list[tuple[str, str]]:
-    """Länder mit mitgelieferten Typen: (Kürzel, Name in der Sprache)."""
+    """Countries with bundled types: (code, name in the language)."""
     return [(code, _local(entry["names"])) for code, entry in _catalog()["countries"].items()]
 
 
 def carriers(country: str) -> list[tuple[str, str]]:
-    """Dienste eines Lands: (Schlüssel, Name)."""
+    """Services of a country: (key, name)."""
     entry = _catalog()["countries"].get(country, {})
     return [(key, _local(names)) for key, names in entry.get("carriers", {}).items()]
 
@@ -195,7 +195,7 @@ def _local(names: dict) -> str:
 
 
 def types(country: str | None = None) -> list[ParcelType]:
-    """Mitgelieferte Typen (eines Lands) und danach die eigenen."""
+    """Bundled types (of a country) followed by the custom ones."""
     return [t for t in _builtin() if country is None or t.country == country] + own_types()
 
 
@@ -207,8 +207,8 @@ def find(type_id: str) -> ParcelType:
 
 
 def default_country() -> str:
-    """Land der Region (Gebietsschema ``LC_ALL`` › ``LC_MESSAGES`` › ``LANG``, z. B. „de_DE“ → DE),
-    wenn es Typen dafür gibt – sonst das erste Land des Katalogs."""
+    """Country of the region (locale ``LC_ALL`` › ``LC_MESSAGES`` › ``LANG``, e.g. “de_DE” → DE) if
+    there are types for it – otherwise the first country of the catalogue."""
     codes = [code for code, _name in countries()]
     for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
         value = os.environ.get(key, "")
@@ -216,7 +216,7 @@ def default_country() -> str:
             region = value.split(".")[0].split("@")[0].partition("_")[2].upper()
             if region in codes:
                 return region
-            break                                     # gesetzt, aber ohne passendes Land
+            break                                     # set, but without a matching country
     return codes[0] if codes else ""
 
 
@@ -224,7 +224,7 @@ _UMLAUTS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
 
 
 def own_id(name: str, taken) -> str:
-    """Kennung für einen neuen eigenen Typ aus seinem Namen („eigen-…“, frei, gültig)."""
+    """Identifier for a new custom type from its name (“eigen-…”, free, valid)."""
     slug = re.sub(r"[^a-z0-9]+", "-", name.casefold().translate(_UMLAUTS)).strip("-")
     base = ("eigen-" + (slug or "typ"))[:58].rstrip("-")
     candidate, number = base, 2
@@ -233,15 +233,15 @@ def own_id(name: str, taken) -> str:
     return candidate
 
 
-# --- Eigene Typen ----------------------------------------------------------------------
+# --- Custom types ----------------------------------------------------------------------
 def own_dir() -> Path:
-    """Ordner der eigenen Markentypen (``$XDG_DATA_HOME/labelwerk/paketmarken``)."""
+    """Folder of the custom label types (``$XDG_DATA_HOME/labelwerk/paketmarken``)."""
     base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
     return Path(base) / "labelwerk" / "paketmarken"
 
 
 def own_types() -> list[ParcelType]:
-    """Eigene Typen aus ``own_dir`` (jede Datei für sich geprüft; kaputte übergangen, Hinweis in
+    """Custom types from ``own_dir`` (each file checked on its own; broken ones skipped, note in
     ``own_warnings``)."""
     _own_warnings.clear()
     found = []
@@ -260,10 +260,10 @@ def own_types() -> list[ParcelType]:
         except (json.JSONDecodeError, RecursionError, UnicodeDecodeError):
             skip(_("damaged"))
             continue
-        except (OSError, ValueError) as e:              # ParcelError ist ValueError
+        except (OSError, ValueError) as e:              # ParcelError is a ValueError
             skip(e)
             continue
-        if path.stem != ptype.id:                         # Datei heißt wie ihr Typ (Speichern, Löschen)
+        if path.stem != ptype.id:                         # file is named like its type (saving, deleting)
             skip(_("file name does not match the identifier {id}").format(id=ptype.id))
         elif ptype.id in seen:
             skip(_("identifier {id} appears twice").format(id=ptype.id))
@@ -274,12 +274,12 @@ def own_types() -> list[ParcelType]:
 
 
 def own_warnings() -> list[str]:
-    """Hinweise zu eigenen Typen, die ``own_types`` übergangen hat."""
+    """Notes on custom types that ``own_types`` skipped."""
     return list(_own_warnings)
 
 
 def own_from_dict(data) -> ParcelType:
-    """Eigenen Typ aus JSON-Daten prüfen und anlegen (fremde Eingabe → ``ParcelError``)."""
+    """Check and create a custom type from JSON data (foreign input → ``ParcelError``)."""
     def bad(what):
         return ParcelError(_("Invalid parcel label type: {what}").format(what=_(what)))
     if not isinstance(data, dict):
@@ -317,14 +317,14 @@ def own_from_dict(data) -> ParcelType:
                 or not _numbers(p.get("src"), 4, 0, 2001) \
                 or not _numbers([p.get("space_after_mm", 0)], 1, 0, MAX_SPACE_MM):
             raise bad(N_("areas"))
-        # Bereiche gegen ihre Seite (ohne Größe je Seite: gegen die größte Seitengröße)
+        # Areas against their page (without a size per page: against the largest page size)
         width, height = (pages[p.get("page", 1) - 1] if pages else
                          (max(s[0] for s in sizes), max(s[1] for s in sizes)))
         x0, y0, x1, y1 = p["src"]
         if x1 > width + EDGE_TOLERANCE_MM or y1 > height + EDGE_TOLERANCE_MM:
             raise ParcelError(_("Invalid parcel label type: area {number} reaches beyond the "
                                 "page.").format(number=number))
-        x1, y1 = min(x1, width), min(y1, height)          # Rundung am Rand: auf die Seite
+        x1, y1 = min(x1, width), min(y1, height)          # rounding at the edge: onto the page
         if not (x1 - x0 >= MIN_PIECE_MM and y1 - y0 >= MIN_PIECE_MM):
             raise ParcelError(_("Invalid parcel label type: area {number} is too small (at least "
                                 "{size} mm).").format(number=number,
@@ -354,14 +354,14 @@ def own_to_dict(ptype: ParcelType) -> dict:
 
 
 def spaces(ptype: ParcelType) -> list[tuple[int, float]]:
-    """Wirksame Freiräume eines eigenen Typs: (Index des Stücks davor, Länge in mm) – einer nach
-    dem letzten Stück zählt nicht (nur zwischen den Teilen)."""
+    """Effective spaces of a custom type: (index of the preceding piece, length in mm) – one after
+    the last piece does not count (only between the parts)."""
     return [(n, p.space_after) for n, p in enumerate(ptype.pieces[:-1]) if p.space_after > 0]
 
 
 def with_spaces(ptype: ParcelType, lengths) -> ParcelType:
-    """Typ mit anderen Längen für die Freiräume aus ``spaces`` (gleiche Reihenfolge; nicht
-    gespeichert – Reiter PAKET, je Marke)."""
+    """Type with different lengths for the spaces from ``spaces`` (same order; not
+    saved – PARCEL tab, per label)."""
     pieces = list(ptype.pieces)
     for (n, _length), length in zip(spaces(ptype), lengths):
         pieces[n] = replace(pieces[n], space_after=min(MAX_SPACE_MM, max(0.0, float(length))))
@@ -369,8 +369,8 @@ def with_spaces(ptype: ParcelType, lengths) -> ParcelType:
 
 
 def save_own(ptype: ParcelType) -> Path:
-    """Eigenen Typ speichern (überschreibt einen gleichnamigen)."""
-    own_from_dict(own_to_dict(ptype))                   # nur Gültiges kommt auf die Platte
+    """Save a custom type (overwrites one of the same name)."""
+    own_from_dict(own_to_dict(ptype))                   # only valid data reaches the disk
     folder = own_dir()
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{ptype.id}.json"
@@ -386,15 +386,15 @@ def remove_own(type_id: str) -> None:
     (own_dir() / f"{type_id}.json").unlink(missing_ok=True)
 
 
-# --- Laden -------------------------------------------------------------------------------
+# --- Loading -----------------------------------------------------------------------------
 @dataclass
 class Source:
-    """Geladene Marke: Seitengrößen in mm, Text je Seite; Seitenbilder bei Bedarf (``page``)."""
+    """Loaded label: page sizes in mm, text per page; page images on demand (``page``)."""
     path: Path
     sizes_mm: list[tuple[float, float]]
     texts: list[str]
-    image: Image.Image | None = None      # Bildmarke (eine Seite, Graustufen)
-    image_dpi: float | None = None        # Auflösung aus der Datei (None = keine/unplausible Angabe)
+    image: Image.Image | None = None      # image label (one page, grayscale)
+    image_dpi: float | None = None        # resolution from the file (None = no/implausible value)
     _cache: dict = field(default_factory=dict, repr=False)
     _places: dict = field(default_factory=dict, repr=False)
 
@@ -407,10 +407,10 @@ class Source:
         return self.image is not None
 
     def page(self, number: int, dpi: float, ptype: ParcelType | None = None) -> Image.Image:
-        """Seite ``number`` als Graustufenbild bei ``dpi`` – mit ``ptype`` in dessen Seitenfläche
-        (``placement``): passende Seite wie sie ist, quer liegende gedreht, andere Größe (Letter auf
-        A4) oben links auf weißer Fläche; eine Bildmarke nach der Bild-Regel des Typs bzw. auf seine
-        Seitengröße gestreckt. Außerhalb der Marke ist alles weiß."""
+        """Page ``number`` as a grayscale image at ``dpi`` – with ``ptype`` in its page area
+        (``placement``): matching page as it is, a page lying across rotated, another size (Letter on
+        A4) at the top left on a white area; an image label by the image rule of the type or stretched
+        to its page size. Outside the label everything is white."""
         if not 1 <= number <= self.page_count:
             raise ParcelError(_("The parcel label has no page {page}.").format(page=number))
         place_key = (number, ptype.id if ptype is not None else None)
@@ -422,20 +422,20 @@ class Source:
             w_mm, h_mm = place.frame_mm
             if w_mm * h_mm * (dpi / 25.4) ** 2 > MAX_PAGE_PIXELS:
                 raise ParcelError(_("Parcel label page too large: {name}").format(name=self.path.name))
-            self._cache.clear()                           # nur eine Seite im Speicher
+            self._cache.clear()                           # only one page in memory
             self._cache[key] = self._render(number, dpi, place)
         return self._cache[key]
 
     def _render(self, number: int, dpi: float, place: "Placement") -> Image.Image:
         k = dpi / 25.4
-        w_mm, h_mm = place.content_mm                     # Inhalt vor dem Drehen
+        w_mm, h_mm = place.content_mm                     # content before rotating
         if self.raster:
             content = self.image.resize((max(1, round(w_mm * k)), max(1, round(h_mm * k))),
                                         Image.LANCZOS)
         else:
             content = _render_pdf(self.path, number, dpi)
         if place.rotation:
-            content = content.rotate(-place.rotation, expand=True)   # im Uhrzeigersinn
+            content = content.rotate(-place.rotation, expand=True)   # clockwise
         frame = Image.new("L", (round(place.frame_mm[0] * k), round(place.frame_mm[1] * k)), 255)
         frame.paste(content, (round(place.offset_mm[0] * k), round(place.offset_mm[1] * k)))
         return frame
@@ -443,8 +443,8 @@ class Source:
 
 @dataclass(frozen=True)
 class Placement:
-    """Wie eine Seite in der Fläche eines Typs liegt: Fläche, Inhalt (mm vor dem Drehen), Drehung
-    im Uhrzeigersinn, Lage der linken oberen Ecke (mm, nach dem Drehen)."""
+    """How a page lies in the area of a type: area, content (mm before rotating), clockwise
+    rotation, position of the top left corner (mm, after rotating)."""
     frame_mm: tuple[float, float]
     content_mm: tuple[float, float]
     rotation: int = 0
@@ -452,8 +452,8 @@ class Placement:
 
 
 def placement(source: Source, ptype: ParcelType | None, number: int = 1) -> Placement:
-    """Lage der Seite ``number`` in der Seitenfläche von ``ptype`` (ohne Typ: wie sie ist) – passt sie
-    nicht, ``ParcelError`` (z. B. falscher Typ von Hand gewählt)."""
+    """Position of page ``number`` in the page area of ``ptype`` (without a type: as it is) – if it
+    does not fit, ``ParcelError`` (e.g. wrong type chosen by hand)."""
     size = source.sizes_mm[number - 1]
     if ptype is None or not ptype.source_sizes:
         return Placement(size, size)
@@ -461,10 +461,10 @@ def placement(source: Source, ptype: ParcelType | None, number: int = 1) -> Plac
         return _raster_placement(source, ptype, ptype.source_sizes[0])
     sizes = ptype.source_sizes
     if ptype.page_sizes and number <= len(ptype.page_sizes):
-        sizes = (ptype.page_sizes[number - 1],)           # eigener Typ: Größe dieser Seite
+        sizes = (ptype.page_sizes[number - 1],)           # custom type: size of this page
     for a, b in sizes:
         if abs(size[0] - a) <= SIZE_TOLERANCE_MM and abs(size[1] - b) <= SIZE_TOLERANCE_MM:
-            return Placement((a, b), size)                # passt (Letter: oben links, Rest weiß)
+            return Placement((a, b), size)                # fits (Letter: top left, rest white)
     for a, b in sizes:
         if abs(size[0] - b) <= SIZE_TOLERANCE_MM and abs(size[1] - a) <= SIZE_TOLERANCE_MM:
             return Placement((a, b), size, _turn(source, ptype, number, (a, b)))
@@ -475,14 +475,14 @@ def placement(source: Source, ptype: ParcelType | None, number: int = 1) -> Plac
 def _raster_placement(source: Source, ptype: ParcelType, frame) -> Placement:
     img = source.image
     rule = ptype.raster
-    if rule is not None:                                  # z. B. Amazon-GIF: feste Lage
+    if rule is not None:                                  # e.g. Amazon GIF: fixed position
         px = rule.get("px")
         if px and not _aspect_fits(img.size, px):
             raise ParcelError(_("The image does not fit the type {name}.").format(name=ptype.name))
         dpi = float(rule.get("dpi", 300)) * (img.width / px[0] if px else 1.0)
         content = (img.width * 25.4 / dpi, img.height * 25.4 / dpi)
         return Placement(frame, content, 0, (float(rule.get("x_mm", 0)), float(rule.get("y_mm", 0))))
-    for a, b in ptype.source_sizes:                       # Bild einer ganzen Seite: gestreckt
+    for a, b in ptype.source_sizes:                       # image of a whole page: stretched
         if _aspect_fits(img.size, (a, b)):
             return Placement(frame, (a, b))
         if _aspect_fits(img.size, (b, a)):
@@ -495,8 +495,8 @@ def _aspect_fits(size, ref) -> bool:
 
 
 def _turn(source: Source, ptype: ParcelType, number: int, frame) -> int:
-    """Quer liegende Marke: Drehung (90 oder 270) mit mehr Tinte in den Bereichen des Typs; liegen
-    beide gleich auf, ist die Richtung nicht eindeutig → ``ParcelError``."""
+    """Label lying across: rotation (90 or 270) with more ink in the areas of the type; if both
+    are equal, the direction is ambiguous → ``ParcelError``."""
     pieces = [p for p in all_pieces(ptype) if p.page == number]
     dpi = 40.0
     scores = {}
@@ -520,8 +520,8 @@ def _turn(source: Source, ptype: ParcelType, number: int, frame) -> int:
 
 
 def _render_pdf(path: Path, number: int, dpi: float) -> Image.Image:
-    """Seite rendern; die Datei kann seit dem Laden gelöscht, verschoben oder ersetzt sein →
-    ``ParcelError`` (übersetzt)."""
+    """Render the page; the file may have been deleted, moved or replaced since loading →
+    ``ParcelError`` (translated)."""
     import pypdfium2 as pdfium
     try:
         with _readable(path), PDFIUM_LOCK:
@@ -538,7 +538,7 @@ def _render_pdf(path: Path, number: int, dpi: float) -> Image.Image:
 
 
 def all_pieces(ptype: ParcelType) -> tuple[Piece, ...]:
-    """Alle Bereiche eines Typs (eigene: ``pieces``, sonst die des ersten Layouts)."""
+    """All areas of a type (custom: ``pieces``, otherwise those of the first layout)."""
     if ptype.pieces:
         return ptype.pieces
     sheets = next(iter(ptype.layouts.values()), ())
@@ -546,9 +546,9 @@ def all_pieces(ptype: ParcelType) -> tuple[Piece, ...]:
 
 
 def load(path: str | Path) -> Source:
-    """Marke laden: PDF (Seitengrößen, Text) oder Bild (PNG/JPG/GIF, eine Seite – wie Bild-Objekte
-    gelesen: Transparenz weiß, 16 Bit, EXIF-Lage, Größe begrenzt); fremde Eingabe geprüft (Endung,
-    Dateigröße, Pixel, Seitenzahl) – Fehler als ``ParcelError``."""
+    """Load a label: PDF (page sizes, text) or image (PNG/JPG/GIF, one page – read like image objects:
+    transparency white, 16 bit, EXIF orientation, size limited); foreign input checked (extension,
+    file size, pixels, page count) – errors as ``ParcelError``."""
     path = Path(path)
     try:
         path = _checked(path, SUFFIXES[1:], "PDF, PNG, JPG, GIF", 1)
@@ -557,7 +557,7 @@ def load(path: str | Path) -> Source:
         with _readable(path):
             if path.suffix.lower() == ".pdf":
                 return _load_pdf(path)
-            with Image.open(path, formats=_IMAGE_FORMATS) as head:   # nur der Kopf: Größe, dpi
+            with Image.open(path, formats=_IMAGE_FORMATS) as head:   # only the header: size, dpi
                 pixels = head.width * head.height
                 dpi = head.info.get("dpi")
             if pixels > MAX_IMAGE_PIXELS:
@@ -565,7 +565,7 @@ def load(path: str | Path) -> Source:
                     name=path.name))
             dpi = float(dpi[0]) if dpi and dpi[0] else None
             if dpi is not None and not DPI_PLAUSIBLE[0] <= dpi <= DPI_PLAUSIBLE[1]:
-                dpi = None                                # Angabe unbrauchbar: wie ohne
+                dpi = None                                # value unusable: as without
             img, used = load_image(path, dpi=dpi or 300.0)
             img = img.convert("L")
             size = (img.width * 25.4 / used, img.height * 25.4 / used)
@@ -595,12 +595,12 @@ def _load_pdf(path: Path) -> Source:
             pdf.close()
 
 
-# --- Erkennen ---------------------------------------------------------------------------
+# --- Detecting ---------------------------------------------------------------------------
 def detect(source: Source, country: str | None = None, label_id: str | None = None,
            own: list[ParcelType] | None = None) -> list[tuple[ParcelType, float]]:
-    """Passende Typen mit Punktzahl, bester zuerst: Seitengröße muss passen (Bildmarken: Typ mit
-    Bild-Regel), alle Begriffe aus ``all`` im Text, ``any`` zählt mit, ``none`` zählt dagegen; mit
-    ``label_id`` gewinnt bei Gleichstand der Typ mit einem Layout für dieses Etikett."""
+    """Matching types with score, best first: page size must fit (image labels: type with an
+    image rule), all terms from ``all`` in the text, ``any`` counts for it, ``none`` counts against;
+    with ``label_id`` the type with a layout for this label wins a tie."""
     candidates = [t for t in _builtin() if country is None or t.country == country]
     candidates += own_types() if own is None else own
     text = " ".join(source.texts).casefold()
@@ -617,7 +617,7 @@ def detect(source: Source, country: str | None = None, label_id: str | None = No
         score += sum(1 for w in words.get("any", ()) if w.casefold() in text)
         score -= 4 * sum(1 for w in words.get("none", ()) if w.casefold() in text)
         if ptype.own:
-            score += 0.5                                  # eigener Typ: genauer gemeint
+            score += 0.5                                  # custom type: more precisely meant
         if label_id is not None and ptype.layouts:
             score += 0.25 if ("100x150" in ptype.layouts) == wide else 0.0
         if score >= 3:
@@ -627,16 +627,16 @@ def detect(source: Source, country: str | None = None, label_id: str | None = No
 
 
 def ambiguous(found: list[tuple[ParcelType, float]]) -> list[ParcelType]:
-    """Gleichstand an der Spitze von ``detect``, den keine geprüfte Vorlage entscheidet: die
-    gleichauf liegenden Typen (dann nicht selbst wählen, sondern fragen); sonst []."""
+    """Tie at the top of ``detect`` that no tested template decides: the types that are
+    level (then do not choose yourself but ask); otherwise []."""
     if len(found) < 2 or found[0][0].verified or found[1][1] < found[0][1]:
         return []
     return [ptype for ptype, score in found if score == found[0][1]]
 
 
 def _fits(source: Source, ptype: ParcelType) -> bool:
-    """Passt die Marke zum Typ? PDF: Seitengröße (auch quer); Bild: Bild-Regel (Seitenverhältnis der
-    erwarteten Pixel) bzw. Seitenverhältnis einer Seitengröße."""
+    """Does the label fit the type? PDF: page size (also across); image: image rule (aspect ratio of the
+    expected pixels) or the aspect ratio of a page size."""
     if source.raster:
         if ptype.raster is not None:
             px = ptype.raster.get("px")
@@ -658,11 +658,11 @@ def _wide(label_id: str) -> bool:
     return label.width * 25.4 / label.dpi >= WIDE_MM
 
 
-# --- Kanten anpassen --------------------------------------------------------------------
+# --- Adjusting edges --------------------------------------------------------------------
 def snap(img: Image.Image, box_mm, dpi: float, limit_mm: float = SNAP_MM):
-    """Kanten eines Ausschnitts (mm) nach außen bis zur ersten ganz weißen Zeile/Spalte rücken,
-    wenn sie Inhalt durchschneiden – höchstens ``limit_mm``; ohne weiße Linie in Reichweite bleibt
-    die Kante. Weiße Kanten bleiben, wie sie sind."""
+    """Move the edges of an area (mm) outwards to the first completely white row/column if
+    they cut through content – at most ``limit_mm``; without a white line in reach the edge
+    stays. White edges stay as they are."""
     k = dpi / 25.4
     x0, y0, x1, y1 = (round(v * k) for v in box_mm)
     x0, y0 = max(0, x0), max(0, y0)
@@ -674,11 +674,11 @@ def snap(img: Image.Image, box_mm, dpi: float, limit_mm: float = SNAP_MM):
 
     def white(a0, b0, a1, b1):
         if a0 < 0 or b0 < 0 or a1 > img.width or b1 > img.height:
-            return True                                   # Seitenrand gilt als weiß
+            return True                                   # page edge counts as white
         return gray.crop((a0, b0, a1, b1)).getextrema()[0] >= WHITE
 
     edges = list(box_mm)
-    # links, oben, rechts, unten: Linie direkt innerhalb der Kante, dann Schritt für Schritt hinaus
+    # left, top, right, bottom: line directly inside the edge, then step by step outwards
     for side in range(4):
         def line(n):
             if side == 0:
@@ -688,27 +688,27 @@ def snap(img: Image.Image, box_mm, dpi: float, limit_mm: float = SNAP_MM):
             if side == 2:
                 return white(x1 + n, y0, x1 + n + 1, y1)
             return white(x0, y1 + n, x1, y1 + n + 1)
-        if line(-1) or line(0):                           # Kante schneidet keinen Inhalt
+        if line(-1) or line(0):                           # edge cuts no content
             continue
         for n in range(1, reach + 1):
-            if line(n):                                   # erste weiße Linie außerhalb
+            if line(n):                                   # first white line outside
                 edges[side] += -n / k if side < 2 else n / k
                 break
     return tuple(edges)
 
 
-# --- Anordnen (eigene Typen) ---------------------------------------------------------------
+# --- Arranging (custom types) ---------------------------------------------------------------
 def arrange(pieces, across_mm: float, gap_mm: float = 1.0) -> Sheet:
-    """Stücke nacheinander in Spalten längs des Bands, je Spalte bis zur Breite ``across_mm``:
-    Barcodes 1:1 (nur wenn sie quer nicht passen, kleiner), Texte höchstens so verkleinert, dass sie
-    quer passen. Nach einem Stück mit Freiraum (``space_after``) beginnt eine neue Spalte in diesem
-    Abstand (statt ``gap_mm``); nach dem letzten Stück zählt er nicht."""
+    """Pieces one after another in columns along the tape, each column up to the width ``across_mm``:
+    barcodes 1:1 (smaller only if they do not fit across), texts scaled down at most so that they fit
+    across. After a piece with space (``space_after``) a new column begins at that
+    distance (instead of ``gap_mm``); after the last piece it does not count."""
     placed, x, y, column, space = [], 0.0, 0.0, 0.0, 0.0
     for piece in pieces:
         w, h = piece.turned_mm()
         s = min(1.0, across_mm / h)
         w, h = w * s, h * s
-        if space > 0 or (y > 0 and y + h > across_mm + 1e-6):   # neue Spalte
+        if space > 0 or (y > 0 and y + h > across_mm + 1e-6):   # new column
             x, y, column = x + column + max(gap_mm, space), 0.0, 0.0
         placed.append(replace(piece, dst=(x, y, x + w, y + h)))
         y += h + gap_mm
@@ -717,32 +717,32 @@ def arrange(pieces, across_mm: float, gap_mm: float = 1.0) -> Sheet:
     return Sheet((x + column, across_mm), tuple(placed))
 
 
-# --- Umwandeln ----------------------------------------------------------------------------
+# --- Converting ----------------------------------------------------------------------------
 @dataclass
 class Conversion:
     documents: list[Document]
     notes: list[str]
-    layout: str                 # "62", "100x150", "arranged" (Stücke neu angeordnet) oder "own"
-    scale: float                # Faktor vom Layout aufs Etikett
+    layout: str                 # "62", "100x150", "arranged" (pieces rearranged) or "own"
+    scale: float                # factor from the layout to the label
 
 
 def convert(source: Source, ptype: ParcelType, label_id: str, model: str = "QL-600") -> Conversion:
-    """Marke ``source`` nach Typ ``ptype`` in Etiketten für ``label_id`` umwandeln (je Ausgabe-
-    Etikett ein ``Document`` mit einem Bild-Objekt je Stück, Strich/Schwelle 128). Passt die Marke
-    nicht zum Typ (Seitengröße, Bild), ``ParcelError``.
+    """Convert label ``source`` by type ``ptype`` into labels for ``label_id`` (one ``Document`` per
+    output label with one image object per piece, line/threshold 128). If the label does not fit
+    the type (page size, image), ``ParcelError``.
 
-    Layout: ab ``WIDE_MM`` bedruckbarer Breite das 100×150-Layout, sonst das 62-mm-Layout; fehlt das
-    passende (z. B. 1a auf 62 mm), ordnet ``arrange`` die Stücke des vorhandenen neu an („arranged“),
-    eigene Typen immer („own“) – erst nach dem Anpassen der Kanten. Ein Maßstab für alle Etiketten
-    einer Umwandlung: Referenz-Layouts nach ihrer Etiketthöhe (60/62 mm wie paketikett.de), quer
-    auf die bedruckbare Breite (breiteres Band → größer), feste Etiketten so, dass alles passt."""
+    Layout: from ``WIDE_MM`` printable width the 100×150 layout, otherwise the 62 mm layout; if the
+    matching one is missing (e.g. 1a on 62 mm), ``arrange`` rearranges the pieces of the existing one
+    (“arranged”), custom types always (“own”) – only after adjusting the edges. One scale for all labels
+    of a conversion: reference layouts by their label height (60/62 mm like paketikett.de), across
+    to the printable width (wider tape → larger), fixed labels so that everything fits."""
     label = get_label(label_id)
     if label.shape == "round":
         raise ParcelError(_("Round labels are not suitable for parcel labels."))
     for number in sorted({p.page for p in all_pieces(ptype)}):
         if number > source.page_count:
             raise ParcelError(_("The parcel label has no page {page}.").format(page=number))
-        placement(source, ptype, number)                  # passt die Marke? sonst Meldung
+        placement(source, ptype, number)                  # does the label fit? otherwise message
     k = label.dpi / 25.4
     across = label.width / k
     along = None if label.height is None else label.height / k
@@ -753,10 +753,10 @@ def convert(source: Source, ptype: ParcelType, label_id: str, model: str = "QL-6
         key, groups = "100x150", None
     elif "62" in ptype.layouts:
         key, groups = "62", None
-    else:                                                 # nur 100×150, aber schmales Band
+    else:                                                 # only 100×150, but narrow tape
         key, groups = "arranged", [sheet.pieces for sheet in next(iter(ptype.layouts.values()))]
     reference = groups is None
-    # Auflösung zum Rendern: aus dem Maßstab vor dem Anpassen der Kanten (Seite ≤ MAX_PAGE_PIXELS)
+    # Resolution for rendering: from the scale before adjusting the edges (page ≤ MAX_PAGE_PIXELS)
     sheets = (ptype.layouts[key] if reference else [arrange(g, across) for g in groups])
     f0, _h = _common_fit(sheets, reference, across, along, max_len)
     frame_w, frame_h = max(ptype.source_sizes or source.sizes_mm, key=lambda s: s[0] * s[1])
@@ -765,7 +765,7 @@ def convert(source: Source, ptype: ParcelType, label_id: str, model: str = "QL-6
     if reference:
         sheets = [Sheet(s.size_mm, _adjusted(source, ptype, s.pieces, dpi, grow=True))
                   for s in sheets]
-    else:                                                 # erst anpassen, dann anordnen
+    else:                                                 # first adjust, then arrange
         sheets = [arrange(_adjusted(source, ptype, g, dpi, grow=False), across) for g in groups]
     f, horizontal = _common_fit(sheets, reference, across, along, max_len)
     documents = [_sheet_document(source, ptype, sheet, f, horizontal, reference, label_id, model,
@@ -780,15 +780,15 @@ def convert(source: Source, ptype: ParcelType, label_id: str, model: str = "QL-6
 
 
 def _adjusted(source, ptype, pieces, dpi, grow: bool) -> tuple[Piece, ...]:
-    """Ungeprüfte Typen: Kanten an der Marke bis zum weißen Rand (``snap``, nie in andere Stücke);
-    ``grow``: das Ziel wächst im selben Maßstab mit (Referenz-Layouts), sonst nur der Ausschnitt
-    (``arrange`` ordnet danach an)."""
-    if ptype.verified:                                    # geprüfte Typen haben genaue Kanten
+    """Untested types: edges on the label out to the white margin (``snap``, never into other pieces);
+    ``grow``: the target grows by the same scale (reference layouts), otherwise only the area
+    (``arrange`` then lays it out)."""
+    if ptype.verified:                                    # tested types have exact edges
         return tuple(pieces)
     srcs = [list(_alone(piece, snap(source.page(piece.page, dpi, ptype), piece.src, dpi), pieces))
             for piece in pieces]
-    if grow:                                              # Stücke einer Spalte (``_aligned``):
-        for axis in (0, 1):                               # gemeinsame Kante nur gemeinsam rücken
+    if grow:                                              # pieces of a column (``_aligned``):
+        for axis in (0, 1):                               # move a shared edge only together
             for piece in pieces:
                 group = [n for n, other in enumerate(pieces)
                          if _column_key(other, axis) == _column_key(piece, axis)
@@ -803,8 +803,8 @@ def _adjusted(source, ptype, pieces, dpi, grow: bool) -> tuple[Piece, ...]:
 
 
 def _frame(sheet: Sheet, reference: bool):
-    """Fläche, die aufs Etikett kommt: Referenz-Layouts quer in ihrer ganzen Höhe (wie das
-    Ausgabe-Etikett von paketikett.de), längs nur der Inhalt; sonst der Inhalt."""
+    """Area that goes onto the label: reference layouts across in their whole height (like the
+    output label of paketikett.de), along only the content; otherwise the content."""
     bx0, by0, bx1, by1 = _bbox(sheet.pieces)
     if not reference:
         return (bx0, by0, bx1, by1), (bx0, by0, bx1, by1)
@@ -813,10 +813,10 @@ def _frame(sheet: Sheet, reference: bool):
 
 
 def _common_fit(sheets, reference: bool, across, along, max_len):
-    """Ein Maßstab und eine Lage für alle Etiketten (True = Etikett-x längs des Bands): quer die
-    Fläche (``_frame``) auf die bedruckbare Breite (Referenz-Layouts auch größer, sonst höchstens
-    1:1), längs höchstens das Etikett bzw. die Höchstlänge; bei festen Etiketten gewinnt die Lage mit
-    dem größeren Maßstab (bei Gleichstand die natürliche: lange Seite längs)."""
+    """One scale and one orientation for all labels (True = label x along the tape): across the
+    area (``_frame``) to the printable width (reference layouts also larger, otherwise at most
+    1:1), along at most the label or the maximum length; for fixed labels the orientation with
+    the larger scale wins (on a tie the natural one: long side along)."""
     first = sheets[0].size_mm
     natural = first[0] >= first[1]
     options = []
@@ -837,7 +837,7 @@ def _common_fit(sheets, reference: bool, across, along, max_len):
             f = fs if f is None else min(f, fs)
         options.append((f, horizontal))
         if along is None:
-            break                                          # Endlosband: natürliche Lage
+            break                                          # continuous tape: natural orientation
     return max(options, key=lambda o: o[0])
 
 
@@ -845,7 +845,7 @@ def _sheet_document(source, ptype, sheet, f, horizontal, reference, label_id, mo
                     along):
     label = get_label(label_id)
     (bx0, by0, bx1, by1), (fx0, fy0, fx1, fy1) = _frame(sheet, reference)
-    if horizontal:                                         # Etikett-x längs des Bands
+    if horizontal:                                         # label x along the tape
         ox, oy = bx0, fy0
         off_x = 0.0 if along is None else (along - (bx1 - bx0) * f) / 2
         off_y = (across - (fy1 - fy0) * f) / 2
@@ -861,7 +861,7 @@ def _sheet_document(source, ptype, sheet, f, horizontal, reference, label_id, mo
         page = source.page(piece.page, dpi, ptype)
         img = _crop_white(page, tuple(round(v * k) for v in piece.src))
         if piece.rotation:
-            img = img.rotate(-piece.rotation, expand=True, fillcolor=255)   # im Uhrzeigersinn
+            img = img.rotate(-piece.rotation, expand=True, fillcolor=255)   # clockwise
         img = _mask_covered(img, piece.dst, [p.dst for p in sheet.pieces[n + 1:]])
         obj = ImageObject.from_image(img, dpi, source.path.name, piece.page)
         dx0, dy0, dx1, dy1 = piece.dst
@@ -869,7 +869,7 @@ def _sheet_document(source, ptype, sheet, f, horizontal, reference, label_id, mo
                                w_mm=(dx1 - dx0) * f, h_mm=(dy1 - dy0) * f, keep_ratio=False,
                                mode="line", threshold=128))
     length = None
-    if along is None:                                      # ganze Druckpunkte + Vorschub
+    if along is None:                                      # whole dots + feed
         lk = label.dpi / 25.4
         length = (math.ceil(along_content * lk - 1e-6) + 2 * label.feed_margin) / lk
     doc = Document(label_id, length_mm=length, orientation="horizontal" if horizontal else "vertical",
@@ -878,8 +878,8 @@ def _sheet_document(source, ptype, sheet, f, horizontal, reference, label_id, mo
 
 
 def _inside(doc: Document, model: str) -> Document:
-    """Rundung: kein Rahmen ragt um einen Druckpunkt über das Etikett (die Rückfrage „ragt hinaus“
-    käme sonst ohne Grund)."""
+    """Rounding: no frame protrudes beyond the label by a dot (the “sticks out” prompt
+    would otherwise appear for no reason)."""
     width, height = label_size(doc, model)
     dpi = get_label(doc.label_id).dpi
     k = dpi / 25.4
@@ -896,18 +896,18 @@ def _inside(doc: Document, model: str) -> Document:
 
 
 def _crop_white(page: Image.Image, box) -> Image.Image:
-    """Ausschnitt; was außerhalb der Seite liegt, ist weiß (Pillow füllte schwarz)."""
+    """Area; what lies outside the page is white (Pillow filled with black)."""
     x0, y0, x1, y1 = box
     out = Image.new("L", (max(1, x1 - x0), max(1, y1 - y0)), 255)
     l, t, r, b = max(0, x0), max(0, y0), min(page.width, x1), min(page.height, y1)
-    if l < r and t < b:                                    # sonst ganz außerhalb: weiß
+    if l < r and t < b:                                    # otherwise entirely outside: white
         out.paste(page.crop((l, t, r, b)), (l - x0, t - y0))
     return out
 
 
 def _mask_covered(img: Image.Image, dst, later) -> Image.Image:
-    """Wo spätere Stücke (Malreihenfolge) liegen, wird dieses Stück weiß – sonst verdeckte sein
-    Weiß nichts, seine Tinte aber den Barcode darüber."""
+    """Where later pieces (painting order) lie, this piece becomes white – otherwise its white
+    would cover nothing, but its ink would cover the barcode above it."""
     x0, y0, x1, y1 = dst
     fx, fy = img.width / (x1 - x0), img.height / (y1 - y0)
     boxes = []
@@ -924,8 +924,8 @@ def _mask_covered(img: Image.Image, dst, later) -> Image.Image:
 
 
 def _alone(piece: Piece, src, pieces):
-    """Angepasste Kanten nur, wo sie nicht neu in den Ausschnitt eines anderen Stücks reichen
-    (sonst käme dessen Inhalt doppelt aufs Etikett) – solche Kanten bleiben, wie sie waren."""
+    """Adjusted edges only where they do not newly reach into the area of another piece
+    (otherwise its content would appear twice on the label) – such edges stay as they were."""
     def hits(box, other):
         return box[0] < other[2] and other[0] < box[2] and box[1] < other[3] and other[1] < box[3]
     others = [p.src for p in pieces if p is not piece and p.page == piece.page]
@@ -944,14 +944,14 @@ def _bbox(pieces):
 
 
 def _grow(piece: Piece, src) -> Piece:
-    """Stück mit angepasstem Ausschnitt: das Ziel wächst im selben Maßstab mit (Kanten gedreht)."""
+    """Piece with adjusted area: the target grows by the same scale (edges rotated)."""
     if tuple(src) == tuple(piece.src):
         return piece
     w, h = piece.turned_mm()
     sx, sy = (piece.dst[2] - piece.dst[0]) / w, (piece.dst[3] - piece.dst[1]) / h
-    dl, dt = piece.src[0] - src[0], piece.src[1] - src[1]       # nach außen positiv
+    dl, dt = piece.src[0] - src[0], piece.src[1] - src[1]       # positive outwards
     dr, db = src[2] - piece.src[2], src[3] - piece.src[3]
-    # Quelle links/oben/rechts/unten → Ziel links/oben/rechts/unten nach Drehung im Uhrzeigersinn
+    # source left/top/right/bottom → target left/top/right/bottom after clockwise rotation
     left, top, right, bottom = {0: (dl, dt, dr, db), 90: (db, dl, dt, dr),
                                 180: (dr, db, dl, dt), 270: (dt, dr, db, dl)}[piece.rotation]
     x0, y0, x1, y1 = piece.dst

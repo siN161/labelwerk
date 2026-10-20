@@ -1,4 +1,4 @@
-"""Reiter „Layout“: Ausrichten, Größe angleichen, Drehen, Reihenfolge (Etappe 3d-1)."""
+"""LAYOUT tab: align, match size, rotate, order (stage 3d-1)."""
 from importlib import resources
 
 import pytest
@@ -53,7 +53,7 @@ def _panel(window):
 
 
 def _press(window, key):
-    """Knopf im Reiter „Layout“ drücken."""
+    """Press a button in the LAYOUT tab."""
     button = _panel(window).buttons[key]
     assert button.isEnabled(), key
     button.click()
@@ -63,7 +63,7 @@ def _frames(window):
     return [layout.exact_rect(o, r) for o, r in zip(window.doc.objects, window.rendered)]
 
 
-# --- Reiter -----------------------------------------------------------------------
+# --- Tabs -------------------------------------------------------------------------
 def test_layout_tool_follows_text_and_image(window):
     assert [tool.key for tool in TOOLS][1:6] == ["paper", "text", "image", "barcode", "layout"]
     window.tool_actions["layout"].trigger()
@@ -76,7 +76,7 @@ def test_selecting_keeps_layout_panel(window):
     window.canvas.set_selection([0, 1])
     assert window.panels.currentWidget() is _panel(window)
     assert window.tool_actions["layout"].isChecked()
-    assert window.panel("text").index == 1                  # Text-Panel folgt trotzdem
+    assert window.panel("text").index == 1                  # text panel follows anyway
 
 
 def test_panel_has_sections_like_p_touch(window):
@@ -111,7 +111,7 @@ def test_buttons_enabled_by_selection_count(window, selection, enabled):
         assert button.isEnabled() == (key in enabled), key
 
 
-# --- Ausrichten -------------------------------------------------------------------
+# --- Align ------------------------------------------------------------------------
 @pytest.mark.parametrize("mode, attr", [("left", "x"), ("hcenter", "cx"), ("right", "right"),
                                         ("top", "y"), ("vcenter", "cy"), ("bottom", "bottom")])
 def test_align_selected_moves_only_selected(window, mode, attr):
@@ -149,7 +149,7 @@ def test_same_size_scales_text_without_fixed_frame(qtbot, mode):
     doc = Document("62", length_mm=40, objects=[TextObject("Wort", size_pt=28, x_mm=2, y_mm=2),
                                                  TextObject("Wort", size_pt=14, x_mm=2, y_mm=25)])
     win = _window(qtbot, doc)
-    win.canvas.set_selection([0, 1])                        # Bezug: zuerst gewähltes
+    win.canvas.set_selection([0, 1])                        # reference: first selected
     _press(win, f"size.{mode}")
     obj = win.doc.objects[1]
     assert obj.size_pt == pytest.approx(28, abs=0.6) and not obj.fit
@@ -169,7 +169,7 @@ def test_same_size_sets_fixed_frame(qtbot, mode, size):
     assert (obj.w_mm, obj.h_mm) == size and (obj.x_mm, obj.y_mm) == (2, 25)
 
 
-# --- Drehen -----------------------------------------------------------------------
+# --- Rotate -----------------------------------------------------------------------
 @pytest.mark.parametrize("key, rotation", [("object.rotate_right", 90),
                                            ("object.rotate_left", 270)])
 def test_rotate_keeps_center(window, key, rotation):
@@ -214,7 +214,7 @@ def _rotated(window, index):
 def test_edge_handle_of_rotated_text_turns_fixed_frame_on(window):
     canvas = window.canvas
     before = _rotated(window, 0)
-    edge = canvas.handle_points(0)["b"]                    # Höhe auf dem Etikett = Breite ungedreht
+    edge = canvas.handle_points(0)["b"]                    # height on the label = width unrotated
     _drag(canvas, edge, edge + QPointF(0, 10 * canvas.px_per_mm()))
     obj = window.doc.objects[0]
     assert obj.fit and obj.rotation == 90
@@ -226,7 +226,7 @@ def test_edge_handle_of_rotated_text_turns_fixed_frame_on(window):
 
 def test_edge_handle_of_rotated_fixed_frame(window):
     canvas = window.canvas
-    before = _rotated(window, 2)                            # 20 × 6 mm, gedreht 6 × 20
+    before = _rotated(window, 2)                            # 20 × 6 mm, rotated 6 × 20
     assert (before.w, before.h) == pytest.approx((6, 20), abs=DOT_MM)
     edge = canvas.handle_points(2)["r"]
     _drag(canvas, edge, edge + QPointF(4 * canvas.px_per_mm(), 0))
@@ -248,7 +248,7 @@ def test_corner_handle_of_rotated_text_scales_font(window):
     assert after.w == pytest.approx(before.w * 1.5, rel=0.08)
 
 
-# --- Reihenfolge ------------------------------------------------------------------
+# --- Order ------------------------------------------------------------------------
 def test_bring_forward_and_send_backward_follow_selection(window):
     window.canvas.set_selection([0])
     _press(window, "object.bring_forward")
@@ -260,7 +260,7 @@ def test_bring_forward_and_send_backward_follow_selection(window):
     _press(window, "object.send_backward")
     assert [o.text for o in window.doc.objects] == ["Zweiter", "Eins", "Drei"]
     assert window.canvas.selection() == [1]
-    assert window.panel("text").edit.toPlainText() == "Eins"   # Panel folgt dem Objekt
+    assert window.panel("text").edit.toPlainText() == "Eins"   # panel follows the object
 
 
 def test_undo_and_redo_of_reorder_keep_selection_on_same_objects(window):
@@ -276,7 +276,7 @@ def test_undo_and_redo_of_reorder_keep_selection_on_same_objects(window):
 
 
 def test_undo_keeps_panel(window):
-    """Rückgängig wechselt nicht vom Reiter Layout weg, auch wenn sich die Auswahl ändert."""
+    """Undo does not leave the LAYOUT tab, even if the selection changes."""
     window.canvas.set_selection([0])
     window.tool_actions["layout"].trigger()
     window.canvas.set_selection([])
@@ -295,7 +295,7 @@ def test_order_of_several_selected(window):
     assert window.canvas.selection() == [2, 1]
 
 
-# --- Rückgängig -------------------------------------------------------------------
+# --- Undo -------------------------------------------------------------------------
 @pytest.mark.parametrize("key", FROM_ONE + FROM_TWO)
 def test_each_operation_is_one_undo_step(window, key):
     window.canvas.set_selection([1, 2] if key in FROM_TWO else [1])
@@ -307,7 +307,7 @@ def test_each_operation_is_one_undo_step(window, key):
     assert not window.shortcut_actions["edit.undo"].isEnabled()
 
 
-# --- Symbole je Design ------------------------------------------------------------
+# --- Symbols per theme ------------------------------------------------------------
 def _color(icon: QIcon, mode=QIcon.Mode.Normal, state=QIcon.State.Off):
     image = icon.pixmap(QSize(16, 16), mode, state).toImage()
     pixels = [image.pixelColor(x, y) for x in range(16) for y in range(16)]
@@ -323,13 +323,13 @@ def test_icons_turn_white_on_hover_only_in_rawblock(window):
     assert _color(button.icon(), QIcon.Mode.Active) == {(0, 0, 0)}
 
 
-# --- Schlussrunde -------------------------------------------------------------------
+# --- Final round --------------------------------------------------------------------
 @pytest.mark.parametrize("key", ["size.same", "size.width", "size.height"])
 def test_match_with_empty_frame_selected_changes_nothing(qtbot, key, capsys):
     doc = Document("62", length_mm=60, objects=[TextObject("Eins", size_pt=20, x_mm=10, y_mm=30)])
     win = _window(qtbot, doc)
-    win.create_text(5, 5)                           # leerer Rahmen, Index 1, ausgewählt
-    win.canvas.set_selection([1, 0])                # Strg+Klick auf „Eins“
+    win.create_text(5, 5)                           # empty frame, index 1, selected
+    win.canvas.set_selection([1, 0])                # Ctrl+click on "Eins"
     before = [(o.text, o.size_pt, o.x_mm, o.y_mm) for o in win.doc.objects]
     win.shortcut_actions[key].trigger()
     assert [(o.text, o.size_pt, o.x_mm, o.y_mm) for o in win.doc.objects] == before
@@ -343,10 +343,10 @@ def test_match_with_empty_frame_and_two_objects_uses_visible_reference(qtbot, ke
         TextObject("Eins", size_pt=20, x_mm=10, y_mm=30), TextObject("Zwei", size_pt=10, x_mm=10, y_mm=10)])
     win = _window(qtbot, doc)
     win.create_text(5, 5)
-    win.canvas.set_selection([2, 0, 1])             # leerer Rahmen zuerst gewählt
+    win.canvas.set_selection([2, 0, 1])             # empty frame selected first
     win.shortcut_actions[key].trigger()
-    assert win.doc.objects[0].size_pt == 20          # Bezug (erstes sichtbares) bleibt
-    assert win.doc.objects[1].size_pt != 10          # das andere wurde angeglichen
+    assert win.doc.objects[0].size_pt == 20          # reference (first visible) stays
+    assert win.doc.objects[1].size_pt != 10          # the other one was matched
 
 
 def test_render_error_then_delete_keeps_canvas_in_step(qtbot):
@@ -354,18 +354,18 @@ def test_render_error_then_delete_keeps_canvas_in_step(qtbot):
         TextObject("A", size_pt=14, x_mm=2, y_mm=2), TextObject("Mitte", size_pt=14)])
     win = _window(qtbot, doc)
     win.canvas.set_selection([1])
-    win.doc.objects[1].paragraphs = TextObject("W" * 80, size_pt=40).paragraphs   # zu groß
+    win.doc.objects[1].paragraphs = TextObject("W" * 80, size_pt=40).paragraphs   # too large
     win.doc.objects[1].size_pt = 40
     win.render_now()
     assert win._render_error is not None
     win.canvas.set_selection([0])
     win.delete_selected()
     assert win.doc.objects[0].text == "W" * 80
-    assert win.canvas.objects == [] and win.rendered == []      # kein Bild des gelöschten Objekts
+    assert win.canvas.objects == [] and win.rendered == []      # no image of the deleted object
     assert win.canvas.selection() == []
     before = win.doc.objects[0].x_mm
     win.canvas.objects_moved.emit([0], [layout.Rect(9, 9, 5, 5)])
-    assert win.doc.objects[0].x_mm == before                    # nichts verschoben
+    assert win.doc.objects[0].x_mm == before                    # nothing moved
 
 
 @pytest.mark.parametrize("orientation, growing", [
@@ -381,12 +381,12 @@ def test_paper_align_along_growing_axis_is_enabled_with_hint(qtbot, orientation,
         button = panel.buttons[f"align.paper_{mode}"]
         assert button.isEnabled(), mode
         assert (hint in button.defaultAction().toolTip()) == (mode in growing), mode
-    win.doc.length_mm = 40                            # feste Länge: kein Hinweis mehr
+    win.doc.length_mm = 40                            # fixed length: no hint any more
     win.render_now()
     assert hint not in panel.buttons[f"align.paper_{growing[0]}"].defaultAction().toolTip()
 
 
-@pytest.mark.parametrize("margin", [3, 6])             # 3 mm: Etikett auf Mindestlänge geklemmt
+@pytest.mark.parametrize("margin", [3, 6])             # 3 mm: label clamped to minimum length
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
 def test_paper_align_along_growing_axis_gives_equal_margins(qtbot, orientation, margin):
     vertical = orientation == "vertical"
@@ -403,8 +403,8 @@ def test_paper_align_along_growing_axis_gives_equal_margins(qtbot, orientation, 
 
 
 def test_paper_align_top_ignores_minimum_length_when_other_objects_lengthen_label(qtbot):
-    """Nur der Titel gewählt, ein zweiter Text macht das Etikett lang: „Oben am Etikett“ setzt
-    den Titel an den Anfang, nicht mittig in die Mindestlänge."""
+    """Only the title selected, a second text makes the label long: "Align top on paper" puts
+    the title at the start, not centred in the minimum length."""
     doc = Document("62", length_mm=None, orientation="vertical", margin_mm=1, objects=[
         TextObject("Titel", size_pt=12, x_mm=5, y_mm=10),
         TextObject("Unten", size_pt=12, x_mm=5, y_mm=60)])

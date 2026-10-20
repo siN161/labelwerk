@@ -1,4 +1,4 @@
-"""Tastenkürzel-Verzeichnis ohne Qt (Etappe 3d-1)."""
+"""Shortcut directory without Qt (stage 3d-1)."""
 import re
 
 import pytest
@@ -12,7 +12,7 @@ def _ids():
     return {a.id for a in ACTIONS}
 
 
-# --- Verzeichnis ------------------------------------------------------------------
+# --- Directory --------------------------------------------------------------------
 def test_actions_have_unique_dotted_ids_and_valid_scopes():
     ids = [a.id for a in ACTIONS]
     assert len(ids) == len(set(ids))
@@ -61,7 +61,7 @@ def test_all_defaults_are_well_formed_and_conflict_free():
     assert shortcuts.conflicts(defaults) == []
 
 
-# --- Wirksame Kürzel --------------------------------------------------------------
+# --- Effective shortcuts ----------------------------------------------------------
 def test_effective_without_overrides_is_defaults():
     assert shortcuts.effective({}) == {a.id: a.default for a in ACTIONS}
 
@@ -77,7 +77,7 @@ def test_effective_ignores_unknown_ids():
     assert "gibt.es_nicht" not in shortcuts.effective({"gibt.es_nicht": "Ctrl+Q"})
 
 
-# --- Normalisieren ----------------------------------------------------------------
+# --- Normalising ------------------------------------------------------------------
 @pytest.mark.parametrize("a, b", [
     ("Ctrl+B", "ctrl+b"),
     ("Ctrl+Shift+Z", "Shift+Ctrl+Z"),
@@ -112,7 +112,7 @@ def test_empty_means_no_shortcut_and_is_allowed():
     assert shortcuts.normalize("") == ""
 
 
-# --- Konflikte --------------------------------------------------------------------
+# --- Conflicts --------------------------------------------------------------------
 def test_conflict_in_same_scope():
     mapping = shortcuts.effective({"edit.duplicate": "Ctrl+C"})
     assert shortcuts.conflicts(mapping) == [("Ctrl+C", ["edit.copy", "edit.duplicate"])]
@@ -124,7 +124,7 @@ def test_conflict_detected_case_insensitive():
 
 
 def test_no_conflict_between_canvas_and_edit_mode():
-    # Strg+B auf der Arbeitsfläche stört Fett im Schreibmodus nicht – nie beide gleichzeitig aktiv
+    # Ctrl+B on the canvas does not interfere with bold in edit mode – never both active at once
     mapping = shortcuts.effective({"edit.duplicate": "Ctrl+B"})
     assert shortcuts.conflicts(mapping) == []
 
@@ -169,7 +169,7 @@ def test_conflicts_ignore_unknown_ids_and_report_each_sequence_once():
     assert shortcuts.conflicts(mapping) == [("Ctrl+C", ["edit.copy", "edit.cut", "edit.duplicate"])]
 
 
-# --- Prüfen -----------------------------------------------------------------------
+# --- Checking ---------------------------------------------------------------------
 def test_validate_keeps_good_entries():
     clean, warnings = shortcuts.validate({"file.print": "Ctrl+Shift+P", "edit.delete": ""})
     assert clean == {"file.print": "Ctrl+Shift+P", "edit.delete": ""}
@@ -213,7 +213,7 @@ def test_conflicts_skip_non_strings():
     assert shortcuts.conflicts({**mapping, "edit.paste": ["Ctrl+V"]}) == []
 
 
-# --- Doppelbelegung aus settings.json auflösen -----------------------------------------
+# --- Resolving duplicates from settings.json -------------------------------------------
 def test_without_conflicts_keeps_defaults_untouched():
     defaults = shortcuts.effective({})
     assert shortcuts.without_conflicts(defaults) == (defaults, [])
@@ -226,14 +226,14 @@ def test_without_conflicts_clears_the_later_action():
     assert shortcuts.conflicts(clean) == []
     assert warnings == ["Tastenkürzel doppelt belegt: Ctrl+C (Kopieren, Duplizieren) – "
                         "„Duplizieren“ ohne Kürzel."]
-    assert mapping["edit.duplicate"] == "Ctrl+C"            # Eingabe bleibt unverändert
+    assert mapping["edit.duplicate"] == "Ctrl+C"            # input stays unchanged
 
 
 def test_without_conflicts_global_wins_by_order_and_other_scopes_stay():
     mapping = shortcuts.effective({"tool.text": "Ctrl+Y", "text.bold": "Ctrl+Y",
                                    "file.print": "Ctrl+Y"})
     clean, warnings = shortcuts.without_conflicts(mapping)
-    assert clean["file.print"] == "Ctrl+Y"                  # steht im Verzeichnis zuerst
+    assert clean["file.print"] == "Ctrl+Y"                  # comes first in the directory
     assert clean["tool.text"] == clean["text.bold"] == ""
     assert len(warnings) == 2 and shortcuts.conflicts(clean) == []
 
@@ -246,11 +246,11 @@ def test_without_conflicts_compares_normalized_forms():
 
 def test_fixed_shortcut_always_keeps_its_key():
     mapping = shortcuts.effective({})
-    mapping["file.print"] = "Esc"                  # global: kollidiert mit jedem Bereich
+    mapping["file.print"] = "Esc"                  # global: collides with every area
     clean, warnings = shortcuts.without_conflicts(mapping)
-    assert clean["text.end_edit"] == "Esc"         # fest – gewinnt immer
+    assert clean["text.end_edit"] == "Esc"         # fixed – always wins
     assert clean["file.print"] == ""
-    assert clean["tool.select"] == "Esc"           # Arbeitsfläche: kein Konflikt mit dem Schreibmodus
+    assert clean["tool.select"] == "Esc"           # canvas: no conflict with edit mode
     assert len(warnings) == 1 and "Drucken" in warnings[0]
 
 

@@ -1,5 +1,5 @@
-"""Barcodes als Objekte: Platzieren (Anfasser, Felder, Ausrichten, Maximieren, Drehen), Einfügen,
-Platzhalter der Serie, Speichern."""
+"""Barcodes as objects: placing (handles, fields, align, maximise, rotate), inserting,
+series placeholders, saving."""
 import json
 from dataclasses import replace
 
@@ -12,7 +12,7 @@ from labelwerk.render import render_object
 from labelwerk.series import fill, missing, placeholders
 from labelwerk.storage import StorageError
 
-MM = 25.4 / 300          # mm je Druckpunkt
+MM = 25.4 / 300          # mm per dot
 
 
 def _bar(**kw) -> BarcodeObject:
@@ -26,11 +26,11 @@ def _rendered(obj, label="62x29"):
 
 
 def _width(obj) -> float:
-    """Breite ungedreht in mm aus Modulen × Modulbreite."""
+    """Unrotated width in mm from modules × module width."""
     return barcodes.modules(obj) * obj.module * MM
 
 
-# --- Rahmen im Modell -----------------------------------------------------------------------------
+# --- Frame in the model -----------------------------------------------------------------------------
 def test_exact_rect_takes_the_height_from_the_model():
     obj = _bar(kind="code128", data="AB", module=3, h_mm=9.95)
     rect = exact_rect(obj, _rendered(obj))
@@ -49,7 +49,7 @@ def test_barcode_rect_matches_the_rendered_frame():
     assert layout.barcode_rect(_bar(kind="ean8", data="12")) is None
 
 
-# --- Anfasser ----------------------------------------------------------------------------------
+# --- Handles ----------------------------------------------------------------------------------
 def _drag(obj, handle, dx=0.0, dy=0.0):
     r = _rendered(obj)
     old = object_rect(r)
@@ -68,7 +68,7 @@ def _drag(obj, handle, dx=0.0, dy=0.0):
 def test_right_handle_snaps_to_whole_dots_per_module():
     obj = _bar(kind="code128", data="AB", module=3)
     count = barcodes.modules(obj)
-    wider = _drag(obj, "r", dx=0.6 * count * MM)        # 3,6 Punkte je Modul → 4
+    wider = _drag(obj, "r", dx=0.6 * count * MM)        # 3.6 dots per module → 4
     assert (wider.module, wider.x_mm, wider.y_mm, wider.h_mm) == (4, 5.0, 3.0, 10.0)
     assert _drag(obj, "r", dx=0.4 * count * MM).module == 3
     assert _drag(obj, "r", dx=-1.6 * count * MM).module == 1
@@ -77,7 +77,7 @@ def test_right_handle_snaps_to_whole_dots_per_module():
 def test_left_handle_keeps_the_right_edge():
     obj = _bar(kind="code128", data="AB", module=3)
     right = 5.0 + _width(obj)
-    narrower = _drag(obj, "l", dx=0.8 * barcodes.modules(obj) * MM)   # 2,2 → 2 Punkte je Modul
+    narrower = _drag(obj, "l", dx=0.8 * barcodes.modules(obj) * MM)   # 2.2 → 2 dots per module
     assert narrower.module == 2
     assert narrower.x_mm + _width(narrower) == pytest.approx(right, abs=1e-3)
 
@@ -106,10 +106,10 @@ def test_turned_bar_code_right_handle_changes_the_height():
 
 
 def test_qr_corner_keeps_the_square_and_the_opposite_corner():
-    obj = _bar(kind="qr", data="labelwerk", module=4)        # 21 Module
+    obj = _bar(kind="qr", data="labelwerk", module=4)        # 21 modules
     bigger = _drag(obj, "br", dx=21 * 2 * MM, dy=21 * 0.5 * MM)
     assert (bigger.module, bigger.x_mm, bigger.y_mm) == (6, 5.0, 3.0)
-    smaller = _drag(obj, "tl", dx=21 * 0.8 * MM, dy=21 * 0.7 * MM)    # 3,2 → 3
+    smaller = _drag(obj, "tl", dx=21 * 0.8 * MM, dy=21 * 0.7 * MM)    # 3.2 → 3
     side = 21 * 3 * MM
     assert smaller.module == 3
     assert smaller.x_mm + side == pytest.approx(5.0 + 21 * 4 * MM, abs=1e-3)
@@ -131,7 +131,7 @@ def test_module_and_height_stay_in_their_limits():
     assert _drag(obj, "b", dy=200).h_mm == 100.0
 
 
-# --- Felder, Ausrichten, Angleichen, Maximieren, Drehen -------------------------------------------
+# --- Fields, align, match size, maximise, rotate -------------------------------------------
 def test_size_fields_set_module_and_height():
     obj = _bar(kind="code128", data="AB", module=3, h_mm=10)
     r = _rendered(obj)
@@ -222,7 +222,7 @@ def test_invalid_content_keeps_the_module():
     assert (placed.module, placed.h_mm, placed.x_mm) == (3, 12, 1)
 
 
-# --- Einfügen ----------------------------------------------------------------------------------
+# --- Insert ----------------------------------------------------------------------------------
 @pytest.mark.parametrize("kind", ["qr", "code128", "code39", "ean13", "ean8"])
 def test_new_barcode_lies_in_the_middle_with_sample_content(kind):
     doc = Document("62x29")
@@ -245,11 +245,11 @@ def test_new_barcode_shrinks_on_a_small_label():
 
 
 def test_new_barcode_turns_rather_than_shrinks():
-    doc = Document("12")                 # quer 9 mm bedruckbar, Endlosband wächst längs
+    doc = Document("12")                 # 9 mm printable across, continuous tape grows lengthwise
     area = layout.printable_area(doc)
     obj = layout.new_barcode(doc, "QL-600", area, "code128")
     assert (obj.rotation, obj.module) == (90, 3)
-    assert obj.h_mm <= area.w + 1e-6                     # gedreht: Höhe liegt quer
+    assert obj.h_mm <= area.w + 1e-6                     # rotated: height lies across
     render_object(obj, Document("12", objects=[obj]))
 
 
@@ -259,11 +259,11 @@ def test_new_barcode_renders_and_fits_everywhere(label, kind):
     doc = Document(label)
     area = layout.printable_area(doc)
     obj = layout.new_barcode(doc, "QL-600", area, kind)
-    render_object(obj, Document(label, objects=[obj]))            # kein „zu niedrig“
+    render_object(obj, Document(label, objects=[obj]))            # no "too short"
     rect = layout.barcode_rect(obj)
     smallest = layout.barcode_rect(replace(obj, module=1, rotation=0))
     if smallest.w > max(layout._insert_limits(doc, "QL-600", area)):
-        assert obj.module == 1                          # passt nicht einmal so: kleinstmöglich
+        assert obj.module == 1                          # does not even fit like this: smallest possible
         return
     grow = layout.growing_axis(doc)
     if grow != "x":
@@ -284,11 +284,11 @@ def test_maximize_renders_and_fits_across(label, kind, rotation):
     render_object(big, Document(label, objects=[big]))
     rect = layout.barcode_rect(big)
     grow = layout.growing_axis(doc)
-    one = layout.barcode_rect(replace(obj, module=1))   # Strichcodes: nur die Modul-Richtung zählt
+    one = layout.barcode_rect(replace(obj, module=1))   # bar codes: only the module direction counts
     need = ([("x", one.w, area.w), ("y", one.h, area.h)] if kind == "qr"
             else [("y", one.h, area.h)] if rotation == 90 else [("x", one.w, area.w)])
     if any(axis != grow and size > room + 1e-6 for axis, size, room in need):
-        assert big == obj                               # passt nicht einmal 1 Punkt: bleibt
+        assert big == obj                               # does not even fit 1 dot: stays
         return
     if grow != "x":
         assert rect.w <= area.w + 1e-6
@@ -297,7 +297,7 @@ def test_maximize_renders_and_fits_across(label, kind, rotation):
     assert big.module >= obj.module
 
 
-# --- Serie -------------------------------------------------------------------------------------
+# --- Series -------------------------------------------------------------------------------------
 def test_placeholders_in_barcode_content():
     doc = Document(objects=[TextObject("{Name}"), _bar(kind="qr", data="https://x/{ Id }/{Name}")])
     assert placeholders(doc) == ["Name", "Id"]
@@ -309,8 +309,8 @@ def test_fill_barcode_content():
     doc = Document(objects=[_bar(kind="code39", data="X{Nr}-{Unbekannt}"), plain])
     filled = fill(doc, ["Nr"], ["17"])
     assert filled.objects[0].data == "X17-{Unbekannt}"
-    assert doc.objects[0].data == "X{Nr}-{Unbekannt}"              # Original bleibt
-    assert filled.objects[1] is plain                             # ohne Platzhalter: dasselbe
+    assert doc.objects[0].data == "X{Nr}-{Unbekannt}"              # original stays
+    assert filled.objects[1] is plain                             # without placeholders: the same
     assert fill(doc, ["Nr"], ["17"], keep=0).objects[0] is doc.objects[0]
 
 
@@ -320,7 +320,7 @@ def test_fill_anchored_keeps_the_barcode_corner():
     assert (filled.objects[0].x_mm, filled.objects[0].y_mm) == (10, 4)
 
 
-# --- Speichern ----------------------------------------------------------------------------------
+# --- Saving ----------------------------------------------------------------------------------
 def test_storage_round_trip():
     objs = [_bar(kind="qr", data="https://example.org", module=5, error="H", rotation=90),
             _bar(kind="ean13", data="590123412345", module=2, h_mm=14.5, text=False)]
@@ -354,8 +354,8 @@ def test_storage_keeps_invalid_content_for_the_render_error():
 
 
 def test_storage_counts_barcodes_against_the_size_limit():
-    """Größtmögliche Fläche ohne Kodieren – auch ein Platzhalter (erst die Serie füllt ihn) und
-    ungültiger Inhalt zählen voll."""
+    """Largest possible area without encoding – a placeholder (only the series fills it) and
+    invalid content also count in full."""
     big = _bar(kind="code39", data="{Nummer}", module=20, h_mm=100)
     w, h = barcodes.max_size(big)
     fits = storage.MAX_FRAME_DOTS // (w * h)
@@ -364,9 +364,9 @@ def test_storage_counts_barcodes_against_the_size_limit():
         storage.from_dict(storage.to_dict(Document(objects=[big] * (fits + 1))))
 
 
-# --- Nachbesserungen nach dem Gesamt-Review -------------------------------------------------------
+# --- Improvements after the overall review -------------------------------------------------------
 def test_large_real_barcodes_can_be_opened_again(tmp_path):
-    """Gültiger Inhalt zählt mit seiner echten Größe – was gespeichert wird, lässt sich öffnen."""
+    """Valid content counts with its real size – what is saved can be opened."""
     objs = [_bar(kind="code39", data="A", module=20, h_mm=100, rotation=90, x_mm=5 + 10 * i)
             for i in range(4)]
     path = tmp_path / "gross.labelwerk"
@@ -375,7 +375,7 @@ def test_large_real_barcodes_can_be_opened_again(tmp_path):
 
 
 def test_barcode_content_is_limited_per_file():
-    """Kodieren beim Laden bleibt billig: Inhalte aller Barcodes zusammen begrenzt."""
+    """Encoding on load stays cheap: contents of all barcodes together are limited."""
     objs = [_bar(kind="qr", data="x" * 2000, module=1, error="L") for _ in range(11)]
     with pytest.raises(StorageError, match="Barcode-Inhalte zusammen 22000 Zeichen"):
         storage.from_dict(storage.to_dict(Document(objects=objs)))
@@ -383,8 +383,8 @@ def test_barcode_content_is_limited_per_file():
 
 
 def test_exact_rect_takes_the_width_from_the_model():
-    """Die Breite folgt aus Inhalt und Modul – auch wenn das gerenderte Bild veraltet ist
-    (Renderfehler, andere Art)."""
+    """The width follows from content and module – even if the rendered image is outdated
+    (render error, other kind)."""
     obj = _bar(kind="code128", data="AB", module=3)
     stale = _rendered(_bar(kind="qr", data="labelwerk", module=6))
     assert exact_rect(obj, stale).w == pytest.approx(_width(obj))

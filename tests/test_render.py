@@ -22,7 +22,7 @@ def test_multiline_text_makes_endless_label_longer():
 def test_long_text_is_shrunk_to_fit_width():
     img = render_text("Sehr langer Text, der niemals passt", "29")
     assert img.width == 306
-    # rechter Rand bleibt weiß -> nichts abgeschnitten
+    # right edge stays white -> nothing cut off
     right_edge = img.crop((img.width - 2, 0, img.width, img.height)).convert("L")
     assert right_edge.getextrema()[0] == 255
 
@@ -31,7 +31,7 @@ def test_fixed_font_size_too_large_raises_with_max_size():
     with pytest.raises(TextTooLarge, match=r"Schriftgröße 48 pt .*höchstens \d+ pt") as exc:
         render_text("Sehr langer Text", "29", size_pt=48)
     assert isinstance(exc.value, ValueError)
-    render_text("Sehr langer Text", "29", size_pt=exc.value.max_pt)  # passt
+    render_text("Sehr langer Text", "29", size_pt=exc.value.max_pt)  # fits
 
 
 def test_fixed_font_size_is_not_shrunk():

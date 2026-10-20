@@ -1,7 +1,7 @@
-"""Favoriten: gespeicherte Etiketten im Ordner ``$XDG_DATA_HOME/labelwerk/favoriten`` (ohne Qt).
+"""Favourites: saved labels in the folder ``$XDG_DATA_HOME/labelwerk/favoriten`` (without Qt).
 
-Ein Favorit ist eine ``*.labelwerk``-Datei; sein Name ist der Dateiname ohne Endung. Die GUI
-öffnet ihn als neues, unbenanntes Etikett (Vorlage) – das Original bleibt unverändert.
+A favourite is a ``*.labelwerk`` file; its name is the file name without extension. The GUI
+opens it as a new, unnamed label (template) – the original stays unchanged.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .document import Document
 from .i18n import N_, _
 from .storage import SUFFIX, save
 
-MAX_NAME_BYTES = 200        # Dateiname höchstens 255 Bytes (Endung, Reserve)
+MAX_NAME_BYTES = 200        # file name at most 255 bytes (extension, reserve)
 _EXISTS = N_("Favorite “{name}” already exists")
 
 
@@ -30,7 +30,7 @@ def favorites_dir() -> Path:
 
 
 def favorites() -> list[Favorite]:
-    """Alle Favoriten, sortiert ohne Groß/Klein; fehlt der Ordner, keine."""
+    """All favourites, sorted case-insensitively; none if the folder is missing."""
     try:
         paths = [p for p in favorites_dir().iterdir()
                  if p.is_file() and p.suffix == SUFFIX and not p.name.startswith(".")]
@@ -44,8 +44,8 @@ def find(name: str) -> Favorite | None:
 
 
 def _checked(name: str) -> str:
-    """Name als Dateiname: NFC (gleich aussehende Namen sind gleich), getrimmt, nicht leer, ohne
-    Pfad- und Steuerzeichen, nicht versteckt, nicht zu lang (in Bytes)."""
+    """Name as file name: NFC (names that look alike are equal), trimmed, not empty, without
+    path and control characters, not hidden, not too long (in bytes)."""
     name = unicodedata.normalize("NFC", name.strip())
     if (not name or len(name.encode("utf-8")) > MAX_NAME_BYTES or name.startswith(".")
             or any(c in "/\\" or unicodedata.category(c) == "Cc" for c in name)):
@@ -56,7 +56,7 @@ def _checked(name: str) -> str:
 
 
 def add(doc: Document, name: str, overwrite: bool = False) -> Favorite:
-    """Etikett als Favorit speichern; vorhandener Name ohne ``overwrite``: ``FileExistsError``."""
+    """Save a label as favourite; an existing name without ``overwrite``: ``FileExistsError``."""
     name = _checked(name)
     path = favorites_dir() / f"{name}{SUFFIX}"
     if path.exists() and not overwrite:
@@ -71,7 +71,7 @@ def rename(favorite: Favorite, name: str) -> Favorite:
     path = favorite.path.with_name(f"{name}{SUFFIX}")
     if not favorite.path.exists():
         raise FileNotFoundError(_("Favorite “{name}” not found").format(name=favorite.name))
-    if path.exists() and not path.samefile(favorite.path):     # Groß/Klein-Dateisysteme
+    if path.exists() and not path.samefile(favorite.path):     # case-insensitive file systems
         raise FileExistsError(_(_EXISTS).format(name=name))
     favorite.path.rename(path)
     return Favorite(name, path)

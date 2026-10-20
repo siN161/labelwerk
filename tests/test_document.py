@@ -16,7 +16,7 @@ def test_render_document_equals_render_text():
 
 def test_fixed_length_sets_height():
     doc = Document("62", length_mm=50, objects=[TextObject("Hallo")])
-    assert render_document(doc).height == 591 - 2 * 35   # Stück 50 mm: Vorschub an beiden Enden
+    assert render_document(doc).height == 591 - 2 * 35   # piece 50 mm: feed at both ends
 
 
 def test_length_is_clamped_to_model_limits():
@@ -61,11 +61,11 @@ def test_horizontal_endless_prints_across_full_width_and_grows_with_text():
 def test_horizontal_text_reads_along_the_tape():
     img = render_document(Document("62", orientation="horizontal",
                                    objects=[TextObject("Hallo\n.", size_pt=36)]))
-    reading = img.rotate(90, expand=True)              # zurück in Leserichtung
+    reading = img.rotate(90, expand=True)              # back in reading direction
     ink = _ink(reading)
     top = ink.crop((0, 0, reading.width, reading.height // 2)).histogram()[255]
     bottom = ink.crop((0, reading.height // 2, reading.width, reading.height)).histogram()[255]
-    assert top > 3 * bottom                             # „Hallo“ oben, kleiner Punkt unten
+    assert top > 3 * bottom                             # „Hallo“ at the top, small dot at the bottom
 
 
 def test_horizontal_auto_font_matches_vertical():
@@ -74,7 +74,7 @@ def test_horizontal_auto_font_matches_vertical():
         reading = img.rotate(90, expand=True) if orientation == "horizontal" else img
         box = _ink(reading).getbbox()
         return box[3] - box[1]
-    assert ink_height("horizontal") == ink_height("vertical")   # gleiche Obergrenze
+    assert ink_height("horizontal") == ink_height("vertical")   # same upper limit
 
 
 def test_horizontal_fixed_length():
@@ -91,7 +91,7 @@ def test_margin_extends_auto_length():
     def height(margin):
         doc = Document("62", margin_mm=margin, objects=[TextObject("A", size_pt=100)])
         return render_document(doc).height
-    # 5 mm = 59 Punkte, davon 35 Vorschub des Druckers; 1 mm liegt ganz im Vorschub
+    # 5 mm = 59 dots, 35 of them printer feed; 1 mm lies entirely in the feed
     assert height(5) - height(1) == 2 * (59 - 35)
 
 
@@ -113,7 +113,7 @@ def test_horizontal_render_is_fast_enough_for_live_preview():
     import time
     doc = Document("62", orientation="horizontal",
                    objects=[TextObject("Max Mustermann\nMusterstr. 5\n12345 Musterstadt")])
-    render_document(doc)                      # Aufwärmen (Schrift laden)
+    render_document(doc)                      # warm-up (load the font)
     start = time.perf_counter()
     render_document(doc)
     assert time.perf_counter() - start < 0.5
@@ -129,7 +129,7 @@ def test_margin_larger_than_fixed_length_is_limited():
     assert img.height == 150
     left, top, right, bottom = _ink_bbox(img)
     assert top > 0 and bottom < img.height
-    assert bottom - top >= 20                 # nicht auf Mindestschrift geschrumpft
+    assert bottom - top >= 20                 # not shrunk to the minimum font
 
 
 def test_margin_larger_than_die_cut_label_is_limited():
@@ -141,9 +141,9 @@ def test_margin_larger_than_die_cut_label_is_limited():
 
 def test_margin_applies_on_every_side():
     from labelwerk.render import label_margins
-    # ab Papierkante: quer lässt der Drucker 18 Punkte (1,5 mm) frei, längs (Endlosband) 35
-    # Punkte Vorschub, gestanzt 62x29 längs 35
-    assert label_margins(Document("62")) == (0, 0)                 # 1 mm: schon im Streifen
+    # from the paper edge: across, the printer leaves 18 dots (1.5 mm) free, along (continuous tape) 35
+    # dots feed, die-cut 62x29 along 35
+    assert label_margins(Document("62")) == (0, 0)                 # 1 mm: already in the strip
     assert label_margins(Document("62", margin_mm=3)) == (35 - 18, 0)
     assert label_margins(Document("62", margin_mm=4)) == (47 - 18, 47 - 35)
     assert label_margins(Document("62", orientation="horizontal", margin_mm=2)) == (0, 6)
@@ -156,7 +156,7 @@ def test_margin_across_leaves_room_on_a_narrow_band():
     from labelwerk.render import label_margins
     across = get_label("12").width
     side, _ = label_margins(Document("12", margin_mm=20))
-    assert side == (across - 24) // 2                              # wie in Bandlaufrichtung
+    assert side == (across - 24) // 2                              # like in tape direction
     assert render_document(Document("12", margin_mm=20, objects=[TextObject("A")])).width == across
 
 

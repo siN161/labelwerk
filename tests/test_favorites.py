@@ -1,4 +1,4 @@
-"""Favoriten (Etappe 3c): gespeicherte Etiketten im Favoriten-Ordner."""
+"""Favourites (stage 3c): saved labels in the favourites folder."""
 import pytest
 
 from labelwerk import favorites

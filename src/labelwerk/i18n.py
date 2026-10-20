@@ -1,10 +1,10 @@
-"""Übersetzungen ohne Qt und ohne zusätzliche Bibliothek: Texte im Code sind englisch, je Sprache
-eine ``po/<code>.po`` im Paket (gelesen beim Start – keine ``.mo``-Dateien, kein Build-Schritt).
+"""Translations without Qt and without an extra library: texts in the code are English, per language
+one ``po/<code>.po`` in the package (read at startup – no ``.mo`` files, no build step).
 
-``_("Text")`` übersetzt, ``ngettext`` mit Mehrzahl, ``pgettext`` mit Kontext (gleiches Wort,
-andere Bedeutung), ``N_`` markiert Texte in Tabellen auf Modulebene (übersetzt wird erst beim
-Anzeigen). Platzhalter sind benannt (``_("… {label} …").format(label=…)``), damit jede Sprache ihre
-Reihenfolge wählen kann. ``set_language`` gilt für alles danach (CLI und GUI setzen sie zuerst).
+``_("Text")`` translates, ``ngettext`` with plural, ``pgettext`` with context (same word,
+different meaning), ``N_`` marks texts in module-level tables (translated only when
+displayed). Placeholders are named (``_("… {label} …").format(label=…)``) so that each language
+can choose its order. ``set_language`` applies to everything after it (CLI and GUI set it first).
 """
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 PO_DIR = Path(__file__).resolve().parent / "po"
-SOURCE = "en"                               # Sprache der Texte im Code
-NAMES = {"de": "Deutsch", "en": "English"}  # Name einer Sprache in ihr selbst
-DECIMAL = {"de": ","}                       # Dezimaltrenner (sonst Punkt)
-# Regionen mit Dezimalkomma (Sprachteil von LC_NUMERIC/LANG) – für Zahlen im Etikett-Inhalt
+SOURCE = "en"                               # language of the texts in the code
+NAMES = {"de": "Deutsch", "en": "English"}  # name of a language in itself
+DECIMAL = {"de": ","}                       # decimal separator (otherwise dot)
+# Regions with decimal comma (language part of LC_NUMERIC/LANG) – for numbers in label content
 COMMA_REGIONS = frozenset({"de", "fr", "es", "it", "nl", "pt", "pl", "cs", "sk", "da", "sv", "nb",
                            "nn", "fi", "ru", "uk", "tr", "hu", "ro", "hr", "sl", "el", "bg", "lt",
                            "lv", "et", "id", "vi"})
@@ -27,7 +27,7 @@ COMMA_REGIONS = frozenset({"de", "fr", "es", "it", "nl", "pt", "pl", "cs", "sk",
 
 @dataclass
 class Catalog:
-    """Übersetzungen einer Sprache: (Kontext, Text) → Übersetzung bzw. Mehrzahlformen."""
+    """Translations of a language: (context, text) → translation or plural forms."""
     language: str
     messages: dict[tuple[str, str], list[str]] = field(default_factory=dict)
     plural: str = "n != 1"
@@ -40,7 +40,7 @@ class Catalog:
 
 
 class PoError(ValueError):
-    """``.po``-Datei nicht lesbar."""
+    """``.po`` file not readable."""
 
 
 _ESCAPE = re.compile(r'\\(?:([ntrabfv"\\?\'])|([0-7]{1,3})|x([0-9a-fA-F]+))')
@@ -49,8 +49,8 @@ _SIMPLE = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b", "f": "\f", "v"
 
 
 def unquote(text: str, where: str) -> str:
-    """Text in Anführungszeichen einer ``.po``-Zeile mit den Escapes von C (``\\n``, ``\\"``,
-    oktal, ``\\x``) – ohne Python-Syntax auszuwerten."""
+    """Text in quotes of a ``.po`` line with the escapes of C (``\\n``, ``\\"``,
+    octal, ``\\x``) – without evaluating Python syntax."""
     text = text.strip()
     if len(text) < 2 or text[0] != '"' or text[-1] != '"':
         raise PoError(f"{where}: quoted text expected")
@@ -65,8 +65,8 @@ def unquote(text: str, where: str) -> str:
 
 
 def parse_po(text: str, language: str = "") -> Catalog:
-    """Inhalt einer ``.po``-Datei; leere, unsichere (``#, fuzzy``) und veraltete (``#~``)
-    Übersetzungen zählen nicht."""
+    """Content of a ``.po`` file; empty, uncertain (``#, fuzzy``) and obsolete (``#~``)
+    translations do not count."""
     catalog = Catalog(language)
     entry: dict[str, str] = {}
     fuzzy = next_fuzzy = False
@@ -80,7 +80,7 @@ def parse_po(text: str, language: str = "") -> Catalog:
                 m = re.search(r"plural=([^;\n]+)", forms[0] if forms else "")
                 if m:
                     catalog.plural = m[1].strip()
-                    catalog.plural_index(1)          # Ausdruck prüfen
+                    catalog.plural_index(1)          # check the expression
             elif forms and all(forms) and not fuzzy:
                 catalog.messages[(entry.get("msgctxt", ""), entry["msgid"])] = forms
         entry, fuzzy = {}, False
@@ -121,14 +121,14 @@ _language = SOURCE
 
 
 def available() -> list[str]:
-    """Sprachen, die labelwerk kann: Englisch und jede mit ``.po``."""
+    """Languages labelwerk supports: English and every one with a ``.po``."""
     return sorted({SOURCE, *(p.stem for p in PO_DIR.glob("*.po"))})
 
 
 def system_language(environ=None) -> str:
-    """Sprache des Systems wie bei GNU gettext: Gebietsschema aus ``LC_ALL`` › ``LC_MESSAGES`` ›
-    ``LANG``; ist es „C“/„POSIX“ (oder fehlt), Englisch – sonst zuerst die Liste ``LANGUAGE``
-    („de_AT:de:en“), dann das Gebietsschema; was labelwerk nicht kann, wird Englisch."""
+    """System language as with GNU gettext: locale from ``LC_ALL`` › ``LC_MESSAGES`` ›
+    ``LANG``; if it is “C”/“POSIX” (or missing), English – otherwise first the list ``LANGUAGE``
+    (“de_AT:de:en”), then the locale; what labelwerk does not support becomes English."""
     env = os.environ if environ is None else environ
     known = available()
 
@@ -144,8 +144,8 @@ def system_language(environ=None) -> str:
 
 
 def set_language(code: str = "") -> str:
-    """Sprache setzen ("" = Systemsprache); unbekannt oder ``.po`` defekt → Englisch (Hinweis auf
-    stderr). Zurück kommt die gültige Sprache."""
+    """Set the language ("" = system language); unknown or ``.po`` broken → English (note on
+    stderr). Returns the valid language."""
     global _catalog, _language
     code = code or system_language()
     if code not in available():
@@ -164,8 +164,8 @@ _all_cache: dict[tuple[str, str], tuple[str, ...]] = {}
 
 
 def all_translations(context: str, text: str) -> tuple[str, ...]:
-    """Ein Text in jeder Sprache, die labelwerk kann (Original zuerst) – für Namen, die in jeder
-    Sprache gelten sollen (Platzhalter ``{Nummer}``/``{Number}``)."""
+    """A text in every language labelwerk supports (original first) – for names that in every
+    language should apply (placeholder ``{Nummer}``/``{Number}``)."""
     key = (context, text)
     if key not in _all_cache:
         found = [text]
@@ -192,12 +192,12 @@ def _(text: str) -> str:
 
 
 def NP_(context: str, text: str) -> str:
-    """Wie ``N_`` mit Kontext (übersetzt wird mit ``pgettext(context, text)``)."""
+    """Like ``N_`` with context (translated with ``pgettext(context, text)``)."""
     return text
 
 
 def N_(text: str) -> str:
-    """Nur markieren (für ``tools/i18n.py``); übersetzt wird beim Anzeigen mit ``_``."""
+    """Only mark (for ``tools/i18n.py``); translated when displayed with ``_``."""
     return text
 
 
@@ -218,24 +218,24 @@ def ngettext(singular: str, plural: str, n: int) -> str:
 
 
 def decimal() -> str:
-    """Dezimaltrenner der Sprache: „,“ bzw. „.“."""
+    """Decimal separator of the language: “,” or “.”."""
     return DECIMAL.get(_language, ".")
 
 
 def thousands(value: int) -> str:
-    """Ganze Zahl mit Tausendertrennung der Sprache: „1.000.000“ bzw. „1,000,000“."""
+    """Integer with the language's thousands separator: “1.000.000” or “1,000,000”."""
     return f"{value:,}".replace(",", "." if decimal() == "," else ",")
 
 
 def parse_number(text: str) -> float:
-    """Zahl, wie getippt: Komma und Punkt gelten als Dezimaltrenner (ValueError sonst)."""
+    """Number as typed: comma and dot both count as decimal separator (otherwise ValueError)."""
     return float(text.strip().replace(",", "."))
 
 
 def content_decimal(environ=None) -> str:
-    """Dezimaltrenner für Zahlen im Etikett-Inhalt (Excel-Zellen einer Serie): wie die
-    Regionaleinstellung des Systems (``LC_ALL`` › ``LC_NUMERIC`` › ``LANG``), nicht die Sprache der
-    Oberfläche – dieselbe Datei druckt in Deutschland mit Komma, egal welche Sprache labelwerk zeigt."""
+    """Decimal separator for numbers in label content (Excel cells of a series): like the
+    system's regional setting (``LC_ALL`` › ``LC_NUMERIC`` › ``LANG``), not the language of the
+    interface – the same file prints with a comma in Germany whichever language labelwerk shows."""
     env = os.environ if environ is None else environ
     for name in ("LC_ALL", "LC_NUMERIC", "LANG"):
         value = env.get(name, "")
@@ -246,7 +246,7 @@ def content_decimal(environ=None) -> str:
 
 
 def number(value: float, digits: int | None = None) -> str:
-    """Zahl für Meldungen: ``digits`` Nachkommastellen (None: so kurz wie möglich, „:g“), mit dem
-    Dezimaltrenner der Sprache."""
+    """Number for messages: ``digits`` decimal places (None: as short as possible, “:g”), with the
+    language's decimal separator."""
     text = f"{value:g}" if digits is None else f"{value:.{digits}f}"
     return text.replace(".", decimal())

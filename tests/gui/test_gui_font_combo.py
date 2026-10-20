@@ -1,5 +1,5 @@
-"""Schriftauswahl FontCombo: Liste aus fonts.families, jede Schrift in ihrer Schrift, fremde Schrift
-bleibt sichtbar."""
+"""Font picker FontCombo: list from fonts.families, each font in its own typeface, a foreign font
+stays visible."""
 from PySide6.QtCore import Qt
 
 from labelwerk.gui.widgets import FontCombo
@@ -27,7 +27,7 @@ def test_default_list_comes_from_fonts(qtbot, monkeypatch):
     combo = FontCombo()
     qtbot.addWidget(combo)
     assert _items(combo) == ["B"]
-    assert "Sans Serif" not in _items(combo)                   # keine Qt-Sammelnamen
+    assert "Sans Serif" not in _items(combo)                   # no Qt collective names
 
 
 def test_unknown_family_is_shown_on_top_and_chosen(qtbot):
@@ -35,9 +35,9 @@ def test_unknown_family_is_shown_on_top_and_chosen(qtbot):
     combo.set_current_family("GibtsGarNicht 4711")
     assert combo.current_family() == "GibtsGarNicht 4711" and combo.currentIndex() == 0
     assert combo.count() == 4
-    combo.set_current_family("GanzAnders")                       # nur ein fremder Eintrag
+    combo.set_current_family("GanzAnders")                       # just a foreign entry
     assert _items(combo)[0] == "GanzAnders" and combo.count() == 4
-    combo.set_current_family("DejaVu Serif")                     # fremder Eintrag entfällt
+    combo.set_current_family("DejaVu Serif")                     # foreign entry is dropped
     assert _items(combo) == ["DejaVu Sans", "DejaVu Serif", "Liberation Sans"]
     assert combo.current_family() == "DejaVu Serif"
 
@@ -46,14 +46,14 @@ def test_family_chosen_signal(qtbot):
     combo = _combo(qtbot)
     combo.set_current_family("DejaVu Sans")
     with qtbot.waitSignal(combo.family_chosen) as blocker:
-        combo.setCurrentIndex(2)                                 # wie eine Wahl in der Liste
+        combo.setCurrentIndex(2)                                 # like a choice in the list
     assert blocker.args == ["Liberation Sans"]
     with qtbot.waitSignal(combo.family_chosen) as blocker:
         combo.set_current_family("DejaVu Serif")
     assert blocker.args == ["DejaVu Serif"]
     with qtbot.assertNotEmitted(combo.family_chosen):
-        combo.set_current_family("DejaVu Serif")                 # unverändert
-        combo.setCurrentIndex(-1)                                # leer: keine Schrift
+        combo.set_current_family("DejaVu Serif")                 # unchanged
+        combo.setCurrentIndex(-1)                                # empty: no font
 
 
 def test_empty_shows_nothing(qtbot):
@@ -68,7 +68,7 @@ def test_set_families_keeps_current_choice(qtbot):
     combo.set_current_family("Liberation Sans")
     with qtbot.assertNotEmitted(combo.family_chosen):
         combo.set_families(["DejaVu Sans"])
-    assert combo.current_family() == "Liberation Sans"           # bleibt (jetzt als fremde Schrift)
+    assert combo.current_family() == "Liberation Sans"           # stays (now as a foreign font)
     assert _items(combo) == ["Liberation Sans", "DejaVu Sans"]
     combo.set_families(["DejaVu Sans", "Liberation Sans"])
     assert _items(combo) == ["DejaVu Sans", "Liberation Sans"]
@@ -82,7 +82,7 @@ def test_set_none_shows_nothing_without_signal(qtbot):
         combo.set_current_family(None)
     assert combo.current_family() is None
     with qtbot.waitSignal(combo.family_chosen) as blocker:
-        combo.set_current_family("DejaVu Serif")                 # wieder gewählt: meldet
+        combo.set_current_family("DejaVu Serif")                 # chosen again: reports
     assert blocker.args == ["DejaVu Serif"]
 
 
@@ -91,8 +91,8 @@ def test_old_qt_name_with_foundry_shows_installed_family(qtbot, monkeypatch):
     monkeypatch.setattr(fonts, "families", lambda all=False: ["C059", "DejaVu Sans"])
     combo = _combo(qtbot, ("C059", "DejaVu Sans"))
     combo.set_current_family("C059 [UKWN]")
-    assert combo.current_family() == "C059" and combo.count() == 2   # kein fremder Eintrag
-    combo.set_current_family("Sans Serif")                           # Sammelname bleibt fremd
+    assert combo.current_family() == "C059" and combo.count() == 2   # no foreign entry
+    combo.set_current_family("Sans Serif")                           # collective name stays foreign
     assert combo.current_family() == "Sans Serif" and combo.count() == 3
 
 

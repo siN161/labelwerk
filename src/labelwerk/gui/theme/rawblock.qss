@@ -1,5 +1,5 @@
-/* labelwerk – an RawBlock angelehnt: Schwarz/Weiß, kräftige Rahmen, eckig.
-   Austauschbar: andere .qss-Datei laden oder ganz weglassen (System-Look). */
+/* labelwerk – modelled on RawBlock: black/white, strong borders, square.
+   Replaceable: load another .qss file or none at all (system look). */
 
 * {
     font-family: "Work Sans", "Inter", "DejaVu Sans", sans-serif;
@@ -15,7 +15,7 @@ QToolBar {
     padding: 6px;
     spacing: 6px;
 }
-/* Qt zieht den 3-px-Unterrand vom unteren Innenabstand ab – ausgleichen, damit oben = unten */
+/* Qt subtracts the 3 px bottom border from the bottom padding – compensate so top = bottom */
 QToolBar QToolButton { margin-bottom: 3px; }
 QToolBar QToolButton {
     background: #FFFFFF;
@@ -29,12 +29,12 @@ QToolBar QToolButton:hover, QToolBar QToolButton:checked {
     background: #000000;
     color: #FFFFFF;
 }
-/* Bearbeitungsleiste: kleinere Knöpfe, Trenner als schwarzer Strich */
+/* Edit bar: smaller buttons, separator as a black line */
 QToolBar#editBar { padding: 4px 6px; }
 QToolBar#editBar QToolButton { padding: 3px 10px; letter-spacing: 1px; }
 QToolBar#editBar::separator { background: #000000; width: 3px; margin: 2px 8px 5px 8px; }
 QToolBar QToolButton#print { background: #000000; color: #FFFFFF; }
-/* Überlauf der Reiterknöpfe: schmaler Knopf „»“ (Qt gibt ihm eine feste kleine Breite) */
+/* Overflow of the tab buttons: narrow button "»" (Qt gives it a small fixed width) */
 QToolBar QToolButton#qt_toolbar_ext_button { border: none; padding: 0; margin: 0; letter-spacing: 0; }
 QToolBar QToolButton#qt_toolbar_ext_button[active="true"] { background: #000000; color: #FFFFFF; }
 QToolBar QToolButton#print:hover { background: #FFFFFF; color: #000000; }
@@ -58,7 +58,7 @@ QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
 }
 QPlainTextEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover { background: #E8E8E8; }
 QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus { border-width: 5px; }
-/* Zahlenfelder: eigene Hoch/Runter-Knöpfe – mit eigenem Rahmen zeichnet Qt sonst keine Pfeile */
+/* Number fields: own up/down buttons – with a custom border Qt draws no arrows otherwise */
 QSpinBox, QDoubleSpinBox { padding: 4px 32px 4px 8px; min-height: 26px; }
 QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {
@@ -84,7 +84,7 @@ QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top righ
 QComboBox::drop-down:hover { background: #000000; }
 QComboBox::down-arrow { image: url(@THEME@/arrow-down-black.svg); width: 10px; height: 7px; }
 QComboBox::down-arrow:hover { image: url(@THEME@/arrow-down-white.svg); }
-/* nur Anzeige (z. B. Rahmengröße ohne feste Rahmengröße): weiß, Pfeile grau */
+/* display only (e.g. frame size without a fixed frame size): white, arrows grey */
 QDoubleSpinBox[readOnly="true"] { background: #FFFFFF; }
 QDoubleSpinBox[readOnly="true"]::up-arrow { image: url(@THEME@/arrow-up-gray.svg); }
 QDoubleSpinBox[readOnly="true"]::down-arrow { image: url(@THEME@/arrow-down-gray.svg); }
@@ -99,9 +99,9 @@ QCheckBox::indicator { width: 16px; height: 16px; border: 3px solid #000000; bac
 QCheckBox::indicator:checked { background: #000000; }
 QCheckBox:disabled, QRadioButton:disabled, QLabel:disabled { color: #999999; }
 QCheckBox::indicator:disabled { border-color: #CCCCCC; background: #F5F5F5; }
-/* gesperrt, aber gesetzt (z. B. DATEI/PAPIER unter „Reiter in der Leiste“): sichtbar gefüllt */
+/* disabled but checked (e.g. FILE/PAPER under "Tabs in the toolbar"): visibly filled */
 QCheckBox::indicator:checked:disabled { border-color: #999999; background: #999999; }
-/* Schieberegler (Schwelle): schwarze Linie, eckiger Griff */
+/* Slider (threshold): black line, square handle */
 QSlider::groove:horizontal { height: 3px; background: #000000; }
 QSlider::handle:horizontal { width: 12px; margin: -9px 0; background: #000000; border: none; }
 QSlider::handle:horizontal:hover { background: #FFFFFF; border: 3px solid #000000; width: 6px; }
@@ -123,12 +123,12 @@ QTextEdit { background: #F0F0F0; border: 3px solid #000000; border-radius: 0; pa
 QTextEdit:focus { border-width: 5px; }
 QTextEdit:disabled { border-color: #CCCCCC; background: #F5F5F5; }
 FontCombo { min-width: 0; }
-/* Reiter Layout: Symbolknöpfe; beim Darüberfahren schwarz, das Symbol wird dann weiß */
+/* LAYOUT tab: icon buttons; black on hover, the icon then turns white */
 QToolButton#layoutButton { background: #FFFFFF; border: 3px solid #000000; border-radius: 0; padding: 6px; }
 QToolButton#layoutButton:hover { background: #000000; }
 QToolButton#layoutButton:disabled { background: #F0F0F0; border-color: #CCCCCC; }
 
-/* Einstellungen: Reiter und Kürzel-Tabelle */
+/* Settings: tabs and shortcut table */
 QTabWidget::pane { border: 3px solid #000000; top: -3px; }
 QTabBar::tab {
     background: #FFFFFF;
@@ -174,7 +174,7 @@ QStatusBar QToolButton:hover { background: #000000; color: #FFFFFF; }
 QGraphicsView { border: none; }
 QToolTip { background: #000000; color: #FFFFFF; border: none; padding: 8px 12px; font-family: "Space Mono", "DejaVu Sans Mono", monospace; }
 
-/* Fenster „Symbol einfügen“: Suche, Gruppen, Raster */
+/* "Insert symbol" window: search, groups, grid */
 QLineEdit#symbolSearch { background: #F0F0F0; border: 3px solid #000000; border-radius: 0; padding: 4px 6px; }
 QLineEdit#symbolSearch:focus { border-width: 5px; }
 QListWidget#symbolGroups, QListView#symbolGrid {

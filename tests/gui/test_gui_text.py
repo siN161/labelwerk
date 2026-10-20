@@ -12,7 +12,7 @@ def window(qtbot):
     win = MainWindow(settings=Settings(check_media_on_start=False))
     qtbot.addWidget(win)
     win.show()
-    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
+    win.canvas.set_selection([0])      # start without a selection: choose the start object for typing
     return win
 
 
@@ -27,9 +27,9 @@ def test_bold_on_selected_word_gives_three_spans(window):
     panel = window.panel("text")
     panel.edit.setPlainText("aaa bbb ccc")
     _select(panel, 0, 11)
-    panel.bold.click()                      # alles normal …
+    panel.bold.click()                      # everything normal …
     _select(panel, 4, 7)
-    panel.bold.click()                      # … nur „bbb“ fett
+    panel.bold.click()                      # … only „bbb“ bold
     spans = window.doc.objects[0].paragraphs[0].spans
     assert [(s.text, s.bold) for s in spans] == [("aaa ", False), ("bbb", True), (" ccc", False)]
 
@@ -55,8 +55,8 @@ def test_grow_changes_only_selection(window):
     _select(panel, 6, 11)
     panel.grow.click()
     spans = window.doc.objects[0].paragraphs[0].spans
-    assert spans[0].text == "klein " and spans[0].size_pt is None      # Grundgröße
-    assert spans[1].text == "gross" and spans[1].size_pt == 20         # 19 → nächste Stufe 20
+    assert spans[0].text == "klein " and spans[0].size_pt is None      # base size
+    assert spans[1].text == "gross" and spans[1].size_pt == 20         # 19 → next step 20
 
 
 def test_size_entry_applies_pt(window):
@@ -79,9 +79,9 @@ def test_buttons_follow_cursor(window):
     panel = window.panel("text")
     panel.edit.setPlainText("aaa bbb")
     _select(panel, 0, 7)
-    panel.bold.click()                     # alles normal
+    panel.bold.click()                     # everything normal
     _select(panel, 4, 7)
-    panel.bold.click()                     # „bbb“ fett
+    panel.bold.click()                     # „bbb“ bold
     cursor = panel.edit.textCursor()
     cursor.setPosition(2)
     panel.edit.setTextCursor(cursor)
@@ -123,7 +123,7 @@ def test_start_uses_settings_family_and_size(qtbot):
 
 def test_unformatted_text_uses_base_format_not_widget_font(window):
     from labelwerk.gui.app import load_theme
-    window.window().setStyleSheet(load_theme())          # Stylesheet setzt eine andere Widget-Schrift
+    window.window().setStyleSheet(load_theme())          # style sheet sets a different widget font
     panel = window.panel("text")
     panel.edit.setPlainText("Max")
     span = window.doc.objects[0].paragraphs[0].spans[0]
@@ -146,9 +146,9 @@ def test_partial_size_change_keeps_rest_at_base(window):
     assert window.panel("text").error.isHidden()
 
 
-# --- Fix nach Review ---------------------------------------------------------
+# --- Fix after review ------------------------------------------------------
 def _mixed(panel):
-    """„klein gross“: klein 10 pt, gross 36 pt."""
+    """Text "klein gross": "klein" at 10 pt, "gross" at 36 pt."""
     panel.edit.setPlainText("klein gross")
     _select(panel, 0, 5)
     panel.set_size_pt(10)
@@ -169,7 +169,7 @@ def _sizes(window):
 def test_size_field_focus_out_keeps_mixed_sizes(window):
     panel = window.panel("text")
     _mixed(panel)
-    _cursor_to(panel, 8)                        # in „gross“, ohne Markierung
+    _cursor_to(panel, 8)                        # in „gross“, without a selection
     panel.size.lineEdit().editingFinished.emit()
     spans = window.doc.objects[0].paragraphs[0].spans
     assert len({s.size_pt for s in spans if s.text.strip()}) == 2
@@ -211,12 +211,12 @@ def test_format_shortcuts_are_actions_scoped_to_panel(window):
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QShortcut
     panel = window.panel("text")
-    assert panel.findChildren(QShortcut) == []              # alles über das Kürzel-Verzeichnis
+    assert panel.findChildren(QShortcut) == []              # everything via the shortcut directory
     actions = [window.shortcut_actions[key] for key in ("text.bold", "text.italic", "text.underline")]
     assert all(a in panel.actions() for a in actions)
     assert all(a.shortcutContext() == Qt.ShortcutContext.WidgetWithChildrenShortcut
                for a in actions)
-    # Tooltip aus der Aktion: stimmt auch nach dem Umbelegen
+    # tooltip from the action: also correct after reassigning
     assert [b.toolTip() for b in (panel.bold, panel.italic, panel.underline)] == \
            [a.toolTip() for a in actions]
 
@@ -266,7 +266,7 @@ def test_grow_with_selection_steps_each_fragment(window):
     assert _sizes(window) == [11, 48]
 
 
-# --- Schlussrunde --------------------------------------------------------------
+# --- Final round ---------------------------------------------------------------
 def test_shift_enter_inserts_paragraph_not_line_separator(window, qtbot):
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
@@ -343,13 +343,13 @@ def test_style_buttons_show_their_style_without_stylesheet(qtbot):
     from labelwerk.gui.panels.text import TextPanel
     panel = TextPanel(Document())
     qtbot.addWidget(panel)
-    # klassisches Design (ohne Stylesheet): die Knopfschrift zeigt den Stil selbst
+    # classic theme (without style sheet): the button font shows the style itself
     assert panel.bold.font().bold()
     assert panel.italic.font().italic()
     assert panel.underline.font().underline()
 
 
-# --- Schriftliste (Abnahme-Korrekturen) ------------------------------------------
+# --- Font list (acceptance corrections) ------------------------------------------
 def _families(window):
     return [(s.text, s.family) for s in window.doc.objects[0].paragraphs[0].spans if s.text.strip()]
 
@@ -358,7 +358,7 @@ def test_mixed_fonts_in_selection_leave_font_field_empty_and_choice_sets_all(win
     panel = window.panel("text")
     panel.edit.setPlainText("aaa bbb")
     _select(panel, 4, 7)
-    panel.family.set_current_family("DejaVu Serif")             # wie eine Wahl in der Liste
+    panel.family.set_current_family("DejaVu Serif")             # like a choice in the list
     assert _families(window) == [("aaa ", None), ("bbb", "DejaVu Serif")]
     _select(panel, 0, 7)
     assert panel.family.currentText() == "" and panel.family.current_family() is None

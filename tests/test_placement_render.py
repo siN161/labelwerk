@@ -1,4 +1,4 @@
-"""Objekte einzeln rendern und zusammensetzen (Etappe 3d-1)."""
+"""Render objects individually and compose them (stage 3d-1)."""
 import pytest
 from PIL import Image
 
@@ -14,21 +14,21 @@ def _dots(mm):
 
 
 def _along(doc):
-    """Rand in Bandlaufrichtung (der Vorschub des Druckers zählt mit)."""
+    """Margin in tape direction (the printer's feed counts too)."""
     return label_margins(doc)[0 if doc.orientation == "horizontal" else 1]
 
 
 def _ink_box(img):
-    """Tintenbox (Pixel dunkler als 50 %)."""
+    """Ink box (pixels darker than 50 %)."""
     return img.convert("L").point(lambda v: 255 if v < 128 else 0).getbbox()
 
 
 def _reading(img, doc):
-    """Druckbild zurück in Leserichtung drehen."""
+    """Rotate the print image back to reading direction."""
     return img.rotate(90, expand=True) if doc.orientation == "horizontal" else img
 
 
-# --- Pixelgleichheit für ein Objekt ohne Position -------------------------------
+# --- Pixel equality for an object without position -----------------------------
 _MIXED = TextObject([Paragraph([Span("klein", size_pt=10), Span("GROSS", size_pt=30)], "left"),
                      Paragraph([Span("rechts", italic=True, underline=True)], "right")],
                     size_pt=20)
@@ -64,7 +64,7 @@ def test_unpositioned_object_is_pixel_identical_to_before(doc):
     assert new.tobytes() == old.tobytes()
 
 
-# --- Modell -----------------------------------------------------------------
+# --- Model -----------------------------------------------------------------
 def test_text_object_defaults_are_unpositioned():
     obj = TextObject("A")
     assert (obj.x_mm, obj.y_mm, obj.w_mm, obj.h_mm, obj.rotation) == (None, None, None, None, 0)
@@ -82,7 +82,7 @@ def test_positioned_ink_starts_at_position(orientation):
     obj = TextObject("H", size_pt=20, x_mm=10, y_mm=5)
     doc = Document("62", length_mm=60, orientation=orientation, objects=[obj])
     left, top, _, _ = _ink_box(_reading(render_document(doc), doc))
-    # oben schließt die Tinte an den Rahmen an, links liegt nur die Vorbreite der Schrift davor
+    # at the top the ink meets the frame, on the left only the font's leading space lies before it
     bearing = _ink_box(render_object(obj, doc).image)[0]
     assert left == _dots(10) + bearing and bearing < 20 * 0.2 * 300 / 72
     assert abs(top - _dots(5)) <= 1
@@ -100,7 +100,7 @@ def test_render_object_reports_frame_on_label():
 def test_positioned_object_never_raises_text_too_large():
     obj = TextObject("W" * 60, size_pt=40, x_mm=0, y_mm=0)
     img = render_document(Document("29", length_mm=50, objects=[obj]))
-    assert img.size == (306, _dots(50) - 2 * 35)        # Stück 50 mm, Vorschub an beiden Enden
+    assert img.size == (306, _dots(50) - 2 * 35)        # piece 50 mm, feed at both ends
 
 
 def test_object_beyond_label_is_clipped():
@@ -111,7 +111,7 @@ def test_object_beyond_label_is_clipped():
     assert _ink_box(img) is not None
 
 
-# --- Drehen -----------------------------------------------------------------
+# --- Rotating ---------------------------------------------------------------
 @pytest.mark.parametrize("rotation, transpose", [(90, Image.Transpose.ROTATE_270),
                                                  (180, Image.Transpose.ROTATE_180),
                                                  (270, Image.Transpose.ROTATE_90)])
@@ -133,13 +133,13 @@ def test_rotated_object_is_placed_on_label():
     ro = render_object(obj, doc)
     left, top, right, bottom = _ink_box(render_document(doc))
     assert abs(left - ro.x) <= 1 and abs(top - ro.y) <= 1
-    assert bottom - top > right - left              # hochkant
+    assert bottom - top > right - left              # portrait
 
 
-# --- Zusammensetzen -----------------------------------------------------------
+# --- Composing ----------------------------------------------------------------
 def test_later_object_does_not_erase_earlier_ink():
     first = TextObject("H", size_pt=60, x_mm=5, y_mm=5)
-    second = TextObject("H", size_pt=60, x_mm=7, y_mm=6)   # Rahmen überdeckt das erste „H“
+    second = TextObject("H", size_pt=60, x_mm=7, y_mm=6)   # frame covers the first “H”
     doc = Document("62", length_mm=40, objects=[first, second])
     a = render_object(first, doc)
     b = render_object(second, doc)
@@ -173,7 +173,7 @@ def test_auto_length_keeps_room_for_unpositioned_object():
     assert render_document(Document("62", objects=[centered, near])).height == alone.height
 
 
-# --- Feste Rahmengröße -----------------------------------------------------------
+# --- Fixed frame size -----------------------------------------------------------
 def test_fit_into_frame():
     obj = TextObject("Hallo Welt", size_pt=12, fit=True, x_mm=2, y_mm=3, w_mm=30, h_mm=8)
     doc = Document("62", length_mm=40, objects=[obj])
@@ -181,13 +181,13 @@ def test_fit_into_frame():
     assert (ro.x, ro.y, ro.w, ro.h) == (_dots(2), _dots(3), _dots(30), _dots(8))
     left, top, right, bottom = _ink_box(ro.image)
     assert left >= 0 and top >= 0 and right <= ro.w and bottom <= ro.h
-    assert right - left > ro.w * 0.8 or bottom - top > ro.h * 0.8    # füllt den Rahmen
+    assert right - left > ro.w * 0.8 or bottom - top > ro.h * 0.8    # fills the frame
     bigger = render_object(TextObject("Hallo Welt", size_pt=12, fit=True, x_mm=2, y_mm=3,
                                       w_mm=60, h_mm=16), doc)
     assert bigger.base_pt > ro.base_pt
 
 
-# --- Grundgröße ---------------------------------------------------------------
+# --- Base size ---------------------------------------------------------------
 def test_base_pt_of_auto_object_reproduces_image():
     doc = Document("62", objects=[TextObject("Hallo")])
     ro = render_object(doc.objects[0], doc)
@@ -196,7 +196,7 @@ def test_base_pt_of_auto_object_reproduces_image():
     assert render_document(fixed).tobytes() == render_document(doc).tobytes()
 
 
-# --- Zusammensetzen aus Objektbildern (Arbeitsfläche = Druck) -------------------------
+# --- Composing from object images (canvas = print) -------------------------
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
 def test_compose_from_object_images_equals_render_document(orientation):
     from labelwerk.render import compose, label_size
@@ -207,7 +207,7 @@ def test_compose_from_object_images_equals_render_document(orientation):
     assert image.tobytes() == render_document(doc).tobytes()
 
 
-# --- Anschnitt: Tinte außerhalb der Tintenbox (Kantenglättung, Unterstreichung, „J“) ------
+# --- Bleed: ink outside the ink box (anti-aliasing, underline, “J”) ------
 def _ink_cases():
     texts = {"Hallo unterstrichen": lambda: [Paragraph([Span("Hallo", underline=True)])],
              "Jahr": lambda: [Paragraph([Span("Jahr", bold=False)])],
@@ -261,7 +261,7 @@ def test_object_image_covers_frame_and_ink():
     assert ro.image_dx + ro.image.width >= ro.w and ro.image_dy + ro.image.height >= ro.h
 
 
-# --- Feste Rahmengröße auf Endlosband mit automatischer Länge ---------------------------
+# --- Fixed frame size on continuous tape with automatic length ---------------------------
 @pytest.mark.parametrize("orientation, frame", [("vertical", dict(w_mm=30)),
                                                 ("horizontal", dict(h_mm=10)),
                                                 ("vertical", {}), ("horizontal", {})])
@@ -272,9 +272,9 @@ def test_fit_without_feed_size_uses_text_extent_on_auto_length(orientation, fram
     length = render_document(doc).height
     start, extent = (ro.y, ro.h) if orientation == "vertical" else (ro.x, ro.w)
     assert length == max(start + extent + _along(doc), length_limits("QL-600")[0])
-    assert length < _dots(60)                       # nicht die Höchstlänge
+    assert length < _dots(60)                       # not the maximum length
     ink = _ink_box(ro.image)
-    assert ink[3] - ink[1] > 0.8 * ro.h or ink[2] - ink[0] > 0.8 * ro.w   # Text füllt den Rahmen
+    assert ink[3] - ink[1] > 0.8 * ro.h or ink[2] - ink[0] > 0.8 * ro.w   # text fills the frame
 
 
 def test_fit_with_given_across_size_fills_it_on_auto_length():
@@ -286,7 +286,7 @@ def test_fit_with_given_across_size_fills_it_on_auto_length():
     assert wide.base_pt > narrow.base_pt
 
 
-# --- Gedrehtes Objekt ohne Position -------------------------------------------------
+# --- Rotated object without position -------------------------------------------------
 @pytest.mark.parametrize("rotation", [90, 270])
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
 def test_rotated_unpositioned_object_is_not_clipped(rotation, orientation):
@@ -311,7 +311,7 @@ def test_upside_down_unpositioned_left_text_starts_at_right_edge():
     ro = render_object(obj, doc)
     width = render_document(doc).width
     assert (ro.w, ro.h) == (upright.w, upright.h)
-    assert ro.x + ro.w == width - upright.x           # Textanfang am anderen Rand
+    assert ro.x + ro.w == width - upright.x           # text starts at the other edge
 
 
 @pytest.mark.parametrize("kw, frame", [(dict(y_mm=10), (0, 10)), (dict(x_mm=7), (7, 0))])
@@ -322,7 +322,7 @@ def test_one_coordinate_positions_object_other_is_zero(kw, frame):
     assert (ro.x, ro.y) == (_dots(frame[0]), _dots(frame[1]))
 
 
-# --- Leere Rahmen, schrittweises Rendern (Arbeitsfläche) ----------------------------
+# --- Empty frames, step-by-step rendering (canvas) ----------------------------
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
 @pytest.mark.parametrize("text", ["", "   "])
 def test_empty_positioned_object_does_not_lengthen_auto_label(orientation, text):

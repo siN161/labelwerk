@@ -1,4 +1,4 @@
-"""Reiter SERIE (Etappe 3e): Tabelle/Nummerierung, Spalten einfügen, Zeilen, Vorschau, Drucken."""
+"""SERIES tab (stage 3e): table/numbering, insert columns, rows, preview, printing."""
 import os
 
 import openpyxl
@@ -44,7 +44,7 @@ def _with_table(qtbot, tmp_path, doc=None):
 
 
 class FakeWorker:
-    """Druck-Worker, der nur mitschreibt (kein Thread, kein Drucker)."""
+    """Print worker that only records (no thread, no printer)."""
     jobs = []
 
     def __init__(self, image, label_id, model, cut_every=1, printer=None, options=None):
@@ -61,9 +61,9 @@ def printed(monkeypatch):
     return FakeWorker.jobs
 
 
-# --- Reiter und Quelle -------------------------------------------------------------------------
+# --- Tab and source -------------------------------------------------------------------------
 def test_series_tab_follows_layout(qtbot):
-    assert [tool.key for tool in TOOLS][-2:] == ["series", "parcel"]   # Paketmarke ganz hinten
+    assert [tool.key for tool in TOOLS][-2:] == ["series", "parcel"]   # parcel label at the very end
     panel = _window(qtbot).panel("series")
     assert panel.source_label.text() == "Keine Serie"
     assert not panel.remove_button.isEnabled()
@@ -158,12 +158,12 @@ def test_cut_mode_is_saved_in_the_series(qtbot, tmp_path):
     assert win.doc.series.cut == "each" and panel.cut.currentData() == "each"
 
 
-# --- Vorschau ----------------------------------------------------------------------------------
+# --- Preview ----------------------------------------------------------------------------------
 def test_canvas_shows_the_preview_row(qtbot, tmp_path):
     win, _ = _with_table(qtbot, tmp_path)
     columns = ["Klemme", "Bezeichnung"]
     assert win.image.tobytes() == render_document(fill(win.doc, columns, ["X1", "24V"])).tobytes()
-    assert win.doc.objects[0].text == "{Klemme} {Bezeichnung}"        # Etikett unverändert
+    assert win.doc.objects[0].text == "{Klemme} {Bezeichnung}"        # label unchanged
     panel = win.panel("series")
     panel.next_button.click()
     win.render_now()
@@ -216,12 +216,12 @@ def test_changed_table_file_is_read_again_when_checked(qtbot, tmp_path):
     panel = win.panel("series")
     assert not panel.check_file()
     _touch(path, "Klemme;Bezeichnung\nY1;5V\n")
-    panel.refresh()                                     # z. B. Rückgängig: liest nicht neu
+    panel.refresh()                                     # e.g. undo: does not re-read
     assert panel.rows.rowCount() == 3
     assert panel.check_file() and panel.rows.rowCount() == 1
 
 
-# --- Spalten einfügen --------------------------------------------------------------------------
+# --- Insert columns --------------------------------------------------------------------------
 def test_column_is_appended_to_the_selected_text(qtbot, tmp_path):
     win, _ = _with_table(qtbot, tmp_path, Document("62x29", objects=[TextObject("Nr. ", size_pt=14)]))
     win.canvas.set_selection([0])
@@ -246,14 +246,14 @@ def test_double_click_on_a_column_inserts_it_once(qtbot, tmp_path):
     viewport = panel.columns.viewport()
     center = panel.columns.visualItemRect(panel.columns.item(0)).center()
     left = Qt.MouseButton.LeftButton
-    QTest.mouseClick(viewport, left, pos=center)          # echte Folge eines Doppelklicks
+    QTest.mouseClick(viewport, left, pos=center)          # real sequence of a double click
     QTest.mousePress(viewport, left, pos=center)
     QTest.mouseDClick(viewport, left, pos=center)
     QTest.mouseRelease(viewport, left, pos=center)
     assert [o.text for o in win.doc.objects] == ["{Klemme}"]
 
 
-# --- Drucken ----------------------------------------------------------------------------------
+# --- Printing ----------------------------------------------------------------------------------
 def test_printing_a_series_prints_the_checked_rows_in_one_job(qtbot, tmp_path, printed):
     win, _ = _with_table(qtbot, tmp_path)
     panel = win.panel("series")
@@ -321,7 +321,7 @@ def test_favorite_with_series_prints_all_rows(qtbot, tmp_path, printed):
     assert len(printed) == 1 and len(printed[0][0]) == 3
 
 
-# --- Ansicht --------------------------------------------------------------------------------------
+# --- View --------------------------------------------------------------------------------------
 def test_preview_row_is_selected_in_the_table(qtbot, tmp_path):
     win, _ = _with_table(qtbot, tmp_path)
     panel = win.panel("series")
@@ -349,9 +349,9 @@ def test_series_panel_fits_its_width(qtbot, tmp_path, theme):
         apply_theme(QApplication.instance(), "classic")
 
 
-# --- Nachbesserungen nach dem Review --------------------------------------------------------------
+# --- Improvements after the review --------------------------------------------------------------
 def _flush(qtbot, win):
-    """Warten, bis ein geplantes Rendern gelaufen ist (ohne render_now von Hand)."""
+    """Wait until a scheduled render has run (without calling render_now by hand)."""
     qtbot.waitUntil(lambda: not win._timer.isActive(), timeout=2000)
 
 
@@ -412,7 +412,7 @@ def test_numbering_error_clears_when_fixed(qtbot):
     assert "Schritt" in panel.error_label.text()
     panel.step.setValue(1)
     assert not panel.error_label.isVisibleTo(panel)
-    panel.start.setValue(10**9)                        # letzte Zahl zu groß: nicht übernommen
+    panel.start.setValue(10**9)                        # last number too large: not accepted
     assert win.doc.series.numbering.start == 1 and "zu groß" in panel.error_label.text()
     panel.refresh()
     assert not panel.error_label.isVisibleTo(panel)
@@ -529,7 +529,7 @@ def test_file_dialog_starts_at_the_current_table(qtbot, tmp_path, monkeypatch):
     assert seen == [str(path.parent)]
 
 
-# --- Schlussreview --------------------------------------------------------------------------------
+# --- Final review --------------------------------------------------------------------------------
 def _hidden_first(tmp_path):
     book = openpyxl.Workbook()
     hidden = book.active
@@ -555,7 +555,7 @@ def test_choosing_excel_reads_once_and_keeps_the_visible_sheet(qtbot, tmp_path, 
     panel = win.panel("series")
     panel.table_button.click()
     assert len(opened) == 1
-    assert win.doc.series.sheet is None                  # erst eine eigene Wahl legt das Blatt fest
+    assert win.doc.series.sheet is None                  # only an own choice fixes the sheet
     assert panel.sheet.currentText() == "Sichtbar"
     assert panel.preview()[1] == ["S1"]
 

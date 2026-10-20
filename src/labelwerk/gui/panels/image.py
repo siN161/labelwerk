@@ -1,10 +1,11 @@
-"""Panel „Bild“: Bilder einfügen (Datei, Zwischenablage, Bildschirmfoto, Symbol) und das
-gewählte Bild einstellen.
+"""IMAGE panel: insert images (file, clipboard, screenshot, symbol) and adjust the
+selected image.
 
-Umwandlung in Schwarz/Weiß (Strich = harte Schwelle, Foto = Rasterpunkte), Schwelle,
-Umkehren, Zuschnitt (automatisch an/aus), Originalgröße 1:1, Seitenverhältnis, Drehen
-(Aktionen des Hauptfensters wie im Reiter Layout) und der Bereich „Position“ (``panels.position``, Größe immer änderbar). Gerechnet wird im Kern
-(``layout.set_crop`` …); Einfügen und Rahmenfelder führt das Hauptfenster aus.
+Conversion to black/white (line = hard threshold, photo = halftone dots), threshold,
+invert, crop (automatic on/off), original size 1:1, aspect ratio, rotate
+(actions of the main window, as in the LAYOUT tab) and the "Position" section
+(``panels.position``, size always changeable). The calculation happens in the core
+(``layout.set_crop`` …); inserting and frame fields are carried out by the main window.
 """
 from __future__ import annotations
 
@@ -30,20 +31,20 @@ from .position import PositionSection
 HINT = N_("Insert an image from a file, the clipboard, as a screenshot or symbol – or drag it "
           "onto the label")
 CROP_FAILED = N_("Image not cropped – only white area found")
-_SOURCE_PX = 240                    # Quelle: längere Namen in der Mitte gekürzt (Tooltip)
-_ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (Attribut, Aktion, Symbol)
+_SOURCE_PX = 240                    # source: longer names shortened in the middle (tooltip)
+_ROTATE = (("rotate_left", "object.rotate_left", "rotate-left"),     # (attribute, action, icon)
            ("rotate_right", "object.rotate_right", "rotate-right"))
 
 
 class ImagePanel(Panel):
-    frame_edited = Signal(str, float)   # Feld im Bereich „Position“ ("x" | "y" | "w" | "h"), mm
-    paste_requested = Signal()          # „Aus Zwischenablage“
-    message = Signal(str, str)          # Hinweis für die Statusleiste (Text, Zustand)
+    frame_edited = Signal(str, float)   # field in the "Position" section ("x" | "y" | "w" | "h"), mm
+    paste_requested = Signal()          # "From clipboard"
+    message = Signal(str, str)          # hint for the status bar (text, state)
 
     def __init__(self, doc: Document):
         super().__init__(doc, _("Image"))
-        self.index: int | None = None   # bearbeitetes Bild; None = keins ausgewählt
-        # ohne Auswahl gezeigt: Standard für neue Bilder (set_defaults; vorher der aus Settings)
+        self.index: int | None = None   # image being edited; None = none selected
+        # shown without a selection: default for new images (set_defaults; before that from settings)
         self._defaults = (Settings.image_mode, Settings.image_threshold)
         self._updating = False
 
@@ -83,7 +84,7 @@ class ImagePanel(Panel):
             row.addWidget(button)
         row.addStretch()
         self.layout_.addLayout(row)
-        row = QHBoxLayout()                    # „Schwelle [128]“, darunter der Regler
+        row = QHBoxLayout()                    # "Threshold [128]", the slider below
         self.threshold_label = QLabel(_("Threshold"))
         self.threshold_value = SpinBox()
         self.threshold = QSlider(Qt.Orientation.Horizontal)
@@ -117,7 +118,7 @@ class ImagePanel(Panel):
         for attr, __, ___ in _ROTATE:
             button = QToolButton()
             button.setObjectName("layoutButton")
-            button.setAutoRaise(True)              # Symbol beim Darüberfahren: Modus „Active“
+            button.setAutoRaise(True)              # icon on hover: mode "Active"
             button.setIconSize(SIZE)
             setattr(self, attr, button)
             row.addWidget(button)
@@ -132,11 +133,11 @@ class ImagePanel(Panel):
         self.layout_.addStretch()
 
         self.refresh()
-        step = self._step               # jede Einstellung ein eigener Rückgängig-Schritt
+        step = self._step               # every setting is its own undo step
         self.line.clicked.connect(lambda: step(self._set, mode="line"))
         self.photo.clicked.connect(lambda: step(self._set, mode="photo"))
         self.threshold.valueChanged.connect(self._threshold_moved)
-        # Ziehen am Regler: ein Schritt vom Drücken bis zum Loslassen
+        # dragging the slider: one step from press to release
         self.threshold.sliderPressed.connect(self._edited)
         self.threshold.sliderReleased.connect(self._edited)
         self.threshold_value.valueChanged.connect(lambda v: step(self._set, threshold=v))
@@ -147,7 +148,7 @@ class ImagePanel(Panel):
         self.original.clicked.connect(lambda: step(self._change, layout.original_size))
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
-        """„Aus Datei …“ und „Bildschirmfoto“ lösen ihre Aktionen aus (Kürzel im Tooltip)."""
+        """FROM FILE … and SCREENSHOT trigger their actions (shortcut in the tooltip)."""
         for button, key in ((self.from_file, "image.insert"),
                             (self.screenshot, "image.screenshot"),
                             (self.symbol, "image.symbol")):
@@ -155,7 +156,7 @@ class ImagePanel(Panel):
             button.clicked.connect(lambda _checked=False, a=action: a.trigger())
             button.setToolTip(action.toolTip())
             action.changed.connect(lambda b=button, a=action: b.setToolTip(a.toolTip()))
-        # Drehen: dieselben Aktionen wie im Reiter Layout (wirken auf die Auswahl = das Bild)
+        # rotate: the same actions as in the LAYOUT tab (act on the selection = the image)
         for attr, key, __ in _ROTATE:
             button, rotate = getattr(self, attr), actions[key]
             button.clicked.connect(lambda _checked=False, a=rotate: a.trigger())
@@ -171,13 +172,13 @@ class ImagePanel(Panel):
         return self.doc.objects[self.index]
 
     def set_object(self, index: int | None) -> None:
-        """Bild bearbeiten (Index in ``doc.objects``) bzw. mit None keins."""
+        """Edit an image (index in ``doc.objects``), or none with None."""
         if index != self.index:
             self.index = index
             self.refresh()
 
     def set_clipboard_image(self, available: bool) -> None:
-        """Enthält die Zwischenablage ein Bild? („Aus Zwischenablage“ nur dann aktiv)."""
+        """Does the clipboard contain an image? ("From clipboard" is active only then)."""
         self.from_clipboard.setEnabled(available)
 
     def _settings_widgets(self):
@@ -185,16 +186,16 @@ class ImagePanel(Panel):
                 self.invert, self.crop, self.keep_ratio, self.original, self.rotate_left,
                 self.rotate_right, self.position)
 
-    # --- Modell → Panel -----------------------------------------------------
+    # --- Model → panel ------------------------------------------------------
     def set_defaults(self, mode: str, threshold: int) -> None:
-        """Standard für neue Bilder (Einstellungen) – zeigt das Panel ohne Auswahl."""
+        """Default for new images (settings) – shown by the panel without a selection."""
         self._defaults = (mode, threshold)
         self.refresh()
 
     def refresh(self) -> None:
         if self.index is not None and not (0 <= self.index < len(self.doc.objects)
                                            and isinstance(self.obj, ImageObject)):
-            self.index = None                      # Objekt gibt es nicht mehr (Rückgängig …)
+            self.index = None                      # the object no longer exists (undo …)
         selected = self.index is not None
         self.hint.setVisible(not selected)
         for widget in self._settings_widgets():
@@ -230,16 +231,16 @@ class ImagePanel(Panel):
         self.source.setToolTip(text)
 
     def show_frame(self, rect: Rect | None) -> None:
-        """Rahmen des Bilds in mm anzeigen (vom Hauptfenster nach dem Rendern)."""
+        """Show the image's frame in mm (from the main window after rendering)."""
         self.position.show_frame(rect, editable_size=True)
 
-    # --- Panel → Modell -----------------------------------------------------
+    # --- Panel → model ------------------------------------------------------
     def _edited(self) -> None:
         if not self._updating and self.index is not None:
             self.edited.emit()
 
     def _step(self, change, *args, **kwargs) -> None:
-        """Änderung als eigener Rückgängig-Schritt (vorher Offenes festhalten, danach das Neue)."""
+        """Change as its own undo step (capture what is open beforehand, the new state afterwards)."""
         if self._updating or self.index is None:
             return
         self.edited.emit()
@@ -255,7 +256,7 @@ class ImagePanel(Panel):
         self._change(lambda obj: replace(obj, **values))
 
     def _threshold_moved(self, value: int) -> None:
-        """Regler: Zahl mitführen; beim Ziehen nur anzeigen (Schritt bis zum Loslassen)."""
+        """Slider: keep the number in step; while dragging only display it (step until release)."""
         if self._updating or self.index is None:
             return
         if self.threshold.isSliderDown():
@@ -264,9 +265,9 @@ class ImagePanel(Panel):
             self._step(self._set, threshold=value)
 
     def _set_crop(self, on: bool) -> None:
-        """Zuschnitt an (auf den Inhalt: alles, was nicht weiß ist; bei Symbolen auf die Tinte,
-        wie beim Einfügen) bzw. aus (ganzes Bild); ist das Bild ganz weiß, bleibt es ganz –
-        mit Hinweis."""
+        """Crop on (to the content: everything that is not white; for symbols to the ink,
+        as when inserting) or off (whole image); if the image is entirely white, it stays whole –
+        with a hint."""
         if not on:
             self._change(lambda obj: layout.set_crop(obj, None))
             return
@@ -275,7 +276,7 @@ class ImagePanel(Panel):
         else:
             box = crop_box(self.obj.image(), self.obj.dpi, ink=NOT_WHITE)
         if box is None:
-            self.refresh()                         # Haken wieder aus
+            self.refresh()                         # checkbox back off
             self.message.emit(_(CROP_FAILED), "warn")
             return
         self._change(lambda obj: layout.set_crop(obj, box))

@@ -1,4 +1,4 @@
-"""Bilder für den Druck: Schwarz/Weiß-Umwandlung und Größenbegrenzung (``imaging``)."""
+"""Images for printing: black/white conversion and size limit (``imaging``)."""
 import struct
 
 import pytest
@@ -8,19 +8,19 @@ from labelwerk.imaging import MAX_DPI, MAX_PIXELS, limit_size, on_white, to_8bit
 
 
 def _pixels(img: Image.Image) -> list:
-    """Pixel einer Zeile von links nach rechts."""
+    """Pixels of a row from left to right."""
     return [img.getpixel((x, 0)) for x in range(img.width)]
 
 
 def _gradient() -> Image.Image:
-    """Graustufen 0–255 nebeneinander (eine Zeile)."""
+    """Greyscale 0–255 side by side (one row)."""
     img = Image.new("L", (256, 1))
     img.putdata(list(range(256)))
     return img
 
 
 def _ink(layer: Image.Image) -> int:
-    """Anzahl bedruckter (schwarzer) Punkte einer Ebene."""
+    """Number of printed (black) dots of a layer."""
     return layer.histogram()[0]
 
 
@@ -46,7 +46,7 @@ def test_invert_swaps_ink_and_paper():
 
 def test_colour_counts_by_brightness():
     img = Image.new("RGB", (2, 1))
-    img.putdata([(255, 0, 0), (255, 255, 0)])            # Rot dunkel, Gelb hell
+    img.putdata([(255, 0, 0), (255, 255, 0)])            # red dark, yellow light
     black = to_layers(img, "line", 128, False)["black"]
     assert [black.getpixel((x, 0)) for x in (0, 1)] == [0, 255]
 
@@ -73,7 +73,7 @@ def test_photo_threshold_128_is_plain_dithering():
 
 @pytest.mark.parametrize("threshold", [0, 1, 64, 128, 192, 254, 255])
 def test_photo_keeps_white_and_black(threshold):
-    """Weißes Papier bekommt nie Punkte, Schwarz bleibt voll – bei jeder Schwelle."""
+    """White paper never gets dots, black stays solid – at every threshold."""
     white, black = Image.new("L", (20, 20), 255), Image.new("L", (20, 20), 0)
     assert _ink(to_layers(white, "photo", threshold, False)["black"]) == 0
     assert _ink(to_layers(black, "photo", threshold, False)["black"]) == 400
@@ -107,7 +107,7 @@ def test_on_white_palette_with_transparency_and_gray():
 
 
 def _gray16(mode: str) -> Image.Image:
-    """Verlauf 0–65535 in 16 Bit (wie ein 16-Bit-PNG) bzw. 32 Bit (``"I"``)."""
+    """Gradient 0–65535 in 16 bit (like a 16-bit PNG) or 32 bit (``"I"``)."""
     values = [v * 257 for v in range(256)]
     if mode == "I":
         img = Image.new("I", (256, 1))

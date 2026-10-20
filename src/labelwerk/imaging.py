@@ -1,11 +1,11 @@
-"""Bilder für den Druck aufbereiten (ohne Qt): auf Weiß legen, Größe begrenzen, in
-Druckebenen umwandeln.
+"""Prepare images for printing (without Qt): put on white, limit the size, convert into
+print layers.
 
-Druckebenen (``to_layers``) sind Bilder im Modus „1“ wie gedruckt: schwarz (0) = Tinte,
-weiß (255) = Papier. Heute gibt es nur die Ebene ``"black"``. Für den Zweifarbdruck der
-QL-8xx kommt später eine Ebene ``"red"`` hinzu – aus dem Farbbild (rote Töne → rot, der
-Rest → schwarz); der Druck setzt dann beide Ebenen zusammen (brother_ql ``red=True``).
-Deshalb bleibt das Original in Farbe, bis ``to_layers`` es umwandelt.
+Print layers (``to_layers``) are images in mode "1" as printed: black (0) = ink,
+white (255) = paper. Today there is only the ``"black"`` layer. For the two-colour printing of the
+QL-8xx a ``"red"`` layer will be added later – from the colour image (red tones → red, the
+rest → black); printing then combines both layers (brother_ql ``red=True``).
+That is why the original stays in colour until ``to_layers`` converts it.
 """
 from __future__ import annotations
 
@@ -13,41 +13,41 @@ from PIL import Image, ImageChops
 
 from .i18n import _
 
-MODES = ("line", "photo")      # Strich (harte Schwelle) | Foto (Rasterpunkte)
-MAX_DPI = 600                  # feiner druckt der QL nicht (300 dpi) – mehr kostet nur Speicher
-MAX_PIXELS = 6000              # längste Seite in Pixeln (Speicher; bei 300 dpi gut 50 cm)
+MODES = ("line", "photo")      # line (hard threshold) | photo (halftone dots)
+MAX_DPI = 600                  # the QL prints no finer (300 dpi) – more only costs memory
+MAX_PIXELS = 6000              # longest side in pixels (memory; at 300 dpi a good 50 cm)
 
 
-_GRAY_16 = ("I", "I;16", "I;16B", "I;16L", "I;16N")   # Graustufen mit 16 Bit (PNG, TIFF)
+_GRAY_16 = ("I", "I;16", "I;16B", "I;16L", "I;16N")   # 16-bit greyscale (PNG, TIFF)
 
 
 def to_8bit(img: Image.Image) -> Image.Image:
-    """Graustufen mit 16 Bit auf 8 Bit skalieren (0–65535 → 0–255); Pillow würde beim
-    Umwandeln abschneiden – das Bild käme fast weiß an. Andere Bilder unverändert."""
+    """Scale 16-bit greyscale to 8 bit (0–65535 → 0–255); Pillow would clip when
+    converting – the image would arrive almost white. Other images unchanged."""
     if img.mode in _GRAY_16:
         return img.convert("I").point(lambda v: v / 257).convert("L")
     return img
 
 
 def on_white(img: Image.Image) -> Image.Image:
-    """Bild als RGB; Transparenz (Alphakanal, transparente Palettenfarbe) wird weiß."""
+    """Image as RGB; transparency (alpha channel, transparent palette colour) becomes white."""
     img = to_8bit(img)
     if img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info:
         rgba = img.convert("RGBA")
         return Image.alpha_composite(Image.new("RGBA", rgba.size, "white"), rgba).convert("RGB")
-    if img.mode == "F":                       # Fließkomma-Graustufen
+    if img.mode == "F":                       # floating-point greyscale
         img = img.convert("L")
     return img.convert("RGB")
 
 
 def limit_size(img: Image.Image, dpi: float,
                stretch: float = 1.0) -> tuple[Image.Image, float]:
-    """Sehr große Bilder verkleinern: höchstens ``MAX_DPI`` bezogen auf die Druckgröße und
-    höchstens ``MAX_PIXELS`` auf der längsten Seite. Die Druckgröße bleibt (die Auflösung
-    sinkt mit); ein Bild in Grenzen kommt unverändert zurück. ``stretch``: Faktor für die
-    Höhe (ungleiche Auflösung) – gerechnet wird mit der gestreckten Größe, in einem
-    Schritt vom Original aus (kein Hochskalieren vorab); auch bei ``factor`` 1 wird dann
-    gestreckt."""
+    """Shrink very large images: at most ``MAX_DPI`` relative to the print size and
+    at most ``MAX_PIXELS`` on the longest side. The print size stays (the resolution
+    drops with it); an image within the limits comes back unchanged. ``stretch``: factor for the
+    height (unequal resolution) – the calculation uses the stretched size, in one
+    step from the original (no upscaling beforehand); even with ``factor`` 1 it is
+    stretched then."""
     height = max(1, round(img.height * stretch))
     factor = min(1.0, MAX_DPI / dpi, MAX_PIXELS / max(img.width, height))
     if factor >= 1.0 and height == img.height:
@@ -57,7 +57,7 @@ def limit_size(img: Image.Image, dpi: float,
 
 
 def check(mode: str, threshold: int) -> None:
-    """Umwandlung und Schwelle prüfen; ``ValueError`` mit verständlicher Meldung."""
+    """Check the conversion and threshold; ``ValueError`` with an understandable message."""
     if mode not in MODES:
         raise ValueError(_("Unknown conversion {mode!r} – allowed: line art, photo (line, photo)").format(
             mode=mode))
@@ -67,22 +67,22 @@ def check(mode: str, threshold: int) -> None:
 
 
 def photo_curve(threshold: int) -> list[int]:
-    """Helligkeitskurve für ``"photo"`` (Tabelle 0–255): ``v' = 255 · (v / 255) ** g`` mit
-    ``g = 2 ** ((threshold − 128) / 64)`` – höhere Schwelle → dunkler, 128 = unverändert;
-    0 und 255 bleiben fest (Papier bleibt weiß, Schwarz bleibt voll)."""
+    """Brightness curve for ``"photo"`` (table 0–255): ``v' = 255 · (v / 255) ** g`` with
+    ``g = 2 ** ((threshold − 128) / 64)`` – higher threshold → darker, 128 = unchanged;
+    0 and 255 stay fixed (paper stays white, black stays full)."""
     gamma = 2 ** ((threshold - 128) / 64)
     return [round(255 * (v / 255) ** gamma) for v in range(256)]
 
 
 def to_layers(img: Image.Image, mode: str, threshold: int,
               invert: bool) -> dict[str, Image.Image]:
-    """Bild in Druckebenen umwandeln (siehe Modulbeschreibung), gleiche Größe wie ``img``.
+    """Convert an image into print layers (see module description), same size as ``img``.
 
-    ``"line"``: Graustufe, dunkler als ``threshold`` wird Tinte (harte Schwelle – Codes,
-    Schrift, Logos). ``"photo"``: Gammakurve (``photo_curve``: 128 = unverändert, Weiß und
-    Schwarz bleiben), dann Floyd-Steinberg-Rasterung (Fotos, Verläufe) – weißes Papier
-    bekommt nie Punkte. Beide Male gilt: höhere Schwelle → mehr Tinte. ``invert`` tauscht
-    zuletzt Tinte und Papier.
+    ``"line"``: greyscale, darker than ``threshold`` becomes ink (hard threshold – codes,
+    text, logos). ``"photo"``: gamma curve (``photo_curve``: 128 = unchanged, white and
+    black stay), then Floyd-Steinberg dithering (photos, gradients) – white paper
+    never gets dots. In both cases: higher threshold → more ink. ``invert`` swaps
+    ink and paper at the end.
     """
     check(mode, threshold)
     gray = img.convert("L")

@@ -1,21 +1,19 @@
-"""Schreibmodus: Text direkt im Rahmen auf dem Etikett schreiben und markieren.
+"""Edit mode: write and select text directly in the frame on the label.
 
-Der Editor des Text-Panels bleibt als unsichtbarer Eingabepuffer erhalten und hat im
-Schreibmodus den Tastaturfokus; die Arbeitsfläche zeigt weiter das echte Objektbild aus dem
-Kern. Schreibmarke, Markierung und Mausklicks rechnet ``TextEditSession`` über den
-Zeilensatz desselben Renders (``RenderedObject.layout``) um – Vorschau = Druck gilt auch
-beim Tippen. Positionen: Editor in UTF-16-Einheiten, Zeilensatz in Zeichen
-(``render.to_utf16``/``from_utf16``).
+The text panel's editor is kept as an invisible input buffer and has the keyboard focus in
+edit mode; the canvas keeps showing the real object image from the core. Caret, selection and
+mouse clicks are converted by ``TextEditSession`` via the line layout of the same render
+(``RenderedObject.layout``) – preview = print also holds while typing. Positions: editor in
+UTF-16 units, line layout in characters (``render.to_utf16``/``from_utf16``).
 
-Im Schreibmodus wirken die Tasten des Editors (Pfeile, Pos1/Ende, Entf, Strg+A/C/X/V/Z …);
-Auf/Ab folgen den Zeilen auf dem Etikett, Tab bleibt ohne Wirkung (Tabulatoren druckt
-labelwerk nicht, und der Fokus soll den Text nicht verlassen). Strg+Z und Strg+Umschalt+Z
-gehen wie die Knöpfe im Dokument weiter, wenn im Editor nichts mehr zurück- bzw.
-wiederherzustellen ist. Ein Rahmen ohne feste Größe wächst an der Kante
-seiner Textposition (``layout.anchor_after_edit``). Start und Ende samt Rückgängig-Schritt
-(eine Bearbeitung = ein Schritt) steuert das Hauptfenster (``MainWindow.edit_text``,
-``finish_editing``); Rückgängig, Zwischenablage und die Freigabe ihrer Knöpfe gibt es im
-Schreibmodus an die Sitzung weiter (``undo``, ``copy`` … ``update_actions``).
+In edit mode the editor's keys apply (arrows, Home/End, Del, Ctrl+A/C/X/V/Z …);
+Up/Down follow the lines on the label, Tab has no effect (labelwerk does not print tabs, and
+the focus should not leave the text). Ctrl+Z and Ctrl+Shift+Z carry on in the document like
+the buttons when the editor has nothing left to undo or redo. A frame without a fixed size
+grows at the edge of its text position (``layout.anchor_after_edit``). Start and end including
+the undo step (one edit = one step) are controlled by the main window (``MainWindow.edit_text``,
+``finish_editing``); in edit mode undo, clipboard and the enabling of their buttons are
+passed on to the session (``undo``, ``copy`` … ``update_actions``).
 """
 from __future__ import annotations
 
@@ -31,7 +29,7 @@ _TABS = (Qt.Key.Key_Tab, Qt.Key.Key_Backtab)
 
 
 class TextEditSession(QObject):
-    """Schreibmodus für höchstens ein Textobjekt (``index``) des Hauptfensters."""
+    """Edit mode for at most one text object (``index``) of the main window."""
 
     def __init__(self, window):
         super().__init__(window)
@@ -40,15 +38,15 @@ class TextEditSession(QObject):
         self._panel = window.panel("text")
         self._editor = self._panel.edit
         self.index: int | None = None
-        self._goal: tuple[float, int] | None = None   # Auf/Ab: Ziel-x und Position danach
-        self._quiet = False                       # Anzeige erst, wenn das Objekt steht
+        self._goal: tuple[float, int] | None = None   # Up/Down: target x and position afterwards
+        self._quiet = False                       # display only once the object is in place
         self._canvas.edit_pressed.connect(self._press)
         self._canvas.edit_dragged.connect(self._drag)
         self._canvas.edit_double_clicked.connect(self._select_word)
         for signal in (self._editor.cursorPositionChanged, self._editor.selectionChanged):
             signal.connect(self.update_marks)
-        # nach einem Knopf des Panels bzw. wenn die Liste von „Schrift“/Größe zugeht oder
-        # dort Enter fällt, weiter an der Schreibmarke tippen – Pfeiltasten im Feld bleiben dort
+        # after a panel button or when the list of “Font”/size closes or Enter is pressed
+        # there, keep typing at the caret – arrow keys in the field stay there
         self._panel.formatted.connect(self._return_focus_from_button)
         self._popups = []
         for combo in (self._panel.family, self._panel.size):
@@ -64,18 +62,18 @@ class TextEditSession(QObject):
     def active(self) -> bool:
         return self.index is not None
 
-    # --- Start / Ende -------------------------------------------------------
+    # --- Start / End -------------------------------------------------------
     def start(self, index: int, point: QPointF | None = None) -> None:
-        """Schreibmodus für Objekt ``index`` (gewählt, im Text-Panel): Editor neu aus dem
-        Modell, Tastaturfokus hinein, Schreibmarke an ``point`` (Druckpunkte in Leserichtung,
-        z. B. Doppelklick) oder ans Textende."""
-        self._panel.refresh()                      # Editor = Modell, eigenes Rückgängig ab hier
+        """Edit mode for object ``index`` (selected, in the text panel): editor rebuilt from the
+        model, keyboard focus into it, caret at ``point`` (dots in reading direction,
+        e.g. double-click) or at the end of the text."""
+        self._panel.refresh()                      # editor = model, own undo from here on
         self.index = index
         self._goal = None
         self._panel.set_editing(True)
         self._editor.caret_rect = self._caret_rect
         self._canvas.set_editing(index)
-        self._canvas.setFocusProxy(self._editor)   # Klick auf die Fläche: Fokus bleibt im Editor
+        self._canvas.setFocusProxy(self._editor)   # click on the canvas: focus stays in the editor
         self._editor.setFocus()
         cursor = self._editor.textCursor()
         position = self._position_at(point) if point is not None else None
@@ -88,13 +86,13 @@ class TextEditSession(QObject):
         self.update_marks()
 
     def end(self) -> int | None:
-        """Schreibmodus beenden (Markierung entfällt, Objekt-Kürzel gelten wieder); zurück
-        kommt der Index des bearbeiteten Objekts."""
+        """End edit mode (selection is dropped, object shortcuts apply again); returns
+        the index of the edited object."""
         index, self.index = self.index, None
         if index is None:
             return None
         cursor = self._editor.textCursor()
-        cursor.clearSelection()                    # Formatieren wirkt wieder auf den ganzen Rahmen
+        cursor.clearSelection()                    # formatting applies to the whole frame again
         self._editor.setTextCursor(cursor)
         self._panel.set_editing(False)
         self._editor.caret_rect = None
@@ -105,19 +103,19 @@ class TextEditSession(QObject):
         return index
 
     def content_changed(self) -> None:
-        """Text oder Format geändert: sofort neu rendern, damit Schreibmarke und Bild zum
-        selben Zeilensatz gehören. Ein Rahmen mit Position und ohne feste Größe wächst dabei
-        an der Kante seiner Textposition (die Oberkante der ersten Zeile bleibt); ohne
-        Position bleibt der Text mittig, eine feste Rahmengröße passt ihn wie bisher ein."""
+        """Text or format changed: render immediately so caret and image belong to the same
+        line layout. A frame with a position and without a fixed size grows at the edge of
+        its text position (the top edge of the first line stays); without a position the
+        text stays centred, a fixed frame size fits it in as before."""
         if not self.active:
             return
         window, index = self._window, self.index
         obj = window.doc.objects[index]
         anchored = obj.positioned and not obj.fit and index < len(window.rendered)
-        old = window.rendered[index] if anchored else None   # wie zuletzt angezeigt
+        old = window.rendered[index] if anchored else None   # as last displayed
         self._quiet = True
         try:
-            window.render_now()                        # neuer Text, noch an der alten Stelle
+            window.render_now()                        # new text, still at the old position
             new = window.rendered[index] if index < len(window.rendered) else None
             if (old is not None and new is not None and new is not old
                     and old.layout is not None and new.layout is not None):
@@ -125,20 +123,20 @@ class TextEditSession(QObject):
                 if position != (obj.x_mm, obj.y_mm):
                     obj.x_mm, obj.y_mm = position
                     window.render_now()
-                    # der Zeilensatz hängt nicht von der Lage ab (relativ zum Rahmen): die
-                    # schon gemessenen Zeichengrenzen weiter nutzen statt neu zu messen
+                    # the line layout does not depend on the position (relative to the frame): keep
+                    # using the character boundaries already measured instead of measuring again
                     window.rendered[index].layout = new.layout
         finally:
             self._quiet = False
         self.update_marks()
 
-    # --- Befehle (Knöpfe, Kürzel) --------------------------------------------
-    # Rückgabe True = im Schreibmodus erledigt; False = das Hauptfenster führt den Befehl
-    # auf dem Dokument bzw. der Auswahl aus.
+    # --- Commands (buttons, shortcuts) --------------------------------------------
+    # Return value True = handled in edit mode; False = the main window runs the command
+    # on the document or the selection.
     def undo(self) -> bool:
-        """Rückgängig im Editor; ist dort nichts mehr zurückzunehmen, endet der Schreibmodus
-        und es geht im Dokument weiter (False). Ein leerer neuer Rahmen entfällt dabei – das
-        ist dann der ganze Schritt. Hat auch das Dokument nichts: weiter schreiben."""
+        """Undo in the editor; if there is nothing left to undo there, edit mode ends and
+        the document carries on (False). An empty new frame is dropped – that is then the
+        whole step. If the document has nothing either: keep writing."""
         if not self.active:
             return False
         if self._editor.document().isUndoAvailable():
@@ -147,18 +145,18 @@ class TextEditSession(QObject):
         window = self._window
         obj = window.doc.objects[self.index]
         if obj.positioned and obj.is_empty():
-            selection = window.history.selection    # Auswahl vor dem Anlegen
+            selection = window.history.selection    # selection before creating
             window.finish_editing()
             self._canvas.set_selection(selection)
             return True
         if not window.history.can_undo(window.doc):
-            return True                             # nichts zurückzunehmen: weiter schreiben
+            return True                             # nothing to undo: keep writing
         window.finish_editing()
         return False
 
     def redo(self) -> bool:
-        """Wiederherstellen im Editor; hat er nichts mehr, endet der Schreibmodus und es geht
-        im Dokument weiter (False) – wie bei ``undo``."""
+        """Redo in the editor; if it has nothing left, edit mode ends and the document
+        carries on (False) – as with ``undo``."""
         if not self.active:
             return False
         if self._editor.document().isRedoAvailable():
@@ -166,35 +164,35 @@ class TextEditSession(QObject):
             return True
         window = self._window
         if not window.history.can_redo(window.doc):
-            return True                             # nichts zu wiederholen: weiter schreiben
+            return True                             # nothing to redo: keep writing
         window.finish_editing()
         return False
 
     def copy(self) -> bool:
-        """Markierten Text in die Zwischenablage des Systems kopieren."""
-        active = self.active          # vorher merken: endet die Sitzung dabei, gilt er trotzdem
+        """Copy the selected text to the system clipboard."""
+        active = self.active          # note it first: if the session ends in the process, it still applies
         if active:
             self._editor.copy()
         return active
 
     def cut(self) -> bool:
-        """Markierten Text ausschneiden (Zwischenablage des Systems)."""
-        active = self.active          # vorher merken: endet die Sitzung dabei, gilt er trotzdem
+        """Cut the selected text (system clipboard)."""
+        active = self.active          # note it first: if the session ends in the process, it still applies
         if active:
             self._editor.cut()
         return active
 
     def paste(self) -> bool:
-        """Text aus der Zwischenablage des Systems einfügen (als reiner Text)."""
-        active = self.active          # vorher merken: endet die Sitzung dabei, gilt er trotzdem
+        """Paste text from the system clipboard (as plain text)."""
+        active = self.active          # note it first: if the session ends in the process, it still applies
         if active:
             self._editor.paste()
         return active
 
     def update_actions(self, actions: dict) -> bool:
-        """Im Schreibmodus wirken die Knöpfe auf den Text im Editor: Freigabe der Aktionen
-        (``gui.actions``) danach setzen; Rückgängig/Wiederherstellen auch, wenn erst das
-        Dokument wieder etwas hat."""
+        """In edit mode the buttons act on the text in the editor: set the enabling of the
+        actions (``gui.actions``) accordingly; undo/redo also when only the document
+        has something."""
         if not self.active:
             return False
         editor, window = self._editor, self._window
@@ -211,11 +209,11 @@ class TextEditSession(QObject):
             actions[key].setEnabled(value)
         return True
 
-    # --- Anzeige ------------------------------------------------------------
+    # --- Display ------------------------------------------------------------
     def update_marks(self) -> None:
-        """Schreibmarke, Markierung und Rahmen aus Editor und aktuellem Zeilensatz an die
-        Arbeitsfläche geben. Passt der Zeilensatz (noch) nicht zum Editor – das Rendern
-        folgt gleich bzw. ist gescheitert –, bleibt die bisherige Anzeige."""
+        """Pass caret, selection and frame from the editor and the current line layout to the
+        canvas. If the line layout does not (yet) match the editor – rendering follows
+        soon or has failed – the previous display stays."""
         if self._quiet:
             return
         current = self._current()
@@ -227,14 +225,14 @@ class TextEditSession(QObject):
         anchor = from_utf16(text, cursor.anchor())
         x, top, height = text_layout.caret(pos)
         scale = self._panel.typing_scale()
-        if abs(scale - 1) > 1e-6:                     # Weitertippen in anderer Größe (A⁺ …)
+        if abs(scale - 1) > 1e-6:                     # continued typing at another size (A⁺ …)
             baseline = next(line.baseline for line in text_layout.lines
                             if line.start <= pos <= line.end)
             top, height = baseline - (baseline - top) * scale, height * scale
         caret = QLineF(_label(rendered, rotation, x, top),
                        _label(rendered, rotation, x, top + height))
         frame = self._frame(rendered, text_layout, rotation, x, top, height)
-        # ein markierter Absatzwechsel am Ende der breitesten Zeile endet am Rahmen
+        # a selected paragraph break at the end of the widest line ends at the frame
         marked = ([_label_rect(rendered, rotation, *rect).intersected(frame)
                    for rect in text_layout.selection_rects(anchor, pos)] if anchor != pos else [])
         self._canvas.set_edit_marks(frame, caret, marked)
@@ -242,7 +240,7 @@ class TextEditSession(QObject):
             QGuiApplication.inputMethod().update(Qt.InputMethodQuery.ImCursorRectangle)
 
     def _caret_rect(self) -> QRect:
-        """Schreibmarke auf der Arbeitsfläche in Koordinaten des (unsichtbaren) Editors."""
+        """Caret on the canvas in coordinates of the (invisible) editor."""
         line = self._canvas.caret_line()
         rect = QRectF(line.p1(), line.p2()).normalized()
         top_left = self._editor.mapFromGlobal(
@@ -252,10 +250,10 @@ class TextEditSession(QObject):
 
     def _frame(self, rendered: RenderedObject, text_layout: TextLayout, rotation: int,
                x: float, top: float, height: float) -> QRectF:
-        """Rahmen im Schreibmodus: Tintenbox des Objekts samt den Zeilen von Ober- bis
-        Unterlänge, damit Schreibmarke und Markierung darin liegen. Ein leerer Text bekommt
-        einen Platzhalter (halbe Zeile breit) um die Schreibmarke – je nach Textposition
-        rechts, mittig oder links von ihr."""
+        """Frame in edit mode: ink box of the object including the lines from ascender to
+        descender, so caret and selection lie inside. An empty text gets a placeholder
+        (half a line wide) around the caret – to the right, centred or to the left of it,
+        depending on the text position."""
         if rendered.w and rendered.h:
             lines = text_layout.lines
             left = min(line.stops[0] for line in lines)
@@ -271,8 +269,8 @@ class TextEditSession(QObject):
         return _label_rect(rendered, rotation, left, top, width, height)
 
     def _current(self) -> tuple[RenderedObject, TextLayout, str, int] | None:
-        """Gerendertes Objekt, sein Zeilensatz, Text des Editors und Drehung – nur wenn der
-        Zeilensatz zum Text im Editor passt."""
+        """Rendered object, its line layout, editor text and rotation – only if the
+        line layout matches the text in the editor."""
         window, index = self._window, self.index
         if index is None or not 0 <= index < min(len(window.rendered), len(window.doc.objects)):
             return None
@@ -282,9 +280,9 @@ class TextEditSession(QObject):
             return None
         return rendered, rendered.layout, text, window.doc.objects[index].rotation
 
-    # --- Maus und Tastatur ----------------------------------------------------
+    # --- Mouse and keyboard ----------------------------------------------------
     def _position_at(self, point: QPointF) -> int | None:
-        """Editor-Position (UTF-16) der Zeichengrenze am Punkt (Druckpunkte in Leserichtung)."""
+        """Editor position (UTF-16) of the character boundary at the point (dots in reading direction)."""
         current = self._current()
         if current is None:
             return None
@@ -293,16 +291,16 @@ class TextEditSession(QObject):
         return to_utf16(text, text_layout.hit(u, v))
 
     def _press(self, point: QPointF, extend: bool) -> None:
-        """Klick in den Rahmen: Schreibmarke dorthin (mit Umschalt: Markierung bis dorthin)."""
+        """Click in the frame: caret there (with Shift: selection up to there)."""
         self._move_to(self._position_at(point), extend)
         self._editor.setFocus()
 
     def _drag(self, point: QPointF) -> None:
-        """Ziehen im Rahmen markiert vom Klickpunkt bis hierher."""
+        """Dragging in the frame selects from the click point to here."""
         self._move_to(self._position_at(point), extend=True)
 
     def _select_word(self, point: QPointF) -> None:
-        """Doppelklick im Schreibmodus markiert das Wort am Punkt."""
+        """Double-click in edit mode selects the word at the point."""
         position = self._position_at(point)
         if position is None:
             return
@@ -320,9 +318,9 @@ class TextEditSession(QObject):
         self._editor.setTextCursor(cursor)
 
     def _vertical(self, step: int, extend: bool) -> None:
-        """Auf/Ab: in die Zeile darüber/darunter, so nah wie möglich an derselben Stelle auf
-        dem Etikett (der Editor kennt die Zeilen des Etiketts nicht). Über der ersten bzw.
-        unter der letzten Zeile geht es an den Anfang bzw. ans Ende."""
+        """Up/Down: to the line above/below, as close as possible to the same place on the
+        label (the editor does not know the label's lines). Above the first or below the
+        last line it goes to the start or the end."""
         current = self._current()
         if current is None:
             return
@@ -331,7 +329,7 @@ class TextEditSession(QObject):
         pos = from_utf16(text, position)
         lines = text_layout.lines
         row = next(i for i, line in enumerate(lines) if line.start <= pos <= line.end)
-        # mehrmals Auf/Ab hintereinander: die Spalte vom Anfang der Folge halten
+        # several Up/Down in a row: keep the column from the start of the sequence
         x = (self._goal[0] if self._goal is not None and self._goal[1] == position
              else text_layout.caret(pos)[0])
         if 0 <= row + step < len(lines):
@@ -343,13 +341,13 @@ class TextEditSession(QObject):
         self._goal = (x, self._editor.textCursor().position())
 
     def _return_focus(self) -> None:
-        """Nach Formatieren im Panel weiter an der Schreibmarke tippen."""
+        """After formatting in the panel, keep typing at the caret."""
         if self.active:
             self._editor.setFocus()
 
     def _return_focus_from_button(self) -> None:
-        """Ein Knopf des Panels hat formatiert (Klick nahm ihm den Fokus): zurück zum Text.
-        Felder mit Tastaturbedienung (Schrift, Größe) behalten ihn."""
+        """A panel button has formatted (the click took its focus): back to the text.
+        Fields with keyboard operation (font, size) keep it."""
         if isinstance(QApplication.focusWidget(), QAbstractButton):
             self._return_focus()
 
@@ -359,18 +357,18 @@ class TextEditSession(QObject):
 
     def eventFilter(self, watched, event) -> bool:
         if watched in self._popups and event.type() == QEvent.Type.Hide:
-            QTimer.singleShot(0, self._return_focus)   # nachdem Qt den Fokus zurückgegeben hat
+            QTimer.singleShot(0, self._return_focus)   # after Qt has given the focus back
         elif (self.active and watched is self._editor
               and event.type() == QEvent.Type.KeyPress):
             if event.key() in _TABS:
-                return True                             # Tab: ohne Wirkung, Fokus bleibt
+                return True                             # Tab: no effect, focus stays
             if (event.matches(QKeySequence.StandardKey.Undo)
                     and not self._editor.document().isUndoAvailable()):
-                self._window.undo()                     # wie der Knopf: weiter im Dokument
+                self._window.undo()                     # like the button: carry on in the document
                 return True
             if (event.matches(QKeySequence.StandardKey.Redo)
                     and not self._editor.document().isRedoAvailable()):
-                self._window.redo()                     # ebenso Wiederherstellen
+                self._window.redo()                     # likewise redo
                 return True
             if (event.key() in _VERTICAL
                     and not event.modifiers() & ~Qt.KeyboardModifier.ShiftModifier):
@@ -381,9 +379,9 @@ class TextEditSession(QObject):
 
 
 def editor_text(document: QTextDocument) -> str:
-    """Text des Editors, wie ihn das Modell bekommt (``TextPanel.to_text_object``): Absätze
-    mit „\\n“, Zeilentrenner U+2028 als Absatz, Tab als Leerzeichen – je ein Zeichen, die
-    Positionen bleiben also gleich."""
+    """Editor text as the model receives it (``TextPanel.to_text_object``): paragraphs
+    with "\\n", line separator U+2028 as a paragraph, tab as a space – one character each, so
+    the positions stay the same."""
     lines = []
     block = document.begin()
     while block.isValid():
@@ -393,12 +391,13 @@ def editor_text(document: QTextDocument) -> str:
 
 
 def _label(rendered: RenderedObject, rotation: int, u: float, v: float) -> QPointF:
-    """Objektkoordinaten (ungedreht) → Punkt auf dem Etikett (Druckpunkte in Leserichtung)."""
+    """Object coordinates (unrotated) → point on the label (dots in reading direction)."""
     return QPointF(*layout.from_object((u, v), rendered, rotation))
 
 
 def _label_rect(rendered: RenderedObject, rotation: int, u: float, v: float, w: float,
                 h: float) -> QRectF:
-    """Rechteck in Objektkoordinaten → Rechteck auf dem Etikett (Drehung um 90°-Schritte)."""
+    """Rectangle in object coordinates → rectangle on the label (rotation in 90° steps)."""
+
     return QRectF(_label(rendered, rotation, u, v),
                   _label(rendered, rotation, u + w, v + h)).normalized()

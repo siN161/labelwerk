@@ -1,5 +1,5 @@
-"""Vektorbilder (Etappe 3d-2c): Bild-Objekte mit SVG werden in Rahmengröße gerastert –
-scharf in jeder Größe. Der Kern rastert nicht selbst (Qt-frei); hier eine Ersatzfunktion."""
+"""Vector images (stage 3d-2c): image objects with SVG are rasterised at frame size –
+sharp at any size. The core does not rasterise itself (Qt-free); here a substitute function."""
 import pytest
 from PIL import Image, ImageDraw
 
@@ -16,8 +16,8 @@ def _dots(mm):
 
 
 class LineRasterizer:
-    """Ersatz: weißes Blatt der Größe ``size`` mit einer 1 Pixel dünnen schwarzen Linie quer
-    durch die Mitte; liefert den Ausschnitt ``region`` und merkt sich die Aufrufe."""
+    """Substitute: white sheet of size ``size`` with a 1-pixel-thin black line across
+    the middle; returns the section ``region`` and records the calls."""
 
     def __init__(self):
         self.calls = []
@@ -40,7 +40,7 @@ def rasterizer():
 
 
 def _preview(w=100, h=50):
-    """Vorschau-PNG wie die Raster-Funktion sie in klein liefert."""
+    """Preview PNG as the raster function delivers it, small."""
     img = Image.new("RGB", (w, h), "white")
     ImageDraw.Draw(img).line((0, h // 2, w - 1, h // 2), fill="black")
     return img
@@ -55,7 +55,7 @@ def _vector(w_mm, h_mm, crop=None, **kw):
 
 
 def _ink_rows(img):
-    """Zeilen mit Tinte (Bild „L“/„1“: 0 = schwarz)."""
+    """Rows with ink (image "L"/"1": 0 = black)."""
     gray = img.convert("L")
     return [y for y in range(gray.height) if gray.crop((0, y, gray.width, y + 1)).getextrema()[0] < 128]
 
@@ -71,7 +71,7 @@ def test_image_without_svg_has_none():
 
 @pytest.mark.parametrize("w_mm", [8, 25, 55])
 def test_vector_stays_one_dot_thin_in_every_size(rasterizer, w_mm):
-    """Ein Pixelbild würde beim Vergrößern verschmieren – das Vektorbild wird neu gerastert."""
+    """A pixel image would smear when enlarged – the vector image is rasterised anew."""
     obj = _vector(w_mm, w_mm / 2)
     rendered = render_object(obj, Document("62", length_mm=60, objects=[obj]))
     w, h = _dots(w_mm), _dots(w_mm / 2)
@@ -82,8 +82,8 @@ def test_vector_stays_one_dot_thin_in_every_size(rasterizer, w_mm):
 
 
 def test_crop_rasterizes_only_the_region(rasterizer):
-    """Ausschnitt in der Mitte: das ganze Blatt in der Größe, in der der Ausschnitt den Rahmen
-    füllt – geliefert wird nur der Ausschnitt."""
+    """Section in the middle: the whole sheet at the size at which the section fills
+    the frame – only the section is delivered."""
     obj = _vector(20, 10, crop=(25, 0, 75, 50), keep_ratio=False)
     render_object(obj, Document("62", length_mm=60, objects=[obj]))
     w, h = _dots(20), _dots(10)
@@ -93,7 +93,7 @@ def test_crop_rasterizes_only_the_region(rasterizer):
 
 
 def test_keep_ratio_fits_vector_into_wrong_frame(rasterizer):
-    obj = _vector(20, 20)                        # Vorschau 2:1, Rahmen quadratisch
+    obj = _vector(20, 20)                        # preview 2:1, frame square
     rendered = render_object(obj, Document("62", length_mm=60, objects=[obj]))
     w = _dots(20)
     _, size, region = rasterizer.calls[-1]
@@ -140,14 +140,14 @@ def test_rasterizer_result_of_wrong_size_is_an_error(rasterizer):
 
 @pytest.mark.parametrize("crop", [(10, 0, 10, 50), (50, 0, 150, 50), (-5, 0, 50, 50)])
 def test_invalid_crop_of_a_vector_is_a_clear_error(rasterizer, crop):
-    """Wie im Pixelweg: verständlicher Fehler statt Division durch null oder weißem Bild."""
+    """As in the pixel path: understandable error instead of division by zero or a white image."""
     obj = _vector(10, 5, crop=crop, keep_ratio=False)
     with pytest.raises(ValueError, match="Ausschnitt"):
         render_object(obj, Document("62", length_mm=60, objects=[obj]))
 
 
 def test_crop_with_keep_ratio_rasterizes_the_fitted_region(rasterizer):
-    obj = _vector(20, 10, crop=(25, 0, 75, 50))  # quadratischer Ausschnitt in breitem Rahmen
+    obj = _vector(20, 10, crop=(25, 0, 75, 50))  # square section in a wide frame
     rendered = render_object(obj, Document("62", length_mm=60, objects=[obj]))
     side = _dots(10)
     _, size, region = rasterizer.calls[-1]
@@ -156,7 +156,7 @@ def test_crop_with_keep_ratio_rasterizes_the_fitted_region(rasterizer):
 
 
 def test_limit_resolution_leaves_vectors_alone():
-    """Die Vorschau ist nur Maßstab – verkleinert würde der Ausschnitt gröber (Versatz)."""
+    """The preview is only a scale – shrunk, the section would get coarser (offset)."""
     obj = _vector(1, 0.5)
     assert obj.limit_resolution() is obj
 
@@ -171,7 +171,7 @@ def test_renderer_notices_a_new_rasterizer(rasterizer):
 
 
 def test_extreme_enlargement_of_a_tiny_crop_is_refused(rasterizer):
-    """Qt ließe Formen eines riesigen Blatts still weg – lieber eine klare Meldung."""
+    """Qt would silently drop shapes of a huge sheet – better a clear message."""
     obj = ImageObject.from_image(Image.new("RGB", (1000, 10), "black"), 300, "x.svg",
                                  crop=(0, 0, 1, 1), svg=SVG)
     obj.w_mm = obj.h_mm = 400

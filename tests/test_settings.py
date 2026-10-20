@@ -35,7 +35,7 @@ def test_invalid_values_fall_back_with_warning(tmp_path):
     s = load_settings(path)
     assert (s.label_id, s.orientation, s.margin_mm, s.font_size_pt, s.start_zoom) == \
         ("62", "vertical", 1.0, None, 200)
-    assert s.check_media_on_start is False                 # gültige Werte bleiben
+    assert s.check_media_on_start is False                 # valid values stay
     assert len(s.warnings) == 5
     assert all("ungültig" in w for w in s.warnings)
 
@@ -50,7 +50,7 @@ def test_broken_json_gives_defaults_and_warning(tmp_path):
 
 def test_save_error_has_clear_message(tmp_path):
     blocker = tmp_path / "datei"
-    blocker.write_text("x")                                # Ordner kann nicht angelegt werden
+    blocker.write_text("x")                                # folder cannot be created
     with pytest.raises(OSError, match="nicht gespeichert"):
         save_settings(Settings(), blocker / "settings.json")
 
@@ -75,7 +75,7 @@ def test_unknown_label_falls_back(tmp_path, label):
 
 @pytest.mark.parametrize("label", ["102", "62red"])
 def test_label_of_another_printer_is_kept(tmp_path, label):
-    """Ob das Etikett zum angeschlossenen Drucker passt, prüfen GUI und CLI (zwei Drucker)."""
+    """Whether the label fits the connected printer is checked by GUI and CLI (two printers)."""
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"label_id": label}))
     s = load_settings(path)
@@ -140,7 +140,7 @@ def test_invalid_theme_falls_back_with_warning(tmp_path):
     assert s.theme == "rawblock" and any("theme" in w for w in s.warnings)
 
 
-# --- Tastenkürzel -------------------------------------------------------------------
+# --- Shortcuts -------------------------------------------------------------------
 def test_shortcuts_default_empty(tmp_path):
     assert load_settings(tmp_path / "fehlt.json").shortcuts == {}
     assert Settings().shortcuts == {}
@@ -196,10 +196,10 @@ def test_esc_from_settings_file_is_rejected(tmp_path):
     assert any("nicht belegbar" in w for w in settings.warnings)
 
 
-# --- Bilder einfügen ----------------------------------------------------------------
+# --- Insert images ----------------------------------------------------------------
 def test_image_import_defaults_and_roundtrip(tmp_path):
     s = Settings()
-    assert (s.image_crop, s.image_rotate) == (True, False)     # zuschneiden, nicht drehen
+    assert (s.image_crop, s.image_rotate) == (True, False)     # crop, do not rotate
     path = tmp_path / "s.json"
     save_settings(Settings(image_crop=False, image_rotate=True), path)
     loaded = load_settings(path)
@@ -215,7 +215,7 @@ def test_invalid_image_import_settings_fall_back_with_warning(tmp_path):
     assert sum("image_" in w for w in s.warnings) == 2
 
 
-# --- Symbole ------------------------------------------------------------------------
+# --- Symbols ------------------------------------------------------------------------
 def test_symbol_lists_default_empty_and_roundtrip(tmp_path):
     s = Settings()
     assert (s.symbols_recent, s.symbols_favorites) == ([], [])
@@ -243,8 +243,8 @@ def test_invalid_symbol_lists_fall_back_with_warning(tmp_path, value):
 
 
 def test_invalid_entries_are_dropped_singly_and_duplicates_removed(tmp_path):
-    """Ein kaputter Eintrag kostet nicht die ganze Liste (sonst wären Favoriten beim nächsten
-    Speichern weg)."""
+    """A broken entry does not cost the whole list (otherwise favourites would be gone on the next
+    save)."""
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"symbols_favorites": ["a", 3, "", "b", "a"]}))
     s = load_settings(path)
@@ -268,11 +268,11 @@ def test_save_is_atomic_and_leaves_no_temp_files(tmp_path, monkeypatch):
     monkeypatch.setattr("labelwerk.settings.os.replace", broken)
     with pytest.raises(OSError, match="konnten nicht gespeichert werden"):
         save_settings(Settings(margin_mm=5), path)
-    assert load_settings(path).margin_mm == 3.0          # alte Datei unversehrt
+    assert load_settings(path).margin_mm == 3.0          # old file intact
     assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
 
 
-# --- Dateien ------------------------------------------------------------------------
+# --- Files ------------------------------------------------------------------------
 def test_recent_files_and_start_favorite_default_and_roundtrip(tmp_path):
     s = Settings()
     assert (s.recent_files, s.start_favorite) == ([], None)
@@ -311,7 +311,7 @@ def test_cups_printer_and_its_options_are_kept(tmp_path):
 
 def test_show_all_cups_printers(tmp_path):
     path = tmp_path / "settings.json"
-    assert Settings().cups_all is False                # Bürodrucker standardmäßig ausgeblendet
+    assert Settings().cups_all is False                # office printers hidden by default
     save_settings(Settings(cups_all=True), path)
     assert load_settings(path).cups_all is True
     path.write_text(json.dumps({"cups_all": "ja"}))
@@ -358,7 +358,7 @@ def test_one_bad_printer_option_keeps_the_others(tmp_path):
 
 def test_fonts_all_default_and_validation(tmp_path):
     path = tmp_path / "s.json"
-    assert load_settings(path).fonts_all is False              # kurze Schriftliste
+    assert load_settings(path).fonts_all is False              # short font list
     save_settings(Settings(fonts_all=True), path)
     assert load_settings(path).fonts_all is True
     path.write_text(json.dumps({"fonts_all": "ja"}))
@@ -368,7 +368,7 @@ def test_fonts_all_default_and_validation(tmp_path):
 
 def test_image_defaults_for_new_images(tmp_path):
     s = Settings()
-    assert (s.image_mode, s.image_threshold) == ("line", 128)  # wie bisher: Strich, Mitte
+    assert (s.image_mode, s.image_threshold) == ("line", 128)  # as before: line, middle
     path = tmp_path / "s.json"
     save_settings(Settings(image_mode="photo", image_threshold=90), path)
     loaded = load_settings(path)
@@ -387,11 +387,11 @@ def test_invalid_image_defaults_fall_back_with_warning(tmp_path, raw):
     assert len(s.warnings) == 1 and next(iter(raw)) in s.warnings[0]
 
 
-# --- Reiter beim Start --------------------------------------------------------------
+# --- Tab at start --------------------------------------------------------------
 def test_start_tool_defaults_and_roundtrip(tmp_path):
     from labelwerk.settings import START_TOOLS
     s = Settings()
-    assert (s.start_tool, s.last_tool) == ("paper", "")         # wie bisher: Papier
+    assert (s.start_tool, s.last_tool) == ("paper", "")         # as before: paper
     assert START_TOOLS[0] == "last" and "paper" in START_TOOLS
     path = tmp_path / "s.json"
     save_settings(Settings(start_tool="last", last_tool="series"), path)
@@ -411,7 +411,7 @@ def test_invalid_start_tool_falls_back_with_warning(tmp_path, raw):
 
 @pytest.mark.parametrize("value", ["last", "druck", 3, None])
 def test_invalid_last_tool_is_dropped_quietly(tmp_path, value):
-    """Zuletzt benutzter Reiter ist nur ein gemerkter Wert: ungültig → leer, ohne Hinweis."""
+    """Last used tab is only a remembered value: invalid → empty, without notice."""
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"last_tool": value}))
     s = load_settings(path)
@@ -428,11 +428,11 @@ def test_start_tool_needs_a_restart():
     assert restart_pending({**started, "start_tool": "last"}, started)
 
 
-# --- Dateiauswahl des Systems ---------------------------------------------------------
+# --- System file dialog ---------------------------------------------------------
 def test_system_file_dialog_default_validation_and_restart(tmp_path):
     from labelwerk.settings import RESTART_KEYS, started_values
     path = tmp_path / "s.json"
-    assert load_settings(path).system_file_dialog is False       # eigener Dialog mit Vorschau
+    assert load_settings(path).system_file_dialog is False       # own dialog with preview
     save_settings(Settings(system_file_dialog=True), path)
     assert load_settings(path).system_file_dialog is True
     path.write_text(json.dumps({"system_file_dialog": "ja"}))
@@ -454,15 +454,15 @@ def test_configured_file_dialog_is_read_before_everything(tmp_path, raw, expecte
     assert configured_file_dialog(path) is expected
 
 
-# --- stilles Speichern einzelner Felder ------------------------------------------------
+# --- silent saving of single fields ------------------------------------------------
 def test_update_settings_keeps_what_another_instance_saved(tmp_path):
-    """Instanz A merkt sich still den Reiter; Instanz B hat inzwischen das Design gespeichert –
-    A schreibt nur ihr Feld und lässt B's Änderung stehen."""
+    """Instance A silently remembers the tab; instance B has meanwhile saved the theme –
+    A writes only its field and leaves B's change alone."""
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
     save_settings(Settings(theme="rawblock"), path)
-    a = load_settings(path)                                    # Instanz A startet
-    save_settings(Settings(theme="classic"), path)              # Instanz B speichert
+    a = load_settings(path)                                    # instance A starts
+    save_settings(Settings(theme="classic"), path)              # instance B saves
     a.last_tool = "series"
     update_settings(path, last_tool=a.last_tool)
     s = load_settings(path)
@@ -470,8 +470,8 @@ def test_update_settings_keeps_what_another_instance_saved(tmp_path):
 
 
 def test_update_settings_keeps_unknown_and_replaces_invalid_entries(tmp_path):
-    """Felder einer neueren Version bleiben in der Datei, wie sie sind; ungültige Werte werden
-    zum Standard (ohne Stand im Speicher) – die Meldung beim Laden käme sonst jedes Mal."""
+    """Fields of a newer version stay in the file as they are; invalid values become
+    the default (without in-memory state) – the message on loading would otherwise come every time."""
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"theme": "classic", "neu": [1, 2], "start_zoom": 9999}))
@@ -490,7 +490,7 @@ def test_update_settings_without_file_writes_base(tmp_path):
 
 
 def test_update_settings_with_unreadable_file_writes_base(tmp_path):
-    """Kaputte Datei: nichts zum Zusammenführen – der Stand im Speicher (``base``) gilt."""
+    """Broken file: nothing to merge – the in-memory state (``base``) applies."""
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
     path.write_text("{kaputt")
@@ -506,13 +506,13 @@ def test_update_settings_rejects_unknown_fields(tmp_path):
 
 
 def test_update_settings_cleans_invalid_and_old_keys(tmp_path):
-    """Stilles Speichern bereinigt, was beim Laden nur gemeldet wurde: ungültige Werte werden
-    zum Wert im Speicher, die alte Schriftgröße wird umgerechnet – Unbekanntes bleibt stehen."""
+    """Silent saving cleans up what loading only reported: invalid values become
+    the in-memory value, the old font size is converted – unknown fields stay."""
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
     path.write_text(json.dumps({"font_size": 100, "theme": "nope", "zukunft": 1}))
     base = load_settings(path)
-    assert base.warnings                                     # beim Laden gemeldet
+    assert base.warnings                                     # reported on loading
     update_settings(path, base, last_tool="text")
     data = json.loads(path.read_text())
     assert "font_size" not in data and data["font_size_pt"] == 24
@@ -521,7 +521,7 @@ def test_update_settings_cleans_invalid_and_old_keys(tmp_path):
     assert load_settings(path).warnings == []
 
 
-# --- Reiter ausblenden --------------------------------------------------------------
+# --- Hide tabs --------------------------------------------------------------
 def test_hidden_tools_default_and_roundtrip(tmp_path):
     from labelwerk.settings import HIDEABLE_TOOLS
     assert Settings().hidden_tools == [] and "file" not in HIDEABLE_TOOLS
@@ -532,8 +532,8 @@ def test_hidden_tools_default_and_roundtrip(tmp_path):
 
 
 @pytest.mark.parametrize("raw, expected", [
-    (["file", "paper", "series"], ["series"]),          # DATEI/PAPIER bleiben immer
-    (["druck", 3, None, "text", "text"], ["text"]),     # Unbekanntes, Doppeltes
+    (["file", "paper", "series"], ["series"]),          # FILE/PAPER always stay
+    (["druck", 3, None, "text", "text"], ["text"]),     # unknown, duplicate
     ("series", []), (None, []), ({"a": 1}, []),
 ])
 def test_invalid_hidden_tools_are_dropped_quietly(tmp_path, raw, expected):

@@ -1,13 +1,13 @@
-"""Zierrahmen ums Etikett: Arten, Lage im bedruckbaren Bereich, Innenraum, runde Etiketten."""
+"""Decorative frame around the label: styles, position in the printable area, inner area, round labels."""
 import pytest
 
 from labelwerk import layout
 from labelwerk.document import FRAME_STYLES, Document, Frame, TextObject
 from labelwerk.render import Renderer, frame_box, label_size, render_document
 
-# 62x29 senkrecht: 696 × 271 Punkte; Rand 4 mm ab Papierkante (_image), davon liegen quer 18 und
-# längs 35 Punkte im unbedruckbaren Streifen → Ränder 29 (quer) und 12 (längs) –
-# Außenkante des Rahmens: x 29 … 666, y 12 … 258; 0,5 mm = 6 Punkte
+# 62x29 vertical: 696 × 271 dots; margin 4 mm from the paper edge (_image), of which 18 across and
+# 35 along lie in the unprintable strip → margins 29 (across) and 12 (along) –
+# outer edge of the frame: x 29 … 666, y 12 … 258; 0.5 mm = 6 dots
 LEFT, TOP, RIGHT, BOTTOM = 29, 12, 666, 258
 LW = 6
 
@@ -26,7 +26,7 @@ def _row(img, y, x0, x1) -> list[bool]:
 
 
 def _runs(values: list[bool]) -> int:
-    """Anzahl schwarzer Abschnitte."""
+    """Number of black sections."""
     return sum(1 for i, v in enumerate(values) if v and (i == 0 or not values[i - 1]))
 
 
@@ -47,14 +47,14 @@ def test_single_frame_lies_on_the_printable_edge():
 
 
 def test_inset_moves_the_frame_inwards():
-    img = _image(Frame("single", inset_mm=2))          # 24 Punkte
+    img = _image(Frame("single", inset_mm=2))          # 24 dots
     assert not _black(img, LEFT + 23, 130) and _black(img, LEFT + 24, 130)
 
 
 def test_line_width_follows_line_mm():
-    img = _image(Frame("single", line_mm=1))           # 12 Punkte
+    img = _image(Frame("single", line_mm=1))           # 12 dots
     assert _black(img, LEFT + 11, 130) and not _black(img, LEFT + 12, 130)
-    thin = _image(Frame("single", line_mm=0.1))        # 1 Punkt
+    thin = _image(Frame("single", line_mm=0.1))        # 1 dot
     assert _black(thin, LEFT, 130) and not _black(thin, LEFT + 1, 130)
 
 
@@ -74,9 +74,9 @@ def test_dashed_and_dotted_frames_are_interrupted_lines_on_the_band(style):
     img = _image(Frame(style))
     top = _row(img, TOP + LW // 2, LEFT, RIGHT + 1)
     assert _runs(top) >= 20 and not all(top)
-    assert _black(img, LEFT + LW // 2, TOP + LW // 2)            # Ecke ist besetzt
+    assert _black(img, LEFT + LW // 2, TOP + LW // 2)            # corner is occupied
     inner = img.crop((LEFT + LW, TOP + LW, RIGHT - LW + 1, BOTTOM - LW + 1))
-    assert inner.getextrema() == ((255, 255),) * 3                # nichts innerhalb der Linie
+    assert inner.getextrema() == ((255, 255),) * 3                # nothing inside the line
     outside = [_black(img, x, TOP - 1) for x in range(0, 696)]
     assert not any(outside)
 
@@ -89,7 +89,7 @@ def test_dashes_are_longer_than_dots():
 
 
 def test_corners_frame_only_draws_the_corners():
-    img = _image(Frame("corners"))                     # Schenkel 4 mm = 47 Punkte
+    img = _image(Frame("corners"))                     # leg 4 mm = 47 dots
     assert _black(img, LEFT, TOP + 46) and not _black(img, LEFT, TOP + 47)
     assert _black(img, LEFT + 46, TOP) and not _black(img, LEFT + 47, TOP)
     assert not _black(img, LEFT, 130) and not _black(img, 300, TOP)
@@ -97,21 +97,21 @@ def test_corners_frame_only_draws_the_corners():
 
 
 def test_corner_legs_are_at_most_a_quarter_of_the_shorter_side():
-    img = _image(Frame("corners"), label="23x23")      # 202 × 202, Ränder 12, Rahmen 178 → Schenkel 44
+    img = _image(Frame("corners"), label="23x23")      # 202 × 202, margins 12, frame 178 → leg 44
     assert _black(img, 12, 12 + 43) and not _black(img, 12, 12 + 44)
 
 
 @pytest.mark.parametrize("style", ["single", "double", "thick_thin", "dashed", "dotted", "corners"])
 def test_rounded_frames_leave_the_corner_free(style):
-    img = _image(Frame(style, rounded=True))           # Eckradius 2 mm = 24 Punkte
+    img = _image(Frame(style, rounded=True))           # corner radius 2 mm = 24 dots
     assert not _black(img, LEFT, TOP) and not _black(img, LEFT + 2, TOP + 2)
     assert any(_black(img, x, y) for x in range(LEFT, LEFT + LW) for y in range(TOP + 24, TOP + 60))
 
 
 def test_round_label_gets_a_circle():
-    img = _image(Frame("single"), label="d24", margin_mm=3.05)   # 236 × 236, Ränder 36 − 24 = 12
+    img = _image(Frame("single"), label="d24", margin_mm=3.05)   # 236 × 236, margins 36 − 24 = 12
     assert _black(img, 12, 118) and _black(img, 118, 12) and _black(img, 223, 118)
-    assert not _black(img, 30, 30)                     # Ecke außerhalb des Kreises
+    assert not _black(img, 30, 30)                     # corner outside the circle
     assert not _black(img, 118, 118)
 
 
@@ -123,12 +123,12 @@ def test_round_label_ignores_corners_and_rounding(style):
 
 
 def test_auto_length_grows_by_the_frame():
-    text = [TextObject("Hallo\nWelt\nZeile drei", size_pt=20)]     # feste Größe: nur der Rahmen zählt
+    text = [TextObject("Hallo\nWelt\nZeile drei", size_pt=20)]     # fixed size: only the frame counts
     plain = label_size(Document("62", objects=text))
     framed = label_size(Document("62", objects=text, frame=Frame("single")))
-    assert framed == (plain[0], plain[1] + 2 * (LW + 12))        # Linie + 1 mm Innenabstand
+    assert framed == (plain[0], plain[1] + 2 * (LW + 12))        # line + 1 mm padding
     img = _image(Frame("single"), label="62", objects=text, margin_mm=1)
-    assert _black(img, 300, framed[1] - 1)             # längs liegt 1 mm im Vorschub des Druckers
+    assert _black(img, 300, framed[1] - 1)             # along the tape, 1 mm lies in the printer's feed
     img = _image(Frame("single"), label="62", objects=text, margin_mm=4)
     framed = label_size(Document("62", objects=text, frame=Frame("single"), margin_mm=4))
     assert _black(img, 300, framed[1] - 13) and not _black(img, 300, framed[1] - 12)   # 47 − 35
@@ -146,13 +146,13 @@ def test_automatic_text_stays_inside_the_frame_and_shrinks():
 
 
 def test_text_alignment_starts_at_the_inner_edge():
-    """Linksbündig beginnt am Innenraum: Rand + Linie + Innenabstand statt nur am Rand."""
+    """Left-aligned starts at the inner area: margin + line + padding instead of only the margin."""
     from labelwerk.document import Paragraph, Span
 
     def left_ink(frame):
         obj = TextObject([Paragraph([Span("links")], "left")], size_pt=12)
         img = _image(frame, objects=[obj]).convert("L")
-        start = LEFT + LW if frame else 0              # mit Rahmen: die Linie nicht mitzählen
+        start = LEFT + LW if frame else 0              # with frame: do not count the line
         inside = img.crop((start, TOP + LW, RIGHT - LW + 1, BOTTOM - LW + 1))
         return start + inside.point(lambda v: 255 - v).getbbox()[0]
     assert left_ink(Frame("single")) - left_ink(None) == LW + 12
@@ -197,11 +197,11 @@ def test_renderer_matches_the_print_image(style, orientation):
 
 
 def test_frame_box_is_the_inner_room():
-    doc = Document("62x29", frame=Frame("single"))     # Rand 1 mm liegt im unbedruckbaren Streifen
+    doc = Document("62x29", frame=Frame("single"))     # margin 1 mm lies in the unprintable strip
     assert frame_box(doc, size=(696, 271)) == (18, 18, 696 - 36, 271 - 36)
     assert frame_box(Document("62x29"), size=(696, 271)) is None
     wide = Document("62x29", orientation="horizontal", margin_mm=3, frame=Frame("double"))
-    pad = 3 * LW + 12                                  # Rand 35: längs 35 − 35 = 0, quer 35 − 18 = 17
+    pad = 3 * LW + 12                                  # margin 35: along 35 − 35 = 0, across 35 − 18 = 17
     assert frame_box(wide, size=(271, 696)) == (pad, 17 + pad, 271 - 2 * pad, 696 - 34 - 2 * pad)
 
 
@@ -212,7 +212,7 @@ def test_frame_area_in_mm():
     assert layout.frame_area(Document("62x29"), size=(696, 271)) is None
 
 
-# --- Nachbesserungen nach dem Review ------------------------------------------------------
+# --- Fixes after the review ------------------------------------------------------
 def test_dashed_corner_is_filled_to_the_outer_edge():
     img = _image(Frame("dashed", line_mm=2))
     for x, y in ((LEFT, TOP), (RIGHT, TOP), (LEFT, BOTTOM), (RIGHT, BOTTOM)):
@@ -220,7 +220,7 @@ def test_dashed_corner_is_filled_to_the_outer_edge():
 
 
 def _lengths_of_runs(values: list[bool]) -> tuple[list[int], list[int]]:
-    """Längen der schwarzen und der weißen Abschnitte (ohne den ersten und letzten)."""
+    """Lengths of the black and the white sections (without the first and last)."""
     runs, current, length = [], values[0], 0
     for v in values:
         if v == current:
@@ -237,8 +237,8 @@ def test_dashes_are_three_line_widths_with_gaps_of_two():
     lw = 12                                            # 1 mm
     row = _row(_image(Frame("dashed", line_mm=1)), TOP + lw // 2, LEFT, RIGHT + 1)
     dashes, gaps = _lengths_of_runs(row)
-    assert all(abs(n - 3 * lw) <= 3 for n in dashes), dashes      # gleichmäßig auf die Seite
-    assert all(abs(n - 2 * lw) <= 3 for n in gaps), gaps          # verteilt
+    assert all(abs(n - 3 * lw) <= 3 for n in dashes), dashes      # evenly over the side
+    assert all(abs(n - 2 * lw) <= 3 for n in gaps), gaps          # distributed
 
 
 def test_dots_are_two_line_widths_apart():
@@ -254,14 +254,14 @@ def _first_black(img, x, y0):
 
 
 def test_corner_radius_is_two_millimetres():
-    img = _image(Frame("single", rounded=True))        # Radius 24 Punkte, Linie 6
-    assert _first_black(img, LEFT, TOP) == TOP + 20    # Bogen trifft die Kante kurz vor 24
+    img = _image(Frame("single", rounded=True))        # radius 24 dots, line 6
+    assert _first_black(img, LEFT, TOP) == TOP + 20    # arc meets the edge shortly before 24
 
 
 def test_corner_radius_is_at_most_a_quarter_of_the_shorter_side():
     doc = Document("12", objects=[TextObject("A", size_pt=6)], frame=Frame("single", rounded=True),
-                   margin_mm=2.5)                      # 30 Punkte: quer 30 − 18 = 12, längs 30 − 35
-    img = render_document(doc)                         # quer 82 Punkte → Radius 20
+                   margin_mm=2.5)                      # 30 dots: across 30 − 18 = 12, along 30 − 35
+    img = render_document(doc)                         # across 82 dots → radius 20
     assert _first_black(img, 12, 0) == 16
 
 
@@ -273,8 +273,8 @@ def test_double_rounded_lines_stay_concentric():
 
 
 def test_round_label_inner_room_is_the_square_in_the_circle():
-    # Ø 212, Linie 6, Innenabstand 12 → Radius 88 → Quadrat 124
-    doc = Document("d24", frame=Frame(), margin_mm=3.05)          # Ränder 36 − 24 = 12
+    # Ø 212, line 6, padding 12 → radius 88 → square 124
+    doc = Document("d24", frame=Frame(), margin_mm=3.05)          # margins 36 − 24 = 12
     assert frame_box(doc, size=(236, 236)) == (56, 56, 124, 124)
 
 
@@ -285,8 +285,8 @@ def test_corners_without_room_give_a_message():
 
 
 def test_endless_label_keeps_room_inside_the_frame():
-    """Leeres Endlosband oder nur frei platzierte Objekte: das Etikett wird lang genug, dass im
-    Rahmen Platz bleibt – nie ein negativer Innenraum."""
+    """Empty continuous tape or only freely placed objects: the label becomes long enough that there
+    is room inside the frame – never a negative inner area."""
     for objects in ([], [TextObject("A", size_pt=10, x_mm=2, y_mm=1)]):
         doc = Document("62", objects=objects, frame=Frame("single", inset_mm=10, padding_mm=10,
                                                           line_mm=3))
@@ -296,11 +296,11 @@ def test_endless_label_keeps_room_inside_the_frame():
 
 
 def test_frame_check_only_on_the_render_path():
-    """Ränder und bedruckbarer Bereich lassen sich auch ohne Platz im Rahmen bestimmen –
-    die GUI ruft sie außerhalb des Renderns auf."""
+    """Margins and printable area can also be determined without room inside the frame –
+    the GUI calls them outside of rendering."""
     from labelwerk.render import label_margins
     doc = Document("d12", objects=[TextObject("A")], frame=Frame("single", inset_mm=10))
-    assert label_margins(doc) == (0, 0)                # 1 mm liegt im unbedruckbaren Streifen
+    assert label_margins(doc) == (0, 0)                # 1 mm lies in the unprintable strip
     assert layout.printable_area(doc, size=(94, 94)).w > 0
     with pytest.raises(ValueError, match="Rahmen passt nicht"):
         Renderer().render(doc)
@@ -312,8 +312,8 @@ def test_rounded_must_be_a_bool():
 
 
 def test_renderer_follows_padding_on_a_fixed_label():
-    """Innenabstand ändert die automatische Schrift auf festem Etikett – derselbe Renderer
-    muss neu messen (Rahmen gehört zum Kontext)."""
+    """Padding changes the automatic font on a fixed label – the same renderer
+    must measure again (the frame is part of the context)."""
     doc = Document("62x29", objects=[TextObject("WWWWWWWWWWWWWWWWWWWW")], frame=Frame("single"))
     renderer = Renderer()
     first = renderer.render(doc).objects[0].base_pt
@@ -346,10 +346,10 @@ def test_renderer_reports_the_frame_mask():
     assert Renderer().render(Document("62x29")).frame is None
 
 
-# --- Schlussreview ---------------------------------------------------------------------------
+# --- Final review ---------------------------------------------------------------------------
 @pytest.mark.parametrize("style", ["single", "double", "thick_thin", "dashed", "dotted", "corners"])
 def test_rounded_corners_stay_out_of_the_inner_room(style):
-    """Auch ohne Innenabstand reichen die Bögen nicht in den Innenraum (seine Ecken)."""
+    """Even without padding the arcs do not reach into the inner area (its corners)."""
     from labelwerk.render import frame_mask
     doc = Document("62x29", frame=Frame(style, rounded=True, padding_mm=0))
     x, y, w, h = frame_box(doc, size=(696, 271))

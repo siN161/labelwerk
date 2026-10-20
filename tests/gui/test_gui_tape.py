@@ -1,4 +1,4 @@
-"""Arbeitsfläche: Restband, geschlossener Anfang, Schnittlinie am Ende, Randlinien (Abnahme 3d-1)."""
+"""Canvas: remaining tape, closed start, cut line at the end, margin lines (acceptance 3d-1)."""
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
@@ -30,15 +30,15 @@ def test_tape_continues_in_feed_direction_behind_the_end(qtbot, orientation):
     assert tape.top() == pytest.approx(outline.bottom()) and tape.height() > 0
     assert tape.left() == pytest.approx(outline.left())
     assert tape.width() == pytest.approx(outline.width())
-    assert canvas.handle.sceneBoundingRect().intersects(tape)       # Anfasser sitzt auf dem Band
-    assert canvas.cut_edges() == ["end"]                            # Anfang geschlossen
+    assert canvas.handle.sceneBoundingRect().intersects(tape)       # handle sits on the tape
+    assert canvas.cut_edges() == ["end"]                            # start closed
 
 
 def test_tape_is_not_part_of_label_size_or_print_image(qtbot):
     win = _window(qtbot)
     before = render_document(win.doc).size
     assert win._shown_size == (before[0], before[1])
-    # das Stück: Druckbild plus Vorschub des Druckers an beiden Enden
+    # the piece: print image plus the printer's feed at both ends
     assert win.canvas.outline.sceneBoundingRect().height() == pytest.approx(before[1] + 2 * 35)
     assert win.canvas.tape_rect().bottom() > before[1]
 
@@ -61,7 +61,7 @@ def test_clicks_on_tape_do_nothing(qtbot, orientation):
     canvas.set_tool("select")
     canvas.set_selection([0])
     QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=pos)
-    assert canvas.selection() == []                                  # wie Klick ins Leere
+    assert canvas.selection() == []                                  # like a click into empty space
     assert len(win.doc.objects) == n
 
 
@@ -73,11 +73,11 @@ def test_canvas_draws_all_four_margins(qtbot, label, orientation):
     area = layout.printable_area(win.doc, win.model, win._shown_size)
     drawn = canvas.printable.mapRectToScene(canvas.printable.rect())
     sheet = canvas.sheet.mapRectToScene(canvas.sheet.rect())
-    # Fläche in Leserichtung → Szene: gleiche Größe wie der Bereich, Rand in Bandrichtung sichtbar
+    # area in reading direction → scene: same size as the area, margin in tape direction visible
     along = (area.y, win._shown_size[1] * 25.4 / 300 - area.bottom) if orientation == "vertical" \
         else (area.x, win._shown_size[0] * 25.4 / 300 - area.right)
-    # Rand 3 mm ab Papierkante: der unbedruckbare Streifen (gestanzt) bzw. der Vorschub des
-    # Druckers (Endlosband) zählt mit
+    # margin 3 mm from the paper edge: the unprintable strip (die-cut) or the printer's feed
+    # (continuous tape) counts too
     label_ = get_label(label)
     edge = label_.feed_margin if label_.height is None else (label_.total_height - label_.height) // 2
     expected = max(0, round(3 * 300 / 25.4) - edge) * 25.4 / 300
@@ -107,9 +107,9 @@ def test_orientation_names_are_plain(qtbot):
 @pytest.mark.parametrize("label", ["62", "62x29"])
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
 def test_canvas_shades_strips_the_printer_does_not_print(qtbot, label, orientation):
-    """Quer (total_width − width) / 2, längs der Vorschub bzw. der Rand des gestanzten Etiketts:
-    hellgrau, nur Anzeige – keine Klicks, unter dem Inhalt, nicht im Druckbild (Szene-y =
-    Bandrichtung, auch bei „horizontal“)."""
+    """Across (total_width − width) / 2, along the tape the feed or the margin of the die-cut label:
+    light grey, display only – no clicks, below the content, not in the print image (scene y =
+    tape direction, also with "horizontal")."""
     win = _window(qtbot, label=label, orientation=orientation, length=None)
     canvas = win.canvas
     strips = canvas.unprintable
@@ -125,7 +125,7 @@ def test_canvas_shades_strips_the_printer_does_not_print(qtbot, label, orientati
     assert path.contains(QPointF(mid.x(), box.bottom() - along / 2))
     assert not path.contains(mid)
     assert not path.contains(QPointF(box.left() + across + 1, box.top() + along + 1))
-    stack = canvas.scene().items()                      # oben zuerst
+    stack = canvas.scene().items()                      # topmost first
     assert stack.index(canvas.sheet) < stack.index(strips) < stack.index(canvas.outline)
     assert render_document(win.doc).size == (win._shown_size if orientation == "vertical"
                                               else win._shown_size[::-1])

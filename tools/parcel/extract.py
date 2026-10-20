@@ -1,7 +1,7 @@
-"""Genaue Bereiche je paketikett-Typ: Stücke aus den QR-Codes (analyze2), fehlende Stücke per
-Kreuzkorrelation, Kanten per Nachbau-Vergleich geschärft.
+"""Exact areas per paketikett type: pieces from the QR codes (analyze2), missing pieces by
+cross-correlation, edges sharpened by comparison with a rebuild.
 
-LABELWERK_PARCEL_DIR=ordner python extract.py [TYPID …]  (Konfiguration in TYPES unten) → check/<id>-<n>.png, result/<id>.json
+LABELWERK_PARCEL_DIR=folder python extract.py [TYPEID …]  (configuration in TYPES below) → check/<id>-<n>.png, result/<id>.json
 """
 import json
 import sys
@@ -20,7 +20,7 @@ PX = A.PX
 SHEET = {"A4H": ("testblatt-A4-hoch.pdf", (210, 297)), "A5H": ("testblatt-A5-hoch.pdf", (148, 210)),
          "L100": ("testblatt-100x150.pdf", (100, 150))}
 
-# id: (Ordner, Datei, Name de, Name en, Dienst, Quelle mm, Format)
+# id: (folder, file, name de, name en, carrier, source mm, format)
 TYPES = {
     "dhl-privat-1": ("DHL Privat", "1 DHL National [dhl.de][shop.deutschepost.de][ebay] - a4 hoch.pdf",
                      "DHL national (dhl.de, Post-Shop, eBay)", "DHL domestic (dhl.de, Post shop, eBay)",
@@ -75,7 +75,7 @@ TYPES = {
     "hermes-3": ("Hermes", "3 Hermes V1.0.2 - A4 hoch.pdf", "Hermes Paketschein (V1.0)",
                  "Hermes parcel label (V1.0)", "hermes", (210, 297), "62"),
 }
-# Echte Marken (nur lokal, nie ins Repo): Original/originale.json im Datenordner, z. B.
+# Real parcel labels (local only, never in the repo): Original/originale.json in the data folder, e.g.
 # {"source": "marke.pdf", "results": {"dhl-privat-1": "marke-umgewandelt-1.pdf"}}
 _originals = D / "Original" / "originale.json"
 _orig = json.loads(_originals.read_text()) if _originals.exists() else {"source": "", "results": {}}
@@ -83,12 +83,12 @@ ORIGINAL = _orig["results"]
 ORIGINAL_SRC = _orig["source"]
 
 
-# --- Bilder ---------------------------------------------------------------------------
+# --- Images ---------------------------------------------------------------------------
 def target_ink(img):
-    """Tinte im Ergebnis in Polarität der Quelle (paketikett kehrt die Testblätter um)."""
+    """Ink in the result in the polarity of the source (paketikett inverts the test sheets)."""
     a = np.asarray(img, float)
     nonwhite = (a < 235).sum()
-    if (a < 60).mean() > 0.4 or nonwhite and ((a >= 140) & (a < 220)).sum() / nonwhite > 0.2:   # umgekehrt
+    if (a < 60).mean() > 0.4 or nonwhite and ((a >= 140) & (a < 220)).sum() / nonwhite > 0.2:   # inverted
         t = np.where(a >= 235, 255.0, 255 - np.minimum(255, a * 1.5))
     else:
         t = a
@@ -100,7 +100,7 @@ def src_ink(img):
 
 
 def rot_point(x, y, r, W0, H0):
-    """Pixel (x, y) nach Drehung des Bildes um r° im Uhrzeigersinn (expand)."""
+    """Pixel (x, y) after rotating the image by r° clockwise (expand)."""
     if r == 0:
         return x, y
     if r == 90:
@@ -114,10 +114,10 @@ def rotate_cw(a, r):
     return np.rot90(a, k=-(r // 90)) if r else a
 
 
-# --- Stücke ---------------------------------------------------------------------------
+# --- Pieces ---------------------------------------------------------------------------
 class Piece:
     def __init__(self, M, src_mm, codes):
-        self.M = np.asarray(M, float)        # mm (Quelle) → px (Ergebnis), 2×3
+        self.M = np.asarray(M, float)        # mm (source) → px (result), 2×3
         self.src = list(src_mm)              # [x0, y0, x1, y1] mm
         self.codes = codes
 
@@ -143,7 +143,7 @@ class Piece:
 
 def warp(src_img, piece, shape):
     H, W = shape
-    inv = np.linalg.inv(piece.full() @ np.diag([1 / PX, 1 / PX, 1]))   # px out → px Quelle
+    inv = np.linalg.inv(piece.full() @ np.diag([1 / PX, 1 / PX, 1]))   # px out → px source
     w = src_img.transform((W, H), Image.AFFINE, tuple(inv[:2].ravel()), resample=Image.BILINEAR, fillcolor=255)
     return np.asarray(w) < 128
 
@@ -169,7 +169,7 @@ def initial_pieces(out_img, sparse=False):
     return code, pieces
 
 
-# --- Kosten ---------------------------------------------------------------------------
+# --- Cost ---------------------------------------------------------------------------
 class Scene:
     def __init__(self, target, warped_list, pieces):
         self.target = target
@@ -214,7 +214,7 @@ class Scene:
                         if c < best:
                             best, base, improved = c, p.src[e], True
                     p.src[e] = base
-            margin = 0.003 * self.target.sum()        # schwache Stücke nur, wenn sie deutlich helfen
+            margin = 0.003 * self.target.sum()        # weak pieces only if they clearly help
             for i, p in enumerate(self.pieces):
                 if p.codes < 2:
                     small = min(p.src[2] - p.src[0], p.src[3] - p.src[1]) < 4
@@ -231,7 +231,7 @@ class Scene:
         return best
 
 
-# --- fehlende Stücke ----------------------------------------------------------------------
+# --- Missing pieces ----------------------------------------------------------------------
 def residual(target, pieces, active, min_mm2):
     H, W = target.shape
     covered = np.zeros((H, W), bool)
@@ -252,7 +252,7 @@ def residual(target, pieces, active, min_mm2):
 
 
 def search(patch, sink, scales):
-    """Beste Abbildung (Dice der Tinte) für ein Stück Ergebnis: Drehung, Maßstab, Lage."""
+    """Best mapping (Dice of the ink) for a piece of the result: rotation, scale, position."""
     Pi = patch.astype(float)
     best = None
     for r in (0, 90, 180, 270):
@@ -285,9 +285,9 @@ def piece_from(r, s, oy, ox, bx0, by0, shape):
 
 
 def find_missing(scene, src_img, scales, min_mm2=25, rounds=4):
-    """Tinte, die kein Stück erklärt → Abbildung per Kreuzkorrelation (Dice) suchen; Ausdehnung des
-    neuen Stücks = Blöcke (1 mm), in denen die Abbildung die Tinte erklärt. Mehrere Runden: ein
-    Rest aus zwei Stücken wird so nacheinander zerlegt."""
+    """Ink that no piece explains → search a mapping by cross-correlation (Dice); extent of the
+    new piece = blocks (1 mm) in which the mapping explains the ink. Several rounds: a
+    remainder made of two pieces is thus split up one after the other."""
     target = scene.target
     H, W = target.shape
     sink = src_ink(src_img)
@@ -307,14 +307,14 @@ def find_missing(scene, src_img, scales, min_mm2=25, rounds=4):
                 continue
             best = search(patch, sink, scales)
             if best is None or best[0] < 0.5:
-                print(f"  Rest {bx0 / PX:.0f},{by0 / PX:.0f} mm ({area / PX ** 2:.0f} mm²): keine Abbildung"
+                print(f"  Remainder {bx0 / PX:.0f},{by0 / PX:.0f} mm ({area / PX ** 2:.0f} mm²): no mapping"
                       f" ({best[0] if best else None:.2f})")
                 continue
             score, r, s, (oy, ox) = best
             M = piece_from(r, s, oy, ox, bx0, by0, sink.shape)
             p = Piece(M, [0, 0, 1, 1], 2)
             w = warp(src_img, p, target.shape)
-            # Ausdehnung: größte zusammenhängende Fläche von Blöcken (1 mm) mit Übereinstimmung
+            # Extent: largest connected area of blocks (1 mm) with a match
             B = int(PX)
             gh, gw = (by1 - by0 + B - 1) // B, (bx1 - bx0 + B - 1) // B
             grid = np.zeros((gh, gw), bool)
@@ -336,8 +336,8 @@ def find_missing(scene, src_img, scales, min_mm2=25, rounds=4):
             cs = A.apply(inv[:2], [d0, (d1[0], d0[1]), d1, (d0[0], d1[1])])
             s0, s1 = cs.min(axis=0), cs.max(axis=0)
             p.src = [s0[0], s0[1], s1[0], s1[1]]
-            print(f"  Rest {bx0 / PX:.0f},{by0 / PX:.0f} mm: Drehung {r}°, Maßstab {s:.3f}, Dice {score:.2f}"
-                  f" → Quelle {s0[0]:.1f},{s0[1]:.1f}–{s1[0]:.1f},{s1[1]:.1f}")
+            print(f"  Remainder {bx0 / PX:.0f},{by0 / PX:.0f} mm: rotation {r}°, scale {s:.3f}, "
+                  f"Dice {score:.2f} → source {s0[0]:.1f},{s0[1]:.1f}–{s1[0]:.1f},{s1[1]:.1f}")
             found.append(p)
             pieces.append(p)
             active.append(True)
@@ -348,7 +348,7 @@ def find_missing(scene, src_img, scales, min_mm2=25, rounds=4):
 
 
 def same_transform(a, b, tol_px=4):
-    """Gleiche Abbildung: lineare Teile ≈ gleich, Lage eines gemeinsamen Punktes ≈ gleich."""
+    """Same mapping: linear parts ≈ equal, position of a common point ≈ equal."""
     La, Lb = a.M[:, :2], b.M[:, :2]
     if np.linalg.norm(La - Lb) / np.linalg.norm(La) > 0.015:
         return False
@@ -357,7 +357,7 @@ def same_transform(a, b, tol_px=4):
 
 
 def merge(pieces):
-    """Stücke mit gleicher Abbildung zu einem (umschließendes Rechteck in der Quelle)."""
+    """Merge pieces with the same mapping into one (enclosing rectangle in the source)."""
     out = []
     for p in pieces:
         for q in out:
@@ -372,7 +372,7 @@ def merge(pieces):
 
 
 def refine_translation(piece, src_img, target, rng=3):
-    """Lage eines Stücks pixelgenau nachstellen (±rng px)."""
+    """Adjust the position of a piece to the pixel (±rng px)."""
     H, W = target.shape
     x0, y0, x1, y1 = piece.dst_box()
     x0, y0, x1, y1 = max(0, x0 + 10), max(0, y0 + 10), min(W, x1 - 10), min(H, y1 - 10)
@@ -392,7 +392,7 @@ def refine_translation(piece, src_img, target, rng=3):
         piece.M[:, 2] += [best[1], best[2]]
 
 
-# --- Ablauf ---------------------------------------------------------------------------
+# --- Flow ---------------------------------------------------------------------------
 def process(tid):
     folder, fname, de, en, carrier, source, fmt = TYPES[tid]
     out_path = D / folder / fname
@@ -421,7 +421,7 @@ def process(tid):
         cost = scene.optimize()
         ink = int(target.sum())
         check = {"page": pno + 1, "mismatch_pct": round(100 * cost / max(1, ink), 1)}
-        # Gegenprobe/Schärfen am echten Original (gemeinsame Kosten)
+        # Cross-check/sharpening against the real original (shared cost)
         if tid in ORIGINAL:
             o_out = list(A.page_images(D / "Original" / ORIGINAL[tid]))[pno][1]
             o_src = next(A.page_images(D / "Original" / ORIGINAL_SRC))[1]
@@ -430,7 +430,7 @@ def process(tid):
             o_scene.active = scene.active
             before = o_scene.cost()
             o_ink = int(o_target.sum())
-            # Original zählt gleich viel wie das Testblatt (normiert)
+            # The original counts as much as the test sheet (normalised)
             w = ink / max(1, o_ink)
             scene.optimize(extra=lambda: int(w * o_scene.cost()), step=0.25, rng=2.0, rounds=2)
             after = o_scene.cost()
@@ -451,10 +451,10 @@ def process(tid):
                 "scale_xy": [round(sx, 3), round(sy, 3)],
                 "kind": "barcode" if abs((sx + sy) / 2 - 1) < 0.03 else "text",
                 "M": p.M.round(4).tolist()})
-        # Reihenfolge = Malreihenfolge (spätere Stücke liegen oben)
+        # Order = paint order (later pieces lie on top)
         result["layouts"][fmt].append(label)
         result["check"].append(check)
-        print(f"{tid} Seite {pno + 1}: {len(label['pieces'])} Stücke, Abweichung {check}")
+        print(f"{tid} page {pno + 1}: {len(label['pieces'])} pieces, deviation {check}")
     (HERE / "result").mkdir(exist_ok=True)
     (HERE / "result" / f"{tid}.json").write_text(json.dumps(result, indent=1, ensure_ascii=False))
     return result

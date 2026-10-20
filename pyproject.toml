@@ -5,27 +5,27 @@ build-backend = "hatchling.build"
 [project]
 name = "labelwerk"
 version = "0.1.0"
-description = "Etiketten gestalten und drucken auf Brother-QL-Druckern unter Linux"
+description = "Design and print labels on Brother QL printers under Linux"
 readme = "README.md"
-# Programm GPL; mitgelieferte Symbole: Tabler Icons MIT, eigene Zeichnungen CC0, Commons gemeinfrei/CC0
+# Program GPL; bundled symbols: Tabler Icons MIT, own drawings CC0, Commons public domain/CC0
 license = "GPL-3.0-or-later AND MIT AND CC0-1.0"
 license-files = ["LICEN[CS]E*", "src/labelwerk/clipart_data/LICENSES.md"]
 requires-python = ">=3.10"
 dependencies = [
-    # printer._Raster nutzt Interna (add_cut_every, page_number); Referenztests (tests/golden) hashen
-    # die Rasterdaten – neue Version erst nach tools/golden.py prüfen
+    # printer._Raster uses internals (add_cut_every, page_number); reference tests (tests/golden) hash
+    # the raster data – check a new version with tools/golden.py first
     "brother_ql-inventree>=1.3,<1.4",
     "pillow>=10.1",
     "pypdfium2>=4",
-    "openpyxl>=3.1",      # Excel-Tabellen für Serien (MIT)
-    "defusedxml>=0.7",    # openpyxl liest fremde Dateien damit sicher (PSF)
-    "segno>=1.5",         # QR-Codes (BSD-3-Clause)
+    "openpyxl>=3.1",      # Excel tables for series (MIT)
+    "defusedxml>=0.7",    # lets openpyxl read untrusted files safely (PSF)
+    "segno>=1.5",         # QR codes (BSD-3-Clause)
 ]
 
 [project.optional-dependencies]
-# PySide6 6.12.0 verliert unter Python < 3.12 Referenzen auf None/True/False → Absturz (6.11.2 ok)
+# PySide6 6.12.0 loses references to None/True/False under Python < 3.12 → crash (6.11.2 ok)
 gui = ["PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'"]
-# zxing-cpp (Apache-2.0) liest die gedruckten Barcodes in Tests; Wheels erst ab Python 3.12
+# zxing-cpp (Apache-2.0) reads the printed barcodes in tests; wheels only from Python 3.12
 dev = ["pytest>=8", "pytest-qt>=4", "PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'",
        "zxing-cpp>=2.2; python_version >= '3.12'"]
 

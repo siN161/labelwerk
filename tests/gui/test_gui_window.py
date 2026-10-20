@@ -14,7 +14,7 @@ def window(qtbot):
     win = MainWindow()
     qtbot.addWidget(win)
     win.show()
-    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
+    win.canvas.set_selection([0])      # start without selection: select the start object for typing
     return win
 
 
@@ -65,8 +65,8 @@ def test_fixed_length_sets_preview_height(window):
     paper.length_auto.setChecked(False)
     paper.length.setValue(50.0)
     window.render_now()
-    assert window.image.height == round(50 * MM) - 2 * 35          # Druckbild ohne Vorschub
-    assert window.canvas.label_height() == round(50 * MM)           # Arbeitsfläche: das Stück
+    assert window.image.height == round(50 * MM) - 2 * 35          # print image without feed
+    assert window.canvas.label_height() == round(50 * MM)           # canvas: the piece
 
 
 def _mouse(view, kind, scene_point, buttons):
@@ -79,7 +79,7 @@ def _mouse(view, kind, scene_point, buttons):
 
 
 def _drag_handle(window, to_y):
-    """Untere Schnittkante am Anfasser auf Szene-y to_y ziehen (Greifversatz bleibt erhalten)."""
+    """Drag the lower cut edge at the handle to scene y to_y (grab offset is preserved)."""
     canvas = window.canvas
     start = canvas.handle.sceneBoundingRect().center()
     end = QPointF(start.x(), start.y() + to_y - canvas.label_height())
@@ -89,15 +89,15 @@ def _drag_handle(window, to_y):
 
 
 def test_dragging_handle_sets_fixed_length(window):
-    _drag_handle(window, 40.1 * MM)   # ±1 Pixel Rundung bleibt im 0,5-mm-Raster
-    assert window.doc.length_mm == 40.0                   # Raster 0,5 mm
+    _drag_handle(window, 40.1 * MM)   # ±1 pixel rounding stays within the 0.5 mm grid
+    assert window.doc.length_mm == 40.0                   # grid 0.5 mm
     paper = window.panel("paper")
     assert not paper.length_auto.isChecked()
     assert paper.length.value() == 40.0
 
 
 def test_dragging_below_minimum_stops_at_12_7_mm_plus_feed(window):
-    _drag_handle(window, 2 * MM)        # Druckbild 12,7 mm, das Stück hat 2 × 35 Punkte Vorschub
+    _drag_handle(window, 2 * MM)        # print image 12.7 mm, the piece has 2 × 35 dots of feed
     assert window.doc.length_mm == pytest.approx(12.7 + 2 * 35 / MM, abs=0.01)
 
 
@@ -209,7 +209,7 @@ def test_drag_without_motion_does_not_drift_and_renders_only_on_release(window, 
     _mouse(canvas, QMouseEvent.Type.MouseButtonPress, start, Qt.MouseButton.LeftButton)
     _press_move(window, 10, start=start)
     first = window.doc.length_mm
-    qtbot.wait(300)   # früher: Render mitten im Ziehen verschob das Etikett unter dem Cursor
+    qtbot.wait(300)   # formerly: rendering mid-drag moved the label under the cursor
     assert canvas.label_height() == height_before
     _press_move(window, 10, start=start)
     assert window.doc.length_mm == first
@@ -278,7 +278,7 @@ def test_window_title_and_app_name_use_app_name(window, qapp):
     from labelwerk.desktop import APP_NAME
     from labelwerk.gui.app import apply_identity
     apply_identity(qapp)
-    assert window.windowTitle() == f"Unbenannt – {APP_NAME}"       # Etappe 3c: Dateiname
+    assert window.windowTitle() == f"Unbenannt – {APP_NAME}"       # stage 3c: file name
     assert qapp.applicationName() == APP_NAME
 
 
@@ -296,7 +296,7 @@ def test_number_fields_keep_text_clear_of_frame(window, qtbot):
     from labelwerk.gui.settings_dialog import SettingsDialog
     from labelwerk.settings import Settings
     dialog = SettingsDialog(Settings())
-    qtbot.addWidget(dialog)          # sonst lebt der Dialog bis nach dem Ende der QApplication
+    qtbot.addWidget(dialog)          # otherwise the dialog lives on until after the end of the QApplication
     spins = window.findChildren(QAbstractSpinBox) + dialog.findChildren(QAbstractSpinBox)
     assert len(spins) >= 5
     assert all(s.lineEdit().textMargins().left() >= 8 for s in spins)
@@ -308,7 +308,7 @@ def test_theme_urls_are_quoted():
 
 
 def test_toolbar_buttons_have_equal_space_above_and_below(qtbot, qapp):
-    """Abstand Knopf ↔ Leistenrand oben gleich unten (gemessen an dunklen Pixelzeilen)."""
+    """Distance button ↔ bar edge the same at top and bottom (measured on dark pixel rows)."""
     from PySide6.QtWidgets import QToolBar
     from labelwerk.settings import Settings
     qapp.setStyleSheet(load_theme())
@@ -366,13 +366,13 @@ def test_font_replacement_hint_in_status_bar(window):
 
 
 def test_global_actions_come_from_shortcut_registry(window, monkeypatch):
-    """Drucken, Einstellungen und Zoom sind Aktionen des Kürzel-Verzeichnisses."""
+    """Print, settings and zoom are actions of the shortcut registry."""
     from PySide6.QtGui import QKeySequence
     assert window.print_action is window.shortcut_actions["file.print"]
     assert window.settings_action is window.shortcut_actions["app.settings"]
     assert window.print_action.shortcut() == QKeySequence("Ctrl+P")
     assert "Ctrl+P" in window.print_action.toolTip()
-    asked = []                                              # leeres Etikett: Rückfrage = Druck läuft
+    asked = []                                              # empty label: prompt = printing is running
     monkeypatch.setattr(QMessageBox, "question",
                         lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.Cancel)
     window.panel("text").edit.setPlainText("")
@@ -387,12 +387,12 @@ def test_global_actions_come_from_shortcut_registry(window, monkeypatch):
     window.shortcut_actions["view.zoom_reset"].trigger()
     assert window.canvas.zoom == 100
     from PySide6.QtWidgets import QWidget
-    window_actions = QWidget.actions(window)                # self.shortcut_actions ist das Verzeichnis
+    window_actions = QWidget.actions(window)                # self.shortcut_actions is the registry
     assert all(window.shortcut_actions[key] in window_actions
                for key in ("view.zoom_in", "view.zoom_out", "view.zoom_reset", "edit.undo"))
 
 
-# --- Rückfrage: Objekt ragt über das Etikett --------------------------------------
+# --- Prompt: object extends beyond the label --------------------------------------
 def _outside_window(qtbot):
     from labelwerk.document import Document, TextObject
     from labelwerk.settings import Settings
@@ -408,11 +408,11 @@ def test_print_with_outside_object_asks_and_no_does_not_print(qtbot, monkeypatch
     monkeypatch.setattr(QMessageBox, "question",
                         lambda *a, **kw: asked.append(a) or QMessageBox.StandardButton.No)
     monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp0")
-    printed = []                     # pytest.fail im Worker-Thread wirkte nicht: zählen
+    printed = []                     # pytest.fail in the worker thread had no effect: count
     monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
                         lambda *a, **kw: printed.append(a) or {"did_print": True})
     win.print_label()
-    QThreadPool.globalInstance().waitForDone(2000)          # ein gestarteter Druck wäre fertig
+    QThreadPool.globalInstance().waitForDone(2000)          # a started print would be finished
     assert printed == []
     (_, title, text, buttons, default), = asked
     assert text == "Objekt ragt über das Etikett hinaus und wird abgeschnitten. Trotzdem drucken?"

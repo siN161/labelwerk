@@ -1,4 +1,4 @@
-"""Eingelegte Rolle vom Drucker abfragen („Medium prüfen“) – reine Statusabfrage, druckt nichts."""
+"""Query the inserted roll from the printer (“Check media”) – pure status query, prints nothing."""
 from __future__ import annotations
 
 import os
@@ -11,21 +11,21 @@ from brother_ql.reader import RESP_MEDIA_TYPES, interpret_response
 from .i18n import _
 from .labels import labels_for_model
 
-# Puffer leeren (Invalidate), initialisieren (ESC @), Status anfragen (ESC i S)
+# clear the buffer (invalidate), initialise (ESC @), request status (ESC i S)
 STATUS_REQUEST = b"\x00" * 200 + b"\x1b\x40" + b"\x1b\x69\x53"
 TIMEOUT_S = 2.0
 _KINDS = {"Continuous length tape": "endless", "Die-cut labels": "die_cut", "No media": "none"}
 
 
 class MediaError(ValueError):
-    """Rolle konnte nicht ermittelt werden; die Meldung ist für Nutzer gedacht."""
+    """Roll could not be determined; the message is meant for users."""
 
 
 @dataclass(frozen=True)
 class Media:
     width_mm: int
     length_mm: int
-    kind: str                # "endless", "die_cut" oder "none"
+    kind: str                # "endless", "die_cut" or "none"
 
     def describe(self) -> str:
         if self.kind == "none":
@@ -37,7 +37,7 @@ class Media:
 
 
 def read_media(printer: str, timeout: float = TIMEOUT_S) -> Media:
-    """Rolle im Drucker (``file:///dev/usb/lpN``) abfragen."""
+    """Query the roll in the printer (``file:///dev/usb/lpN``)."""
     return parse_media(query_status(printer, timeout))
 
 
@@ -46,7 +46,7 @@ def parse_media(data: bytes) -> Media:
         raise MediaError(_("Unknown roll (code 0x{code:02X})").format(code=data[11]))
     try:
         status = interpret_response(data)
-    except Exception as e:  # brother_ql wirft je nach Fehler NameError, UnboundLocalError …
+    except Exception as e:  # brother_ql raises NameError, UnboundLocalError … depending on the error
         raise MediaError(_("Unintelligible answer from the printer: {error}").format(error=e)) \
             from None
     kind = _KINDS.get(status["media_type"])
@@ -60,7 +60,7 @@ def parse_media(data: bytes) -> Media:
 
 
 def label_for_media(media: Media, model: str = "QL-600") -> str | None:
-    """Passende Etikett-ID zur eingelegten Rolle, sonst None."""
+    """Matching label ID for the inserted roll, otherwise None."""
     for label in labels_for_model(model):
         if media.kind == "endless" and label.shape == "endless" \
                 and label.size_mm[0] == media.width_mm:
@@ -76,7 +76,7 @@ def _open_device(path: str) -> int:
 
 
 def query_status(printer: str, timeout: float = TIMEOUT_S, opener=_open_device) -> bytes:
-    """Statusabfrage senden und die 32-Byte-Antwort lesen – mit festem Zeitlimit, nie blockierend."""
+    """Send the status query and read the 32-byte answer – with a fixed timeout, never blocking."""
     if not printer.startswith("file://"):
         raise MediaError(_("Check media only works via /dev/usb/lpN (backend linux_kernel)."))
     try:

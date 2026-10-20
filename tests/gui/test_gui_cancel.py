@@ -1,4 +1,4 @@
-"""Serie abbrechen: beim Vorbereiten (nichts gedruckt) und zwischen den Teilaufträgen."""
+"""Cancelling a series: while preparing (nothing printed) and between the partial jobs."""
 import pytest
 
 from labelwerk.document import Document, Numbering, Series, TextObject
@@ -10,7 +10,7 @@ from labelwerk.settings import Settings
 
 
 class FakeWorker:
-    """Druck-Worker ohne Thread und Drucker; merkt sich „Abbrechen“."""
+    """Print worker without thread and printer; remembers “Cancel”."""
     instances = []
 
     def __init__(self, image, label_id, model, cut_every=1, printer=None, options=None):
@@ -82,7 +82,7 @@ def test_single_label_has_no_cancel(qtbot, workers):
 
 
 def test_cancel_while_preparing_prints_nothing(qtbot, workers, monkeypatch):
-    win = _window(qtbot, count=60)                       # Vorbereiten meldet sich alle 25 Zeilen
+    win = _window(qtbot, count=60)                       # preparing reports every 25 rows
     clicks = []
 
     def events(*args, **kwargs):

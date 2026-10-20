@@ -1,14 +1,14 @@
-"""Tastenkürzel-Verzeichnis ohne Qt: alle Aktionen mit Standardkürzel und Bereich.
+"""Shortcut registry without Qt: all actions with default shortcut and scope.
 
-Kürzel sind Texte im Qt-Format („Ctrl+Shift+Z“, „Del“, „Shift+Left“); „“ = kein Kürzel.
-Der Kern prüft nur Form und Doppelbelegung, die GUI wandelt mit ``QKeySequence`` um.
-Bereiche: ``global`` (überall), ``canvas`` (Arbeitsfläche hat den Fokus),
-``edit`` (Schreibmodus: der Editor im Text-Panel hat den Fokus – Fett/Kursiv/Unterstrichen
-wirken auch, solange ein anderes Feld des Panels ihn hat). Arbeitsfläche und Schreibmodus
-sind nie gleichzeitig aktiv, ein globales Kürzel kollidiert dagegen mit jedem Bereich.
-Feste Kürzel (``fixed``, z. B. Esc beendet den Schreibmodus, Enter startet ihn für das
-gewählte Textobjekt) lassen sich nicht ändern; Enter ist sonst nicht belegbar, F2 ist die
-änderbare Alternative.
+Shortcuts are strings in Qt format (“Ctrl+Shift+Z”, “Del”, “Shift+Left”); "" = no shortcut.
+The core only checks form and duplicate assignment; the GUI converts with ``QKeySequence``.
+Scopes: ``global`` (everywhere), ``canvas`` (the canvas has the focus),
+``edit`` (edit mode: the editor in the text panel has the focus – bold/italic/underline
+also apply while another field of the panel has it). Canvas and edit mode
+are never active at the same time, whereas a global shortcut collides with every scope.
+Fixed shortcuts (``fixed``, e.g. Esc ends edit mode, Enter starts it for the
+selected text object) cannot be changed; Enter is otherwise not assignable, F2 is the
+changeable alternative.
 """
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ SCOPES = ("global", "canvas", "edit")
 
 @dataclass(frozen=True)
 class Action:
-    id: str          # z. B. "edit.copy"
-    name: str        # Anzeigename (englisch, mit N_ markiert – angezeigt wird _(name))
-    default: str     # Standardkürzel, "" = keins
+    id: str          # e.g. "edit.copy"
+    name: str        # display name (English, marked with N_ – _(name) is displayed)
+    default: str     # default shortcut, "" = none
     scope: str       # global | canvas | edit
-    fixed: bool = False   # Kürzel fest, in den Einstellungen nicht änderbar
+    fixed: bool = False   # shortcut fixed, not changeable in the settings
 
 
 ACTIONS: tuple[Action, ...] = (
@@ -90,8 +90,8 @@ ACTIONS: tuple[Action, ...] = (
 )
 
 _BY_ID = {a.id: a for a in ACTIONS}
-_MODIFIERS = ("Ctrl", "Alt", "Shift", "Meta")          # Reihenfolge wie Qt
-# bedienen Textfeld, Tabelle und Dialoge: als Kürzel nicht belegbar (außer als eigener Standard)
+_MODIFIERS = ("Ctrl", "Alt", "Shift", "Meta")          # order as in Qt
+# operate text field, table and dialogs: not assignable as a shortcut (except as own default)
 _RESERVED = {"Esc", "Return", "Enter", "Tab", "Backtab", "Shift+Tab"}
 _KEY_ALIASES = {"del": "Del", "delete": "Del", "esc": "Esc", "escape": "Esc",
                 "ins": "Ins", "insert": "Ins", "pgup": "PgUp", "pageup": "PgUp",
@@ -99,15 +99,15 @@ _KEY_ALIASES = {"del": "Del", "delete": "Del", "esc": "Esc", "escape": "Esc",
 
 
 def action(action_id: str) -> Action:
-    """Aktion zur ID (``KeyError`` bei unbekannter ID)."""
+    """Action for the ID (``KeyError`` for an unknown ID)."""
     return _BY_ID[action_id]
 
 
 # --- Form ---------------------------------------------------------------------------
 def _split(seq: str) -> tuple[list[str], str]:
-    """Kürzel in Umschalttasten und Taste zerlegen („Ctrl++“ = Strg und Plus).
+    """Split a shortcut into modifier keys and key (“Ctrl++” = Ctrl and Plus).
 
-    „++“ ergibt eine leere Umschalttaste und ist damit ungültig."""
+    “++” yields an empty modifier and is therefore invalid."""
     if seq == "+":
         return [], "+"
     if seq.endswith("++"):
@@ -117,26 +117,26 @@ def _split(seq: str) -> tuple[list[str], str]:
 
 
 def _parse(seq: str) -> tuple[frozenset[str], str] | None:
-    """Umschalttasten (normiert) und Taste, oder None bei ungültiger Form."""
+    """Modifier keys (normalised) and key, or None for an invalid form."""
     mods, key = _split(seq)
     known = {m.casefold(): m for m in _MODIFIERS}
     normed = [known.get(m.casefold()) for m in mods]
     if None in normed or len(set(normed)) != len(normed):
-        return None                              # unbekannte oder doppelte Umschalttaste
+        return None                              # unknown or duplicate modifier key
     if not key or key != key.strip() or key.casefold() in known:
-        return None                              # Taste fehlt oder ist nur eine Umschalttaste
+        return None                              # key missing or only a modifier key
     return frozenset(normed), key
 
 
 def is_well_formed(seq: str) -> bool:
-    """True für ein Kürzel in Qt-Form oder „“ (kein Kürzel); kein Text = nicht wohlgeformt."""
+    """True for a shortcut in Qt form or "" (no shortcut); not a string = malformed."""
     return isinstance(seq, str) and (seq == "" or _parse(seq) is not None)
 
 
 def normalize(seq: str) -> str:
-    """Einheitliche Schreibweise (Groß/klein, Reihenfolge, Tastennamen) zum Vergleichen.
+    """Uniform spelling (case, order, key names) for comparison.
 
-    ``ValueError`` bei ungültiger Form."""
+    ``ValueError`` for an invalid form."""
     if seq == "":
         return ""
     parsed = _parse(seq) if isinstance(seq, str) else None
@@ -147,20 +147,20 @@ def normalize(seq: str) -> str:
     return "+".join([m for m in _MODIFIERS if m in mods] + [key])
 
 
-# --- Verzeichnis anwenden -------------------------------------------------------------
+# --- Applying the registry -------------------------------------------------------------
 def effective(overrides: dict[str, str]) -> dict[str, str]:
-    """Wirksame Kürzel aller Aktionen: Standard, überschrieben durch ``overrides`` (feste
-    Kürzel bleiben)."""
+    """Effective shortcuts of all actions: default, overridden by ``overrides`` (fixed
+    shortcuts stay)."""
     mapping = {a.id: a.default for a in ACTIONS}
     mapping.update({k: v for k, v in overrides.items() if k in _BY_ID and not _BY_ID[k].fixed})
     return mapping
 
 
 def conflicts(mapping: dict[str, str]) -> list[tuple[str, list[str]]]:
-    """Doppelt belegte Kürzel: ``[(Kürzel, [Aktions-IDs])]``, nach Kürzel sortiert.
+    """Shortcuts assigned twice: ``[(shortcut, [action IDs])]``, sorted by shortcut.
 
-    Kollision = gleiches Kürzel im selben Bereich oder ein globales gegen jeden Bereich.
-    Leere, ungültige Kürzel und unbekannte IDs werden übergangen.
+    Collision = same shortcut in the same scope or a global one against any scope.
+    Empty, invalid shortcuts and unknown IDs are skipped.
     """
     groups: dict[str, list[str]] = {}
     for action_id, seq in mapping.items():
@@ -176,14 +176,14 @@ def conflicts(mapping: dict[str, str]) -> list[tuple[str, list[str]]]:
 
 
 def without_conflicts(mapping: dict[str, str]) -> tuple[dict[str, str], list[str]]:
-    """Doppelbelegungen auflösen (z. B. von Hand bearbeitete settings.json): Feste Kürzel
-    bleiben immer; sonst behält die Aktion, die im Verzeichnis zuerst steht, das Kürzel,
-    spätere bekommen keins. ``(Kürzel, Warnungen)``.
+    """Resolve duplicate assignments (e.g. a hand-edited settings.json): fixed shortcuts
+    always stay; otherwise the action that comes first in the registry keeps the shortcut,
+    later ones get none. ``(shortcuts, warnings)``.
     """
     clean = dict(mapping)
-    kept: list[tuple[str, str]] = []                    # (normalisiertes Kürzel, Aktions-ID)
+    kept: list[tuple[str, str]] = []                    # (normalised shortcut, action ID)
     warnings: list[str] = []
-    for entry in sorted(ACTIONS, key=lambda a: not a.fixed):   # feste zuerst, sonst stabil
+    for entry in sorted(ACTIONS, key=lambda a: not a.fixed):   # fixed ones first, otherwise stable
         seq = clean.get(entry.id, "")
         if not seq or not is_well_formed(seq):
             continue
@@ -205,10 +205,11 @@ def _clash(scope_a: str, scope_b: str) -> bool:
 
 
 def validate(overrides) -> tuple[dict[str, str], list[str]]:
-    """Geänderte Kürzel aus den Einstellungen prüfen: ``(gültige, Warnungen)``.
+    """Check changed shortcuts from the settings: ``(valid, warnings)``.
 
-    Unbekannte Aktionen und ungültige Kürzel werden mit Warnung verworfen (Standard gilt);
-    „“ ist erlaubt und heißt „kein Kürzel“."""
+    Unknown actions and invalid shortcuts are discarded with a warning (the default applies);
+    "" is allowed and means “no shortcut”."""
+
     if not isinstance(overrides, dict):
         return {}, [_("Setting 'shortcuts' invalid ({value!r}) – default shortcuts active.")
                     .format(value=overrides)]

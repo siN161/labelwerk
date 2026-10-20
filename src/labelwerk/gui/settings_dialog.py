@@ -1,7 +1,7 @@
-"""Dialog „Einstellungen“: Reiter „Allgemein“ (Standardwerte für neue Etiketten, Drucker,
-Ansicht) und „Tastenkürzel“ (alle Aktionen aus ``shortcuts.ACTIONS``).
+"""Dialog “Settings”: tabs “General” (defaults for new labels, printer, view) and
+“Shortcuts” (all actions from ``shortcuts.ACTIONS``).
 
-Neue Einstellung = Feld in settings.Settings + eine Zeile im passenden Abschnitt hier.
+New setting = field in settings.Settings + one line in the matching section here.
 """
 from __future__ import annotations
 
@@ -28,20 +28,20 @@ from . import file_dialog
 from .tools import TOOLS
 from .widgets import DoubleSpinBox, FontCombo, SpinBox
 
-# englisch (N_), angezeigt wird _(…)
+# English (N_), _(…) is displayed
 SCOPE_NAMES = {"global": N_("Global"), "canvas": N_("Canvas"), "edit": N_("Text editing")}
 FIXED_TIP = N_("Fixed shortcut – cannot be changed")
 CONFLICT_COLOR = QColor("#FF0000")
 COL_ACTION, COL_SCOPE, COL_KEYS, COL_RESET = range(4)
-DIALOG_SIZE = (760, 680)     # Wunschgröße: Kürzel-Tabelle mit ungekürzten Aktionsnamen
-MIN_SIZE = (520, 420)        # kleiner geht nicht; Tabelle und Reiter rollen dann
-_SCREEN_SHARE = 0.9          # höchstens so viel vom verfügbaren Bildschirm
+DIALOG_SIZE = (760, 680)     # preferred size: shortcut table with untruncated action names
+MIN_SIZE = (520, 420)        # cannot go smaller; table and tabs scroll then
+_SCREEN_SHARE = 0.9          # at most this much of the available screen
 _PORTABLE = QKeySequence.SequenceFormat.PortableText
 _NATIVE = QKeySequence.SequenceFormat.NativeText
 
 
 RESTART_NOTICE = N_("Changes take effect after a restart")
-RESTART_STYLE = "color: #CC7A00; font-weight: 600;"     # wie Hinweise (QSS „warn“), auch ohne QSS
+RESTART_STYLE = "color: #CC7A00; font-weight: 600;"     # like hints (QSS "warn"), even without QSS
 
 
 class SettingsDialog(QDialog):
@@ -54,16 +54,16 @@ class SettingsDialog(QDialog):
         self.resize(initial_size(screen.availableGeometry().size()))
         self.path = path
         self.saved: Settings | None = None
-        self._symbols = (settings.symbols_recent, settings.symbols_favorites)   # nur durchgereicht
-        self._recent_files = settings.recent_files                             # nur durchgereicht
-        self._printer, self._last_model = settings.printer, settings.last_model   # nur durchgereicht
-        self._printer_options = settings.printer_options                          # nur durchgereicht
-        self._last_tool = settings.last_tool                                      # nur durchgereicht
+        self._symbols = (settings.symbols_recent, settings.symbols_favorites)   # only passed through
+        self._recent_files = settings.recent_files                             # only passed through
+        self._printer, self._last_model = settings.printer, settings.last_model   # only passed through
+        self._printer_options = settings.printer_options                          # only passed through
+        self._last_tool = settings.last_tool                                      # only passed through
         outer = QVBoxLayout(self)
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs)
         general = QWidget()
-        scroll = QScrollArea()                   # Drucker-Liste macht den Reiter hoch: rollen statt quetschen
+        scroll = QScrollArea()                   # printer list makes the tab tall: scroll, do not squeeze
         scroll.setWidget(general)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -74,7 +74,7 @@ class SettingsDialog(QDialog):
         self.label = QComboBox()
         for lbl in labels_for_model(model):
             self.label.addItem(lbl.description, lbl.id)
-        if self.label.findData(settings.label_id) < 0:    # anderer Drucker: nicht still ersetzen
+        if self.label.findData(settings.label_id) < 0:    # other printer: do not replace silently
             self.label.addItem(_("{label} – does not fit the {model}").format(
                 label=get_label(settings.label_id).description, model=model), settings.label_id)
         self.label.setCurrentIndex(max(0, self.label.findData(settings.label_id)))
@@ -107,7 +107,7 @@ class SettingsDialog(QDialog):
         form.addRow(_("Font size"), row)
         self.font_family = FontCombo(fonts.families(all=settings.fonts_all))
         self.font_family.set_current_family(settings.font_family)
-        # Nicht installierte Schrift nicht stillschweigend durch Ersatz überschreiben
+        # Do not silently overwrite a font that is not installed with a replacement
         self._orig_family = settings.font_family
         self._family_touched = False
         self.font_family.family_chosen.connect(self._family_changed)
@@ -124,7 +124,7 @@ class SettingsDialog(QDialog):
         for favorite in favorites.favorites():
             self.start_favorite.addItem(favorite.name, favorite.name)
         if settings.start_favorite and self.start_favorite.findData(settings.start_favorite) < 0:
-            # gelöscht oder umbenannt: sichtbar lassen, nicht still auf „leer“ setzen
+            # deleted or renamed: keep visible, do not silently set to “empty”
             self.start_favorite.addItem(_("{name} (missing)").format(name=settings.start_favorite),
                                         settings.start_favorite)
         self.start_favorite.setCurrentIndex(max(0, self.start_favorite.findData(settings.start_favorite)))
@@ -208,7 +208,7 @@ class SettingsDialog(QDialog):
             self.start_tool.addItem(_(tool.title), tool.key)
         self.start_tool.setCurrentIndex(max(0, self.start_tool.findData(settings.start_tool)))
         form.addRow(_("Tab at startup"), self.start_tool)
-        # Reiter in der Leiste: DATEI und PAPIER immer (dort wird das Etikett gewählt)
+        # Tabs in the bar: FILE and PAPER always (the label is chosen there)
         self.tool_boxes: dict[str, QCheckBox] = {}
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
@@ -237,7 +237,7 @@ class SettingsDialog(QDialog):
         self.system_file_dialog.setToolTip(_("Dialog of the desktop instead of the labelwerk dialog "
                                              "with preview (takes effect after a restart)"))
         self.system_file_dialog.setChecked(settings.system_file_dialog)
-        if not file_dialog.system_dialog_available():         # Qt-Plugin fehlt: nur eigener Dialog
+        if not file_dialog.system_dialog_available():         # Qt plugin missing: own dialog only
             self.system_file_dialog.setEnabled(False)
             self.system_file_dialog.setToolTip(_("Not available: this Qt installation has no "
                                                  "module for the file dialog of the system"))
@@ -250,8 +250,8 @@ class SettingsDialog(QDialog):
             self.language.addItem(i18n.NAMES.get(code, code), code)
         self.language.setCurrentIndex(max(0, self.language.findData(settings.language)))
         form.addRow(_("Language"), self.language)
-        # Einstellungen, die erst nach einem Neustart wirken: farbiger Hinweis neben SPEICHERN
-        # (unten im Fenster – sichtbar in jedem Reiter), sobald eine davon geändert ist
+        # Settings that only take effect after a restart: coloured hint next to SAVE
+        # (at the bottom of the window – visible in every tab) as soon as one of them is changed
         self._started = started if started is not None else started_values(settings)
         self.restart_hint = QLabel(_(RESTART_NOTICE))
         self.restart_hint.setObjectName("restartNotice")
@@ -270,9 +270,9 @@ class SettingsDialog(QDialog):
         layout.addStretch()
 
         self._build_shortcut_tab(settings.shortcuts)
-        self.conflict_hint = self._error_label()     # Kürzel doppelt belegt (Speichern gesperrt)
+        self.conflict_hint = self._error_label()     # shortcut assigned twice (saving blocked)
         outer.addWidget(self.conflict_hint)
-        self.error = self._error_label()             # Speichern fehlgeschlagen
+        self.error = self._error_label()             # saving failed
         outer.addWidget(self.error)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save
                                    | QDialogButtonBox.StandardButton.Cancel)
@@ -300,7 +300,7 @@ class SettingsDialog(QDialog):
         label.hide()
         return label
 
-    # --- Reiter „Tastenkürzel“ ------------------------------------------------------
+    # --- Tab “Shortcuts” ------------------------------------------------------
     def _build_shortcut_tab(self, overrides: dict[str, str]) -> None:
         page = QWidget()
         self.tabs.addTab(page, _("Shortcuts"))
@@ -310,9 +310,9 @@ class SettingsDialog(QDialog):
               "the shortcut. Esc, Enter and Tab cannot be assigned here (they operate the table)."))
         hint.setWordWrap(True)
         layout.addWidget(hint)
-        self.key_hint = self._error_label()          # verworfene Eingabe
+        self.key_hint = self._error_label()          # discarded input
         layout.addWidget(self.key_hint)
-        self._keys = shortcuts.effective(overrides)       # Aktions-ID → Kürzel (Qt-Format)
+        self._keys = shortcuts.effective(overrides)       # action ID → shortcut (Qt format)
         self._rows = [a.id for a in shortcuts.ACTIONS]
         table = self.shortcut_table = QTableWidget(len(self._rows), 4)
         table.setHorizontalHeaderLabels([_("Action"), _("Scope"), _("Shortcut"), ""])
@@ -340,13 +340,13 @@ class SettingsDialog(QDialog):
                 item.setFlags(fixed | Qt.ItemFlag.ItemIsEditable)
             table.setItem(row, COL_KEYS, item)
             self._show_keys(entry.id)
-        # gleiche Zeilenhöhe, ob mit Knopf „Standard“ oder ohne
+        # same row height whether with a “Default” button or without
         probe = self._reset_widget("")
         probe.ensurePolished()
         rows = table.verticalHeader()
         rows.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         rows.setDefaultSectionSize(max(rows.defaultSectionSize(), probe.sizeHint().height()))
-        # Klick auf eine Zeile (oder Enter) bearbeitet ihr Kürzel
+        # clicking a row (or Enter) edits its shortcut
         table.cellClicked.connect(self._edit_row)
         table.cellActivated.connect(self._edit_row)
         layout.addWidget(table, 1)
@@ -358,18 +358,18 @@ class SettingsDialog(QDialog):
         layout.addLayout(row)
 
     def shortcut(self, action_id: str) -> str:
-        """Kürzel einer Aktion, wie es gespeichert würde („“ = keins)."""
+        """Shortcut of an action as it would be saved ("" = none)."""
         return self._keys[action_id]
 
     def set_shortcut(self, action_id: str, seq: str) -> None:
-        """Kürzel einer Aktion ändern (Tabelle, Standard-Knopf); Konflikte neu prüfen."""
+        """Change the shortcut of an action (table, Default button); re-check conflicts."""
         self._keys[action_id] = seq
         self.key_hint.hide()
         self._show_keys(action_id)
         self._check_conflicts()
 
     def reject_keys(self, action_id: str, seq: str) -> None:
-        """Eingabe taugt nicht als Kürzel (z. B. nur Umschalt): melden, Kürzel bleibt."""
+        """Input is not usable as a shortcut (e.g. only Shift): report, shortcut stays."""
         self.key_hint.setText(_("“{keys}” is not a valid shortcut – “{action}” stays unchanged.")
                               .format(keys=_native(seq) or seq,
                                       action=_(shortcuts.action(action_id).name)))
@@ -381,7 +381,7 @@ class SettingsDialog(QDialog):
         item = self.shortcut_table.item(row, COL_KEYS)
         item.setText(_native(seq))
         item.setData(Qt.ItemDataRole.UserRole, seq)
-        # Knopf „Standard“ nur, wo das Kürzel abweicht – sonst wäre die Spalte voller grauer Knöpfe
+        # “Default” button only where the shortcut differs – else the column fills with grey buttons
         default = shortcuts.action(action_id).default
         if _same(seq, default):
             self.shortcut_table.removeCellWidget(row, COL_RESET)
@@ -397,7 +397,7 @@ class SettingsDialog(QDialog):
         return button
 
     def reset_button(self, action_id: str) -> QPushButton | None:
-        """Knopf „Standard“ einer Zeile (None, solange das Standardkürzel gilt)."""
+        """“Default” button of a row (None while the default shortcut applies)."""
         return self.shortcut_table.cellWidget(self._rows.index(action_id), COL_RESET)
 
     def _edit_row(self, row: int, _column: int = COL_KEYS) -> None:
@@ -410,7 +410,7 @@ class SettingsDialog(QDialog):
         self._check_conflicts()
 
     def _check_conflicts(self) -> None:
-        """Doppelt belegte Kürzel rot markieren; solange es sie gibt, ist Speichern gesperrt."""
+        """Mark shortcuts assigned twice in red; while any exist, saving is blocked."""
         found = shortcuts.conflicts(self._keys)
         clashing = {action_id for _seq, ids in found for action_id in ids}
         for row, action_id in enumerate(self._rows):
@@ -434,8 +434,8 @@ class SettingsDialog(QDialog):
         self.network.setCellWidget(row, 2, combo)
 
     def _network_values(self) -> list[dict] | None:
-        """Netzwerkdrucker aus der Tabelle; leere Zeilen entfallen; None bei ungültiger Adresse
-        (Hinweis steht dann im Dialog)."""
+        """Network printers from the table; empty rows are dropped; None for an invalid address
+        (the hint is then shown in the dialog)."""
         entries = []
         for row in range(self.network.rowCount()):
             name = (self.network.item(row, 0) or QTableWidgetItem()).text().strip()
@@ -460,22 +460,22 @@ class SettingsDialog(QDialog):
                 if key in HIDEABLE_TOOLS and not box.isChecked()]
 
     def _enable_start_tools(self) -> None:
-        """„Reiter beim Start“: ausgeblendete Reiter gesperrt (gekoppelt an die Häkchen)."""
+        """“Tab at startup”: hidden tabs disabled (coupled to the checkboxes)."""
         model = self.start_tool.model()
         for key, box in self.tool_boxes.items():
             model.item(self.start_tool.findData(key)).setEnabled(box.isChecked())
 
     def _tool_box_toggled(self, key: str) -> None:
-        """Häkchen eines Reiters: Start-Reiter mitsperren; der gewählte Start-Reiter ist gerade
-        ausgeblendet worden → „Zuletzt benutzter“."""
+        """Checkbox of a tab: disable the start tab as well; the chosen start tab has just been
+        hidden → “Last used”."""
         self._enable_start_tools()
         if not self.tool_boxes[key].isChecked() and self.start_tool.currentData() == key:
             self.start_tool.setCurrentIndex(self.start_tool.findData("last"))
-        self._update_restart_hint()             # wirksamer Start-Reiter hängt an den Häkchen
+        self._update_restart_hint()             # the effective start tab depends on the checkboxes
 
     def restart_needed(self) -> bool:
-        """Wirkt eine gewählte Einstellung erst nach einem Neustart anders als jetzt? (Liest nur die
-        Felder der Neustart-Einstellungen – keine Prüfung anderer Felder.)"""
+        """Does a chosen setting only act differently after a restart than now? (Reads only the
+        fields of the restart settings – no check of other fields.)"""
         return restart_pending({"language": self.language.currentData(),
                                 "start_zoom": self.zoom.value(),
                                 "start_tool": start_tool_for(self.start_tool.currentData(),
@@ -524,23 +524,23 @@ class SettingsDialog(QDialog):
 
     def accept(self) -> None:
         if not self.save_button.isEnabled():
-            return                                   # Kürzel doppelt belegt (Hinweis steht da)
+            return                                   # shortcut assigned twice (hint is shown)
         if self._network_values() is None:
-            return                                   # Adresse ungültig (Hinweis steht da)
+            return                                   # address invalid (hint is shown)
         settings = self.values()
         try:
             save_settings(settings, self.path)
         except OSError as e:
             self.error.setText(str(e))
             self.error.show()
-            return                                   # Dialog bleibt offen
+            return                                   # dialog stays open
         self.saved = settings
         super().accept()
 
 
 def _model_combo(automatic: str | None, zebra: bool = False) -> QComboBox:
-    """Druckermodelle (ungeprüfte gekennzeichnet); ``automatic``: erster Eintrag mit Wert "";
-    ``zebra``: auch Zebra (ZPL) je Auflösung (Netzwerkdrucker)."""
+    """Printer models (untested ones marked); ``automatic``: first entry with value "";
+    ``zebra``: also Zebra (ZPL) per resolution (network printers)."""
     combo = QComboBox()
     if automatic is not None:
         combo.addItem(automatic, "")
@@ -555,8 +555,8 @@ def _model_combo(automatic: str | None, zebra: bool = False) -> QComboBox:
 
 
 class _KeyDelegate(QStyledItemDelegate):
-    """Spalte „Kürzel“: Bearbeiten mit ``QKeySequenceEdit`` – genau eine Tastenkombination,
-    ✕ leert. Esc bricht ab (die Tabelle schließt den Editor ohne Übernahme)."""
+    """Column “Shortcut”: editing with ``QKeySequenceEdit`` – exactly one key combination,
+    ✕ clears. Esc cancels (the table closes the editor without applying)."""
 
     def __init__(self, dialog: SettingsDialog):
         super().__init__(dialog)
@@ -566,8 +566,8 @@ class _KeyDelegate(QStyledItemDelegate):
         editor = QKeySequenceEdit(parent)
         editor.setMaximumSequenceLength(1)
         editor.setClearButtonEnabled(True)
-        # Kombination erfasst: Fokus zurück an die Tabelle – das übernimmt und schließt den
-        # Editor auf dem üblichen Weg (wie ein Klick daneben)
+        # Combination captured: focus back to the table – that applies and closes the
+        # editor the usual way (like a click elsewhere)
         editor.editingFinished.connect(self._dialog.shortcut_table.setFocus)
         return editor
 
@@ -584,20 +584,21 @@ class _KeyDelegate(QStyledItemDelegate):
 
 
 def initial_size(available: QSize) -> QSize:
-    """Startgröße: Wunschgröße, auf kleinen Bildschirmen höchstens 90 % davon – nie kleiner als
-    die Mindestgröße."""
+    """Start size: preferred size, on small screens at most 90 % of it – never smaller than
+    the minimum size."""
     width = min(DIALOG_SIZE[0], int(available.width() * _SCREEN_SHARE))
     height = min(DIALOG_SIZE[1], int(available.height() * _SCREEN_SHARE))
     return QSize(max(width, MIN_SIZE[0]), max(height, MIN_SIZE[1]))
 
 
 def _native(seq: str) -> str:
-    """Kürzel zum Anzeigen (z. B. „Strg+P“ mit deutscher Qt-Übersetzung)."""
+    """Shortcut for display (e.g. “Strg+P” with the German Qt translation)."""
     return QKeySequence(seq).toString(_NATIVE)
 
 
 def _same(a: str, b: str) -> bool:
-    """Gleiches Kürzel trotz anderer Schreibweise („ctrl+p“ = „Ctrl+P“)."""
+    """Same shortcut despite different spelling (“ctrl+p” = “Ctrl+P”)."""
+
     try:
         return shortcuts.normalize(a) == shortcuts.normalize(b)
     except ValueError:

@@ -151,7 +151,7 @@ def test_busy_printer_gives_specific_hint(monkeypatch, capsys):
 
 def test_install_desktop_uses_xdg_data_home(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    monkeypatch.setattr("labelwerk.desktop.shutil.which", lambda name: None)   # kein update-…
+    monkeypatch.setattr("labelwerk.desktop.shutil.which", lambda name: None)   # no update-…
     monkeypatch.setattr("labelwerk.desktop.subprocess.run",
                         lambda *a, **k: pytest.fail("externes Programm gestartet"))
     rc = main(["install-desktop"])
@@ -308,7 +308,7 @@ def test_default_font_family_from_settings(tmp_path):
 
 def test_font_path_beats_font_family_from_settings(tmp_path):
     from labelwerk import fonts
-    path = fonts.resolve(None, False, False).path          # DejaVu Sans normal als Datei
+    path = fonts.resolve(None, False, False).path          # DejaVu Sans regular as a file
     _write_settings(font_family="Liberation Sans")
     assert _rich_preview(tmp_path, "--font", path) == _rich_expected(font_path=path)
 
@@ -368,7 +368,7 @@ def test_install_desktop_reports_failed_update_tools(tmp_path, monkeypatch, caps
     assert "update-mime-database" in capsys.readouterr().err
 
 
-# --- Drucker-Kompatibilität ----------------------------------------------------------------------
+# --- Printer compatibility ----------------------------------------------------------------
 def _detected(monkeypatch, *found):
     from labelwerk.printers import Printer
     monkeypatch.setattr("labelwerk.cli.printers.usb_printers",
@@ -409,7 +409,7 @@ def test_label_auto_reads_the_loaded_roll(monkeypatch, tmp_path):
     monkeypatch.setattr("labelwerk.cli.read_media", lambda printer: Media(29, 0, "endless"))
     out = tmp_path / "v.png"
     assert main(["print", "Hallo", "-l", "auto", "--preview", str(out)]) == 0
-    assert Image.open(out).width == 306                       # 29 mm endlos
+    assert Image.open(out).width == 306                       # 29 mm continuous
 
 
 @pytest.mark.parametrize("media, message", [(None, "nicht gefunden"),
@@ -436,7 +436,7 @@ def test_auto_printer_includes_network_printers(monkeypatch):
     monkeypatch.setattr("labelwerk.cli.prn.print_image", fake_print)
     assert main(["print", "Hallo", "-l", "62"]) == 0
     assert sent["printer"] == "tcp://10.0.0.5:9100" and sent["backend"] is None
-    assert sent["model"] == "QL-720NW"                        # Modell des Netzwerkdruckers
+    assert sent["model"] == "QL-720NW"                        # model of the network printer
 
 
 def test_given_printer_decides_the_model(monkeypatch):
@@ -500,7 +500,7 @@ def test_missing_chosen_printer_is_named(monkeypatch, capsys):
 # --- CUPS ---------------------------------------------------------------------------------------
 @pytest.fixture
 def cups_queue(monkeypatch):
-    """CUPS nachgebildet: Warteschlange „Buero“ ohne PPD, Aufrufe aufgezeichnet."""
+    """CUPS imitated: queue “Buero” without PPD, calls recorded."""
     from labelwerk import cups
     calls = []
 
@@ -550,14 +550,14 @@ def test_print_file_to_cups_in_its_resolution(cups_queue, tmp_path, monkeypatch)
 # --- Zebra --------------------------------------------------------------------------------------
 def test_print_to_a_zebra_device(tmp_path, capsys, monkeypatch):
     from labelwerk import zpl
-    monkeypatch.setattr(zpl, "_is_device", lambda info: True)    # Datei statt Gerät
+    monkeypatch.setattr(zpl, "_is_device", lambda info: True)    # file instead of device
     device = tmp_path / "lp2"
     device.write_bytes(b"")
     assert main(["-m", "zpl:300", "print", "Hallo", "-p", f"zpl+file://{device}",
                  "-l", "57x32mm@305", "-b", "zebra"]) == 0
-    assert device.read_bytes().startswith(b"^XA^PW684^LL384")     # ohne ^MM: wie am Drucker
+    assert device.read_bytes().startswith(b"^XA^PW684^LL384")     # without ^MM: as on the printer
     assert main(["print", "Hallo", "-p", f"zpl+file://{device}", "-l", "57x32mm@305"]) == 2
-    assert "passt nicht zum zpl:203" in capsys.readouterr().err     # ohne -m: 203 dpi
+    assert "passt nicht zum zpl:203" in capsys.readouterr().err     # without -m: 203 dpi
 
 
 def test_zebra_on_usb_is_listed(tmp_path, monkeypatch, capsys):
@@ -576,7 +576,7 @@ def test_model_and_route_mismatch_is_a_message(capsys):
 
 @pytest.fixture
 def office_queue(monkeypatch):
-    """„Etiketten“ (Dymo-Größen) und „Buero“ (A4/Letter) in CUPS."""
+    """“Etiketten” (Dymo sizes) and “Buero” (A4/Letter) in CUPS."""
     from labelwerk import cups
     calls = []
 
@@ -606,7 +606,7 @@ def test_all_printers_option_lists_office_printers_without_asking(office_queue, 
     assert main(["printers", "--all"]) == 0
     out = capsys.readouterr().out
     assert "Buero · CUPS" in out and "ausgeblendet" not in out
-    assert not any(c[0] == "lpoptions" for c in office_queue)    # nichts einzuordnen
+    assert not any(c[0] == "lpoptions" for c in office_queue)    # nothing to classify
 
 
 def test_office_printers_are_listed_with_the_setting(office_queue, capsys):
@@ -629,7 +629,7 @@ def test_backend_cups_skips_office_printers(office_queue, capsys):
 
 def test_explicit_queue_is_not_classified(office_queue, capsys):
     assert main(["print", "Hallo", "-p", "cups:Buero", "-l", "57x32mm@300"]) == 0
-    assert ("lpoptions", "-p", "Etiketten", "-l") not in office_queue   # nur Buero (Etiketten)
+    assert ("lpoptions", "-p", "Etiketten", "-l") not in office_queue   # only Buero (Etiketten)
 
 
 def test_backend_cups_names_hidden_office_printers(monkeypatch, capsys):
@@ -659,7 +659,7 @@ def test_cli_speaks_english_with_lang(capsys):
     assert main(["--lang", "en", "print", "X", "-l", "999"]) == 2
     err = capsys.readouterr().err
     assert "Unknown label" in err or "unknown" in err.lower()
-    assert main(["print", "X", "-l", "999"]) == 2                 # ohne --lang: Deutsch (conftest)
+    assert main(["print", "X", "-l", "999"]) == 2                 # without --lang: German (conftest)
     assert "Unbekanntes Etikett" in capsys.readouterr().err
 
 

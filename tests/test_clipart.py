@@ -1,4 +1,4 @@
-"""Symbol-Bibliothek (Etappe 3d-2c): Katalog, Lizenzen, Suche, eigener Ordner."""
+"""Symbol library (stage 3d-2c): catalogue, licences, search, own folder."""
 import zipfile
 from xml.etree import ElementTree
 
@@ -11,7 +11,7 @@ from labelwerk.i18n import _
 
 
 def test_groups_in_fixed_order_with_german_names():
-    assert [(key, _(name)) for key, name in GROUPS] == [     # Namen übersetzt beim Anzeigen
+    assert [(key, _(name)) for key, name in GROUPS] == [     # names translated on display
         ("elektro", "Elektro"), ("versand", "Versand"), ("sicherheit", "Sicherheit"),
         ("allgemein", "Allgemein"), ("eigene", "Eigene")]
 
@@ -54,12 +54,12 @@ def test_no_brand_logos():
                                   "wash-temperature-3", "wash-tumble-dry", "ironing",
                                   "ironing-steam", "bleach", "bleach-chlorine"])
 def test_trademarks_are_left_out(name):
-    """Marken und geschützte Zeichen außerhalb der Tabler-Kategorie „Brand“ fehlen auch."""
+    """Trademarks and protected symbols outside the Tabler category "Brand" are missing too."""
     assert clipart.find(f"tabler/outline/{name}") is None
 
 
 def test_washing_machine_stays_but_care_symbols_do_not():
-    """Textil-Pflegesymbole sind Marken (GINETEX); die Waschmaschine ist keins."""
+    """Textile care symbols are trademarks (GINETEX); the washing machine is not."""
     assert clipart.find("tabler/outline/wash-machine") is not None
     assert not [s for s in clipart.symbols("allgemein")
                 if s.id.startswith(("tabler/outline/wash-", "tabler/outline/ironing"))
@@ -101,7 +101,7 @@ def test_find_unknown_id_is_none():
     assert clipart.find("gibt/es/nicht") is None
 
 
-# --- Suche ----------------------------------------------------------------------------
+# --- Search ----------------------------------------------------------------------------
 def _ids(results):
     return [s.id for s in results]
 
@@ -137,7 +137,7 @@ def test_search_all_words_must_match():
                                           ("Erde", "labelwerk/schutzleiter"),
                                           ("LED", "labelwerk/diode")])
 def test_exact_terms_come_first(text, wanted):
-    """Fachkürzel: genauer Treffer (Namenswort, Suchbegriff) vor Teilwörtern („pe“ in „pencil“)."""
+    """Technical abbreviations: exact hit (name word, search term) before partial words ("pe" in "pencil")."""
     assert wanted in _ids(clipart.search(text))[:3]
 
 
@@ -147,7 +147,7 @@ def test_search_within_group():
 
 
 def test_names_first():
-    """Treffer im Namen vor Treffern nur in Suchbegriffen."""
+    """Hits in the name before hits only in search terms."""
     results = clipart.search("motor")
     assert results[0].name.lower().startswith("motor")
 
@@ -156,7 +156,7 @@ def test_empty_search_is_the_whole_group():
     assert clipart.search("", "versand") == clipart.symbols("versand")
 
 
-# --- eigener Ordner -------------------------------------------------------------------
+# --- own folder -------------------------------------------------------------------
 def test_own_folder_follows_xdg_data_home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     assert clipart.own_dir() == tmp_path / "labelwerk" / "symbole"
@@ -193,7 +193,7 @@ def test_own_symbols_are_found_by_search(tmp_path, monkeypatch):
     assert clipart.find("ordner/Werkstatt-Logo.svg").name == "Werkstatt-Logo"
 
 
-# --- Zuletzt verwendet --------------------------------------------------------------
+# --- Recently used --------------------------------------------------------------
 def test_add_recent_puts_newest_first_without_duplicates_and_limit():
     recent = [f"s{i}" for i in range(24)]
     assert clipart.add_recent(recent, "s5")[:2] == ["s5", "s0"]
@@ -218,7 +218,7 @@ def test_names_in_the_language_and_search_in_both():
     assert (earth.name, earth.subgroup) == ("Earth", "Electrical")
     assert clipart.find("iso7000/0621").name == "Fragile"
     found = [s.id for s in clipart.search("erde", "elektro")]
-    assert found[0] == "labelwerk/erde"                     # deutsch gesucht, englisch angezeigt
+    assert found[0] == "labelwerk/erde"                     # searched in German, displayed in English
     i18n.set_language("de")
     earth = clipart.find("labelwerk/erde")
     assert (earth.name, earth.subgroup) == ("Erde", "Elektro")

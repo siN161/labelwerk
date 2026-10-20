@@ -1,5 +1,5 @@
-"""Panel „Papier“: Etikett, Länge (Endlosband), Ränder, Zierrahmen und Ausrichtung – wie im
-P-touch Editor."""
+"""PAPER panel: label, length (continuous tape), margins, decorative frame and orientation – as in
+the P-touch Editor."""
 from __future__ import annotations
 
 from PIL import Image, ImageOps
@@ -28,15 +28,15 @@ NOTE_STYLE = "color: #666666; font-size: 11px; font-weight: 400; border: none; p
 
 
 def frame_icon(style: str | None) -> QIcon:
-    """Vorschau einer Rahmenart auf weißem Etikett – aus dem Kern gezeichnet (dicke Linie,
-    damit sie klein lesbar bleibt); None = leeres Etikett („Kein“, gleich hoch)."""
+    """Preview of a frame style on a white label – drawn from the core (thick line,
+    so that it stays legible when small); None = empty label (“No border”, same height)."""
     size = (FRAME_ICON.width(), FRAME_ICON.height())
     if style is None:
         small = Image.new("L", size, 255)
     else:
         doc = Document("62x29", frame=Frame(style, line_mm=1.5, padding_mm=0))
         small = ImageOps.invert(frame_mask(doc)).resize(size, Image.Resampling.BOX)
-    rgb = small.convert("RGB")                  # deckend weiß – auch auf dunkler Palette
+    rgb = small.convert("RGB")                  # opaque white – also on a dark palette
     image = QImage(rgb.tobytes(), rgb.width, rgb.height, 3 * rgb.width, QImage.Format.Format_RGB888)
     return QIcon(QPixmap.fromImage(image.copy()))
 
@@ -48,19 +48,19 @@ def _spin(low: float, high: float, step: float, tip: str) -> DoubleSpinBox:
     box.setSingleStep(step)
     box.setRange(low, high)
     box.setToolTip(tip)
-    box.setKeyboardTracking(False)          # erst bei Enter/Verlassen: ein Rückgängig-Schritt
+    box.setKeyboardTracking(False)          # only on Enter/leaving: one undo step
     return box
 
 
 class PaperPanel(Panel):
     check_media_requested = Signal()
-    media_status_changed = Signal(str, str)   # Text, Zustand (ok/warn/error/"") für die Fußzeile
+    media_status_changed = Signal(str, str)   # text, state (ok/warn/error/"") for the footer
 
     def __init__(self, doc: Document, model: str = DEFAULT_MODEL):
         super().__init__(doc, _("Paper"))
-        self.media: Media | None = None          # zuletzt erkannte Rolle
-        self.media_label: str | None = None      # passendes Etikett dazu
-        self.media_adjusted = False              # Etikett wurde automatisch angepasst
+        self.media: Media | None = None          # last detected roll
+        self.media_label: str | None = None      # matching label for it
+        self.media_adjusted = False              # label was adjusted automatically
 
         self.section(_("Label"))
         self.combo = QComboBox()
@@ -107,9 +107,9 @@ class PaperPanel(Panel):
         self.margin.setSingleStep(0.5)
         self.margin.setRange(0.0, MAX_MARGIN_MM)
         self.layout_.addWidget(self.margin)
-        self.margin_hint = QLabel()                 # Rand längs kleiner als der Vorschub
+        self.margin_hint = QLabel()                 # margin along the tape smaller than the feed
         self.margin_hint.setObjectName("note")
-        self.margin_hint.setStyleSheet(NOTE_STYLE)   # dezent, in jedem Design
+        self.margin_hint.setStyleSheet(NOTE_STYLE)   # subtle, in every theme
         self.margin_hint.setWordWrap(True)
         self.layout_.addWidget(self.margin_hint)
 
@@ -123,7 +123,7 @@ class PaperPanel(Panel):
         self.layout_.addWidget(self.frame_rounded)
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setColumnStretch(1, 1)              # Felder füllen die Breite (wie die übrigen)
+        grid.setColumnStretch(1, 1)              # fields fill the width (like the others)
         defaults = Frame()
         self.frame_line = _spin(*FRAME_LINE_MM, 0.1, _("Line width"))
         self.frame_inset = _spin(0.0, MAX_FRAME_MM, 0.5,
@@ -142,7 +142,7 @@ class PaperPanel(Panel):
             grid.addWidget(label, row, 0)
             grid.addWidget(box, row, 1)
         self.layout_.addLayout(grid)
-        self._last_frame = defaults               # Werte bleiben bei „Kein“ für später stehen
+        self._last_frame = defaults               # values stay in place for later when “No border” is chosen
 
         self.layout_.addStretch()
 
@@ -165,7 +165,7 @@ class PaperPanel(Panel):
         return (self.frame_line, self.frame_inset, self.frame_padding)
 
     def _apply_frame(self) -> None:
-        """Rahmen aus den Feldern; „Kein“ = kein Rahmen (die Felder bleiben für später stehen)."""
+        """Frame from the fields; “No border” = no frame (the fields stay in place for later)."""
         style = self.frame_style.currentData()
         frame = Frame(style or self._last_frame.style, self.frame_rounded.isChecked(),
                       self.frame_line.value(), self.frame_inset.value(), self.frame_padding.value())
@@ -173,11 +173,11 @@ class PaperPanel(Panel):
         self.doc.frame = None if style is None else frame
         self._update_frame_widgets()
         self.changed.emit()
-        self.edited.emit()           # jede Rahmen-Änderung ist ein eigener Schritt
+        self.edited.emit()           # every frame change is a step of its own
 
     def set_model(self, model: str) -> None:
-        """Druckermodell gewechselt: Etiketten und Längengrenzen folgen; das Etikett des Dokuments
-        bleibt (passt es nicht, steht es mit Hinweis in der Liste)."""
+        """Printer model changed: labels and length limits follow; the document's label
+        stays (if it does not fit, it stays in the list with a note)."""
         if model == self.model:
             return
         self.model = model
@@ -190,8 +190,8 @@ class PaperPanel(Panel):
         self.refresh()
 
     def _fill_labels(self) -> None:
-        """Etiketten des Modells nach Form gruppiert; ein Etikett des Dokuments, das das Modell
-        nicht kann, bleibt sichtbar („passt nicht zum …“), damit nichts still umgestellt wird."""
+        """The model's labels grouped by shape; a document label the model cannot handle stays
+        visible (“does not fit the …”), so that nothing is changed silently."""
         self.combo.clear()
         labels = labels_for_model(self.model)
         for shape, title in _GROUPS:
@@ -203,15 +203,15 @@ class PaperPanel(Panel):
             for lbl in group:
                 self.combo.addItem(lbl.description, lbl.id)
         self._unfit = None
-        if self.combo.findData(self.doc.label_id) < 0:      # gewählt bleibt es, wählbar nicht
+        if self.combo.findData(self.doc.label_id) < 0:      # it stays selected, but not selectable
             self._unfit = self.doc.label_id
             self.combo.addItem(_("{label} – does not fit the {model}").format(
                 label=get_label(self.doc.label_id).description, model=self.model), self.doc.label_id)
             self.combo.model().item(self.combo.count() - 1).setEnabled(False)
 
     def _set_length_range(self) -> None:
-        """Länge des Stücks: Grenzen des Modells (für das Druckbild) plus Vorschub an beiden
-        Enden."""
+        """Length of the piece: the model's limits (for the print image) plus feed at both
+        ends."""
         min_len, max_len = length_limits(self.model)
         feed = 2 * get_label(self.doc.label_id).feed_margin
         blocked = self.length.blockSignals(True)
@@ -223,26 +223,26 @@ class PaperPanel(Panel):
         layout.change_label(self.doc, self.combo.currentData())
         if self._unfit is not None and self._unfit != self.doc.label_id:
             self.combo.blockSignals(True)
-            self._fill_labels()                      # Eintrag „passt nicht“ verschwindet
+            self._fill_labels()                      # the “does not fit” entry disappears
             self.combo.setCurrentIndex(self.combo.findData(self.doc.label_id))
             self.combo.blockSignals(False)
-        self.media_adjusted = False   # Auswahl ist jetzt vom Nutzer
+        self.media_adjusted = False   # the choice is now the user's
         self.doc.length_mm = None if self.length_auto.isChecked() else self.length.value()
         self.doc.margin_mm = self.margin.value()
         self.doc.orientation = "horizontal" if self.horizontal.isChecked() else "vertical"
         self._update_visibility()
         self._update_media_status()
         self.changed.emit()
-        self.edited.emit()           # jede Papier-Änderung ist ein eigener Schritt
+        self.edited.emit()           # every paper change is a step of its own
 
     def refresh(self) -> None:
         for w in self._widgets():
             w.blockSignals(True)
         if self.combo.findData(self.doc.label_id) < 0 or (
                 self._unfit is not None and self._unfit != self.doc.label_id):
-            self._fill_labels()          # andere Datei bzw. passendes Etikett: Liste neu
+            self._fill_labels()          # other file or matching label: rebuild the list
         self.combo.setCurrentIndex(self.combo.findData(self.doc.label_id))
-        self._set_length_range()                     # Grenzen des Etiketts vor seinem Wert
+        self._set_length_range()                     # the label's limits before its value
         self.length_auto.setChecked(self.doc.length_mm is None)
         if self.doc.length_mm is not None:
             self.length.setValue(self.doc.length_mm)
@@ -250,7 +250,7 @@ class PaperPanel(Panel):
         (self.horizontal if self.doc.orientation == "horizontal" else self.vertical).setChecked(True)
         if self.doc.frame is not None:
             self._last_frame = self.doc.frame
-        frame = self._last_frame                     # ohne Rahmen: zuletzt gewählte Werte
+        frame = self._last_frame                     # without frame: last chosen values
         self.frame_style.setCurrentIndex(self.frame_style.findData(
             None if self.doc.frame is None else frame.style))
         self.frame_rounded.setChecked(frame.rounded)
@@ -261,7 +261,7 @@ class PaperPanel(Panel):
         self._update_visibility()
         self._update_media_status()
 
-    # --- Medium prüfen ----------------------------------------------------
+    # --- Check media ----------------------------------------------------
     def set_checking(self, running: bool) -> None:
         self.check.setEnabled(not running)
         self.check.setText(_("CHECKING …") if running else _("CHECK MEDIA"))
@@ -302,7 +302,7 @@ class PaperPanel(Panel):
         self.length_title.setVisible(endless)
         self.length_box.setVisible(endless)
         self.length.setEnabled(not self.length_auto.isChecked())
-        self._set_length_range()                       # Vorschub hängt am Etikett
+        self._set_length_range()                       # the feed depends on the label
         strip = label.feed_margin
         self.margin_hint.setVisible(endless and round(self.doc.margin_mm * label.dpi / 25.4) < strip)
         self.margin_hint.setText(_("Along the tape the printer leaves {mm} mm free – a smaller "
@@ -322,7 +322,7 @@ class PaperPanel(Panel):
         self._update_frame_widgets()
 
     def _update_frame_widgets(self) -> None:
-        """Felder nur mit Rahmen; runde Etiketten: Kreis – keine Ecken, nicht abgerundet."""
+        """Fields only with a frame; round labels: circle – no corners, not rounded."""
         round_label = get_label(self.doc.label_id).shape == "round"
         corners = self.frame_style.findData("corners")
         self.frame_style.model().item(corners).setEnabled(not round_label)

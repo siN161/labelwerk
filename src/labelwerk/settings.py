@@ -1,7 +1,7 @@
-"""Einstellungen für GUI und CLI in $XDG_CONFIG_HOME/labelwerk/settings.json.
+"""Settings for GUI and CLI in $XDG_CONFIG_HOME/labelwerk/settings.json.
 
-Fehlende oder ungültige Werte fallen auf den Standard zurück – mit Hinweis in
-`Settings.warnings`, nie mit Ausnahme. Neue Einstellung = neues Feld + Prüfregel.
+Missing or invalid values fall back to the default – with a hint in
+`Settings.warnings`, never with an exception. New setting = new field + validation rule.
 """
 from __future__ import annotations
 
@@ -23,13 +23,13 @@ from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
 THEMES = ("rawblock", "classic")
-RESTART_KEYS = ("language", "start_zoom", "start_tool", "system_file_dialog")   # erst nach Neustart (Hinweis)
-# Reiter beim Start: „last“ = zuletzt benutzter, sonst Schlüssel der Werkzeuge (gui/tools.py TOOLS)
+RESTART_KEYS = ("language", "start_zoom", "start_tool", "system_file_dialog")   # only after a restart (hint)
+# tab at startup: "last" = last used, otherwise a tool key (gui/tools.py TOOLS)
 START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series", "parcel")
-# Reiter, die sich ausblenden lassen (DATEI und PAPIER bleiben immer – dort wird das Etikett gewählt)
+# tabs that can be hidden (FILE and PAPER always stay – the label is chosen there)
 HIDEABLE_TOOLS = tuple(key for key in START_TOOLS[1:] if key not in ("file", "paper"))
 SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")
-# ungültig → Standard ohne Hinweis: nur gemerkt (last_tool) bzw. nur Ein-/Ausblenden (hidden_tools)
+# invalid → default without a hint: only remembered (last_tool) or only show/hide (hidden_tools)
 QUIET_KEYS = ("last_tool", "hidden_tools")
 
 
@@ -38,33 +38,33 @@ class Settings:
     label_id: str = "62"
     orientation: str = "vertical"
     margin_mm: float = 1.0
-    font_size_pt: float | None = None      # None = automatisch
+    font_size_pt: float | None = None      # None = automatic
     font_family: str = DEFAULT_FAMILY
-    fonts_all: bool = False                # Schriftauswahl: alle Familien statt der kurzen Liste
+    fonts_all: bool = False                # font choice: all families instead of the short list
     check_media_on_start: bool = True
     start_zoom: int = 200
-    start_tool: str = "paper"              # Reiter beim Start (START_TOOLS; "last" = zuletzt benutzter)
-    last_tool: str = ""                    # zuletzt benutzter Reiter (still gespeichert)
-    hidden_tools: list[str] = field(default_factory=list)   # ausgeblendete Reiter (HIDEABLE_TOOLS)
-    theme: str = "rawblock"                # "rawblock" oder "classic" (Qt-Systemstil)
-    system_file_dialog: bool = False       # Dateiauswahl des Desktops (Portal) statt eigener mit Vorschau
-    image_crop: bool = True                # Bilder beim Einfügen auf den Inhalt zuschneiden
-    image_rotate: bool = False             # Bilder drehen, wenn sie nur gedreht 1:1 passen
-    image_mode: str = "line"               # neue Bilder: Strich ("line") oder Foto ("photo")
-    image_threshold: int = 128             # neue Bilder: Schwelle 0–255
-    symbols_recent: list[str] = field(default_factory=list)      # Symbol-ids, neueste zuerst
-    symbols_favorites: list[str] = field(default_factory=list)   # Symbol-ids
-    recent_files: list[str] = field(default_factory=list)   # Zuletzt geöffnet (Pfade), neueste zuerst
-    start_favorite: str | None = None      # Favorit, mit dem labelwerk startet; None = leer
-    printer: str = ""                      # gewählter Drucker (URI); "" = automatisch
-    printer_model: str = ""                # Ersatz, wenn das Modell nicht erkannt wird; "" = keins
-    last_model: str = ""                   # zuletzt erkanntes Modell (gilt ohne Drucker)
+    start_tool: str = "paper"              # tab at startup (START_TOOLS; "last" = last used)
+    last_tool: str = ""                    # last used tab (saved silently)
+    hidden_tools: list[str] = field(default_factory=list)   # hidden tabs (HIDEABLE_TOOLS)
+    theme: str = "rawblock"                # "rawblock" or "classic" (Qt system style)
+    system_file_dialog: bool = False       # desktop file dialog (portal) instead of our own with preview
+    image_crop: bool = True                # crop images to their content when inserting
+    image_rotate: bool = False             # rotate images if they only fit 1:1 when rotated
+    image_mode: str = "line"               # new images: line art ("line") or photo ("photo")
+    image_threshold: int = 128             # new images: threshold 0–255
+    symbols_recent: list[str] = field(default_factory=list)      # symbol ids, newest first
+    symbols_favorites: list[str] = field(default_factory=list)   # symbol ids
+    recent_files: list[str] = field(default_factory=list)   # recently opened (paths), newest first
+    start_favorite: str | None = None      # favourite labelwerk starts with; None = empty
+    printer: str = ""                      # selected printer (URI); "" = automatic
+    printer_model: str = ""                # fallback if the model is not detected; "" = none
+    last_model: str = ""                   # model detected last (applies without a printer)
     network_printers: list[dict] = field(default_factory=list)   # {name, host, model}
-    printer_options: dict[str, dict[str, str]] = field(default_factory=dict)  # Modell → Druck-Optionen
-    zebra_dpi: int = 0                  # Auflösung der Zebras am USB, 0 = erkannt
-    cups_all: bool = False              # Druckermenü: auch CUPS-Bürodrucker (A4/Letter) zeigen
-    language: str = ""                  # "" = Sprache des Systems, sonst "de", "en" …
-    shortcuts: dict[str, str] = field(default_factory=dict)   # nur geänderte Kürzel, "" = keins
+    printer_options: dict[str, dict[str, str]] = field(default_factory=dict)  # model → print options
+    zebra_dpi: int = 0                  # resolution of USB Zebras, 0 = detected
+    cups_all: bool = False              # printer menu: also show CUPS office printers (A4/Letter)
+    language: str = ""                  # "" = language of the system, otherwise "de", "en" …
+    shortcuts: dict[str, str] = field(default_factory=dict)   # changed shortcuts only, "" = none
     warnings: list[str] = field(default_factory=list, compare=False, repr=False)
 
 
@@ -73,8 +73,8 @@ def _is_int(v) -> bool:
 
 
 def _rules(model: str | None = None) -> dict:
-    """Prüfregeln; das Etikett muss ein bekanntes sein – ob es zum Drucker passt, prüfen GUI und
-    CLI erst mit dem erkannten Modell (wer zwei Drucker abwechselnd nutzt, behält sein Etikett)."""
+    """Validation rules; the label must be a known one – whether it fits the printer is checked by the GUI and
+    CLI only with the detected model (whoever alternates between two printers keeps their label)."""
     known = {lab.id for m in SUPPORTED_MODELS for lab in labels_for_model(m)}
     return {
         "label_id": lambda v: isinstance(v, str) and (v in known or sized_label(v) is not None),
@@ -117,14 +117,14 @@ _DISCARDED = N_("Setting {key!r}: invalid entries discarded.")
 
 
 def _option_word(value, empty: bool = False) -> bool:
-    """Schlüssel bzw. Wert einer Druck-Option: ein Wort (``lp -o`` trennt an Leerzeichen);
-    ``empty``: leer erlaubt (Zebra-Modus „wie am Drucker eingestellt“)."""
+    """Key or value of a print option: one word (``lp -o`` splits at spaces);
+    ``empty``: empty allowed (Zebra mode "as set on the printer")."""
     return isinstance(value, str) and value.isprintable() and (bool(value) or empty) \
         and not any(c.isspace() or c in "='\"" for c in value)
 
 
 def _printer_options(value: dict, warnings: list[str]) -> dict[str, dict[str, str]]:
-    """Druck-Optionen je Modell: ungültige Einträge einzeln verworfen (mit Hinweis)."""
+    """Print options per model: invalid entries dropped one by one (with a hint)."""
     valid = {k: {a: b for a, b in o.items() if _option_word(a) and _option_word(b, empty=True)}
              for k, o in value.items() if isinstance(k, str) and isinstance(o, dict)}
     if len(valid) != len(value) or any(len(valid[k]) != len(value[k]) for k in valid):
@@ -133,22 +133,22 @@ def _printer_options(value: dict, warnings: list[str]) -> dict[str, dict[str, st
 
 
 def start_tool_for(start_tool: str, hidden_tools: list[str]) -> str:
-    """Reiter, mit dem labelwerk wirklich startet: ein ausgeblendeter Start-Reiter wird PAPIER
-    (wie ``MainWindow._start_tool``)."""
+    """Tab labelwerk really starts with: a hidden start tab becomes PAPER
+    (like ``MainWindow._start_tool``)."""
     return "paper" if start_tool in hidden_tools else start_tool
 
 
 def started_values(settings: Settings) -> dict:
-    """Was beim Start galt (für ``restart_pending``): die gesetzte Sprache und die Neustart-
-    Einstellungen (Start-Reiter wirksam, ausgeblendet = PAPIER)."""
+    """What applied at startup (for ``restart_pending``): the chosen language and the restart
+    settings (start tab as effective, hidden = PAPER)."""
     return {**{key: getattr(settings, key) for key in RESTART_KEYS}, "language": i18n.language(),
             "start_tool": start_tool_for(settings.start_tool, settings.hidden_tools)}
 
 
 def restart_pending(values: dict, started: dict) -> bool:
-    """Wirkt eine Einstellung erst nach einem Neustart anders als jetzt? ``values``: gewählte Werte
-    der Neustart-Einstellungen (``RESTART_KEYS``); Sprache wirksam verglichen ("" = Systemsprache),
-    die übrigen mit dem Wert beim Start."""
+    """Does a setting only differ after a restart? ``values``: chosen values
+    of the restart settings (``RESTART_KEYS``); language compared as effective ("" = system language),
+    the others with the value at startup."""
     language = values["language"]
     effective = language if language in i18n.available() else i18n.system_language()
     return effective != started["language"] or any(
@@ -156,7 +156,7 @@ def restart_pending(values: dict, started: dict) -> bool:
 
 
 def _configured(path: str | Path | None, key: str, valid) -> object | None:
-    """Wert ``key`` direkt aus der Datei (vor allem anderen gelesen); unlesbar/ungültig → None."""
+    """Value ``key`` directly from the file (read before anything else); unreadable/invalid → None."""
     try:
         raw = json.loads(Path(path or settings_path()).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -166,15 +166,15 @@ def _configured(path: str | Path | None, key: str, valid) -> object | None:
 
 
 def configured_language(path: str | Path | None = None) -> str:
-    """Eingestellte Sprache ("" = System) – vor allem anderen gelesen (die Meldungen beim Laden der
-    Einstellungen kommen schon in dieser Sprache); unlesbar oder ungültig → ""."""
+    """Configured language ("" = system) – read before anything else (the messages while loading the
+    settings already come in this language); unreadable or invalid → ""."""
     return _configured(path, "language",
                        lambda v: isinstance(v, str) and v in i18n.available()) or ""
 
 
 def configured_file_dialog(path: str | Path | None = None) -> bool:
-    """Dateiauswahl des Systems eingestellt? – vor dem Start der Oberfläche gelesen (das
-    Platform-Theme von Qt gilt ab dem Anlegen der Anwendung)."""
+    """System file dialog configured? – read before the interface starts (the
+    Qt platform theme applies from the moment the application is created)."""
     return _configured(path, "system_file_dialog", lambda v: isinstance(v, bool)) is True
 
 
@@ -184,8 +184,8 @@ def settings_path() -> Path:
 
 
 def load_settings(path: str | Path | None = None, model: str | None = None) -> Settings:
-    """``model``: Modell für die Prüfung des Etiketts; None = aus den Einstellungen (Ersatzmodell,
-    zuletzt erkanntes)."""
+    """``model``: model for checking the label; None = from the settings (fallback model,
+    last detected)."""
     path = Path(path) if path else settings_path()
     settings = Settings()
     try:
@@ -214,7 +214,7 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
                 value = _symbol_ids(key, value, settings.warnings)
             elif key == "recent_files":
                 value = _text_list(key, value, settings.warnings)[:RECENT_FILES]
-            elif key == "hidden_tools":            # still: DATEI/PAPIER und Unbekanntes fallen weg
+            elif key == "hidden_tools":            # silent: FILE/PAPER and unknown ones are dropped
                 value = list(dict.fromkeys(v for v in value if v in HIDEABLE_TOOLS))
             elif key == "network_printers":
                 value = _network(value, settings.warnings)
@@ -225,20 +225,20 @@ def load_settings(path: str | Path | None = None, model: str | None = None) -> S
             settings.warnings.append(_("Setting {key!r} invalid ({value!r}) – using default "
                                        "{default!r}.").format(key=key, value=value,
                                                               default=getattr(settings, key)))
-    if "shortcuts" in raw:                 # eigene Prüfung je Kürzel: gültige bleiben erhalten
+    if "shortcuts" in raw:                 # each shortcut is checked on its own: valid ones are kept
         settings.shortcuts, warnings = _shortcuts.validate(raw["shortcuts"])
         settings.warnings.extend(warnings)
     return settings
 
 
 def _model_of(raw: dict) -> str:
-    """Modell für die Prüfung des Etiketts: aus den Einstellungen (Ersatzmodell, zuletzt erkanntes)."""
+    """Model for checking the label: from the settings (fallback model, last detected)."""
     return effective_model(None, *(raw.get(k) if raw.get(k) in SUPPORTED_MODELS else ""
                                    for k in ("printer_model", "last_model")))
 
 
 def _text_list(key: str, value: list, warnings: list[str]) -> list[str]:
-    """Liste von Texten: ungültige Einträge einzeln verworfen (mit Hinweis), Doppelte entfernt."""
+    """List of texts: invalid entries dropped one by one (with a hint), duplicates removed."""
     valid = [i for i in value if isinstance(i, str) and i]
     if len(valid) != len(value):
         warnings.append(_(_DISCARDED).format(key=key))
@@ -246,9 +246,9 @@ def _text_list(key: str, value: list, warnings: list[str]) -> list[str]:
 
 
 def _network(value: list, warnings: list[str]) -> list[dict]:
-    """Netzwerkdrucker: Einträge mit Host (ohne Leerzeichen, ohne Schema) und bekanntem Modell
-    (Brother-QL oder Zebra „zpl:203“);
-    ungültige einzeln verworfen (mit Hinweis)."""
+    """Network printers: entries with host (no spaces, no scheme) and known model
+    (Brother QL or Zebra "zpl:203");
+    invalid ones dropped one by one (with a hint)."""
     valid = [{"name": e.get("name") or "", "host": e["host"].strip(), "model": e["model"]}
              for e in value if isinstance(e, dict) and isinstance(e.get("host"), str)
              and valid_host(e["host"]) and (e.get("model") in SUPPORTED_MODELS
@@ -260,27 +260,27 @@ def _network(value: list, warnings: list[str]) -> list[dict]:
 
 
 def valid_host(host: str) -> bool:
-    """IPv4-Adresse oder Hostname (ohne Schema, Pfad, Port, Leer- und Steuerzeichen; IPv6 geht
-    nicht – „:“ trennt den Port)."""
+    """IPv4 address or hostname (without scheme, path, port, spaces and control characters; IPv6 does
+    not work – ":" separates the port)."""
     host = host.strip()
     return (bool(host) and host.isprintable() and not any(c in host for c in " /:")
             and len(host) <= 253)
 
 
 def network_entries(settings: Settings) -> list[NetworkEntry]:
-    """Netzwerkdrucker der Einstellungen für ``printers.network_printers``."""
+    """Network printers of the settings for ``printers.network_printers``."""
     return [NetworkEntry(e["name"], e["host"], e["model"]) for e in settings.network_printers]
 
 
 def _symbol_ids(key: str, value: list, warnings: list[str]) -> list[str]:
-    """Symbol-ids: ungültige Einträge einzeln verworfen (mit Hinweis), Doppelte entfernt,
-    Zuletzt verwendet auf ``RECENT_LIMIT`` begrenzt."""
+    """Symbol ids: invalid entries dropped one by one (with a hint), duplicates removed,
+    recently used limited to ``RECENT_LIMIT``."""
     ids = _text_list(key, value, warnings)
     return ids[:RECENT_LIMIT] if key == "symbols_recent" else ids
 
 
 def _migrate_font_size(raw: dict, settings: Settings) -> None:
-    """Alte Einstellung ``font_size`` (Druckpunkte bei 300 dpi) einmalig in pt umrechnen."""
+    """Convert the old setting ``font_size`` (dots at 300 dpi) to pt once."""
     if "font_size" not in raw or "font_size_pt" in raw:
         return
     old = raw.pop("font_size")
@@ -300,13 +300,13 @@ def save_settings(settings: Settings, path: str | Path | None = None) -> Path:
 
 
 def update_settings(path: str | Path | None = None, base: Settings | None = None, **fields) -> Path:
-    """Nur ``fields`` in die Datei schreiben (stilles Speichern: Zuletzt verwendet, Favoriten,
-    gewählter Drucker …): die Datei wird neu gelesen, alles andere bleibt, wie es dort steht –
-    auch was eine zweite Instanz inzwischen gespeichert hat oder eine neuere Version kennt.
-    Fehlt die Datei oder ist sie nicht lesbar, gilt ``base`` (Stand im Speicher) bzw. der Standard.
-    Was beim Laden nur gemeldet wurde, wird dabei bereinigt (sonst käme die Meldung bei jedem
-    Start wieder): die alte Schriftgröße umgerechnet, ungültige Werte durch den Wert aus ``base``
-    (bzw. den geprüften der Datei) ersetzt."""
+    """Write only ``fields`` to the file (silent saving: recently used, favourites,
+    selected printer …): the file is read again, everything else stays as it is there –
+    also what a second instance has saved in the meantime or a newer version knows.
+    If the file is missing or unreadable, ``base`` (state in memory) or the default applies.
+    What was only reported while loading is cleaned up (otherwise the message would come at every
+    start): the old font size converted, invalid values replaced by the value from ``base``
+    (or the validated one of the file)."""
     unknown = [key for key in fields if key not in _KEYS]
     if unknown:
         raise KeyError(unknown[0])
@@ -315,7 +315,7 @@ def update_settings(path: str | Path | None = None, base: Settings | None = None
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
-            raise ValueError("not a JSON object")          # intern, nie angezeigt
+            raise ValueError("not a JSON object")          # internal, never shown
     except (OSError, ValueError):
         data = {key: getattr(source, key) for key in _KEYS}
     else:
@@ -325,10 +325,10 @@ def update_settings(path: str | Path | None = None, base: Settings | None = None
 
 
 def _clean(data: dict, path: Path, base: Settings | None) -> None:
-    """Gelesene Einstellungen bereinigen, wie ``load_settings`` sie versteht: alte Schriftgröße
-    umgerechnet; ungültige Werte durch den Wert aus ``base`` (Stand im Speicher), nur teilweise
-    ungültige (einzelne Einträge einer Liste) durch den bereinigten Wert der Datei ersetzt – den
-    Rest kann eine zweite Instanz neuer gespeichert haben. Unbekanntes bleibt stehen."""
+    """Clean up the read settings the way ``load_settings`` understands them: old font size
+    converted; invalid values replaced by the value from ``base`` (state in memory), only partially
+    invalid ones (single entries of a list) by the cleaned value of the file – the
+    rest may have been saved more recently by a second instance. Unknown keys stay."""
     checked = load_settings(path)
     if "font_size" in data and "font_size_pt" not in data:
         data.pop("font_size")
@@ -345,8 +345,8 @@ def _write(data: dict, path: str | Path | None) -> Path:
     path = Path(path) if path else settings_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        # erst daneben schreiben, dann ersetzen: ein Absturz mitten im Schreiben lässt die alte
-        # Datei heil (die GUI speichert Zuletzt verwendet/Favoriten bei jedem Einfügen still)
+        # write next to it first, then replace: a crash in the middle of writing leaves the old
+        # file intact (the GUI silently saves recently used/favourites on every insert)
         tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
         try:
             tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -360,7 +360,7 @@ def _write(data: dict, path: str | Path | None) -> Path:
 
 
 def new_document(settings: Settings) -> Document:
-    """Neues Etikett mit den Standardwerten aus den Einstellungen."""
+    """New label with the default values from the settings."""
     family = None if settings.font_family == DEFAULT_FAMILY else settings.font_family
     return Document(label_id=settings.label_id, orientation=settings.orientation,
                     margin_mm=settings.margin_mm,

@@ -1,5 +1,5 @@
-"""Symbole/ClipArt (Etappe 3d-2c): Fenster „Symbol einfügen“, Einfügen, Zuletzt verwendet,
-Favoriten, eigener Ordner, Ziehen aufs Etikett."""
+"""Symbols/clip art (stage 3d-2c): “Insert symbol” window, inserting, recently used,
+favourites, own folder, dragging onto the label."""
 import zipfile
 
 import pytest
@@ -52,7 +52,7 @@ def _ids(dialog):
     return [s.id for s in dialog.model.symbols]
 
 
-# --- Aktion und Fenster ---------------------------------------------------------------
+# --- Action and window ----------------------------------------------------------------
 def test_symbol_action_and_button(qtbot):
     entry = shortcuts.action("image.symbol")
     assert (_(entry.name), entry.default, entry.scope) == ("Symbol einfügen …", "", "canvas")
@@ -61,7 +61,7 @@ def test_symbol_action_and_button(qtbot):
     dialog = _open(win, qtbot)
     assert dialog.windowTitle() == "Symbol einfügen" and not dialog.isModal()
     win.panel("image").symbol.click()
-    assert win.symbol_window is dialog                      # eine Instanz
+    assert win.symbol_window is dialog                      # one instance
 
 
 def test_groups_and_start_in_electrical_without_recent(qtbot):
@@ -81,7 +81,7 @@ def test_subgroups_filter_large_groups(qtbot):
 
 
 def test_search_spans_the_whole_library(qtbot):
-    dialog = _open(_window(qtbot), qtbot)                   # steht in „Elektro“
+    dialog = _open(_window(qtbot), qtbot)                   # listed under "Electrical"
     dialog.search.setText("Haus")
     assert "tabler/outline/home" in _ids(dialog)
     dialog.search.setText("gibtesnichtxyz")
@@ -97,7 +97,7 @@ def test_previews_are_rendered_on_demand(qtbot):
     assert dialog.model.symbols[0].name in tip
 
 
-# --- Einfügen -------------------------------------------------------------------------
+# --- Inserting ------------------------------------------------------------------------
 def test_double_click_signal_inserts_a_15_mm_vector_symbol(qtbot):
     win = _window(qtbot)
     dialog = _open(win, qtbot)
@@ -124,7 +124,7 @@ def test_original_size_is_the_symbol_size(qtbot):
 
 
 def test_inserted_symbol_is_cropped_to_its_ink(qtbot):
-    """Tabler-Icons haben Rand in der Zeichenfläche – der fällt weg."""
+    """Tabler icons have a margin in the drawing area – it is dropped."""
     win = _window(qtbot)
     dialog = _open(win, qtbot)
     dialog.search.setText("house")
@@ -138,8 +138,8 @@ def test_inserted_symbol_is_cropped_to_its_ink(qtbot):
 @pytest.mark.parametrize("symbol_id", ["labelwerk/motor", "labelwerk/batterie", "iso7000/0627",
                                        "tabler/outline/home"])
 def test_crop_off_and_on_again_gives_the_same_section(qtbot, symbol_id):
-    """Das Panel schneidet Symbole wie beim Einfügen auf die Tinte zu (nicht per
-    Schnittmarken-Erkennung: von „Motor“ bliebe sonst nur das „M“)."""
+    """The panel crops symbols to the ink as on insertion (not via crop-mark
+    detection: of “Motor” only the “M” would remain)."""
     win = _window(qtbot)
     win.insert_symbol(clipart.find(symbol_id))
     obj = win.doc.objects[1]
@@ -179,7 +179,7 @@ def test_recent_is_updated_saved_and_shown(qtbot):
 def test_window_starts_with_recent_when_there_are_some(qtbot):
     dialog = _open(_window(qtbot, symbols_recent=["iso7000/0621", "weg/da"]), qtbot)
     assert dialog.groups.currentItem().text() == "Zuletzt verwendet"
-    assert _ids(dialog) == ["iso7000/0621"]                 # unbekannte ids übergangen
+    assert _ids(dialog) == ["iso7000/0621"]                 # unknown ids skipped
 
 
 def test_favorites_toggle_and_save(qtbot):
@@ -196,7 +196,7 @@ def test_favorites_toggle_and_save(qtbot):
     assert _ids(dialog) == [] and win.settings.symbols_favorites == []
 
 
-# --- eigener Ordner -------------------------------------------------------------------
+# --- own folder -----------------------------------------------------------------------
 def test_own_folder_empty_hint_and_open_button(qtbot, monkeypatch):
     dialog = _open(_window(qtbot), qtbot)
     opened = []
@@ -236,9 +236,9 @@ def test_broken_own_symbol_gives_message(qtbot):
     assert win.result.text().startswith("Symbol: ") and win.result.property("state") == "error"
 
 
-# --- Ziehen aufs Etikett ------------------------------------------------------------
+# --- Dragging onto the label ------------------------------------------------------------
 def _drop(canvas, mime, pos):
-    try:                    # QDragEnterEvent nimmt erst ab PySide6 6.12 QPointF (CI 3.10: 6.11)
+    try:                    # QDragEnterEvent takes QPointF only from PySide6 6.12 (CI 3.10: 6.11)
         QDragEnterEvent(pos, Qt.DropAction.CopyAction, mime, LEFT, NO_MOD)
     except TypeError:
         pos = pos.toPoint()
@@ -263,7 +263,7 @@ def test_dropping_a_symbol_inserts_it_at_the_point(qtbot):
     assert len(win.doc.objects) == 2
     obj = win.doc.objects[1]
     assert obj.source == "Symbol: Erde"
-    assert obj.x_mm + obj.w_mm / 2 == pytest.approx(31, abs=3)      # Etikettmitte (62 mm)
+    assert obj.x_mm + obj.w_mm / 2 == pytest.approx(31, abs=3)      # label centre (62 mm)
 
 
 def test_unknown_dropped_symbol_is_ignored(qtbot):
@@ -281,9 +281,9 @@ def test_closing_the_main_window_closes_the_symbol_window(qtbot):
     assert not dialog.isVisible()
 
 
-# --- Nachbesserungen: Bedienung, Sonderfälle ------------------------------------------
+# --- Refinements: operation, special cases ------------------------------------------
 def test_real_double_click_inserts_exactly_once(qtbot):
-    """Qt meldet nach dem Doppelklick zusätzlich „activated“ – eingefügt wird trotzdem einmal."""
+    """After the double-click Qt additionally reports “activated” – it is still inserted once."""
     win = _window(qtbot)
     dialog = _open(win, qtbot)
     _select(dialog, "labelwerk/erde")
@@ -409,7 +409,7 @@ def test_white_own_symbol_gives_crop_hint(qtbot):
 
 
 def test_tiny_drawing_on_a_big_page_does_not_explode(qtbot):
-    """Winziger Inhalt auf großer Seite: die Vorschau bleibt begrenzt, kein Speicherfehler."""
+    """Tiny content on a large page: the preview stays bounded, no memory error."""
     folder = clipart.own_dir()
     folder.mkdir(parents=True)
     (folder / "punkt.svg").write_text(
@@ -440,7 +440,7 @@ def test_own_svg_with_linked_file_becomes_pixel_image(qtbot):
     assert obj.svg is None and obj.image().convert("L").getextrema()[0] == 0
 
 
-# --- Bibliotheksarchiv defekt oder fehlend ------------------------------------------
+# --- Library archive broken or missing ------------------------------------------
 def _clear_library_caches():
     for function in (clipart._files, clipart._catalog, clipart._index_for):
         function.cache_clear()
@@ -462,7 +462,7 @@ def broken_library(tmp_path, monkeypatch):
         _clear_library_caches()
     _clear_library_caches()
     yield make
-    _clear_library_caches()      # der Archivpfad kommt mit monkeypatch zurück
+    _clear_library_caches()      # the archive path comes back with monkeypatch
 
 
 @pytest.mark.parametrize("kind", ["garbage", "nocatalog", "badjson", "missing"])

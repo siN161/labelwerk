@@ -1,6 +1,6 @@
-"""Paketmarken umwandeln (Kern): Katalog, Laden, Erkennen, Kanten anpassen, Umwandeln, eigene Typen.
+"""Convert parcel labels (core): catalogue, loading, detecting, adjusting edges, converting, custom types.
 
-Nur erzeugte Test-Marken (tests/parcelmark.py) – nie echte Marken mit Adressen."""
+Only generated test labels (tests/parcelmark.py) – never real labels with addresses."""
 import json
 
 import pytest
@@ -15,7 +15,7 @@ from parcelmark import make_pdf
 MM = 300 / 25.4
 
 
-# --- Katalog -------------------------------------------------------------------------
+# --- Catalogue -----------------------------------------------------------------------
 def test_catalog_has_the_german_types():
     ids = {t.id for t in parcel.types("DE")}
     assert {"dhl-privat-1", "dhl-privat-1a", "dhl-privat-2", "dhl-privat-3", "dhl-privat-4",
@@ -56,7 +56,7 @@ def test_unknown_type_is_a_friendly_error():
         parcel.find("dpd-1")
 
 
-# --- Laden und Erkennen --------------------------------------------------------------
+# --- Loading and detecting -----------------------------------------------------------
 def test_load_reads_size_and_text(tmp_path):
     path = make_pdf(tmp_path / "m.pdf", texts=[(20, 20, "DHL Online Frankierung")])
     source = parcel.load(path)
@@ -122,7 +122,7 @@ def test_detect_nothing(tmp_path):
     assert parcel.detect(parcel.load(path), "DE") == []
 
 
-# --- Kanten an die Marke anpassen -----------------------------------------------------
+# --- Adjusting edges to the label -----------------------------------------------------
 def _page(*rects):
     img = Image.new("L", (round(100 * MM), round(100 * MM)), 255)
     draw = ImageDraw.Draw(img)
@@ -132,27 +132,27 @@ def _page(*rects):
 
 
 def test_snap_moves_a_cut_edge_out_to_white():
-    img = _page((20, 20, 41, 40))                     # Fläche ragt 1 mm über die rechte Kante
+    img = _page((20, 20, 41, 40))                     # area sticks out 1 mm beyond the right edge
     box = parcel.snap(img, (20, 20, 40, 40), 300)
     assert box[2] == pytest.approx(41, abs=0.2) and box[:2] == pytest.approx((20, 20), abs=0.01)
 
 
 def test_snap_keeps_white_edges_and_long_overhangs():
-    img = _page((20, 20, 50, 40))                     # ragt 10 mm hinaus: keine weiße Linie nah
+    img = _page((20, 20, 50, 40))                     # sticks out 10 mm: no white line nearby
     assert parcel.snap(img, (20, 20, 40, 40), 300) == pytest.approx((20, 20, 40, 40))
-    img = _page((22, 22, 38, 38))                     # Kanten schon weiß
+    img = _page((22, 22, 38, 38))                     # edges already white
     assert parcel.snap(img, (20, 20, 40, 40), 300) == pytest.approx((20, 20, 40, 40))
 
 
-# --- Umwandeln ----------------------------------------------------------------------
+# --- Converting ---------------------------------------------------------------------
 def _barcode_page(tmp_path, ptype_id="dhl-privat-1"):
-    """Testmarke mit einem Code 128 im ersten Barcode-Stück des Typs (quer wie auf der Marke)."""
+    """Test label with a Code 128 in the first barcode piece of the type (across, as on the label)."""
     from labelwerk import barcodes
     piece = max((p for p in parcel.find(ptype_id).layouts["62"][0].pieces if p.kind == "barcode"),
-                key=lambda p: (p.src[2] - p.src[0]) * (p.src[3] - p.src[1]))     # größtes Barcode-Stück
+                key=lambda p: (p.src[2] - p.src[0]) * (p.src[3] - p.src[1]))     # largest barcode piece
     code = barcodes.draw(BarcodeObject(kind="code128", data="LW123456", module=4, h_mm=18))
     if piece.src[3] - piece.src[1] > piece.src[2] - piece.src[0]:
-        code = code.rotate(90, expand=True)                    # hochkant wie auf der Marke
+        code = code.rotate(90, expand=True)                    # upright as on the label
     x = piece.src[0] + 2
     y = piece.src[1] + 2
     return make_pdf(tmp_path / "m.pdf", texts=[(20, 20, "DHL Online Frankierung")],
@@ -168,11 +168,11 @@ def test_convert_dhl_domestic_for_62_mm(tmp_path):
     assert len(doc.objects) == 7 and all(isinstance(o, ImageObject) for o in doc.objects)
     assert all(o.mode == "line" and not o.keep_ratio for o in doc.objects)
     width, height = label_size(doc, "QL-600")
-    assert height == get_label("62").width                   # quer: ganzes Band
-    assert result.scale == pytest.approx(58.93 / 62, abs=0.002)  # Etiketthöhe des Layouts (62 mm)
-    assert result.notes == []                                # Barcodes 95 %: wie paketikett.de
+    assert height == get_label("62").width                   # across: whole tape
+    assert result.scale == pytest.approx(58.93 / 62, abs=0.002)  # label height of the layout (62 mm)
+    assert result.notes == []                                # barcodes 95 %: like paketikett.de
     assert 160 < doc.length_mm < 190
-    for obj in doc.objects:                                  # alles auf dem Etikett
+    for obj in doc.objects:                                  # everything on the label
         assert obj.x_mm >= -0.01 and obj.y_mm >= -0.01
         assert obj.y_mm + obj.h_mm <= 58.95
         assert obj.x_mm + obj.w_mm <= doc.length_mm - 5.9
@@ -228,8 +228,8 @@ def test_raster_label_is_placed_where_the_type_says(tmp_path):
     ptype = parcel.find("dhl-retour-3")
     page = source.page(1, 100, ptype)
     assert page.size == pytest.approx((210 * 100 / 25.4, 297 * 100 / 25.4), abs=1)
-    k = 100 / 25.4                                            # Lage aus der Regel: 189,4 mm von oben
-    assert page.getpixel((round(50 * k), round((189.4 + 101.6 - 1) * k))) < 128   # Rahmen unten
+    k = 100 / 25.4                                            # position from the rule: 189.4 mm from the top
+    assert page.getpixel((round(50 * k), round((189.4 + 101.6 - 1) * k))) < 128   # frame at the bottom
     assert page.getpixel((round(50 * k), round(150 * k))) == 255
     assert page.getpixel((2, 2)) == 255
     result = parcel.convert(source, ptype, "62", "QL-600")
@@ -242,7 +242,7 @@ def test_round_labels_are_refused(tmp_path):
         parcel.convert(source, parcel.find("dhl-privat-1"), "d24", "QL-600")
 
 
-# --- Eigene Typen -------------------------------------------------------------------
+# --- Custom types -------------------------------------------------------------------
 def _own(**changes):
     data = {"id": "own-test", "names": {"de": "Meine Marke", "en": "My label"},
             "source": {"sizes_mm": [[210, 297]]}, "detect": {"all": ["Meine Firma"]},
@@ -258,7 +258,7 @@ def test_own_types_round_trip():
     parcel.save_own(ptype)
     assert [t.id for t in parcel.own_types()] == ["own-test"]
     assert parcel.find("own-test").own and parcel.find("own-test").name == "Meine Marke"
-    assert "own-test" in {t.id for t in parcel.types("DE")}       # eigene in jedem Land
+    assert "own-test" in {t.id for t in parcel.types("DE")}       # custom ones in every country
     parcel.remove_own("own-test")
     assert parcel.own_types() == []
 
@@ -288,9 +288,9 @@ def test_arrange_fills_columns_along_the_tape():
     sheet = parcel.arrange(ptype.pieces, 58.9)
     assert sheet.size_mm[1] == pytest.approx(58.9)
     text, code, turned = sheet.pieces
-    assert code.dst[2] - code.dst[0] == pytest.approx(50)                # Barcode 1:1
-    assert text.dst[2] - text.dst[0] == pytest.approx(100)              # passt quer: 1:1
-    assert turned.dst[3] - turned.dst[1] == pytest.approx(30)           # gedreht: 100 lang → längs
+    assert code.dst[2] - code.dst[0] == pytest.approx(50)                # barcode 1:1
+    assert text.dst[2] - text.dst[0] == pytest.approx(100)              # fits across: 1:1
+    assert turned.dst[3] - turned.dst[1] == pytest.approx(30)           # rotated: 100 long → along
     for piece in sheet.pieces:
         assert piece.dst[3] <= 58.9 + 1e-6
 
@@ -313,18 +313,18 @@ def test_snap_only_for_untested_types_and_not_into_other_pieces(tmp_path, monkey
     monkeypatch.setattr(parcel, "snap", spy)
     source = parcel.load(make_pdf(tmp_path / "m.pdf", texts=[(20, 20, "DHL")]))
     parcel.convert(source, parcel.find("dhl-privat-1"), "62", "QL-600")
-    assert calls == []                                       # geprüft: Kanten genau
+    assert calls == []                                       # tested: edges exact
     parcel.convert(source, parcel.find("dhl-privat-2"), "62", "QL-600")
     assert calls
     a = parcel.Piece(1, (10, 10, 20, 20), 0)
     b = parcel.Piece(1, (21, 10, 30, 20), 0)
-    assert parcel._alone(a, (9, 10, 22, 20), [a, b]) == (9, 10, 20, 20)   # nicht in b hinein
+    assert parcel._alone(a, (9, 10, 22, 20), [a, b]) == (9, 10, 20, 20)   # not into b
 
 
-# --- Lage, Drehung und Malreihenfolge je Typ -------------------------------------------
+# --- Position, rotation and painting order per type -------------------------------------------
 def _marked_sheet(ptype, size_mm=None, k=300 / 25.4):
-    """Marke (Bild bei 300 dpi) mit einem schwarzen Quadrat oben links in jedem Bereich – zeigt
-    nach dem Umwandeln, ob Lage und Drehung stimmen."""
+    """Label (image at 300 dpi) with a black square at the top left of every area – shows
+    after converting whether position and rotation are right."""
     w, h = size_mm or ptype.source_sizes[0]
     img = Image.new("L", (round(w * k), round(h * k)), 255)
     draw = ImageDraw.Draw(img)
@@ -350,7 +350,7 @@ def _covered(dst, later):
 @pytest.mark.parametrize("ptype", [t for t in parcel.types("DE")], ids=lambda t: t.id)
 def test_every_piece_lands_where_and_how_the_type_says(ptype, tmp_path):
     marked = _marked_sheet(ptype)
-    if ptype.raster:                                      # Bildmarke: nur ihr Ausschnitt der Seite
+    if ptype.raster:                                      # image label: only its section of the page
         k = 300 / 25.4
         x, y = ptype.raster["x_mm"] * k, ptype.raster["y_mm"] * k
         marked.crop((round(x), round(y), round(x) + 1800, round(y) + 1200)).save(tmp_path / "m.png")
@@ -365,7 +365,7 @@ def test_every_piece_lands_where_and_how_the_type_says(ptype, tmp_path):
     for doc, sheet in zip(result.documents, sheets):
         for n, (obj, piece) in enumerate(zip(doc.objects, sheet.pieces)):
             if _covered(piece.dst, [p.dst for p in sheet.pieces[n + 1:]]) > 0.05:
-                continue                                  # verdeckt: Malreihenfolge-Test unten
+                continue                                  # covered: painting order test below
             img = obj.image().convert("L")
             u, v = _ROTATED[piece.rotation](0.25, 0.25)
             pixel = img.getpixel((min(img.width - 1, round(u * img.width)),
@@ -376,8 +376,8 @@ def test_every_piece_lands_where_and_how_the_type_says(ptype, tmp_path):
 
 
 def test_later_pieces_cover_earlier_ones_cleanly(tmp_path):
-    """DHL national: das Leitcode-Quadrat liegt auf dem Kopfstreifen – dessen Tinte darf darunter
-    nicht durchscheinen."""
+    """DHL national: the routing code square lies on the header strip – its ink must not
+    show through underneath."""
     ptype = parcel.find("dhl-privat-1")
     pieces = ptype.layouts["62"][0].pieces
     head, square = pieces[0], pieces[3]
@@ -393,7 +393,7 @@ def test_later_pieces_cover_earlier_ones_cleanly(tmp_path):
     reading = render_document(doc, "QL-600").convert("L").rotate(90, expand=True)
     obj = doc.objects[3]
     centre = (round((obj.x_mm + obj.w_mm / 2) * k), round((obj.y_mm + obj.h_mm / 2) * k))
-    assert reading.getpixel(centre) == 255                # weißes Quadrat bleibt weiß
+    assert reading.getpixel(centre) == 255                # white square stays white
 
 
 def test_crop_outside_the_page_is_white():
@@ -402,17 +402,17 @@ def test_crop_outside_the_page_is_white():
     assert out.size == (60, 60) and out.getpixel((2, 2)) == 255 and out.getpixel((30, 30)) == 0
 
 
-# --- Seitenlage: quer, andere Größe, Bild ------------------------------------------------
+# --- Page orientation: across, other size, image ------------------------------------------------
 def test_landscape_page_is_turned_upright(tmp_path):
     ptype = parcel.find("dhl-privat-1")
-    landscape = _marked_sheet(ptype).rotate(90, expand=True)     # Marke quer (gegen den Uhrzeiger)
+    landscape = _marked_sheet(ptype).rotate(90, expand=True)     # label across (counterclockwise)
     source = parcel.load(make_pdf(tmp_path / "m.pdf", size_mm=(297, 210),
                                   images=[(0, 0, landscape, 300)]))
     assert parcel.placement(source, ptype).rotation == 90
     page = source.page(1, 300 / 25.4 * 25.4 / 1, ptype)
     assert page.size == pytest.approx((210 * 300 / 25.4, 297 * 300 / 25.4), abs=2)
     doc = parcel.convert(source, ptype, "62", "QL-600").documents[0]
-    img = doc.objects[2].image().convert("L")               # Stück ohne Drehung
+    img = doc.objects[2].image().convert("L")               # piece without rotation
     assert img.getpixel((round(0.25 * img.width), round(0.25 * img.height))) < 128
 
 
@@ -429,10 +429,10 @@ def test_letter_page_keeps_its_size_and_areas_beyond_it_are_white(tmp_path):
     page = source.page(1, 50, ptype)
     k = 50 / 25.4
     assert page.size == pytest.approx((215.9 * k, 279.4 * k), abs=1)
-    assert page.getpixel((round(100 * k), round(270 * k))) == 0          # Letter-Inhalt
+    assert page.getpixel((round(100 * k), round(270 * k))) == 0          # Letter content
     beyond = parcel._crop_white(page, (round(100 * k), round(275 * k), round(120 * k),
                                        round(290 * k)))
-    assert beyond.getpixel((5, beyond.height - 3)) == 255                # unter dem Blatt weiß
+    assert beyond.getpixel((5, beyond.height - 3)) == 255                # white below the sheet
     assert parcel._crop_white(page, (5000, 5000, 5010, 5010)).getextrema() == (255, 255)
 
 
@@ -461,7 +461,7 @@ def test_image_of_another_shape_is_not_recognized(tmp_path):
 
 def test_full_page_image_is_stretched_to_the_page_of_the_type(tmp_path):
     ptype = parcel.find("dhl-privat-1")
-    _marked_sheet(ptype, k=100 / 25.4).save(tmp_path / "seite.png")   # 100 dpi, keine Angabe
+    _marked_sheet(ptype, k=100 / 25.4).save(tmp_path / "seite.png")   # 100 dpi, no value
     source = parcel.load(tmp_path / "seite.png")
     doc = parcel.convert(source, ptype, "62", "QL-600").documents[0]
     img = doc.objects[2].image().convert("L")
@@ -500,7 +500,7 @@ def test_pdf_without_pages_has_its_own_message(tmp_path):
         parcel.load(tmp_path / "leer.pdf")
 
 
-# --- Layout fehlt fürs Format, Gleichstand, eigene Typen --------------------------------
+# --- Layout missing for the format, tie, custom types --------------------------------
 def test_missing_layout_is_arranged_from_the_pieces(tmp_path):
     ptype = parcel.find("dhl-privat-1a-100x150")
     source = parcel.load(make_pdf(tmp_path / "m.pdf", size_mm=(100, 150)))
@@ -510,7 +510,7 @@ def test_missing_layout_is_arranged_from_the_pieces(tmp_path):
     for obj, piece in zip(doc.objects, ptype.layouts["100x150"][0].pieces):
         w, h = piece.turned_mm()
         if piece.kind == "barcode" and h <= 58.9:
-            assert (obj.w_mm, obj.h_mm) == pytest.approx((w, h), abs=0.05)   # Barcodes 1:1
+            assert (obj.w_mm, obj.h_mm) == pytest.approx((w, h), abs=0.05)   # barcodes 1:1
         assert obj.y_mm + obj.h_mm <= 58.95
 
 
@@ -541,7 +541,7 @@ def test_version_mark_decides_between_hermes_labels(tmp_path):
     assert found[0][0].id == "hermes-2" and parcel.ambiguous(found) == []
 
 
-# --- Hilfen für die Oberfläche ----------------------------------------------------------
+# --- Helpers for the interface ----------------------------------------------------------
 @pytest.mark.parametrize("env, expected", [
     ({"LC_ALL": "de_DE.UTF-8"}, "DE"), ({"LANG": "de_AT.UTF-8"}, "DE"),
     ({"LC_ALL": "", "LC_MESSAGES": "", "LANG": "C"}, "DE"), ({"LANG": "fr_FR.UTF-8"}, "DE")])
@@ -550,7 +550,7 @@ def test_default_country_follows_the_region_or_takes_the_first(monkeypatch, env,
         monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
         monkeypatch.setenv(key, value)
-    assert parcel.default_country() == expected     # nur DE im Katalog: sonst das erste Land
+    assert parcel.default_country() == expected     # only DE in the catalogue: otherwise the first country
 
 
 def test_default_country_prefers_a_matching_region(monkeypatch):
@@ -572,14 +572,14 @@ def test_own_id_is_a_free_slug():
     assert len(slug) <= 64 and parcel.own_from_dict(_own(id=slug)).id == slug
 
 
-# --- Gesamtreview: Marke verschwunden, Bereiche am Rand -------------------------------------
+# --- Overall review: label vanished, areas at the edge -------------------------------------
 def test_mark_deleted_after_loading_is_a_friendly_error(tmp_path):
     path = make_pdf(tmp_path / "weg.pdf", texts=[(20, 20, "DHL Online Frankierung")])
     source = parcel.load(path)
     path.unlink()
     with pytest.raises(parcel.ParcelError, match="nicht mehr lesen"):
         source.page(1, 100)
-    path.write_bytes(b"kein PDF mehr")                          # durch etwas anderes ersetzt
+    path.write_bytes(b"kein PDF mehr")                          # replaced by something else
     with pytest.raises(parcel.ParcelError, match="nicht mehr lesen"):
         source.page(1, 100)
 
@@ -602,7 +602,7 @@ def test_own_area_too_small_names_the_area():
         parcel.own_from_dict(_own(pieces=pieces))
 
 
-# --- Abschluss-Review: Rundung, Maßstab, eigene Typen, Seiten verschiedener Größe ----------
+# --- Final review: rounding, scale, custom types, pages of different sizes ----------------
 def _blocks(ptype, tmp_path):
     k = 100 / 25.4
     w, h = ptype.source_sizes[0]
@@ -639,15 +639,15 @@ def test_own_type_snaps_first_then_arranges(tmp_path):
     k = 300 / 25.4
     img = Image.new("L", (round(210 * k), round(297 * k)), 255)
     draw = ImageDraw.Draw(img)
-    draw.rectangle([20 * k, 20 * k, 70 * k, 50 * k], fill=0)     # Barcode 50 × 30 mm
-    draw.rectangle([20 * k, 100 * k, 120 * k, 130 * k], fill=0)  # Text 100 × 30 mm
+    draw.rectangle([20 * k, 20 * k, 70 * k, 50 * k], fill=0)     # barcode 50 × 30 mm
+    draw.rectangle([20 * k, 100 * k, 120 * k, 130 * k], fill=0)  # text 100 × 30 mm
     source = parcel.load(make_pdf(tmp_path / "own.pdf", images=[(0, 0, img, 300)]))
     ptype = parcel.own_from_dict(_own(pieces=[
-        {"page": 1, "src": [22, 22, 68, 48], "rotation": 0, "kind": "barcode"},    # schneidet
+        {"page": 1, "src": [22, 22, 68, 48], "rotation": 0, "kind": "barcode"},    # cuts
         {"page": 1, "src": [22, 102, 118, 128], "rotation": 0, "kind": "text"}]))
     result = parcel.convert(source, ptype, "62", "QL-600")
     code = result.documents[0].objects[0]
-    assert (code.w_mm, code.h_mm) == pytest.approx((50, 30), abs=0.3)        # angepasst und 1:1
+    assert (code.w_mm, code.h_mm) == pytest.approx((50, 30), abs=0.3)        # adjusted and 1:1
     assert result.notes == []
 
 
@@ -675,8 +675,8 @@ def test_pages_of_different_size(tmp_path, second):
     doc = parcel.convert(source, ptype, "62", "QL-600").documents[0]
     for obj in doc.objects:
         hist = obj.image().convert("L").histogram()
-        assert sum(hist[:128]) > 0.5 * sum(hist)                   # jede Seite trifft ihre Tinte
-    with pytest.raises(parcel.ParcelError):                       # Bereich gegen seine Seite geprüft
+        assert sum(hist[:128]) > 0.5 * sum(hist)                   # every page hits its ink
+    with pytest.raises(parcel.ParcelError):                       # area checked against its page
         parcel.own_from_dict(_own(source={"sizes_mm": [[210, 297]], "pages_mm": [[210, 297],
                                                                                  [210, 148]]},
                                   pieces=[{"page": 2, "src": [10, 100, 50, 160], "rotation": 0}]))
@@ -699,18 +699,18 @@ def test_own_file_name_must_match_its_identifier():
     assert any("anders.json" in w for w in parcel.own_warnings())
 
 
-# --- Schliff: Stücke desselben Barcodes fluchten ------------------------------------------
+# --- Polish: pieces of the same barcode line up ------------------------------------------
 def _spans(piece):
-    """Ausschnitt-Spanne, die auf Etikett-x bzw. -y fällt (je Drehung)."""
+    """Span of the area that falls on label x or -y (per rotation)."""
     x, y = (piece.src[0], piece.src[2]), (piece.src[1], piece.src[3])
     return (x, y) if piece.rotation in (0, 180) else (y, x)
 
 
 @pytest.mark.parametrize("ptype", parcel.types("DE"), ids=lambda t: t.id)
 def test_pieces_of_one_column_share_their_target_span(ptype):
-    """Layouts schneiden die Mitte langer Balken heraus und setzen die Teile aneinander – gleiche
-    Spanne im Ausschnitt an (fast) gleicher Stelle im Ziel muss genau dieselbe Spanne im Ziel haben,
-    sonst knicken die Balken. Weiter entfernt ist es ein anderer Platz (bleibt)."""
+    """Layouts cut the middle out of long bars and join the parts – the same
+    span in the area at (almost) the same place in the target must have exactly the same span in the target,
+    otherwise the bars kink. Further away it is a different place (stays)."""
     for sheets in ptype.layouts.values():
         for sheet in sheets:
             for axis in (0, 1):
@@ -724,22 +724,22 @@ def test_pieces_of_one_column_share_their_target_span(ptype):
 
 
 def test_pieces_of_one_column_stay_aligned_after_snapping(tmp_path):
-    """DHL Retoure Amazon: Leitcode und Identcode liegen je auf zwei Stücken derselben Spalte.
-    Rückt das Anpassen der Kanten (ungeprüfter Typ) eine gemeinsame Kante nur bei einem Stück,
-    bleibt sie bei allen – sonst bekämen die Stücke verschiedene Maßstäbe (Knick in den Balken)."""
+    """DHL return Amazon: routing code and ident code each lie on two pieces of the same column.
+    If adjusting the edges (untested type) moves a shared edge on only one piece,
+    it stays on all – otherwise the pieces would get different scales (kink in the bars)."""
     ptype = parcel.find("dhl-retour-3")
     pieces = ptype.layouts["62"][0].pieces
     column = [1, 3, 4]
-    assert len({pieces[n].src[1::2] for n in column}) == 1   # dieselbe Spanne (gedreht: Etikett-x)
+    assert len({pieces[n].src[1::2] for n in column}) == 1   # same span (rotated: label x)
     k = 300 / 25.4
     x, y = ptype.raster["x_mm"], ptype.raster["y_mm"]
     img = Image.new("L", (1800, 1200), 255)
     draw = ImageDraw.Draw(img)
-    for n in column:                                      # Inhalt in jedem Stück
+    for n in column:                                      # content in every piece
         x0, y0, x1, y1 = pieces[n].src
         draw.rectangle([round((x0 + 2 - x) * k), round((y0 + 5 - y) * k),
                         round((x1 - 2 - x) * k), round((y1 - 5 - y) * k)], 0)
-    x0, y0, x1, y1 = pieces[4].src                        # nur Stück 4 ragt über die Unterkante
+    x0, y0, x1, y1 = pieces[4].src                        # only piece 4 sticks out over the bottom edge
     draw.rectangle([round((x0 + 2 - x) * k), round((y1 - 6 - y) * k),
                     round((x1 - 2 - x) * k), round((y1 + 1 - y) * k)], 0)
     img.save(tmp_path / "m.png", dpi=(300, 300))
@@ -748,7 +748,7 @@ def test_pieces_of_one_column_stay_aligned_after_snapping(tmp_path):
     assert len(spans) == 1
 
 
-# --- Freiraum zwischen den Stücken eigener Typen -----------------------------------------------
+# --- Space between the pieces of custom types -----------------------------------------------
 def _spaced(*spaces):
     pieces = [dict(p) for p in _own()["pieces"]]
     for piece, space in zip(pieces, spaces):
@@ -762,7 +762,7 @@ def test_space_after_a_piece_round_trips():
     assert ptype.pieces[0].space_after == 12.5 and ptype.pieces[1].space_after == 0
     data = parcel.own_to_dict(ptype)
     assert data["pieces"][0]["space_after_mm"] == 12.5
-    assert "space_after_mm" not in data["pieces"][1]               # nur, wenn es einen gibt
+    assert "space_after_mm" not in data["pieces"][1]               # only if there is one
     assert parcel.own_from_dict(data).pieces[0].space_after == 12.5
 
 
@@ -777,19 +777,19 @@ def test_space_is_checked(space):
 def test_space_starts_a_new_column_at_its_distance():
     plain = parcel.arrange(_spaced().pieces, 100)
     spaced = parcel.arrange(_spaced(0, 20).pieces, 100)
-    # 100 mm Band: Text und Barcode übereinander in Spalte 1, das gedrehte Stück in Spalte 2
+    # 100 mm tape: text and barcode stacked in column 1, the rotated piece in column 2
     assert plain.pieces[1].dst[0] == plain.pieces[0].dst[0]
-    # Freiraum nach dem Barcode: das gedrehte Stück 20 mm hinter dem Ende der ersten Spalte
+    # Space after the barcode: the rotated piece 20 mm behind the end of the first column
     first_column_end = max(p.dst[2] for p in spaced.pieces[:2])
     assert spaced.pieces[2].dst[0] == pytest.approx(first_column_end + 20)
-    assert spaced.size_mm[0] == pytest.approx(plain.size_mm[0] + 19)   # statt 1 mm Abstand
+    assert spaced.size_mm[0] == pytest.approx(plain.size_mm[0] + 19)   # instead of 1 mm gap
 
 
 def test_space_between_pieces_of_one_column_splits_it():
     spaced = parcel.arrange(_spaced(15).pieces, 100)
     text, code, _turned = spaced.pieces
     assert code.dst[0] == pytest.approx(text.dst[2] + 15)
-    assert code.dst[1] == 0                                         # neue Spalte, oben
+    assert code.dst[1] == 0                                         # new column, top
 
 
 def test_space_after_the_last_piece_does_not_count():
@@ -799,7 +799,7 @@ def test_space_after_the_last_piece_does_not_count():
 
 
 def test_spaces_lists_and_changes_the_effective_spaces():
-    ptype = _spaced(10, 0, 30)                                      # 30 nach dem letzten: zählt nicht
+    ptype = _spaced(10, 0, 30)                                      # 30 after the last: does not count
     assert parcel.spaces(ptype) == [(0, 10.0)]
     changed = parcel.with_spaces(ptype, [25])
     assert parcel.spaces(changed) == [(0, 25.0)] and parcel.spaces(ptype) == [(0, 10.0)]

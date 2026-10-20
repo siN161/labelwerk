@@ -1,7 +1,7 @@
-"""templates.json (Auswertung) → src/labelwerk/parcel_data/catalog.json (Daten für labelwerk).
+"""templates.json (analysis) → src/labelwerk/parcel_data/catalog.json (data for labelwerk).
 
-Aufruf: python catalog.py templates.json ../../src/labelwerk/parcel_data/catalog.json
-Erkennungs-Begriffe, weitere Seitengrößen und Bild-Regeln stehen hier von Hand."""
+Usage: python catalog.py templates.json ../../src/labelwerk/parcel_data/catalog.json
+Recognition terms, further page sizes and image rules are maintained by hand here."""
 import json
 import sys
 from pathlib import Path
@@ -39,21 +39,21 @@ DETECT = {
     "dhl-retour-3": {"all": [], "any": [], "none": []},
     "dhl-retour-4": {"all": ["Amazon"], "any": ["Rücksendung", "Rücksendeetikett", "DHL"], "none": ["Hermes"]},
     "hermes-1": {"all": ["Amazon"], "any": ["Rücksendung", "Rücksendeetikett", "Hermes"], "none": ["DHL"]},
-    # Versionskennung, die Hermes auf den Schein druckt (so heißen die Typen bei paketikett.de)
+    # Version code that Hermes prints on the slip (this is how the types are named at paketikett.de)
     "hermes-2": {"all": ["Hermes"], "any": ["Paketschein", "Sendungsnummer", "V4.2"], "none": ["Amazon", "V1.0"]},
     "hermes-3": {"all": ["Hermes"], "any": ["Paketschein", "Sendungsnummer", "V1.0"], "none": ["Amazon", "V4.2"]},
 }
 SOURCES = {"dhl-retour-4": [A4, LETTER], "hermes-1": [A4, LETTER]}
-# Amazon-GIF (6 × 4 Zoll, 300 dpi): Lage auf der A4-Seite geschätzt (meiste Tinte in den Stücken)
+# Amazon GIF (6 × 4 inch, 300 dpi): position on the A4 page estimated (most ink in the pieces)
 RASTER = {"dhl-retour-3": {"dpi": 300, "x_mm": -2.5, "y_mm": 189.4, "px": [1800, 1200]}}
 
 
 def clamp(p, size):
-    """Ausschnitt auf die Seite begrenzen; das Ziel schrumpft im selben Maßstab mit (Drehung beachtet)."""
+    """Limit the cut-out to the page; the target shrinks by the same scale (rotation taken into account)."""
     x0, y0, x1, y1 = p["src"]
     w, h = size
     nx0, ny0, nx1, ny1 = max(0, x0), max(0, y0), min(w, x1), min(h, y1)
-    dl, dt, dr, db = nx0 - x0, ny0 - y0, x1 - nx1, y1 - ny1          # nach innen positiv
+    dl, dt, dr, db = nx0 - x0, ny0 - y0, x1 - nx1, y1 - ny1          # positive inwards
     if not any((dl, dt, dr, db)):
         return p
     tw, th = (y1 - y0, x1 - x0) if p["rotation"] in (90, 270) else (x1 - x0, y1 - y0)
@@ -95,4 +95,4 @@ catalog = {
     "types": types,
 }
 out.write_text(json.dumps(catalog, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-print(len(types), "Typen →", out)
+print(len(types), "types →", out)

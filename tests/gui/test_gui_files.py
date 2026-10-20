@@ -1,5 +1,5 @@
-"""Reiter Datei (Etappe 3c): Neu/Öffnen/Speichern, ungespeicherte Änderungen, Favoriten, Zuletzt
-geöffnet, Start mit Datei oder Favorit. Dialoge und Rückfragen sind ersetzt."""
+"""FILE tab (stage 3c): New/Open/Save, unsaved changes, favourites, recently opened,
+start with a file or favourite. Dialogs and prompts are replaced."""
 import pytest
 from PySide6.QtCore import Qt
 
@@ -24,7 +24,7 @@ def _window(qtbot, doc=None, **settings):
 
 
 class Answers:
-    """Ersatz für Dialoge: Antworten der Reihe nach, gestellte Fragen gemerkt."""
+    """Replacement for dialogs: answers in order, questions asked are remembered."""
 
     def __init__(self, win, **answers):
         self.asked = []
@@ -45,7 +45,7 @@ def _type(win, text):
     win._commit()
 
 
-# --- Reiter, Aktionen ------------------------------------------------------------------
+# --- Tabs, actions ---------------------------------------------------------------------
 def test_file_tab_comes_first_and_window_starts_on_paper(qtbot):
     assert [tool.key for tool in TOOLS][:2] == ["file", "paper"]
     win = _window(qtbot)
@@ -71,14 +71,14 @@ def test_panel_buttons_trigger_the_actions(qtbot):
     assert "Ctrl+S" in panel.save.toolTip()
 
 
-# --- Speichern, Öffnen, Titel ----------------------------------------------------------
+# --- Saving, opening, title ------------------------------------------------------------
 def test_title_untitled_and_dot_when_changed(qtbot):
     win = _window(qtbot)
     assert win.windowTitle() == "Unbenannt – labelwerk"
     _type(win, "Neu")
     assert win.windowTitle() == "• Unbenannt – labelwerk"
     win.undo()
-    assert win.windowTitle() == "Unbenannt – labelwerk"        # zurück zum Ausgangsstand
+    assert win.windowTitle() == "Unbenannt – labelwerk"        # back to the initial state
 
 
 def test_save_asks_for_a_file_the_first_time_and_adds_the_suffix(qtbot, tmp_path):
@@ -91,7 +91,7 @@ def test_save_asks_for_a_file_the_first_time_and_adds_the_suffix(qtbot, tmp_path
     assert win.windowTitle() == "absender – labelwerk"
     assert win.result.text() == "Gespeichert: absender.labelwerk"
     _type(win, "geändert")
-    win.shortcut_actions["file.save"].trigger()                  # jetzt ohne Dialog
+    win.shortcut_actions["file.save"].trigger()                  # now without a dialog
     assert answers.asked == ["ask_save_file"] and storage.load(path).objects[0].text == "geändert"
 
 
@@ -127,7 +127,7 @@ def test_open_replaces_the_document_and_resets_undo(qtbot, tmp_path):
     Answers(win, ask_open_file=str(path))
     win.shortcut_actions["file.open"].trigger()
     assert win.doc.objects[0].text == "Regal 3"
-    assert win.panel("text").doc is win.doc                      # Panels behalten das Objekt
+    assert win.panel("text").doc is win.doc                      # panels keep the object
     assert not win.history.can_undo(win.doc)
     assert win.windowTitle() == "regal – labelwerk"
     assert load_settings().recent_files == [str(path)]
@@ -150,7 +150,7 @@ def test_new_gives_an_empty_label_from_the_settings(qtbot):
     assert win.windowTitle() == "Unbenannt – labelwerk"
 
 
-# --- Rückfrage bei ungespeicherten Änderungen ---------------------------------------------
+# --- Prompt on unsaved changes ------------------------------------------------------------
 @pytest.mark.parametrize("trigger", ["new", "open", "close"])
 def test_unchanged_label_needs_no_question(qtbot, tmp_path, trigger):
     path = tmp_path / "x.labelwerk"
@@ -197,7 +197,7 @@ def test_close_with_changes_can_be_cancelled(qtbot):
     assert not win.isVisible()
 
 
-# --- Favoriten -------------------------------------------------------------------------
+# --- Favourites ------------------------------------------------------------------------
 def test_add_current_label_as_favorite(qtbot):
     win = _window(qtbot)
     answers = Answers(win, ask_favorite_name=lambda: "Absender")
@@ -293,7 +293,7 @@ def test_favorite_context_menu_actions(qtbot):
 
 
 def test_favorite_menu_opens_the_folder(qtbot):
-    """Rechtsklick → Ordner öffnen: der Menüeintrag selbst (nicht nur die Funktion) öffnet."""
+    """Right-click → open folder: the menu entry itself (not just the function) opens it."""
     favorites.add(_doc(), "Absender")
     win = _window(qtbot)
     opened = []
@@ -318,7 +318,7 @@ def test_opening_a_favorite_with_changes_asks_first(qtbot):
     assert answers.asked == ["ask_save_changes"] and win.doc.objects[0].text == "ungespeichert"
 
 
-# --- Zuletzt geöffnet -----------------------------------------------------------------
+# --- Recently opened ------------------------------------------------------------------
 def test_recent_files_list_and_open(qtbot, tmp_path):
     a, b = tmp_path / "a.labelwerk", tmp_path / "b.labelwerk"
     storage.save(_doc("A"), a)
@@ -388,7 +388,7 @@ def test_settings_dialog_keeps_a_missing_start_favorite_visible(qtbot):
 
 
 def test_label_the_printer_cannot_print_is_refused(qtbot, tmp_path):
-    """102 mm gibt es bei brother_ql, der QL-600 druckt aber höchstens 62 mm."""
+    """brother_ql has 102 mm, but the QL-600 prints 62 mm at most."""
     path = tmp_path / "breit.labelwerk"
     storage.save(Document("102", objects=[TextObject("breit")]), path)
     win = _window(qtbot)
@@ -408,7 +408,7 @@ def test_recent_paths_are_normalized(qtbot, tmp_path):
     assert win.settings.recent_files == [str(path.resolve())]
 
 
-# --- Nachbesserungen ---------------------------------------------------------------------
+# --- Fixes -------------------------------------------------------------------------------
 from labelwerk.media import Media  # noqa: E402
 
 
@@ -444,14 +444,14 @@ def test_new_label_follows_the_known_roll(qtbot):
 
 
 def test_opening_a_label_that_does_not_render_replaces_the_view(qtbot, tmp_path):
-    """Renderfehler nach dem Öffnen: die Arbeitsfläche zeigt nicht mehr das alte Etikett."""
+    """Render error after opening: the canvas no longer shows the old label."""
     path = tmp_path / "gross.labelwerk"
     storage.save(Document("62", length_mm=20, objects=[TextObject("X" * 40, size_pt=100)]), path)
     win = _window(qtbot, Document("62", length_mm=40, objects=[
         TextObject("a", x_mm=1, y_mm=1), TextObject("b", x_mm=20, y_mm=1)]))
     win.files.open(str(path))
     assert len(win.doc.objects) == 1 and win._render_error is not None
-    assert win.rendered == []                      # keine Bilder des alten Etiketts mehr
+    assert win.rendered == []                      # no images of the old label any more
 
 
 def test_printing_a_favorite_checks_the_label(qtbot, monkeypatch):
@@ -596,7 +596,7 @@ def test_question_buttons_map_to_answers():
                                           QMessageBox.StandardButton.Discard,
                                           QMessageBox.StandardButton.Cancel)] == [
         "save", "discard", "cancel"]
-    assert answer_for(0) == "cancel"                 # Fenster-X / Esc
+    assert answer_for(0) == "cancel"                 # window X / Esc
 
 
 def test_ctrl_s_saves(qtbot, tmp_path):
@@ -606,7 +606,7 @@ def test_ctrl_s_saves(qtbot, tmp_path):
     assert answers.asked == ["ask_save_file"] and (tmp_path / "k.labelwerk").exists()
 
 
-# --- Schlussreview 3c ---------------------------------------------------------------------
+# --- Final review 3c ----------------------------------------------------------------------
 def _unreachable_folder(tmp_path):
     import os
     folder = tmp_path / "zu"
@@ -625,7 +625,7 @@ def test_unreachable_recent_path_does_not_stop_the_start(qtbot, tmp_path):
         path = str(folder / "x.labelwerk")
         win = _window(qtbot, recent_files=[path])
         assert win.panel("file").recent_names() == ["x"]
-        win.panel("file").open_recent_at(0)             # kein Traceback, Meldung
+        win.panel("file").open_recent_at(0)             # no traceback, message
         assert win.settings.recent_files == [] and "nicht gefunden" in win.result.text()
     finally:
         folder.chmod(0o755)
@@ -663,7 +663,7 @@ def test_print_with_render_error_says_so_again(qtbot, tmp_path, monkeypatch):
 
 def test_many_unsaved_empty_text_frames_do_not_count_as_a_change(qtbot):
     win = _window(qtbot)
-    win.doc.objects.append(TextObject("", x_mm=10, y_mm=10))      # frisch angelegter Rahmen
+    win.doc.objects.append(TextObject("", x_mm=10, y_mm=10))      # freshly created frame
     assert not win.files.modified()
     win.doc.objects[-1] = TextObject("x", x_mm=10, y_mm=10)
     assert win.files.modified()

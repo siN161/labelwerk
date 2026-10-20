@@ -16,7 +16,7 @@ def window(qtbot):
     win = MainWindow()
     qtbot.addWidget(win)
     win.show()
-    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
+    win.canvas.set_selection([0])      # start without selection: select the start object for typing
     win.panel("text").edit.setPlainText("Max Mustermann")
     win.render_now()
     return win
@@ -39,7 +39,7 @@ def test_margin_changes_document_and_length(window):
     paper.margin.setValue(5.0)
     window.render_now()
     assert window.doc.margin_mm == 5.0
-    assert window.image.height == before + 2 * (59 - 35)   # 1 mm lag ganz im Vorschub
+    assert window.image.height == before + 2 * (59 - 35)   # 1 mm lay entirely in the feed
 
 
 def test_horizontal_view_shows_handle_right_of_label(window):
@@ -49,7 +49,7 @@ def test_horizontal_view_shows_handle_right_of_label(window):
     label_box = canvas.label_view_rect()
     handle = canvas.mapFromScene(canvas.handle.sceneBoundingRect().center())
     assert handle.x() > label_box.right()
-    assert label_box.width() > label_box.height()          # Adresse liegt quer im Bild
+    assert label_box.width() > label_box.height()          # address lies sideways in the image
 
 
 def test_horizontal_caption_reads_length_first(qtbot):
@@ -101,19 +101,19 @@ def test_settings_warnings_appear_in_status_bar(qtbot):
     assert "start_zoom" in win.result.text()
 
 
-# --- Vorschub des Druckers längs zum Endlosband ------------------------------------------
+# --- Feed of the printer along the continuous tape ---------------------------------------
 def test_margin_hint_when_margin_is_inside_the_printer_strip(window):
     paper = window.panel("paper")
     paper.margin.setValue(1.0)
     assert paper.margin_hint.isVisibleTo(paper)
     assert paper.margin_hint.text() == ("Längs zum Band lässt der Drucker 3,0 mm frei – ein kleinerer "
                                         "Rand wirkt dort nicht.")
-    # dezent wie eine Erläuterung (steht beim Standardrand immer da), nicht der Hinweis-Kasten
+    # subtle like an explanation (always there at the default margin), not the hint box
     assert paper.margin_hint.objectName() != "hint" and "color" in paper.margin_hint.styleSheet()
-    paper.margin.setValue(3.0)                          # 35 Punkte: genau der Vorschub
+    paper.margin.setValue(3.0)                          # 35 dots: exactly the feed
     assert not paper.margin_hint.isVisibleTo(paper)
     paper.margin.setValue(1.0)
-    paper.combo.setCurrentIndex(paper.combo.findData("62x29"))   # gestanzt: kein Vorschub
+    paper.combo.setCurrentIndex(paper.combo.findData("62x29"))   # die-cut: no feed
     assert not paper.margin_hint.isVisibleTo(paper)
 
 
@@ -127,15 +127,15 @@ def test_margin_tooltip_names_the_real_printer_strips(window, label, across, alo
 
 
 def test_margin_tooltip_without_printer_strips(window):
-    window.doc.label_id = "57x32mm@203"                 # anderer Hersteller: ganz bedruckbar
+    window.doc.label_id = "57x32mm@203"                 # other manufacturer: fully printable
     paper = window.panel("paper")
     paper.refresh()
     assert paper.margin.toolTip() == "Abstand zur Papierkante ringsum"
 
 
 def test_refresh_sets_length_range_of_the_label_before_the_value(window):
-    """Etikett „18“ (Vorschub 14 Punkte) erlaubt kürzere Stücke als „62“ – der Wert der Datei
-    darf beim Anzeigen nicht an der Grenze des vorigen Etiketts hängen bleiben."""
+    """Label "18" (feed 14 dots) allows shorter pieces than "62" – the value of the file
+    must not stick to the limit of the previous label when displayed."""
     paper = window.panel("paper")
     window.doc.label_id, window.doc.length_mm = "18", 16.0
     paper.refresh()
@@ -164,5 +164,5 @@ def test_canvas_shows_printer_strip_before_and_after_the_print_image(window, ori
     canvas = window.canvas
     outline = canvas.outline.sceneBoundingRect()
     sheet = canvas.sheet.mapRectToScene(canvas.sheet.rect())
-    assert sheet.top() - outline.top() == pytest.approx(35)        # Szene-y = Bandrichtung
+    assert sheet.top() - outline.top() == pytest.approx(35)        # scene y = tape direction
     assert outline.bottom() - sheet.bottom() == pytest.approx(35)

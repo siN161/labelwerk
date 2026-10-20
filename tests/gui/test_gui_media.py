@@ -24,7 +24,7 @@ def window(qtbot):
     win = MainWindow(settings=Settings(check_media_on_start=False))
     qtbot.addWidget(win)
     win.show()
-    win.canvas.set_selection([0])      # Start ohne Auswahl: das Startobjekt zum Tippen wählen
+    win.canvas.set_selection([0])      # start without selection: select the start object for typing
     return win
 
 
@@ -60,7 +60,7 @@ def test_check_media_error_is_shown(window, qtbot, monkeypatch):
 
 
 def test_no_media_check_while_printing(window, monkeypatch):
-    window._printing = True                        # Druck läuft
+    window._printing = True                        # print is running
     window.check_media()
     assert not window.is_checking_media()
 
@@ -69,7 +69,7 @@ def test_no_print_while_media_check_runs(window, monkeypatch):
     monkeypatch.setattr("labelwerk.gui.print_worker.print_image",
                         lambda *a, **kw: pytest.fail("darf nicht drucken"))
     window.panel("text").edit.setPlainText("Hallo")
-    window._media_signals = object()               # Prüfung läuft
+    window._media_signals = object()               # check is running
     window.print_label()
     assert "geprüft" in window.result.text()
 
@@ -80,7 +80,7 @@ def test_printer_appearing_triggers_status_and_media_check(qtbot, monkeypatch):
     assert win.printer_status.text() == "○ kein Drucker"
     monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [LP1])
     _printer_with(monkeypatch, Media(62, 29, "die_cut"))
-    win._printer_timer.timeout.emit()              # nächster Abfrage-Takt
+    win._printer_timer.timeout.emit()              # next polling tick
     assert "lp1" in win.printer_status.text()
     qtbot.waitUntil(lambda: win.doc.label_id == "62x29", timeout=3000)
 
@@ -105,7 +105,7 @@ def test_printer_disconnect_clears_media_status(window, qtbot, monkeypatch):
     assert window.printer_status.text() == "○ kein Drucker"
 
 
-# --- Druck und Medium-Prüfung schließen sich aus ----------------------------
+# --- Printing and media check exclude each other ----------------------------
 def test_no_media_check_during_empty_dialog_and_print_proceeds(window, qtbot, monkeypatch):
     _printer_with(monkeypatch, Media(62, 0, "endless"))
     monkeypatch.setattr("labelwerk.gui.print_worker.find_brother_lp", lambda: "file:///dev/usb/lp1")
@@ -114,7 +114,7 @@ def test_no_media_check_during_empty_dialog_and_print_proceeds(window, qtbot, mo
     seen = {}
 
     def dialog():
-        window.check_media()                      # Timer feuert während des Dialogs
+        window.check_media()                      # timer fires during the dialog
         seen["checking"] = window.is_checking_media()
         return True
     monkeypatch.setattr(MainWindow, "confirm_empty", lambda self: dialog())
@@ -168,12 +168,12 @@ def test_matching_label_not_mentioned_as_adjusted(window, qtbot, monkeypatch):
 def test_media_check_is_caught_up_after_print(qtbot, monkeypatch):
     win = MainWindow(settings=Settings(check_media_on_start=True))
     qtbot.addWidget(win)
-    win._printing = True                           # Druck läuft, Drucker erscheint
+    win._printing = True                           # print is running, printer appears
     monkeypatch.setattr("labelwerk.gui.main_window.usb_printers", lambda: [LP1])
     _printer_with(monkeypatch, Media(62, 29, "die_cut"))
     win.refresh_printer()
     assert not win.is_checking_media()
-    win._print_done({"did_print": True})           # Druck fertig
+    win._print_done({"did_print": True})           # print finished
     qtbot.waitUntil(lambda: win.doc.label_id == "62x29", timeout=3000)
 
 

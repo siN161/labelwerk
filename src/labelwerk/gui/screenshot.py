@@ -1,10 +1,10 @@
-"""Bildschirmfoto über das XDG-Desktop-Portal (``org.freedesktop.portal.Screenshot``).
+"""Screenshot via the XDG desktop portal (``org.freedesktop.portal.Screenshot``).
 
-Die Auswahl (Bereich, Fenster, Bildschirm) zeigt der Desktop (``interactive``); das Portal
-antwortet asynchron mit dem Signal ``Response`` am Request-Objekt, dessen Pfad sich aus dem
-Busnamen und einem eigenen ``handle_token`` ergibt – darum wird es vor dem Aufruf abonniert.
-Ohne D-Bus testbar: ``request_path``, ``parse_response``, ``error_text``. Aufrufe gehen als
-einzelne Nachrichten raus (``QDBusInterface`` würde beim Anlegen blockierend introspektieren).
+The desktop shows the selection (area, window, screen) (``interactive``); the portal
+answers asynchronously with the signal ``Response`` on the request object, whose path results from
+the bus name and its own ``handle_token`` – so it is subscribed to before the call.
+Testable without D-Bus: ``request_path``, ``parse_response``, ``error_text``. Calls go out as
+single messages (``QDBusInterface`` would introspect blockingly when created).
 """
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ SERVICE = "org.freedesktop.portal.Desktop"
 OBJECT = "/org/freedesktop/portal/desktop"
 INTERFACE = "org.freedesktop.portal.Screenshot"
 REQUEST = "org.freedesktop.portal.Request"
-AVAILABLE_TIMEOUT_MS = 5_000      # Portal da? (startet es erst, dauert das meist < 1 s)
-CALL_TIMEOUT_MS = 10_000          # Antwort auf den Aufruf selbst (die Auswahl dauert beliebig)
+AVAILABLE_TIMEOUT_MS = 5_000      # portal there? (if it has to start first, that usually takes < 1 s)
+CALL_TIMEOUT_MS = 10_000          # answer to the call itself (the selection may take any time)
 FAILED = N_("Screenshot failed")
 _RESPONSE_SLOT = SLOT("response(uint,QVariantMap)")
 _NO_PORTAL = ("ServiceUnknown", "NameHasNoOwner", "UnknownObject", "UnknownInterface",
@@ -31,18 +31,18 @@ _NO_ANSWER = ("NoReply", "Timeout", "TimedOut")
 
 
 def session_bus() -> QDBusConnection:
-    """Sitzungsbus (in Tests ersetzt – kein Test erreicht das echte Portal)."""
+    """Session bus (replaced in tests – no test reaches the real portal)."""
     return QDBusConnection.sessionBus()
 
 
 def request_path(unique_name: str, token: str) -> str:
-    """Pfad des Request-Objekts, an dem das Portal antwortet (Busname „:1.42“ → „1_42“)."""
+    """Path of the request object the portal answers on (bus name “:1.42” → “1_42”)."""
     sender = unique_name.lstrip(":").replace(".", "_")
     return f"{OBJECT}/request/{sender}/{token}"
 
 
 def parse_response(code: int, results: dict) -> tuple[Path | None, str | None]:
-    """Antwort des Portals → (Pfad der Bilddatei, Fehlermeldung); (None, None) = abgebrochen."""
+    """Portal response → (path of the image file, error message); (None, None) = cancelled."""
     if code == 1:
         return None, None
     if code != 0:
@@ -54,8 +54,8 @@ def parse_response(code: int, results: dict) -> tuple[Path | None, str | None]:
 
 
 def error_text(error_name: str) -> str:
-    """D-Bus-Fehlername (z. B. „org.freedesktop.DBus.Error.ServiceUnknown“) → deutsche Meldung
-    (die Fehlertexte von D-Bus sind englisch)."""
+    """D-Bus error name (e.g. “org.freedesktop.DBus.Error.ServiceUnknown”) → message for the user
+    (D-Bus's own error texts are English)."""
     short = error_name.rsplit(".", 1)[-1]
     if short in _NO_PORTAL:
         return _("Screenshot failed – no screenshot portal found")
@@ -67,9 +67,9 @@ def error_text(error_name: str) -> str:
 
 
 class _Request(QObject):
-    """Empfänger der Antwort einer Aufnahme. QtDBus stellt Signale über die Ereignisschlange
-    zu: eine schon eingereihte Antwort einer verworfenen Aufnahme kommt auch nach dem Abmelden
-    noch an – sie zählt nur, solange ihr Empfänger der aktuelle ist."""
+    """Receiver of the answer to one capture. QtDBus delivers signals via the event queue:
+    an already queued answer of a discarded capture still arrives after unsubscribing –
+    it counts only as long as its receiver is the current one."""
 
     def __init__(self, portal: ScreenshotPortal):
         super().__init__(portal)
@@ -81,17 +81,17 @@ class _Request(QObject):
 
 
 class ScreenshotPortal(QObject):
-    """Ein Bildschirmfoto je ``take()``; Ergebnis genau einmal über ``finished``:
-    (Pfad | None, Fehlermeldung | None), (None, None) = abgebrochen."""
+    """One screenshot per ``take()``; result exactly once via ``finished``:
+    (path | None, error message | None), (None, None) = cancelled."""
 
     finished = Signal(object, object)
 
     def __init__(self, bus: QDBusConnection | None = None, parent: QObject | None = None):
         super().__init__(parent)
         self._bus = bus
-        self._request: _Request | None = None   # Empfänger der offenen Aufnahme
-        self._spent: list[_Request] = []        # frühere Empfänger, beim nächsten take() gelöscht
-        self._path: str | None = None           # dafür abonnierter Request-Pfad
+        self._request: _Request | None = None   # receiver of the open capture
+        self._spent: list[_Request] = []        # earlier receivers, deleted on the next take()
+        self._path: str | None = None           # request path subscribed for it
 
     def bus(self) -> QDBusConnection:
         return self._bus if self._bus is not None else session_bus()
@@ -103,7 +103,7 @@ class ScreenshotPortal(QObject):
         return self.bus().call(message, QDBus.CallMode.Block, timeout)
 
     def available(self) -> bool:
-        """Sitzungsbus erreichbar und Portal mit Schnittstelle Screenshot vorhanden."""
+        """Session bus reachable and portal with the Screenshot interface present."""
         if not self.bus().isConnected():
             return False
         reply = self._call(OBJECT, "org.freedesktop.DBus.Properties", "Get", INTERFACE,
@@ -111,14 +111,14 @@ class ScreenshotPortal(QObject):
         return reply.type() == QDBusMessage.MessageType.ReplyMessage
 
     def take(self) -> None:
-        """Auswahl des Desktops öffnen; das Ergebnis kommt über ``finished`` – bei Fehlern vor
-        der Auswahl (kein Bus, kein Portal) noch während dieses Aufrufs. Eine noch offene
-        Aufnahme wird verworfen (ihre Auswahl geschlossen, ihre Antwort nicht mehr gemeldet)."""
+        """Open the desktop's selection; the result arrives via ``finished`` – on errors before
+        the selection (no bus, no portal) still during this call. A capture that is still open
+        is discarded (its selection closed, its answer no longer reported)."""
         if self._path is not None:
             self._close(self._path)
         self._drop()
-        for request in self._spent:          # nicht früher: Löschen eines Empfängers, dessen
-            request.deleteLater()             # Antwort gerade zugestellt wird, stürzt ab (SIGBUS)
+        for request in self._spent:          # not earlier: deleting a receiver whose
+            request.deleteLater()             # answer is just being delivered crashes (SIGBUS)
         self._spent.clear()
         bus = self.bus()
         if not bus.isConnected():
@@ -138,16 +138,16 @@ class ScreenshotPortal(QObject):
         except (IndexError, AttributeError):
             self._finish(None, _("Screenshot failed – unexpected answer from the portal"))
             return
-        if handle != self._path and not self._subscribe(handle):   # ältere Portale: eigener Pfad
-            self._close(handle)                  # ohne Abo kommt keine Antwort: Auswahl schließen
+        if handle != self._path and not self._subscribe(handle):   # older portals: own path
+            self._close(handle)                  # without subscription no answer comes: close the selection
 
     def _close(self, path: str) -> None:
-        """Offene Auswahl am Request-Pfad ``path`` schließen (``Request.Close``, ohne Antwort)."""
+        """Close the open selection at request path ``path`` (``Request.Close``, without answer)."""
         self.bus().send(QDBusMessage.createMethodCall(SERVICE, path, REQUEST, "Close"))
 
     def _subscribe(self, path: str) -> bool:
-        """Antwort am Pfad ``path`` abonnieren (ein älteres wird gelöst); scheitert das, ist die
-        Aufnahme mit Fehler beendet – sonst käme nie eine Antwort."""
+        """Subscribe to the answer at path ``path`` (an older one is released); if that fails, the
+        capture ends with an error – otherwise no answer would ever come."""
         self._unsubscribe()
         if not self.bus().connect(SERVICE, path, REQUEST, "Response", self._request,
                                   _RESPONSE_SLOT):

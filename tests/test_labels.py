@@ -5,7 +5,7 @@ from labelwerk.labels import format_mm, get_label, labels_for_model, length_limi
 def test_62mm_endless_has_696_printable_dots():
     label = get_label("62")
     assert label.width == 696
-    assert label.height is None  # endlos
+    assert label.height is None  # continuous
 
 
 def test_die_cut_label_has_fixed_height():

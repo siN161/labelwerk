@@ -1,4 +1,4 @@
-"""Eigenschaften-Panels: je Werkzeug eines, bearbeiten ihren Teil des Dokuments."""
+"""Property panels: one per tool, they edit their part of the document."""
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
@@ -9,10 +9,10 @@ from ...document import Document
 
 
 class Panel(QWidget):
-    """Basis: hält das Dokument, sendet changed nach jeder Änderung.
+    """Base: holds the document, emits changed after every change.
 
-    ``edited`` meldet einen abgeschlossenen Stand für Rückgängig (das Hauptfenster hält ihn
-    fest; ohne Änderung seit dem letzten Stand ist das kein neuer Schritt).
+    ``edited`` reports a completed state for undo (the main window keeps it;
+    without a change since the last state it is not a new step).
     """
 
     changed = Signal()
@@ -29,21 +29,21 @@ class Panel(QWidget):
     def section(self, text: str) -> QLabel:
         label = QLabel(text.upper())
         label.setProperty("role", "section")
-        label.setWordWrap(True)                  # lange Titel (andere Sprachen) brechen um
+        label.setWordWrap(True)                  # long titles (other languages) wrap
         self.layout_.addWidget(label)
         return label
 
     def refresh(self) -> None:
-        """Widgets aus dem Dokument neu setzen (z. B. nach Ziehen auf der Arbeitsfläche)."""
+        """Reset the widgets from the document (e.g. after dragging on the canvas)."""
 
     def show_error(self, message: str | None) -> None:
-        """Fehlermeldung anzeigen bzw. mit None löschen (nur wo sinnvoll)."""
+        """Show an error message or clear it with None (only where useful)."""
 
     def set_selection(self, indices: list[int]) -> None:
-        """Auswahl auf der Arbeitsfläche hat sich geändert (Indizes in der Reihenfolge der Wahl)."""
+        """Selection on the canvas has changed (indices in the order of selection)."""
 
     def use_actions(self, actions: dict[str, QAction]) -> None:
-        """Aktionen des Hauptfensters (``gui.actions``) für eigene Knöpfe übernehmen."""
+        """Take over actions of the main window (``gui.actions``) for own buttons."""
 
     def set_icon_style(self, dark_checked: bool) -> None:
-        """Symbole an das Design anpassen (weiß auf schwarz nur bei RawBlock)."""
+        """Adapt icons to the theme (white on black only in RawBlock)."""

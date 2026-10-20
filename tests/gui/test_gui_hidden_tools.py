@@ -1,5 +1,5 @@
-"""Reiter ausblenden (Einstellung „Reiter in der Leiste“): DATEI und PAPIER bleiben immer, Objekte
-ausgeblendeter Reiter bleiben bearbeitbar, Tastenkürzel wirken weiter."""
+"""Hiding tabs (setting "Tabs in the toolbar"): FILE and PAPER always stay, objects of
+hidden tabs stay editable, shortcuts keep working."""
 from PySide6.QtWidgets import QApplication
 
 from labelwerk.document import BarcodeObject, Document, TextObject
@@ -8,8 +8,8 @@ from labelwerk.gui.settings_dialog import SettingsDialog
 from labelwerk.gui.tools import TOOLS
 from labelwerk.settings import HIDEABLE_TOOLS, Settings
 
-from test_gui_cups import queue  # noqa: F401  (Fixture: CUPS-Warteschlangen Dymo/Laser)
-from test_gui_printers import workers  # noqa: F401  (Fixture)
+from test_gui_cups import queue  # noqa: F401  (fixture: CUPS queues Dymo/laser)
+from test_gui_printers import workers  # noqa: F401  (fixture)
 
 
 def _window(qtbot, objects=None, **settings):
@@ -21,7 +21,7 @@ def _window(qtbot, objects=None, **settings):
 
 
 def _checked(win) -> list[str]:
-    """Hervorgehobene Knöpfe in der Leiste (ausgeblendete zählen nicht – man sieht sie nicht)."""
+    """Highlighted buttons in the bar (hidden ones do not count – they are not visible)."""
     return [key for key, action in win.tool_actions.items()
             if action.isChecked() and action.isVisible()]
 
@@ -44,8 +44,8 @@ def test_selecting_an_object_of_a_hidden_tool_shows_its_panel(qtbot):
     win.canvas.set_selection([1])
     QApplication.processEvents()
     assert win.panels.currentWidget() is win.panel("barcode")
-    assert _checked(win) == []                                     # kein Knopf hervorgehoben
-    win.tool_actions["text"].trigger()                             # sichtbarer Reiter: normal
+    assert _checked(win) == []                                     # no button highlighted
+    win.tool_actions["text"].trigger()                             # visible tab: normal
     assert _checked(win) == ["text"] and win.panels.currentWidget() is win.panel("text")
 
 
@@ -130,7 +130,7 @@ def test_saving_settings_applies_hidden_tools_immediately(qtbot, monkeypatch):
     assert not win.tool_actions["layout"].isVisible()
 
 
-# --- SERIE erscheint, solange sie gebraucht wird -----------------------------------
+# --- SERIES appears as long as it is needed -----------------------------------------
 def test_series_button_appears_while_the_label_has_a_series(qtbot):
     from labelwerk.document import Numbering, Series
     win = _window(qtbot, hidden_tools=["series"])
@@ -157,7 +157,7 @@ def test_series_button_visible_with_driver_cut_options(qtbot, monkeypatch, queue
     win = printer_window(qtbot, monkeypatch, [], printer="cups:Dymo", hidden_tools=["series"])
     assert win.panel("series").driver_cuts
     assert win.tool_actions["series"].isVisible()
-    win.choose_printer("cups:Laser")                               # Treiber ohne Schnitt-Option
+    win.choose_printer("cups:Laser")                               # driver without a cut option
     assert not win.tool_actions["series"].isVisible()
 
 
@@ -167,7 +167,7 @@ def test_settings_dialog_explains_that_series_can_appear(qtbot, tmp_path):
     assert dialog.tools_note.objectName() == "note" and "Serie" in dialog.tools_note.text()
 
 
-# --- Nach SPEICHERN nur zurückfallen, wenn nötig -----------------------------------
+# --- After SAVE only fall back if necessary -----------------------------------------
 def _save_with(win, monkeypatch, **changes):
     class FakeDialog:
         DialogCode = SettingsDialog.DialogCode
@@ -215,12 +215,12 @@ def test_hiding_text_keeps_the_edit_mode(qtbot, monkeypatch):
     assert win.edit_session.active and win.panels.currentWidget() is win.panel("text")
 
 
-# --- Auswahl leer → zurück zu einem sichtbaren Reiter ------------------------------
+# --- Selection empty → back to a visible tab ----------------------------------------
 def test_empty_selection_leaves_a_hidden_panel(qtbot):
     win = _window(qtbot, objects=[TextObject("A"), BarcodeObject(kind="qr", data="X", module=4)],
                   hidden_tools=["barcode", "text"])
     win.tool_actions["layout"].trigger()
-    win.tool_actions["image"].trigger()                            # zuletzt benutzt: BILD
+    win.tool_actions["image"].trigger()                            # last used: IMAGE
     win.render_now()
     win.canvas.set_selection([1])
     QApplication.processEvents()
@@ -241,10 +241,10 @@ def test_empty_selection_without_a_last_tool_goes_to_paper(qtbot):
     win.canvas.set_selection([])
     QApplication.processEvents()
     assert win.panels.currentWidget() is win.panel("paper")
-    assert win.canvas.tool() == "select"                           # kein „Text anlegen“
+    assert win.canvas.tool() == "select"                           # no "add text"
 
 
-# --- Einstellungsdialog: Reiter beim Start folgt den Häkchen -----------------------
+# --- Settings dialog: tab at start follows the checkboxes ---------------------------
 def _enabled(combo, key) -> bool:
     return combo.model().item(combo.findData(key)).isEnabled()
 
@@ -266,10 +266,10 @@ def test_hiding_the_start_tab_switches_to_last_used(qtbot, tmp_path):
     assert dialog.values().start_tool == "last"
 
 
-# --- SERIE: Panel gezeigt → Knopf bleibt, bis der Reiter wechselt ------------------
+# --- SERIES: panel shown → button stays until the tab changes ------------------------
 def _series_window(qtbot):
     win = _window(qtbot, hidden_tools=["series"])
-    win.panel("series").numbering_button.click()                    # Nummerierung als Serie
+    win.panel("series").numbering_button.click()                    # numbering as a series
     win.render_now()
     assert win.doc.series is not None
     win.tool_actions["series"].trigger()
@@ -324,7 +324,7 @@ def test_start_tab_already_hidden_is_locked_without_restart_hint(qtbot, tmp_path
     dialog.show()
     assert not _enabled(dialog.start_tool, "series")
     assert not dialog.restart_hint.isVisible()
-    assert dialog.values().start_tool == "paper"                  # wie es tatsächlich startet
+    assert dialog.values().start_tool == "paper"                  # as it actually starts
 
 
 def test_start_with_hidden_tools_does_not_fall_back(qtbot):
@@ -333,8 +333,8 @@ def test_start_with_hidden_tools_does_not_fall_back(qtbot):
 
 
 def test_undo_after_a_shortcut_insert_leaves_the_hidden_panel(qtbot):
-    """Echtes Tastenkürzel fügt bei ausgeblendetem BARCODE ein (Panel nur für die Auswahl);
-    Strg+Z nimmt es zurück – leere Auswahl kehrt zu einem sichtbaren Reiter zurück."""
+    """A real shortcut inserts with BARCODE hidden (panel only for the selection);
+    Ctrl+Z takes it back – an empty selection returns to a visible tab."""
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     win = _window(qtbot, hidden_tools=["barcode"], shortcuts={"barcode.insert": "Ctrl+Shift+B"})

@@ -1,5 +1,5 @@
-"""Bild-Objekt einfügen und einstellen (Etappe 3d-2a, ohne Qt): Größe 1:1, Platz beim
-Einfügen, Zuschnitt umschalten, Seitenverhältnis."""
+"""Insert and adjust an image object (stage 3d-2a, without Qt): size 1:1, space when
+inserting, toggle cropping, aspect ratio."""
 import pytest
 from PIL import Image
 
@@ -16,7 +16,7 @@ def _image(w=600, h=300, dpi=300, crop=None, **kw) -> ImageObject:
     return obj
 
 
-# --- Modell: Auflösung, Ausschnitt, Größe 1:1 -----------------------------------------
+# --- Model: resolution, section, size 1:1 -----------------------------------------
 def test_from_image_keeps_dpi_for_one_to_one():
     obj = _image(dpi=150)
     assert obj.dpi == 150
@@ -50,8 +50,8 @@ def test_page_count_of_unreadable_pdf_is_a_clear_error(tmp_path):
         files.page_count(path)
 
 
-# --- Einfügen: Platz und Größe -------------------------------------------------------
-AREA = Rect(1.5, 1.0, 59.0, 38.0)          # z. B. 62 mm × 40 mm, feste Länge
+# --- Insert: space and size -------------------------------------------------------
+AREA = Rect(1.5, 1.0, 59.0, 38.0)          # e.g. 62 mm × 40 mm, fixed length
 
 
 def test_insert_frame_centres_image_one_to_one():
@@ -77,17 +77,17 @@ def test_insert_frame_at_point_stays_inside_area():
 
 
 def test_insert_frame_on_growing_tape_only_limits_across():
-    doc = Document("62", length_mm=None)                     # Endlos, automatische Länge
+    doc = Document("62", length_mm=None)                     # continuous, automatic length
     area = Rect(1.5, 1.0, 59.0, 10.0)
     rect, factor = layout.insert_frame(doc, "QL-600", area, (40, 80))
     assert factor == 1 and (rect.w, rect.h) == (40, 80)
-    assert rect.y == pytest.approx(area.y)                   # nicht vor den Anfang
+    assert rect.y == pytest.approx(area.y)                   # not before the start
     assert rect.cx == pytest.approx(area.cx)
     rect, factor = layout.insert_frame(doc, "QL-600", area, (40, 5000))
-    assert factor < 1 and rect.h < 1000                      # höchstens die größte Länge
+    assert factor < 1 and rect.h < 1000                      # at most the largest length
 
 
-# --- Einfügen: lieber drehen als verkleinern (wie print-file --rotate auto) --------------
+# --- Insert: rotate rather than shrink (like print-file --rotate auto) --------------
 def test_insert_placement_keeps_fitting_image_unturned():
     rect, rotation, factor = layout.insert_placement(Document("62", length_mm=40), "QL-600",
                                                      AREA, (20, 10))
@@ -97,11 +97,11 @@ def test_insert_placement_keeps_fitting_image_unturned():
 
 
 def test_insert_placement_turns_image_that_fits_only_turned():
-    doc = Document("62", length_mm=70)                       # 59 × 68 mm bedruckbar
+    doc = Document("62", length_mm=70)                       # 59 × 68 mm printable
     area = Rect(1.5, 1.0, 59.0, 68.0)
     rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (66, 34))
     assert (rotation, factor) == (90, 1)
-    assert (rect.w, rect.h) == (34, 66)                      # Rahmen auf dem Etikett (gedreht)
+    assert (rect.w, rect.h) == (34, 66)                      # frame on the label (rotated)
     assert (rect.cx, rect.cy) == pytest.approx((area.cx, area.cy))
 
 
@@ -113,7 +113,7 @@ def test_insert_placement_shrinks_only_when_neither_fits():
 
 
 def test_insert_placement_without_rotate_shrinks_instead_of_turning():
-    """Einstellung „nicht drehen“: die Internetmarke kommt quer und verkleinert (spart Band)."""
+    """Setting "do not rotate": the Internetmarke comes across and shrunk (saves tape)."""
     doc = Document("62", length_mm=None)
     area = Rect(1.5, 1.0, 59.0, 10.0)
     rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (70, 34),
@@ -123,8 +123,8 @@ def test_insert_placement_without_rotate_shrinks_instead_of_turning():
 
 
 def test_insert_placement_on_growing_tape_vertical_turns_wide_image():
-    """Endlosband, automatische Länge, senkrecht: quer begrenzt die Bandbreite, längs nur
-    die größte Etikettlänge – eine Internetmarke (70 × 34 mm) passt gedreht 1:1."""
+    """Continuous tape, automatic length, vertical: across limits the tape width, lengthwise only
+    the largest label length – an Internetmarke (70 × 34 mm) fits rotated 1:1."""
     doc = Document("62", length_mm=None)
     area = Rect(1.5, 1.0, 59.0, 10.0)
     rect, rotation, factor = layout.insert_placement(doc, "QL-600", area, (70, 34))
@@ -144,7 +144,7 @@ def test_insert_placement_on_growing_tape_horizontal_keeps_wide_image():
     assert (rotation, factor) == (90, 1) and (rect.w, rect.h) == (70, 34)
 
 
-# --- Endlosband: hinter vorhandene Objekte statt darüber ---------------------------------
+# --- Continuous tape: behind existing objects instead of on top ---------------------------------
 def test_insert_placement_without_overlap_stays_unchanged():
     doc = Document("62", length_mm=None)
     area = Rect(1.5, 1.0, 59.0, 10.0)
@@ -181,9 +181,9 @@ def test_insert_placement_explicit_point_and_fixed_length_ignore_others():
             == layout.insert_placement(fixed, "QL-600", AREA, (20, 10)))
 
 
-# --- Zuschnitt umschalten: Maßstab und Lage des Inhalts bleiben ------------------------
+# --- Toggle cropping: scale and position of the content stay ------------------------
 def test_set_crop_keeps_scale_and_content_in_place():
-    obj = _image(x_mm=10, y_mm=5)                            # 50,8 × 25,4 mm
+    obj = _image(x_mm=10, y_mm=5)                            # 50.8 × 25.4 mm
     cropped = layout.set_crop(obj, (60, 30, 360, 180))
     assert cropped.crop == (60, 30, 360, 180)
     assert (cropped.w_mm, cropped.h_mm) == pytest.approx((25.4, 12.7))
@@ -191,7 +191,7 @@ def test_set_crop_keeps_scale_and_content_in_place():
     back = layout.set_crop(cropped, None)
     assert back.crop is None
     assert (back.x_mm, back.y_mm, back.w_mm, back.h_mm) == pytest.approx((10, 5, 50.8, 25.4))
-    assert obj.crop is None                                  # Original bleibt
+    assert obj.crop is None                                  # original stays
 
 
 @pytest.mark.parametrize("rotation", [90, 180, 270])
@@ -199,15 +199,15 @@ def test_set_crop_of_rotated_image_keeps_content_in_place(rotation):
     obj = _image(x_mm=10, y_mm=5, rotation=rotation)
     back = layout.set_crop(layout.set_crop(obj, (60, 30, 360, 180)), None)
     assert (back.x_mm, back.y_mm) == pytest.approx((10, 5))
-    cropped = layout.set_crop(obj, (0, 0, 300, 150))         # linke obere Hälfte
+    cropped = layout.set_crop(obj, (0, 0, 300, 150))         # upper left half
     w, h = 25.4, 12.7
-    # wo die linke obere Ecke des Bilds nach dem Drehen liegt, bleibt der Ausschnitt
+    # where the upper left corner of the image lies after rotating, the section stays
     expected = {90: (10 + 25.4 - h, 5), 180: (10 + 50.8 - w, 5 + 25.4 - h),
                 270: (10, 5 + 50.8 - w)}[rotation]
     assert (cropped.x_mm, cropped.y_mm) == pytest.approx(expected)
 
 
-# --- Originalgröße, Seitenverhältnis, Größe im Panel ---------------------------------
+# --- Original size, aspect ratio, size in the panel ---------------------------------
 def test_original_size_is_one_to_one_and_keeps_corner():
     obj = _image(x_mm=3, y_mm=4, w_mm=10, h_mm=30, crop=(0, 0, 300, 300))
     original = layout.original_size(obj)
@@ -216,7 +216,7 @@ def test_original_size_is_one_to_one_and_keeps_corner():
 
 
 def test_keep_ratio_on_restores_ratio_from_width():
-    obj = _image(w_mm=40, h_mm=40, keep_ratio=False)          # verzerrt (2:1-Bild)
+    obj = _image(w_mm=40, h_mm=40, keep_ratio=False)          # distorted (2:1 image)
     kept = layout.set_keep_ratio(obj, True)
     assert kept.keep_ratio and (kept.w_mm, kept.h_mm) == pytest.approx((40, 20))
     free = layout.set_keep_ratio(kept, False)

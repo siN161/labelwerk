@@ -1,4 +1,4 @@
-"""Schreibmodus: direkt auf dem Etikett schreiben (Etappe 3d-1b)."""
+"""Edit mode: writing directly on the label (stage 3d-1b)."""
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QMouseEvent
@@ -56,12 +56,12 @@ def _double_click(canvas, pos):
 
 
 def _view_point(canvas, x_dots, y_dots):
-    """Punkt in Druckpunkten in Leserichtung → Ansichtskoordinaten."""
+    """Point in dots in reading direction → view coordinates."""
     return canvas.viewportTransform().map(canvas.sheet.mapToScene(QPointF(x_dots, y_dots)))
 
 
 def _char_point(window, index, pos):
-    """Ansichtspunkt der Schreibmarke vor Zeichen ``pos`` (halbe Zeilenhöhe) im Objekt."""
+    """View point of the caret before character ``pos`` (half line height) in the object."""
     rendered = window.rendered[index]
     x, top, h = rendered.layout.caret(pos)
     point = layout.from_object((x, top + h / 2), rendered, window.doc.objects[index].rotation)
@@ -86,7 +86,7 @@ def test_text_tool_click_starts_edit_mode_and_typing_lands_in_new_frame(window, 
     qtbot.waitUntil(editor.hasFocus, timeout=1000)
     QTest.keyClicks(editor, "Neu")
     assert window.doc.objects[2].text == "Neu"
-    assert window.rendered[2].layout.texts == ["Neu"]          # sofort gerendert, ohne Timer
+    assert window.rendered[2].layout.texts == ["Neu"]          # rendered immediately, without timer
     assert window.canvas.objects[2].rendered is window.rendered[2]
 
 
@@ -117,7 +117,7 @@ def test_editor_has_focus_while_editing(window, qtbot):
     _double_click(window.canvas, _char_point(window, 0, 1))
     editor = window.panel("text").edit
     qtbot.waitUntil(editor.hasFocus, timeout=1000)
-    _click(window.canvas, _char_point(window, 0, 3))         # Klick in den Rahmen
+    _click(window.canvas, _char_point(window, 0, 3))         # click into the frame
     assert editor.hasFocus() and editor.textCursor().position() == 3
     assert _session(window).active
 
@@ -132,7 +132,7 @@ def test_contents_field_is_gone_from_the_panel(window):
     assert "INHALT" not in sections
 
 
-# --- Ende ---------------------------------------------------------------------------
+# --- End ---------------------------------------------------------------------------
 def test_esc_ends_edit_mode_and_keeps_the_frame_selected(window, qtbot):
     _double_click(window.canvas, _char_point(window, 0, 1))
     editor = window.panel("text").edit
@@ -140,7 +140,7 @@ def test_esc_ends_edit_mode_and_keeps_the_frame_selected(window, qtbot):
     QTest.keyClick(editor, Qt.Key.Key_Escape)
     assert not _session(window).active
     assert window.canvas.selection() == [0]
-    qtbot.waitUntil(window.canvas.hasFocus, timeout=1000)   # Objekt-Kürzel gelten wieder
+    qtbot.waitUntil(window.canvas.hasFocus, timeout=1000)   # object shortcuts apply again
     assert window.canvas.editing() is None
 
 
@@ -167,7 +167,7 @@ def test_empty_new_frame_is_removed_when_edit_mode_ends(window, qtbot):
     assert window.canvas.selection() == []
 
 
-# --- Darstellung --------------------------------------------------------------------
+# --- Appearance ----------------------------------------------------------------
 def _expected_caret(window, index, pos):
     rendered = window.rendered[index]
     x, top, h = rendered.layout.caret(pos)
@@ -251,7 +251,7 @@ def test_hidden_editor_does_not_wrap_so_home_and_end_cover_the_paragraph(qtbot):
     assert editor.textCursor().position() == len("Max Mustermann Musterstraße")
 
 
-# --- Bedienung: Maus ------------------------------------------------------------------
+# --- Operation: mouse ------------------------------------------------------------------
 CTRL = Qt.KeyboardModifier.ControlModifier
 
 
@@ -274,7 +274,7 @@ def _drag(canvas, start, end, modifiers=NO_MOD):
 
 
 def _editing(qtbot, doc=None, index=0, pos=1):
-    """Fenster mit Objekt ``index`` im Schreibmodus, Schreibmarke vor Zeichen ``pos``."""
+    """Window with object ``index`` in edit mode, caret before character ``pos``."""
     win = _window(qtbot, doc if doc is not None else _plain_doc())
     _double_click(win.canvas, _char_point(win, index, pos))
     editor = win.panel("text").edit
@@ -293,7 +293,7 @@ def test_drag_inside_frame_selects_text_and_bold_formats_only_the_selection(qtbo
     before = (win.doc.objects[0].x_mm, win.doc.objects[0].y_mm)
     _drag(win.canvas, _char_point(win, 0, 4), _char_point(win, 0, 14))
     assert _selection(editor) == (4, 14)
-    assert (win.doc.objects[0].x_mm, win.doc.objects[0].y_mm) == before   # nicht verschoben
+    assert (win.doc.objects[0].x_mm, win.doc.objects[0].y_mm) == before   # not moved
     QTest.keyClick(editor, Qt.Key.Key_B, CTRL)
     spans = win.doc.objects[0].paragraphs[0].spans
     assert [(s.text, s.bold) for s in spans] == [("Max ", False), ("Mustermann", True)]
@@ -313,7 +313,7 @@ def test_shift_click_extends_the_selection(qtbot):
     assert _selection(editor) == (2, 9)
 
 
-# --- Bedienung: Tastatur --------------------------------------------------------------
+# --- Operation: keyboard --------------------------------------------------------------
 def test_arrows_move_the_caret_in_edit_mode_and_the_object_outside(qtbot):
     win, editor = _editing(qtbot, pos=3)
     x = win.doc.objects[0].x_mm
@@ -337,7 +337,7 @@ def test_up_and_down_follow_the_lines_on_the_label(qtbot):
     QTest.keyClick(editor, Qt.Key.Key_Up, SHIFT)
     assert _selection(editor) == (1, expected)
     QTest.keyClick(editor, Qt.Key.Key_Up)
-    assert editor.textCursor().position() == 0                  # über der ersten Zeile: Anfang
+    assert editor.textCursor().position() == 0                  # above the first line: the beginning
 
 
 def test_home_end_and_enter(qtbot):
@@ -367,7 +367,7 @@ def test_delete_and_backspace_delete_characters_not_the_object(qtbot):
 
 def test_copy_and_paste_text_in_edit_mode(qtbot):
     win, editor = _editing(qtbot)
-    _double_click(win.canvas, _char_point(win, 0, 1))      # Wort „Max“
+    _double_click(win.canvas, _char_point(win, 0, 1))      # word "Max"
     QTest.keyClick(editor, Qt.Key.Key_C, CTRL)
     QTest.keyClick(editor, Qt.Key.Key_End)
     QTest.keyClick(editor, Qt.Key.Key_V, CTRL)
@@ -385,11 +385,11 @@ def test_edit_bar_cut_and_paste_work_on_text_in_edit_mode(qtbot):
 
 @pytest.mark.parametrize("name", ["copy", "cut", "paste"])
 def test_clipboard_command_ending_edit_mode_does_not_fall_through_to_objects(qtbot, name):
-    """Endet der Schreibmodus während des Befehls, gilt der Befehl trotzdem als erledigt –
-    Ausschneiden nimmt dann nicht das ganze Objekt mit."""
+    """If edit mode ends during the command, the command still counts as done –
+    cutting then does not take the whole object along."""
     win, editor = _editing(qtbot)
     _double_click(win.canvas, _char_point(win, 0, 1))
-    setattr(editor, name, win.finish_editing)               # beendet den Schreibmodus sofort
+    setattr(editor, name, win.finish_editing)               # ends edit mode immediately
     assert getattr(_session(win), name)() is True
     assert not _session(win).active and len(win.doc.objects) == 2
 
@@ -398,18 +398,18 @@ def test_end_edit_is_a_fixed_action_of_edit_mode(window):
     action = window.shortcut_actions["text.end_edit"]
     assert action in window.panel("text").actions()
     assert action.shortcut().toString() == "Esc"
-    assert not action.isEnabled()                              # nur im Schreibmodus
+    assert not action.isEnabled()                              # only in edit mode
     _double_click(window.canvas, _char_point(window, 0, 1))
     assert action.isEnabled()
     action.trigger()
     assert not _session(window).active
 
 
-# --- Formatieren ----------------------------------------------------------------------
+# --- Formatting ----------------------------------------------------------------------
 def test_format_without_selection_in_edit_mode_applies_to_typing_only(qtbot):
     win, editor = _editing(qtbot, pos=3)
     win.panel("text").bold.click()
-    qtbot.waitUntil(editor.hasFocus, timeout=1000)             # Fokus zurück an die Schreibmarke
+    qtbot.waitUntil(editor.hasFocus, timeout=1000)             # focus back to the caret
     QTest.keyClicks(editor, "X")
     spans = win.doc.objects[0].paragraphs[0].spans
     assert [(s.text, s.bold) for s in spans] == [("Max", False), ("X", True),
@@ -427,12 +427,12 @@ def test_format_outside_edit_mode_applies_to_the_whole_frame(window):
 def test_size_for_typing_scales_the_caret(qtbot):
     win, editor = _editing(qtbot, pos=3)
     height = win.canvas.caret_line().length()
-    win.panel("text").set_size_pt(28)                         # 14 → 28 pt, nur fürs Weitertippen
+    win.panel("text").set_size_pt(28)                         # 14 → 28 pt, only for typing on
     assert win.doc.objects[0].text == "Max Mustermann"
     assert win.canvas.caret_line().length() == pytest.approx(2 * height, abs=2)
 
 
-# --- Rückgängig -----------------------------------------------------------------------
+# --- Undo -----------------------------------------------------------------------
 def test_one_finished_edit_is_one_undo_step(qtbot):
     win, editor = _editing(qtbot, pos=3)
     QTest.keyClicks(editor, "XY")
@@ -454,10 +454,10 @@ def test_ctrl_z_while_editing_is_the_editors_undo(qtbot):
     assert win.doc.objects[0].text == "Max Mustermann" and _session(win).active
     QTest.keyClick(editor, Qt.Key.Key_Z, CTRL | SHIFT)
     assert win.doc.objects[0].text == "MaxX Mustermann"
-    win.shortcut_actions["edit.undo"].trigger()               # Knopf: ebenfalls im Editor
+    win.shortcut_actions["edit.undo"].trigger()               # button: also in the editor
     assert win.doc.objects[0].text == "Max Mustermann" and _session(win).active
     QTest.keyClick(editor, Qt.Key.Key_Escape)
-    assert not win.shortcut_actions["edit.undo"].isEnabled()  # nichts geändert: kein Schritt
+    assert not win.shortcut_actions["edit.undo"].isEnabled()  # nothing changed: no step
 
 
 def test_new_frame_and_its_text_are_one_undo_step(window, qtbot):
@@ -470,7 +470,7 @@ def test_new_frame_and_its_text_are_one_undo_step(window, qtbot):
     assert [o.text for o in window.doc.objects] == ["Eins", "Zwei"]
 
 
-# --- Rahmen wächst --------------------------------------------------------------------
+# --- Frame grows --------------------------------------------------------------------
 def _anchor(window, index):
     obj, rendered = window.doc.objects[index], window.rendered[index]
     return layout.from_object(rendered.layout.anchor(layout.anchor_align(obj)), rendered,
@@ -487,7 +487,7 @@ def test_frame_grows_at_the_edge_of_the_alignment(qtbot, align, rotation):
     QTest.keyClicks(editor, "Wjg")
     after = _anchor(win, 0)
     assert win.rendered[0].layout.texts == ["EinsWjg"]
-    assert after == pytest.approx(before, abs=1)              # ±1 Druckpunkt
+    assert after == pytest.approx(before, abs=1)              # ±1 dot
     QTest.keyClick(editor, Qt.Key.Key_Backspace)
     assert _anchor(win, 0) == pytest.approx(before, abs=1)
 
@@ -519,12 +519,12 @@ def test_editor_keeps_focus_for_input_methods(qtbot):
 
 
 
-# --- Neuer Text: linksbündig ab dem Klickpunkt ----------------------------------------
+# --- New text: left-aligned from the click point ----------------------------------------
 def test_new_text_starts_left_aligned_at_the_click_point_and_grows_to_the_right(window, qtbot):
     window.shortcut_actions["tool.text"].trigger()
     click = _view_point(window.canvas, 30 * MM, 12 * MM)
     _click(window.canvas, click)
-    dot = window.canvas.px_per_mm() / MM                   # Bildschirmpixel je Druckpunkt
+    dot = window.canvas.px_per_mm() / MM                   # screen pixels per dot
     line = window.canvas.caret_line()
     assert line.p1().x() == pytest.approx(click.x(), abs=dot)
     assert line.p1().y() == pytest.approx(click.y(), abs=dot)
@@ -534,17 +534,17 @@ def test_new_text_starts_left_aligned_at_the_click_point_and_grows_to_the_right(
     assert [p.align for p in obj.paragraphs] == ["left"]
     x, y = layout.from_object(rendered.layout.anchor("left"), rendered, 0)
     assert (x, y) == pytest.approx((30 * MM, 12 * MM), abs=1)
-    assert rendered.x >= 30 * MM - 2 and rendered.w > 0          # wächst nach rechts
+    assert rendered.x >= 30 * MM - 2 and rendered.w > 0          # grows to the right
 
 
-# --- Fokus bleibt im Schreibmodus ---------------------------------------------------------
+# --- Focus stays in edit mode ---------------------------------------------------------
 @pytest.mark.parametrize("key", [Qt.Key.Key_Tab, Qt.Key.Key_Backtab])
 def test_tab_keeps_focus_in_the_text(qtbot, key):
     win, editor = _editing(qtbot, pos=3)
     QTest.keyClick(QApplication.focusWidget(), key)
     assert QApplication.focusWidget() is editor
     QTest.keyClicks(QApplication.focusWidget(), "x")
-    assert win.doc.objects[0].text == "Maxx Mustermann"           # Tab fügt nichts ein
+    assert win.doc.objects[0].text == "Maxx Mustermann"           # Tab inserts nothing
     QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Escape)
     assert not _session(win).active
 
@@ -591,15 +591,15 @@ def test_keyboard_in_font_box_while_editing_stays_in_the_box(qtbot):
     start = family.currentIndex()
     QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Down)
     QTest.keyClick(QApplication.focusWidget(), Qt.Key.Key_Down)
-    assert family.currentIndex() == min(start + 2, family.count() - 1)   # auch bei wenigen Schriften
+    assert family.currentIndex() == min(start + 2, family.count() - 1)   # also with few fonts
     assert editor.textCursor().position() == 3 and not editor.hasFocus()
     family.showPopup()
-    family.hidePopup()                                          # Auswahl fertig: weiter tippen
-    win.activateWindow()                                        # offscreen: Liste nahm sie mit
+    family.hidePopup()                                          # choice done: keep typing
+    win.activateWindow()                                        # offscreen: the list took it along
     qtbot.waitUntil(editor.hasFocus, timeout=1000)
 
 
-# --- Leerer neuer Rahmen entfällt auf jedem Weg ---------------------------------------------
+# --- Empty new frame is dropped on every path ---------------------------------------------
 @pytest.mark.parametrize("leave", [lambda w: w.shortcut_actions["tool.select"].trigger(),
                                    lambda w: w.shortcut_actions["tool.text"].trigger(),
                                    lambda w: w.tool_actions["paper"].trigger(),
@@ -617,21 +617,21 @@ def test_undo_in_an_empty_new_frame_only_removes_the_frame(window):
     window.create_text(30, 12)
     window.shortcut_actions["edit.undo"].trigger()
     assert [o.text for o in window.doc.objects] == ["Eins", "Zwei"]
-    assert window.doc.objects[1].x_mm == pytest.approx(5)          # Verschieben bleibt
+    assert window.doc.objects[1].x_mm == pytest.approx(5)          # moving stays
     window.shortcut_actions["edit.redo"].trigger()
-    assert len(window.doc.objects) == 2                           # kein leerer Rahmen zurück
+    assert len(window.doc.objects) == 2                           # no empty frame comes back
 
 
 def test_keyboard_undo_falls_through_like_the_button(qtbot):
     win, editor = _editing(qtbot, pos=3)
     QTest.keyClick(editor, Qt.Key.Key_Escape)
     win.canvas.set_selection([0])
-    win.nudge(1, 0)                                              # Schritt im Dokument
+    win.nudge(1, 0)                                              # step in the document
     _double_click(win.canvas, _char_point(win, 0, 3))
     QTest.keyClicks(editor, "X")
-    QTest.keyClick(editor, Qt.Key.Key_Z, CTRL)                   # im Editor
+    QTest.keyClick(editor, Qt.Key.Key_Z, CTRL)                   # in the editor
     assert win.doc.objects[0].text == "Max Mustermann" and _session(win).active
-    QTest.keyClick(editor, Qt.Key.Key_Z, CTRL)                   # weiter im Dokument
+    QTest.keyClick(editor, Qt.Key.Key_Z, CTRL)                   # on in the document
     assert not _session(win).active
     assert win.doc.objects[0].x_mm == pytest.approx(4)
 
@@ -642,7 +642,7 @@ def test_keyboard_undo_with_nothing_to_undo_keeps_edit_mode(qtbot):
     assert _session(win).active and win.doc.objects[0].text == "Max Mustermann"
 
 
-# --- Rahmen umschließt Schreibmarke und Markierung ----------------------------------------
+# --- Frame encloses caret and selection ----------------------------------------
 @pytest.mark.parametrize("rotation", [0, 90, 270])
 def test_edit_frame_encloses_caret_and_selection(qtbot, rotation):
     win, editor = _editing(qtbot, _plain_doc(_plain("Max\nMustermann", 10, 10, rotation=rotation)),
@@ -655,7 +655,7 @@ def test_edit_frame_encloses_caret_and_selection(qtbot, rotation):
     assert all(frame.contains(rect) for rect in win.canvas.selection_rects())
 
 
-# --- Zeichen außerhalb der BMP (UTF-16) ---------------------------------------------------
+# --- Characters outside the BMP (UTF-16) ---------------------------------------------------
 def test_emoji_positions_for_click_caret_and_selection(qtbot):
     text = "a\U0001F600b c"
     win, editor = _editing(qtbot, _plain_doc(_plain(text, 4, 4, align="left")), pos=0)
@@ -666,7 +666,7 @@ def test_emoji_positions_for_click_caret_and_selection(qtbot):
         assert win.canvas.caret_line().p1().x() == pytest.approx(start.x(), abs=1)
     cursor = editor.textCursor()
     cursor.setPosition(0)
-    cursor.setPosition(to_utf16(text, 2), cursor.MoveMode.KeepAnchor)   # „a😀“
+    cursor.setPosition(to_utf16(text, 2), cursor.MoveMode.KeepAnchor)   # "a😀"
     editor.setTextCursor(cursor)
     (rect,) = win.canvas.selection_rects()
     assert rect.left() == pytest.approx(_char_point(win, 0, 0).x(), abs=1)
@@ -675,13 +675,13 @@ def test_emoji_positions_for_click_caret_and_selection(qtbot):
     assert win.doc.objects[0].text == "Zb c"
 
 
-# --- Schlussrunde: Einfügen-Knopf, Rollenwechsel, Wiederherstellen, F2/Enter -----------------
+# --- Final round: Insert button, roll change, redo, F2/Enter -----------------
 def test_paste_button_follows_the_system_clipboard_in_edit_mode(qtbot):
     win, editor = _editing(qtbot)
     QApplication.clipboard().setText("")
     win._update_edit_actions()
     assert not win.shortcut_actions["edit.paste"].isEnabled()
-    _double_click(win.canvas, _char_point(win, 0, 1))              # Wort markieren
+    _double_click(win.canvas, _char_point(win, 0, 1))              # select word
     QTest.keyClick(editor, Qt.Key.Key_C, CTRL)
     assert win.shortcut_actions["edit.paste"].isEnabled()
     QApplication.clipboard().setText("")
@@ -716,12 +716,12 @@ def test_redo_falls_through_to_the_document_like_undo(qtbot):
     win, editor = _editing(qtbot, pos=3)
     QTest.keyClicks(editor, "X")
     QTest.keyClick(editor, Qt.Key.Key_Escape)
-    win.shortcut_actions["edit.undo"].trigger()                    # Text zurück, Wiederherstellen offen
+    win.shortcut_actions["edit.undo"].trigger()                    # text back, redo available
     assert win.doc.objects[0].text == "Max Mustermann"
     _double_click(win.canvas, _char_point(win, 0, 3))
     assert _session(win).active
     redo = win.shortcut_actions["edit.redo"]
-    assert redo.isEnabled()                                        # Knopf: im Dokument weiter
+    assert redo.isEnabled()                                        # button: continues in the document
     QTest.keyClick(editor, Qt.Key.Key_Z, CTRL | SHIFT)
     assert not _session(win).active
     assert win.doc.objects[0].text == "MaxX Mustermann"
@@ -764,7 +764,7 @@ def test_start_edit_shortcuts_are_in_the_directory():
 
 
 def test_font_is_shown_again_after_deselect_and_reselect(qtbot):
-    # Abwählen leert das Schriftfeld; erneutes Wählen muss die Schrift wieder zeigen
+    # Deselecting clears the font field; selecting again must show the font again
     win = MainWindow(settings=Settings(check_media_on_start=False, font_family="DejaVu Sans"))
     qtbot.addWidget(win)
     win.show()

@@ -1,4 +1,4 @@
-"""Arbeitsfläche bei Etiketten anderer Auflösung: echte Größe, mm-Umrechnung, Schreibmarke."""
+"""Canvas for labels of another resolution: real size, mm conversion, caret."""
 import pytest
 
 from labelwerk.document import Document, TextObject

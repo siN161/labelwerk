@@ -1,4 +1,4 @@
-"""Kommandozeile: labelwerk labels | print "Text" | print-file datei.pdf | parcel marke.pdf | media |
+"""Command line: labelwerk labels | print "Text" | print-file file.pdf | parcel label.pdf | media |
 printers | fonts | install-desktop"""
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from .storage import os_reason
 
 
 def _font_size(value: str) -> float | None:
-    """'auto' (= None) oder Größe in pt, 4–100."""
+    """'auto' (= None) or size in pt, 4–100."""
     if value.lower() == "auto":
         return None
     try:
@@ -38,10 +38,10 @@ def _font_size(value: str) -> float | None:
 
 def _margin(value: str) -> float:
     try:
-        mm = i18n.parse_number(value)                  # Komma und Punkt
+        mm = i18n.parse_number(value)                  # comma and dot
     except ValueError:
         mm = float("nan")
-    if not 0 <= mm <= MAX_MARGIN_MM:      # nan fällt hier ebenfalls durch
+    if not 0 <= mm <= MAX_MARGIN_MM:      # nan also falls through here
         raise argparse.ArgumentTypeError(_("Margin: number from 0 to {max} mm").format(
             max=i18n.number(MAX_MARGIN_MM)))
     return mm
@@ -63,11 +63,11 @@ def _add_output_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--preview", metavar="PNG", help=_("only save a preview, do not print"))
 
 
-_UNSET = object()   # -s nicht angegeben (None bedeutet „auto“)
+_UNSET = object()   # -s not given (None means “auto”)
 
 
-# Texte von argparse selbst (Python übersetzt sie nicht): markiert für die Übersetzung, eingesetzt
-# über ``argparse._`` – fehlt eine (andere Python-Version), bleibt sie englisch
+# Texts of argparse itself (Python does not translate them): marked for translation, inserted
+# via ``argparse._`` – if one is missing (other Python version), it stays English
 ARGPARSE_TEXTS = (NP_("argparse", "usage: "), NP_("argparse", "positional arguments"),
                   NP_("argparse", "options"), NP_("argparse", "show this help message and exit"),
                   NP_("argparse", "%(prog)s: error: %(message)s\n"),
@@ -84,12 +84,12 @@ def _translate_argparse() -> None:
 
 
 def _language(argv: list[str]) -> str:
-    """``--lang de|en`` (vor dem Bau des Parsers: seine Hilfe ist schon übersetzt), sonst die
-    Einstellung, sonst die Sprache des Systems."""
+    """``--lang de|en`` (before building the parser: its help is already translated), otherwise the
+    setting, otherwise the system language."""
     for i, arg in enumerate(argv):
         if arg == "--" or not arg.startswith("-") and argv[i - 1:i] != ["-m"] \
                 and argv[i - 1:i] != ["--model"] and argv[i - 1:i] != ["--lang"]:
-            break                                       # Unterbefehl bzw. Ende der Optionen
+            break                                       # subcommand or end of the options
         if arg == "--lang" and i + 1 < len(argv):
             return argv[i + 1]
         if arg.startswith("--lang="):
@@ -161,7 +161,7 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
-# kein Drucker gefunden, je Backend – übersetzt beim Melden (``{not_found}``: PRINTER_NOT_FOUND)
+# no printer found, per backend – translated when reported (``{not_found}``: PRINTER_NOT_FOUND)
 _NOT_DETECTED = {
     "linux_kernel": N_("{not_found}\nSpecify manually with -p file:///dev/usb/lpN"),
     "pyusb": N_("Brother printer not found via USB (pyusb).\n"
@@ -178,25 +178,25 @@ _NOT_DETECTED = {
 
 
 def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
-    """Drucker, auf den sich der Befehl bezieht: ``-p`` (gefunden oder aus der URI beschrieben),
-    bei ``-p auto`` per pyusb bzw. der gewählte/erste aus sysfs und den eingetragenen
-    Netzwerkdruckern (``-b`` grenzt ein); None = keiner."""
+    """Printer the command refers to: ``-p`` (found or described from the URI),
+    with ``-p auto`` via pyusb or the chosen/first one from sysfs and the registered
+    network printers (``-b`` narrows it down); None = none."""
     wanted = getattr(args, "printer", "auto")
     backend = getattr(args, "backend", None)
     if backend == "pyusb" and wanted == "auto":
         uri = find_brother_usb()
         return printers.printer_for(uri, []) if uri else None
-    # CUPS nur fragen, wenn es darum geht (lpstat kann dauern)
+    # only ask CUPS when it matters (lpstat can take a while)
     with_cups = (wanted.startswith("cups:") or backend == "cups"
                  or wanted == "auto" and settings.printer.startswith("cups:"))
-    if wanted != "auto":                            # angegeben: nichts einzuordnen
+    if wanted != "auto":                            # given: nothing to classify
         return printers.printer_for(wanted, _all_printers(settings, cups=with_cups, office=True))
-    args.hidden_office = []                         # ausgeblendete Bürodrucker (Meldung)
+    args.hidden_office = []                         # hidden office printers (message)
     found = _all_printers(settings, cups=with_cups, hidden=args.hidden_office)
     if backend in ("network", "cups", "zebra"):
         found = [p for p in found if p.source == backend]
         if backend == "cups" and not settings.printer.startswith("cups:"):
-            return found[0] if found else None      # ausdrücklich CUPS: die erste Warteschlange
+            return found[0] if found else None      # explicitly CUPS: the first queue
     elif backend == "linux_kernel":
         found = [p for p in found if p.source == "usb"]
     return printers.choose(found, settings.printer)
@@ -204,8 +204,8 @@ def _target(args: argparse.Namespace, settings) -> printers.Printer | None:
 
 def _all_printers(settings, cups: bool = True, office: bool | None = None,
                   hidden: list[str] | None = None) -> list[printers.Printer]:
-    """Direkt per USB, eingetragene Netzwerkdrucker und (``cups``) Warteschlangen von CUPS;
-    Bürodrucker nur mit ``office`` (None = Einstellung ``cups_all``), ausgeblendete sammelt
+    """Directly via USB, registered network printers and (``cups``) CUPS queues;
+    office printers only with ``office`` (None = setting ``cups_all``), hidden ones are collected by
     ``hidden``."""
     direct = (printers.usb_printers() + printers.zebra_printers(dpi=settings.zebra_dpi)
               + printers.network_printers(network_entries(settings)))
@@ -215,8 +215,8 @@ def _all_printers(settings, cups: bool = True, office: bool | None = None,
 
 
 def _resolve_model(model: str, target: printers.Printer | None, settings) -> str:
-    """``-m auto``: Modell des Zieldruckers, sonst Ersatzmodell bzw. zuletzt erkanntes aus den
-    Einstellungen; ein angegebenes muss bekannt sein."""
+    """``-m auto``: model of the target printer, otherwise the fallback model or the last detected
+    one from the settings; a given one must be known."""
     if model != "auto":
         if not printers.is_model(model):
             raise ValueError(_("Unknown printer model {model!r} – allowed: {models}, "
@@ -227,7 +227,7 @@ def _resolve_model(model: str, target: printers.Printer | None, settings) -> str
 
 
 def _auto_label(model: str, target: printers.Printer | None) -> str:
-    """``-l auto``: Etikett zur eingelegten Rolle (Statusabfrage per USB beim Zieldrucker) – sonst
+    """``-l auto``: label for the inserted roll (status query via USB on the target printer) – otherwise
     ValueError."""
     if target is not None and target.source != "usb":
         raise ValueError(_("-l auto (query the roll) only works with printers via USB."))
@@ -247,7 +247,7 @@ def _auto_label(model: str, target: printers.Printer | None) -> str:
 
 def _make_image(args: argparse.Namespace) -> Image.Image:
     if args.cmd == "print-file":
-        dpi = get_label(args.label).dpi                # PDF gleich in der Auflösung des Druckers
+        dpi = get_label(args.label).dpi                # PDF directly at the printer's resolution
         img = crop(load_file(args.file, page=args.page, dpi=dpi), dpi)
         rotate = args.rotate if args.rotate == "auto" else int(args.rotate)
         return fit_to_label(img, args.label, fit=args.fit, model=args.model, rotate=rotate,
@@ -295,7 +295,7 @@ def _send(img: Image.Image, args: argparse.Namespace) -> int:
 
 
 def _list_parcel_types(country: str) -> int:
-    """labelwerk parcel --list: Typen des Lands und eigene (Kennung, Name, Prüfstand)."""
+    """labelwerk parcel --list: types of the country and own ones (ID, name, tested status)."""
     for ptype in parcel.types(country):
         state = _("own") if ptype.own else (_("tested") if ptype.verified else _("untested"))
         print(f"{ptype.id:<24} {ptype.name} ({state})")
@@ -305,7 +305,7 @@ def _list_parcel_types(country: str) -> int:
 
 
 def _parcel(args: argparse.Namespace) -> int:
-    """labelwerk parcel DATEI: Typ erkennen (bzw. --type), umwandeln, Vorschau oder drucken."""
+    """labelwerk parcel FILE: detect type (or --type), convert, preview or print."""
     try:
         source = parcel.load(args.file)
         if args.type == "auto":
@@ -352,8 +352,8 @@ def _parcel(args: argparse.Namespace) -> int:
 
 
 def _show_printers(model: str, show_all: bool = False) -> int:
-    """Gefundene Drucker (USB, eingetragene Netzwerkdrucker, CUPS-Warteschlangen – Bürodrucker nur
-    mit ``show_all`` bzw. Einstellung ``cups_all``) und unterstützte Modelle."""
+    """Found printers (USB, registered network printers, CUPS queues – office printers only
+    with ``show_all`` or setting ``cups_all``) and supported models."""
     hidden = []
     found = _all_printers(load_settings(), office=True if show_all else None, hidden=hidden)
     for p in found:
@@ -403,7 +403,7 @@ def _show_media(model: str, target: printers.Printer | None) -> int:
 
 
 def _apply_settings(args: argparse.Namespace) -> None:
-    """Nicht angegebene Optionen mit den Standardwerten aus den Einstellungen füllen."""
+    """Fill options that were not given with the defaults from the settings."""
     settings = load_settings(model=args.model)
     for warning in settings.warnings:
         print(warning, file=sys.stderr)
@@ -411,7 +411,7 @@ def _apply_settings(args: argparse.Namespace) -> None:
         args.label = settings.label_id
     if getattr(args, "label", None) == "auto":
         args.label = _auto_label(args.model, args.target)
-    if hasattr(args, "label") and get_label(args.label).id not in {   # unbekannt: ValueError
+    if hasattr(args, "label") and get_label(args.label).id not in {   # unknown: ValueError
             label.id for label in labels_for_model(args.model)}:
         raise ValueError(_("Label {label!r} does not fit the {model} – see "
                            "'labelwerk -m {model} labels'").format(label=args.label,
@@ -504,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         _apply_settings(args)
-    except (ValueError, MediaError) as e:            # -l auto: kein Drucker, keine Rolle
+    except (ValueError, MediaError) as e:            # -l auto: no printer, no roll
         print(e, file=sys.stderr)
         return 2
 

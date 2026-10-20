@@ -1,5 +1,5 @@
-"""Zebra direkt (ZPL): Aufbau, Kompression (zurückgelesen mit einem eigenen Decoder), Erkennung
-per sysfs, Senden (Gerät/Socket ersetzt) – kein Test spricht einen Drucker oder das Netz an."""
+"""Zebra direct (ZPL): structure, compression (read back with a separate decoder), detection
+via sysfs, sending (device/socket replaced) – no test talks to a printer or the network."""
 import random
 import re
 
@@ -12,8 +12,8 @@ from labelwerk.printer import PrintError, print_image
 
 
 def decode(text: str) -> Image.Image:
-    """``^GFA,total,total,je_zeile,daten`` → Bild (schwarz = Punkt), Kompression nach Zebra
-    zeichenweise zurückgelesen (für die Tests)."""
+    """``^GFA,total,total,per_row,data`` → image (black = dot), compression read back
+    character by character in the Zebra way (for the tests)."""
     m = re.search(r"\^GFA,(\d+),(\d+),(\d+),([^^]*)", text)
     total, row_bytes, data = int(m[1]), int(m[3]), m[4]
     width = row_bytes * 2
@@ -52,12 +52,12 @@ def _picture(w, h, seed=1):
     for _ in range(40):
         x, y = rnd.randrange(w), rnd.randrange(h)
         pen.rectangle((x, y, x + rnd.randrange(1, 60), y + rnd.randrange(1, 9)), fill=0)
-    for x in range(0, w, 7):                                 # Muster: keine Wiederholungen
+    for x in range(0, w, 7):                                 # pattern: no repetitions
         img.putpixel((x, h // 2), 0)
     return img
 
 
-# --- Kompression --------------------------------------------------------------------------------
+# --- Compression --------------------------------------------------------------------------------
 @pytest.mark.parametrize("n, code", [(2, "H"), (19, "Y"), (20, "g"), (21, "gG"), (400, "z"),
                                      (419, "zY")])
 def test_repeat_counts(n, code):
@@ -76,7 +76,7 @@ def test_graphic_reads_back_exactly(size):
     img = _picture(*size)
     back = decode(zpl.graphic(img))
     assert back.crop((0, 0, *size)).tobytes() == img.tobytes()
-    if back.width > size[0]:                                  # Füllbits am Zeilenende: weiß
+    if back.width > size[0]:                                  # padding bits at the end of the row: white
         assert back.crop((size[0], 0, back.width, size[1])).getextrema() == (255, 255)
 
 
@@ -90,7 +90,7 @@ def test_fixed_reference_rows():
 
 
 def test_large_images_go_in_bands():
-    img = Image.new("1", (1224, 1830), 1)                     # 102 × 152 mm bei 12 Punkten/mm
+    img = Image.new("1", (1224, 1830), 1)                     # 102 × 152 mm at 12 dots/mm
     text = zpl.fields(img)
     sizes = [int(n) for n in re.findall(r"\^GFA,(\d+),", text)]
     assert max(sizes) <= zpl.MAX_GRAPHIC and sum(sizes) == 153 * 1830
@@ -108,21 +108,21 @@ def test_build_one_stream_per_series():
     img = Image.new("1", (label.width, label.height), 1)
     data = zpl.build([img, img], "C").decode()
     assert data.count("^XA^MMC^PW456^LL256^LH0,0^FO0,0^GFA,") == 2 and data.count("^XZ") == 2
-    assert zpl.build([img]).startswith(b"^XA^PW456")          # Standard: kein ^MM
+    assert zpl.build([img]).startswith(b"^XA^PW456")          # default: no ^MM
     with pytest.raises(ValueError, match="Modus"):
         zpl.build([img], "X")
 
 
-# --- Modelle und Erkennung ----------------------------------------------------------------------
+# --- Models and detection ----------------------------------------------------------------------
 def test_zebra_models_and_labels():
     assert zpl.is_model("zpl:203") and not zpl.is_model("zpl:250") and not zpl.is_model(None)
     assert printers.is_model("zpl:300")
-    caps = printers.capabilities("zpl:203")             # Schneiden: Modus im Reiter SERIE
+    caps = printers.capabilities("zpl:203")             # cutting: mode in the SERIES tab
     assert not caps.cutter and not caps.two_color and not caps.tested
-    labels = labels_for_model("zpl:300")                   # 12 Punkte/mm = 304,8 dpi
+    labels = labels_for_model("zpl:300")                   # 12 dots/mm = 304.8 dpi
     assert labels[0].id == "51x25mm@305" and labels[0].dpi == 305 and len(labels) == len(zpl.MEDIA)
     assert labels_for_model("zpl:600")[0].id == "51x25mm@610"
-    assert get_label("102x152mm@305").width == 1225             # 102 mm × 12 = 1224 (305 statt 304,8)
+    assert get_label("102x152mm@305").width == 1225             # 102 mm × 12 = 1224 (305 instead of 304.8)
 
 
 def _sys_printer(root, name, vendor, ieee="", product=""):
@@ -154,9 +154,9 @@ def test_zebra_on_usb_is_found_with_its_resolution(tmp_path):
         ("zpl+file:///dev/usb/lp2", "zpl:300", "ZTC ZD420-300dpi ZPL · lp2", "zebra"),
         ("zpl+file:///dev/usb/lp3", "zpl:203", "ZTC GK420d · lp3", "zebra")]
     assert [p.uri for p in printers.usb_printers(tmp_path / "usbmisc")] == ["file:///dev/usb/lp1"]
-    _sys_printer(tmp_path, "lp4", "0a5f", "MFG:Zebra;CMD:EPL2;MDL:LP2844;")     # nur EPL: nicht
+    _sys_printer(tmp_path, "lp4", "0a5f", "MFG:Zebra;CMD:EPL2;MDL:LP2844;")     # EPL only: not
     assert len(printers.zebra_printers(tmp_path / "usbmisc")) == 2
-    forced = printers.zebra_printers(tmp_path / "usbmisc", dpi=600)       # Einstellung gilt
+    forced = printers.zebra_printers(tmp_path / "usbmisc", dpi=600)       # setting applies
     assert [p.model for p in forced] == ["zpl:600", "zpl:600"]
 
 
@@ -171,10 +171,10 @@ def test_network_zebra_and_given_uris():
     assert printers.backend_for("zpl+file:///dev/usb/lp2") == "zpl"
 
 
-# --- Drucken ------------------------------------------------------------------------------------
+# --- Printing ------------------------------------------------------------------------------------
 @pytest.fixture
 def any_file(monkeypatch):
-    """Eine Datei gilt als Druckergerät (Tests schreiben nie an /dev/usb)."""
+    """A file counts as the printer device (tests never write to /dev/usb)."""
     monkeypatch.setattr(zpl, "_is_device", lambda info: True)
 
 
@@ -203,7 +203,7 @@ def test_print_over_the_network(monkeypatch):
             sent["write_timeout"] = value
 
         def send(self, data):
-            sent["data"] = sent.get("data", b"") + bytes(data[:1000])     # langsamer Drucker
+            sent["data"] = sent.get("data", b"") + bytes(data[:1000])     # slow printer
             return min(len(data), 1000)
 
     def connect(address, timeout):
@@ -214,7 +214,7 @@ def test_print_over_the_network(monkeypatch):
     print_image(Image.new("1", (label.width, label.height), 1), label.id, model="zpl:203",
                 printer="zpl+tcp://10.0.0.8:9100")
     assert sent["address"] == ("10.0.0.8", 9100) and sent["timeout"] == zpl.TIMEOUT_S
-    assert sent["write_timeout"] == zpl.WRITE_TIMEOUT_S          # je Block, nicht für alles
+    assert sent["write_timeout"] == zpl.WRITE_TIMEOUT_S          # per block, not for everything
     assert sent["data"].startswith(b"^XA^PW408^LL200") and sent["data"].endswith(b"^XZ\n")
 
 
@@ -226,7 +226,7 @@ def test_send_errors_are_readable(tmp_path, monkeypatch):
     (tmp_path / "datei").write_bytes(b"")
     with pytest.raises(PrintError, match="kein Druckergerät"):
         print_image(img, label.id, model="zpl:203", printer=f"zpl+file://{tmp_path}/datei")
-    assert not (tmp_path / "fehlt").exists()                   # nie eine Datei angelegt
+    assert not (tmp_path / "fehlt").exists()                   # no file ever created
 
     def refuse(address, timeout):
         raise ConnectionRefusedError(111, "Connection refused")
@@ -265,7 +265,7 @@ def test_series_is_streamed_label_by_label(tmp_path, any_file):
             made.append(n)
             yield Image.new("1", (label.width, label.height), 1)
     chunks = zpl.stream(images())
-    assert made == []                                          # erst beim Senden erzeugt
+    assert made == []                                          # only created on sending
     zpl.send(chunks, f"zpl+file://{tmp_path}/lp2") if (tmp_path / "lp2").write_bytes(b"") == 0 \
         else None
     assert made == [0, 1, 2] and (tmp_path / "lp2").read_bytes().count(b"^XZ") == 3

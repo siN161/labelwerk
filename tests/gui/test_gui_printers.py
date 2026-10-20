@@ -1,5 +1,5 @@
-"""Drucker-Kompatibilität in der GUI: Druckerwahl in der Statusleiste, Modellwechsel (Etiketten,
-Schnitt, Farbe), Netzwerkdrucker, Einstellungen, Farbe in Layout, Druck an den gewählten Drucker."""
+"""Printer compatibility in the GUI: printer choice in the status bar, model change (labels,
+cut, colour), network printers, settings, colour in LAYOUT, printing to the selected printer."""
 import pytest
 from PySide6.QtWidgets import QTableWidgetItem
 
@@ -51,14 +51,14 @@ def workers(monkeypatch):
     return FakeWorker.instances
 
 
-# --- Erkennen und wählen --------------------------------------------------------------------------
+# --- Detect and choose ----------------------------------------------------------------------------
 def test_detected_model_drives_labels_and_is_remembered(qtbot, monkeypatch):
     win = _window(qtbot, monkeypatch, [QL1100])
     assert win.model == "QL-1100" and "102" in _labels(win)
     assert win.printer_status.text() == "● QL-1100 · lp4 · ungeprüft"
     assert "Rückmeldung erwünscht" in win.printer_status.toolTip()
     assert win.settings.last_model == "QL-1100"
-    assert load_settings().last_model == "QL-1100"                 # gespeichert
+    assert load_settings().last_model == "QL-1100"                 # saved
 
 
 def test_tested_model_has_no_marker(qtbot, monkeypatch):
@@ -98,7 +98,7 @@ def test_network_printer_from_the_settings(qtbot, monkeypatch, workers):
     win = _window(qtbot, monkeypatch, [], network_printers=[
         {"name": "Büro", "host": "10.0.0.5", "model": "QL-720NW"}])
     assert win.printer.uri == "tcp://10.0.0.5:9100" and win.model == "QL-720NW"
-    assert not win.panel("paper").check.isEnabled()                   # Medium prüfen nur USB
+    assert not win.panel("paper").check.isEnabled()                   # check media only USB
     assert "nur bei Brother-Druckern per USB" in win.panel("paper").check.toolTip()
     win.panel("text").edit.setPlainText("Hallo")
     win.print_label()
@@ -111,10 +111,10 @@ def test_network_status_says_sent(qtbot, monkeypatch):
     assert win.result.text() == "Gesendet ✓ (der Drucker meldet keinen Status zurück)"
 
 
-# --- Modellwechsel -------------------------------------------------------------------------------
+# --- Model change --------------------------------------------------------------------------------
 def test_label_that_does_not_fit_stays_with_a_hint(qtbot, monkeypatch):
     win = _window(qtbot, monkeypatch, [QL1100], doc=Document("102", objects=[TextObject("A")]))
-    win.files.origin = "file"                        # geöffnete Datei: bleibt bei ihrem Etikett
+    win.files.origin = "file"                        # opened file: stays with its label
     found = [QL600]
     monkeypatch.setattr(main_window, "usb_printers", lambda: found)
     win.refresh_printer()
@@ -140,7 +140,7 @@ def test_fixed_model_is_not_replaced(qtbot, monkeypatch):
     assert win.model == "QL-600"
 
 
-# --- Farbe ---------------------------------------------------------------------------------------
+# --- Colour --------------------------------------------------------------------------------------
 def test_color_buttons_need_a_red_label_on_a_two_color_printer(qtbot, monkeypatch):
     win = _window(qtbot, monkeypatch, [QL600])
     win.canvas.set_selection([0])
@@ -171,7 +171,7 @@ def test_red_series_keeps_red(qtbot, monkeypatch, workers):
                for img in images)
 
 
-# --- Einstellungen -------------------------------------------------------------------------------
+# --- Settings ------------------------------------------------------------------------------------
 def test_settings_dialog_edits_model_fallback_and_network_printers(qtbot, tmp_path):
     path = tmp_path / "s.json"
     dialog = SettingsDialog(Settings(printer="tcp://1.2.3.4:9100", last_model="QL-700",
@@ -209,7 +209,7 @@ def test_untested_models_are_marked_in_the_settings(qtbot, tmp_path):
     assert items[0] == "Automatisch (erkannt)" and "QL-600" in items and "QL-700 – ungeprüft" in items
 
 
-# --- Nachbesserungen nach dem Review --------------------------------------------------------------
+# --- Fixes after the review -----------------------------------------------------------------------
 def test_new_untouched_label_follows_the_printer(qtbot, monkeypatch):
     monkeypatch.setattr(main_window, "usb_printers", lambda: [QL600])
     win = MainWindow(settings=Settings(check_media_on_start=False, label_id="102"))
@@ -252,7 +252,7 @@ def test_black_stays_available_and_red_needs_a_two_color_model(qtbot, monkeypatc
     red = _window(qtbot, monkeypatch, [QL600], doc=Document("62red", objects=[TextObject("B")]))
     red.files.origin = "file"
     red.canvas.set_selection([0])
-    assert not red.panel("layout").colors["red"].isEnabled()      # 62red, aber QL-600
+    assert not red.panel("layout").colors["red"].isEnabled()      # 62red, but QL-600
 
 
 def test_unfitting_entry_is_not_selectable_and_disappears(qtbot, monkeypatch):
@@ -296,7 +296,7 @@ def test_canvas_length_limits_follow_the_model(qtbot, monkeypatch):
     assert win.canvas.max_mm == pytest.approx(35434 * 25.4 / 300, abs=0.5)
 
 
-# --- Nachbesserungen nach dem Gesamt-Review -------------------------------------------------------
+# --- Fixes after the overall review ---------------------------------------------------------------
 NET = Printer("tcp://10.0.0.5:9100", "QL-720NW", "Büro · Netzwerk", "network")
 
 
@@ -330,7 +330,7 @@ def test_network_series_goes_out_as_one_job(monkeypatch):
                         lambda address, timeout: type("S", (), {"close": lambda self: None})())
     print_image([Image.new("RGB", (696, 100), "white")] * 25, "62", model="QL-720NW",
                 printer=NET.uri)
-    assert len(sent) == 1                    # kein Status übers Netz: Teile brächten nichts
+    assert len(sent) == 1                    # no status over the network: parts would not help
 
 
 def test_removed_network_printer_is_no_longer_chosen(qtbot, monkeypatch, tmp_path):
@@ -342,7 +342,7 @@ def test_removed_network_printer_is_no_longer_chosen(qtbot, monkeypatch, tmp_pat
         DialogCode = SettingsDialog.DialogCode
 
         def __init__(self, settings, model=None, parent=None, started=None):
-            self.saved = Settings(check_media_on_start=False)       # Eintrag entfernt
+            self.saved = Settings(check_media_on_start=False)       # entry removed
 
         def exec(self):
             return SettingsDialog.DialogCode.Accepted
@@ -362,7 +362,7 @@ def test_media_check_needs_the_chosen_printer(qtbot, monkeypatch):
 def test_media_result_of_a_previous_printer_is_ignored(qtbot, monkeypatch):
     from labelwerk.media import Media
     win = _window(qtbot, monkeypatch, [QL600, QL1100])
-    win._media_uri = QL1100.uri                       # Prüfung lief noch für den anderen
+    win._media_uri = QL1100.uri                       # check was still running for the other one
     win._media_signals = object()
     win._media_found(Media(102, 0, "endless"), "102")
     assert win.panel("paper").media_label is None and win.doc.label_id == "62"
@@ -375,7 +375,7 @@ def test_series_keeps_model_and_printer_of_its_start(qtbot, monkeypatch, workers
     win.ask_print_count = lambda n: True
     calls = []
 
-    def events(*a, **k):                              # während des Vorbereitens: anderer Drucker
+    def events(*a, **k):                              # while preparing: other printer
         if not calls:
             calls.append(1)
             monkeypatch.setattr(main_window, "usb_printers", lambda: [QL1100])

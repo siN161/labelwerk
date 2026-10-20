@@ -1,8 +1,8 @@
-"""QActions aus dem Kürzel-Verzeichnis (``shortcuts.ACTIONS``): eine je Aktion, Kürzel änderbar.
+"""QActions from the shortcut directory (``shortcuts.ACTIONS``): one per action, shortcut changeable.
 
-Wer eine Aktion nutzt, verbindet ``triggered`` und hängt sie an das passende Widget
-(globale ans Hauptfenster, „canvas“ an die Arbeitsfläche, „edit“ ans Text-Panel, in dem der
-Editor des Schreibmodus steckt).
+Whoever uses an action connects ``triggered`` and attaches it to the matching widget
+(global ones to the main window, "canvas" to the canvas, "edit" to the text panel that holds
+the editor of the edit mode).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ _CONTEXT = {
 
 
 def build_actions(parent: QObject, mapping: dict[str, str]) -> dict[str, QAction]:
-    """Je Aktion des Verzeichnisses eine QAction mit Name, Bereich und Kürzel aus ``mapping``."""
+    """One QAction per action of the directory, with name, scope and shortcut from ``mapping``."""
     actions = {}
     for entry in shortcuts.ACTIONS:
         action = QAction(_(entry.name), parent)
@@ -32,10 +32,10 @@ def build_actions(parent: QObject, mapping: dict[str, str]) -> dict[str, QAction
 
 
 def apply_shortcuts(actions: dict[str, QAction], mapping: dict[str, str]) -> None:
-    """Kürzel (z. B. nach dem Speichern der Einstellungen) setzen; Tooltip nennt das Kürzel."""
+    """Set the shortcuts (e.g. after saving the settings); the tooltip names the shortcut."""
     for action_id, action in actions.items():
         sequence = QKeySequence(mapping.get(action_id, ""))
-        if sequence.toString() == "Return":           # Enter auf dem Ziffernblock gilt mit
+        if sequence.toString() == "Return":           # Enter on the numeric keypad counts too
             action.setShortcuts([sequence, QKeySequence("Enter")])
         else:
             action.setShortcut(sequence)

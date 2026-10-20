@@ -1,7 +1,7 @@
-"""Längere Texte (Englisch/Deutsch) passen: in keinem Panel, im Einstellungsdialog und in der
-Werkzeugleiste ist ein Knopf oder eine Beschriftung abgeschnitten oder ragt über den Rand.
+"""Longer texts (English/German) fit: in no panel, in the settings dialog and in the
+toolbar is a button or a label cut off or sticking out over the edge.
 
-Mit ``LABELWERK_SHOTS=/ordner`` legt der Test Bildschirmfotos je Sprache und Panel ab (Abnahme).
+With ``LABELWERK_SHOTS=/folder`` the test saves screenshots per language and panel (acceptance).
 """
 import os
 from pathlib import Path
@@ -23,15 +23,15 @@ SHOTS = os.environ.get("LABELWERK_SHOTS")
 
 
 def _cut_off(root, limit: int | None = None) -> list[str]:
-    """Sichtbare Knöpfe/Beschriftungen, deren Text nicht ganz hineinpasst bzw. die über
-    ``limit`` (rechter Rand in Pixeln, bezogen auf ``root``) hinausragen."""
+    """Visible buttons/labels whose text does not fit completely or which stick out beyond
+    ``limit`` (right edge in pixels, relative to ``root``)."""
     problems = []
     for widget in root.findChildren(QAbstractButton) + root.findChildren(QLabel):
         if not widget.isVisibleTo(root) or not widget.text():
             continue
         text = widget.text().replace("\n", " ")
         if isinstance(widget, QLabel) and widget.wordWrap():
-            pass                                           # bricht um
+            pass                                           # wraps
         elif isinstance(widget, (QPushButton, QToolButton, QCheckBox, QRadioButton, QLabel)) \
                 and widget.width() < widget.minimumSizeHint().width() - 1:
             problems.append(f"abgeschnitten: {text!r} ({widget.width()} < "
@@ -47,8 +47,8 @@ def _cut_off(root, limit: int | None = None) -> list[str]:
 def language(request, qapp):
     i18n.set_language(request.param)
     QLocale.setDefault(QLocale(request.param))
-    translator = install_translations(qapp)                # Qt-Knöpfe („Speichern“) wie im Programm
-    qapp.setStyleSheet(load_theme())                       # RawBlock: Standard-Design
+    translator = install_translations(qapp)                # Qt buttons ("Save") as in the program
+    qapp.setStyleSheet(load_theme())                       # RawBlock: default theme
     yield request.param
     QLocale.setDefault(QLocale("de"))
     qapp.setStyleSheet("")
@@ -128,7 +128,7 @@ def test_settings_dialog_fits(qtbot, language, tmp_path):
     dialog = SettingsDialog(Settings(), tmp_path / "s.json")
     qtbot.addWidget(dialog)
     dialog.show()
-    dialog.zoom.setValue(150)                              # mit Neustart-Hinweis neben SPEICHERN
+    dialog.zoom.setValue(150)                              # with restart notice next to SAVE
     assert dialog.restart_hint.isVisible()
     QApplication.processEvents()
     assert _cut_off(dialog) == []

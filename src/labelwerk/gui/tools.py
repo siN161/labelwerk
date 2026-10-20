@@ -1,6 +1,6 @@
-"""Werkzeug-Registry: Werkzeugleiste und Panel-Stapel werden daraus erzeugt.
+"""Tool registry: the toolbar and the panel stack are generated from it.
 
-Ein neues Werkzeug ist ein neuer Eintrag in TOOLS.
+A new tool is a new entry in TOOLS.
 """
 from __future__ import annotations
 
@@ -23,13 +23,14 @@ from .panels.text import TextPanel
 @dataclass(frozen=True)
 class Tool:
     key: str
-    title: str                                 # englisch (N_), angezeigt wird _(title)
-    icon: str                                  # Name im Freedesktop-Icon-Theme
+    title: str                                 # English (N_), _(title) is displayed
+    icon: str                                  # name in the freedesktop icon theme
     panel: Callable[[Document], Panel]
-    tip: str = ""                              # Tooltip (sonst der Titel), englisch (N_)
+    tip: str = ""                              # tooltip (otherwise the title), English (N_)
 
 
-START_TOOL = "paper"                           # Reiter beim Start
+START_TOOL = "paper"                           # tab at startup
+
 
 TOOLS = [
     Tool("file", N_("File"), "document-open", FilePanel, N_("File and favorites")),

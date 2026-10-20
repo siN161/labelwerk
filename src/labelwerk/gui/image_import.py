@@ -1,8 +1,8 @@
-"""Bilder für das Werkzeug „Bild“ beschaffen: Datei, Zwischenablage, Ablegen.
+"""Obtain images for the IMAGE tool: file, clipboard, drop.
 
-SVG rastert Qt (``QSvgRenderer``) – so bleibt der Kern Qt-frei; alle anderen Dateien lädt
-``files.load_image``. Bilder aus der Zwischenablage oder abgelegte Bilddaten haben keine
-verlässliche Auflösung und gelten als 300 dpi.
+Qt rasterises SVG (``QSvgRenderer``) – so the core stays Qt-free; all other files are loaded by
+``files.load_image``. Images from the clipboard or dropped image data have no reliable
+resolution and count as 300 dpi.
 """
 from __future__ import annotations
 
@@ -24,30 +24,30 @@ from ..imaging import MAX_DPI, MAX_PIXELS, on_white
 from ..labels import DPI
 
 SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".pdf")
-ALLOWED = "PNG, JPG, GIF, BMP, WebP, SVG, PDF"  # für Meldungen
-_PATTERNS = " ".join(f"*{s} *{s.upper()}" for s in SUFFIXES)   # Großschreibung: Kameras, Windows
-# Quelle eines eingefügten Bilds: wird mit dem Etikett gespeichert und verglichen – deshalb fest
-# (deutsch, wie in älteren Dateien) und nur beim Anzeigen übersetzt (``source_title``)
+ALLOWED = "PNG, JPG, GIF, BMP, WebP, SVG, PDF"  # for messages
+_PATTERNS = " ".join(f"*{s} *{s.upper()}" for s in SUFFIXES)   # upper case: cameras, Windows
+# Source of an inserted image: saved with the label and compared – hence fixed
+# (German, as in older files) and translated only for display (``source_title``)
 CLIPBOARD = "Zwischenablage"
 DROPPED = "Abgelegtes Bild"
 SCREENSHOT = "Bildschirmfoto"
-MIME_OBJECTS = "application/x-labelwerk-objects"   # kopierte Objekte (Kennung der Kopie)
-SYMBOL_SOURCE = "Symbol: {name}"                    # Quelle eines eingefügten Symbols
+MIME_OBJECTS = "application/x-labelwerk-objects"   # copied objects (identifier of the copy)
+SYMBOL_SOURCE = "Symbol: {name}"                    # source of an inserted symbol
 _SOURCE_TITLES = {CLIPBOARD: N_("Clipboard"), DROPPED: N_("Dropped image"),
                   SCREENSHOT: N_("Screenshot")}
-MIME_SYMBOL = "application/x-labelwerk-symbol"     # Symbol aus dem Fenster gezogen (id)
-SYMBOL_PROBE_PX = 512          # Symbol: erst grob rastern, um den Inhalt zu finden
+MIME_SYMBOL = "application/x-labelwerk-symbol"     # symbol dragged from the window (id)
+SYMBOL_PROBE_PX = 512          # symbol: first rasterise coarsely to find the content
 SVG_DPI = 96                                    # SVG: 1 px = 1/96 in
 
 
 def file_filter() -> str:
-    """Filter des Dateidialogs „Bild einfügen“ in der eingestellten Sprache."""
+    """Filter of the “Insert image” file dialog in the configured language."""
     return _("Images and PDF ({patterns});;All files (*)").format(patterns=_PATTERNS)
 
 
 def source_title(source: str) -> str:
-    """Quelle eines Bilds zum Anzeigen: feste Quellen (Zwischenablage, Ablegen, Bildschirmfoto,
-    Symbol) übersetzt, Dateinamen wie sie sind."""
+    """Source of an image for display: fixed sources (clipboard, drop, screenshot,
+    symbol) translated, file names as they are."""
     if source in _SOURCE_TITLES:
         return _(_SOURCE_TITLES[source])
     if is_symbol_source(source):
@@ -56,13 +56,13 @@ def source_title(source: str) -> str:
 
 
 def page_count(path: Path) -> int:
-    """Seitenzahl (PDF), sonst 1 – Fehler wie beim Laden (``ValueError``, ``FileNotFoundError``)."""
+    """Page count (PDF), otherwise 1 – errors as when loading (``ValueError``, ``FileNotFoundError``)."""
     return files.page_count(path) if Path(path).suffix.lower() == ".pdf" else 1
 
 
 def load(path: Path, page: int = 1) -> tuple[Image.Image, float]:
-    """Bild aus einer Datei: (RGB-Bild, dpi); SVG wird hier gerastert, der Rest im Kern.
-    Andere Dateitypen: ``ValueError`` mit allen möglichen Typen (samt SVG)."""
+    """Image from a file: (RGB image, dpi); SVG is rasterised here, the rest in the core.
+    Other file types: ``ValueError`` listing all possible types (including SVG)."""
     path = Path(path)
     if path.suffix.lower() not in SUFFIXES:
         raise ValueError(_("File type not supported: {type} – possible: {allowed}").format(
@@ -73,41 +73,41 @@ def load(path: Path, page: int = 1) -> tuple[Image.Image, float]:
 
 
 def load_screenshot(path: Path) -> tuple[Image.Image, float]:
-    """Bildschirmfoto-Datei: (RGB-Bild, dpi) mit 1 Bildschirmpixel = 1 Druckpunkt (300 dpi) –
-    eine Auflösungsangabe der Datei gilt nicht; ein riesiges Foto wird verkleinert
-    (``imaging.limit_size``), die zurückgegebene Auflösung sinkt dann mit, damit die Größe stimmt."""
+    """Screenshot file: (RGB image, dpi) with 1 screen pixel = 1 dot (300 dpi) –
+    a resolution given by the file does not apply; a huge photo is scaled down
+    (``imaging.limit_size``), and the returned resolution drops with it so the size stays right."""
     return files.load_image(path, dpi=DPI)
 
 
 def load_svg(path: Path) -> tuple[Image.Image, float]:
-    """SVG bei 300 dpi auf Weiß rastern (Größe aus width/height samt Einheit, sonst Qts
-    Größe/viewBox; 1 px = 1/96 in); sehr große Zeichnungen gröber, höchstens
-    ``MAX_PIXELS`` auf der längsten Seite."""
+    """Rasterise SVG at 300 dpi on white (size from width/height including unit, otherwise Qt's
+    size/viewBox; 1 px = 1/96 in); very large drawings more coarsely, at most
+    ``MAX_PIXELS`` on the longest side."""
     if not path.exists():
         raise FileNotFoundError(_("File not found: {path}").format(path=path))
-    # mit Verweisen auf andere Dateien über den Pfad (sie liegen neben der SVG), sonst aus den
-    # Bytes – derselbe Weg wie beim Rastern eines Vektorbilds (Vorschau = Raster)
+    # with references to other files via the path (they lie next to the SVG), otherwise from the
+    # bytes – the same way as when rasterising a vector image (preview = raster)
     vector = load_vector(path)
     renderer = QSvgRenderer(str(path)) if vector is None else _svg_renderer(vector)
     size = renderer.defaultSize()
     if not renderer.isValid() or size.isEmpty():
         raise ValueError(_("Cannot read file: {name} (not a valid SVG)").format(name=path.name))
-    # Qt rechnet mm/in/pt mit 90 dpi – Maße mit Einheit deshalb selbst lesen (CSS: 96 px/in)
+    # Qt computes mm/in/pt at 90 dpi – so read dimensions with a unit ourselves (CSS: 96 px/in)
     width, height = svg_size(path) or (size.width(), size.height())
     dpi = min(DPI, MAX_PIXELS * SVG_DPI / max(width, height))
     pixels = (max(1, round(width * dpi / SVG_DPI)), max(1, round(height * dpi / SVG_DPI)))
     return _render(renderer, pixels, (0, 0, *pixels)), dpi
 
 
-# Verweis auf eine andere Datei: href, das weder auf eine Stelle im Dokument (#…) noch auf
-# eingebettete Daten (data:) zeigt
+# Reference to another file: href that points neither to a place in the document (#…) nor to
+# embedded data (data:)
 _EXTERNAL = re.compile(rb"""href\s*=\s*["'](?!\s*(?:#|data:))""")
 
 
 def load_vector(path: Path) -> bytes | None:
-    """SVG-Datei als Vektorbild: ihre Bytes – außer sie verweist auf andere Dateien (``<image>``,
-    externes ``<use>``; die gelten nur neben der SVG): dann None, sie wird Pixelbild. Andere
-    Dateitypen: None."""
+    """SVG file as a vector image: its bytes – unless it refers to other files (``<image>``,
+    external ``<use>``; those only apply next to the SVG): then None, it becomes a pixel image.
+    Other file types: None."""
     path = Path(path)
     if path.suffix.lower() != ".svg":
         return None
@@ -117,13 +117,13 @@ def load_vector(path: Path) -> bytes | None:
 
 @lru_cache(maxsize=4)
 def _svg_renderer(svg: bytes) -> QSvgRenderer:
-    """Geparstes SVG (Größe ändern rastert neu, ohne neu zu parsen)."""
+    """Parsed SVG (resizing re-rasterises without re-parsing)."""
     return QSvgRenderer(QByteArray(svg))
 
 
 def _render(renderer: QSvgRenderer, size: tuple[int, int],
             region: tuple[int, int, int, int]) -> Image.Image:
-    """Ganzes Blatt auf ``size`` Pixel, davon ``region`` (x, y, w, h), RGB auf Weiß."""
+    """Whole sheet at ``size`` pixels, of which ``region`` (x, y, w, h), RGB on white."""
     x, y, w, h = region
     image = QImage(w, h, QImage.Format.Format_RGB888)
     image.fill(Qt.GlobalColor.white)
@@ -132,20 +132,20 @@ def _render(renderer: QSvgRenderer, size: tuple[int, int],
     renderer.render(painter, QRectF(0, 0, *size))
     painter.end()
     return Image.frombuffer("RGB", (w, h), image.constBits(), "raw", "RGB",
-                            image.bytesPerLine(), 1).copy()     # eine Kopie: Qt gibt frei
+                            image.bytesPerLine(), 1).copy()     # one copy: Qt frees the original
 
 
 def is_symbol_source(source: str) -> bool:
-    """Stammt das Bild aus der Symbol-Bibliothek (Quelle ``SYMBOL_SOURCE``)?"""
+    """Does the image come from the symbol library (source ``SYMBOL_SOURCE``)?"""
     return source.startswith(SYMBOL_SOURCE.split("{")[0])
 
 
 def rasterize_svg(svg: bytes, size: tuple[int, int],
                   region: tuple[int, int, int, int]) -> Image.Image:
-    """Raster-Funktion für Vektorbilder (``render.set_svg_rasterizer``): das ganze Blatt auf
-    ``size`` Pixel, davon nur ``region`` (x, y, w, h) – RGB auf Weiß. Kaputtes SVG:
-    ``ValueError``; ebenso ein SVG mit Verweisen auf andere Dateien (die gelten nur neben der
-    SVG, nicht in einem gespeicherten Dokument)."""
+    """Rasteriser for vector images (``render.set_svg_rasterizer``): the whole sheet at
+    ``size`` pixels, of which only ``region`` (x, y, w, h) – RGB on white. Broken SVG:
+    ``ValueError``; likewise an SVG with references to other files (those only apply next to
+    the SVG, not in a saved document)."""
     if _EXTERNAL.search(svg):
         raise ValueError(_("Vector image refers to other files – they are not saved with it."))
     renderer = _svg_renderer(svg)
@@ -156,14 +156,14 @@ def rasterize_svg(svg: bytes, size: tuple[int, int],
 
 def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tuple | None,
                                                          bytes | None]:
-    """Symbol als Bild-Objekt-Zutaten: (Vorschau RGB, dpi, Ausschnitt, SVG-Bytes oder None).
+    """Symbol as ingredients of an image object: (preview RGB, dpi, region, SVG bytes or None).
 
-    Zugeschnitten auf die Tinte (nicht die Schnittmarken-Erkennung: umrandete Zeichen blieben
-    sonst nicht ganz); die längere Seite des Inhalts misst ``side_mm`` (Größe 1:1). Ganz weiß:
-    Ausschnitt None (ganzes Bild). Vektoren werden so gerastert, dass der Inhalt ``MAX_DPI`` hat
-    – die Vorschau aber höchstens ``MAX_PIXELS`` groß (winziger Inhalt auf großer Seite). Eigene
-    SVGs mit Verweisen auf andere Dateien werden Pixelbilder (wie ``load_vector``).
-    Unlesbar: ``ValueError``/``OSError``."""
+    Cropped to the ink (not the crop-mark detection: outlined characters would otherwise not
+    stay whole); the longer side of the content measures ``side_mm`` (size 1:1). Entirely white:
+    region None (whole image). Vectors are rasterised so that the content has ``MAX_DPI``
+    – but the preview at most ``MAX_PIXELS`` large (tiny content on a large page). Own
+    SVGs with references to other files become pixel images (like ``load_vector``).
+    Unreadable: ``ValueError``/``OSError``."""
     data = clipart.data(symbol)
     if clipart.is_vector(symbol):
         linked = _EXTERNAL.search(data) is not None
@@ -179,7 +179,7 @@ def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tup
         sheet = (max(1, round(size.width() * k)), max(1, round(size.height() * k)))
         image, svg = _render(renderer, sheet, (0, 0, *sheet)), None if linked else data
     else:
-        with Image.open(io.BytesIO(data), formats=["PNG"]) as img:     # nur PNG (kein EPS)
+        with Image.open(io.BytesIO(data), formats=["PNG"]) as img:     # PNG only (no EPS)
             image, svg = on_white(img), None
     crop = files.ink_box(image)
     l, t, r, b = crop or (0, 0, *image.size)
@@ -187,14 +187,14 @@ def load_symbol(symbol: Symbol, side_mm: float) -> tuple[Image.Image, float, tup
 
 
 _UNITS = {"": 1.0, "px": 1.0, "in": 96.0, "cm": 96 / 2.54, "mm": 96 / 25.4, "pt": 96 / 72,
-          "pc": 16.0}                           # CSS-Pixel je Einheit (96 px = 1 in)
+          "pc": 16.0}                           # CSS pixels per unit (96 px = 1 in)
 _LENGTH = re.compile(r"\s*([0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*([a-zA-Z]*)\s*$")
 
 
 def svg_size(path: Path) -> tuple[float, float] | None:
-    """Breite und Höhe der Zeichnung in CSS-Pixeln (1/96 in) aus ``width``/``height`` des
-    Wurzelelements, mit Einheiten px/mm/cm/in/pt/pc; None, wenn eine Angabe fehlt, relativ
-    ist (%, em) oder die Datei sich nicht lesen lässt – dann zählt Qts Größe (viewBox)."""
+    """Width and height of the drawing in CSS pixels (1/96 in) from ``width``/``height`` of the
+    root element, with units px/mm/cm/in/pt/pc; None if a value is missing, is relative
+    (%, em) or the file cannot be read – then Qt's size (viewBox) applies."""
     try:
         __, root = next(ElementTree.iterparse(path, events=("start",)))
     except (ElementTree.ParseError, OSError, StopIteration):
@@ -209,7 +209,7 @@ def svg_size(path: Path) -> tuple[float, float] | None:
 
 
 def to_pil(image: QImage) -> Image.Image:
-    """QImage → RGB-Bild (Transparenz wird weiß)."""
+    """QImage → RGB image (transparency becomes white)."""
     buffer = QBuffer()
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
     image.save(buffer, "PNG")
@@ -218,7 +218,7 @@ def to_pil(image: QImage) -> Image.Image:
 
 
 def mime_image(mime: QMimeData | None) -> Image.Image | None:
-    """Bilddaten aus der Zwischenablage bzw. einem Ablegen, sonst None."""
+    """Image data from the clipboard or a drop, otherwise None."""
     if mime is None or not mime.hasImage():
         return None
     data = mime.imageData()
@@ -230,15 +230,15 @@ def mime_image(mime: QMimeData | None) -> Image.Image | None:
 
 
 def mime_files(mime: QMimeData | None) -> list[Path]:
-    """Lokale Dateien aus einem Ablegen (Dateimanager)."""
+    """Local files from a drop (file manager)."""
     if mime is None or not mime.hasUrls():
         return []
     return [Path(url.toLocalFile()) for url in mime.urls() if url.isLocalFile()]
 
 
 def mime_text(mime: QMimeData | None) -> str:
-    """Text aus der Zwischenablage, wie ein Textrahmen ihn bekommt: Zeilenenden als „\\n“,
-    Tabulatoren als Leerzeichen, ohne Leerzeilen am Ende; leer ohne Text."""
+    """Text from the clipboard as a text frame receives it: line endings as “\\n”,
+    tabs as spaces, no blank lines at the end; empty without text."""
     if mime is None or not mime.hasText():
         return ""
     text = mime.text().replace("\r\n", "\n").replace("\r", "\n").replace("\t", " ")

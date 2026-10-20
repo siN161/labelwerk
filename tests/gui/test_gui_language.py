@@ -1,5 +1,5 @@
-"""Sprache in der GUI: Wahl in den Einstellungen, Neustart-Hinweis, Zahlenfelder je Sprache,
-Oberfläche auf Englisch."""
+"""Language in the GUI: choice in the settings, restart hint, number fields per language,
+interface in English."""
 from PySide6.QtCore import QLocale
 
 from labelwerk import i18n
@@ -29,9 +29,9 @@ def test_language_choice_in_the_settings(qtbot, tmp_path):
     dialog.language.setCurrentIndex(dialog.language.findData("en"))
     assert not dialog.restart_hint.isHidden()
     assert dialog.restart_hint.text() == "Änderungen erst nach Neustart aktiv"
-    dialog.language.setCurrentIndex(0)                    # zurück: Hinweis verschwindet
+    dialog.language.setCurrentIndex(0)                    # back: hint disappears
     assert dialog.restart_hint.isHidden()
-    dialog.zoom.setValue(150)                             # Start-Zoom wirkt auch erst beim Start
+    dialog.zoom.setValue(150)                             # start zoom also only applies at startup
     assert not dialog.restart_hint.isHidden()
     dialog.language.setCurrentIndex(dialog.language.findData("en"))
     dialog.accept()
@@ -39,8 +39,8 @@ def test_language_choice_in_the_settings(qtbot, tmp_path):
 
 
 def test_restart_notice_stays_next_to_save(qtbot, tmp_path):
-    """Der Hinweis steht unten neben SPEICHERN – auch im Reiter Tastenkürzel sichtbar – und
-    vergleicht mit dem Stand beim Start: wieder zurückgestellt, kein Hinweis."""
+    """The hint is at the bottom next to SAVE – also visible in the Shortcuts tab – and
+    compares with the state at startup: set back again, no hint."""
     dialog = SettingsDialog(Settings(language="en"), tmp_path / "s.json",
                             started={"language": "en", "start_zoom": 200,
                                      "start_tool": "paper", "system_file_dialog": False})
@@ -48,15 +48,15 @@ def test_restart_notice_stays_next_to_save(qtbot, tmp_path):
     dialog.show()
     assert dialog.restart_hint.isHidden()
     dialog.language.setCurrentIndex(dialog.language.findData("de"))
-    dialog.tabs.setCurrentIndex(1)                         # anderer Reiter: Hinweis bleibt sichtbar
+    dialog.tabs.setCurrentIndex(1)                         # other tab: hint stays visible
     assert dialog.restart_hint.isVisible()
-    assert dialog.restart_hint.parent() is dialog            # Fußzeile, nicht im Reiter
+    assert dialog.restart_hint.parent() is dialog            # footer, not in the tab
     dialog.language.setCurrentIndex(dialog.language.findData("en"))
     assert dialog.restart_hint.isHidden()
 
 
 def test_saved_but_not_restarted_still_shows_the_notice(qtbot, tmp_path):
-    """Gespeichert, aber noch nicht neu gestartet: beim nächsten Öffnen steht der Hinweis gleich da."""
+    """Saved but not restarted yet: the hint is there right away at the next opening."""
     dialog = SettingsDialog(Settings(language="en"), tmp_path / "s.json",
                             started={"language": "de", "start_zoom": 200,
                                      "start_tool": "paper", "system_file_dialog": False})
@@ -68,7 +68,7 @@ def test_start_takes_the_configured_language(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     save_settings(Settings(language="en"))
     assert gui_app.set_language() == "en" and QLocale().decimalPoint() == "."
-    save_settings(Settings(language=""))                   # Automatisch: LANGUAGE=de (conftest)
+    save_settings(Settings(language=""))                   # automatic: LANGUAGE=de (conftest)
     assert gui_app.set_language() == "de" and QLocale().decimalPoint() == ","
 
 

@@ -1,5 +1,5 @@
-"""Barcodes lesbar? zxing-cpp (unabhängiger Leser, nur Entwicklung) liest, was gedruckt würde –
-jede Art, gedreht, mit und ohne Klartext, jeder Code-128-Wert, jedes Code-39-Zeichen."""
+"""Are barcodes readable? zxing-cpp (independent reader, development only) reads what would be printed –
+every kind, rotated, with and without plain text, every Code 128 value, every Code 39 character."""
 import pytest
 from PIL import ImageOps
 
@@ -41,15 +41,15 @@ def test_zxing_reads_the_printed_label(rotation):
 
 
 def test_zxing_reads_every_code128_value():
-    pairs = "".join(f"{i:02d}" for i in range(100))          # Zeichensatz C: Werte 0–99
+    pairs = "".join(f"{i:02d}" for i in range(100))          # character set C: values 0–99
     for start in range(0, 200, 80):
         assert _read(barcodes.draw(_bar(kind="code128", data=pairs[start:start + 80]))) \
             == [pairs[start:start + 80]]
-    ascii_ = "".join(chr(c) for c in range(32, 127))        # Zeichensatz B: Werte 0–94
+    ascii_ = "".join(chr(c) for c in range(32, 127))        # character set B: values 0–94
     for start in range(0, 95, 50):
         part = ascii_[start:start + 50]
         assert _read(barcodes.draw(_bar(kind="code128", data=part, text=False))) == [part]
-    for data in ("a1234b", "12345", "X12345678", "1a2"):  # Wechsel B ↔ C
+    for data in ("a1234b", "12345", "X12345678", "1a2"):  # switch B ↔ C
         assert _read(barcodes.draw(_bar(kind="code128", data=data))) == [data]
 
 
@@ -69,7 +69,7 @@ def test_zxing_reads_one_dot_modules():
 
 
 def test_zxing_reads_barcodes_on_a_203_dpi_label():
-    """Andere Drucker: Module in ganzen Punkten bei 203 dpi bleiben lesbar."""
+    """Other printers: modules in whole dots at 203 dpi stay readable."""
     objs = [_bar(kind="qr", data="Zebra 203", module=3, x_mm=2, y_mm=2),
             _bar(kind="code128", data="Z-203", module=2, x_mm=22, y_mm=4, h_mm=10)]
     found = _read(render_document(Document("57x32mm@203", objects=objs)))

@@ -1,4 +1,4 @@
-"""Serien (Etappe 3e): Tabellen aus CSV/Excel, Nummerierung, Platzhalter."""
+"""Series (stage 3e): tables from CSV/Excel, numbering, placeholders."""
 import datetime
 import os
 
@@ -18,7 +18,7 @@ def _csv(tmp_path, text, encoding="utf-8", name="t.csv"):
 
 
 def _xlsx(tmp_path, sheets, name="t.xlsx"):
-    """Excel-Datei mit Blättern ``{Name: Zeilen}`` (erste Zeile = Spaltennamen)."""
+    """Excel file with sheets ``{name: rows}`` (first row = column names)."""
     book = openpyxl.Workbook()
     book.remove(book.active)
     for title, rows in sheets.items():
@@ -135,10 +135,10 @@ def test_xlsx_unpacked_size_is_limited(tmp_path, monkeypatch):
 
 
 def test_excel_xml_is_read_safely():
-    assert openpyxl.DEFUSEDXML            # defusedxml schützt vor XML-Angriffen in fremden Dateien
+    assert openpyxl.DEFUSEDXML            # defusedxml protects against XML attacks in foreign files
 
 
-# --- Nummerierung -------------------------------------------------------------------------------
+# --- Numbering -------------------------------------------------------------------------------
 def test_numbering_counts_up():
     assert numbering_table(Numbering(start=1, step=1, count=3)) == Table(
         ["Nummer"], [["1"], ["2"], ["3"]])
@@ -178,7 +178,7 @@ def test_invalid_series(value, message):
         series.check(value)
 
 
-# --- Platzhalter --------------------------------------------------------------------------------
+# --- Placeholders --------------------------------------------------------------------------------
 def _doc(*objects):
     return Document("62x29", objects=list(objects))
 
@@ -235,7 +235,7 @@ def test_fill_keeps_one_object_and_images():
     assert filled.objects[2] == image
 
 
-# --- Speichern ----------------------------------------------------------------------------------
+# --- Saving ----------------------------------------------------------------------------------
 @pytest.mark.parametrize("value", [
     Series(numbering=Numbering(start=5, step=5, count=20, digits=3), cut="end"),
     Series(source="/tmp/klemmen.xlsx", sheet="Blatt 2"),
@@ -275,7 +275,7 @@ def test_invalid_series_in_files(tmp_path, value, message):
         storage.load(path)
 
 
-# --- Nachbesserungen nach dem Review ------------------------------------------------------------
+# --- Improvements after the review ------------------------------------------------------------
 import io  # noqa: E402
 import zipfile  # noqa: E402
 
@@ -302,7 +302,7 @@ def test_empty_formatted_cells_far_right_do_not_count(tmp_path):
     sheet = book.active
     sheet.append(["A", "B"])
     sheet.append([1, 2])
-    sheet.cell(row=1, column=300).font = openpyxl.styles.Font(bold=True)   # leer, nur formatiert
+    sheet.cell(row=1, column=300).font = openpyxl.styles.Font(bold=True)   # empty, only formatted
     path = tmp_path / "formatiert.xlsx"
     book.save(path)
     assert load_table(path) == Table(["A", "B"], [["1", "2"]])
@@ -364,8 +364,8 @@ def test_bad_paths_in_files_are_refused(tmp_path, value):
 
 
 def test_fill_shares_only_what_it_does_not_change():
-    """Gefüllte Etiketten sind nur zum Lesen (Rendern, Drucken): unveränderte Objekte bleiben
-    dieselben (Renderer-Cache), geänderte sind neu – das Original bleibt unberührt."""
+    """Filled labels are read-only (rendering, printing): unchanged objects stay
+    the same (renderer cache), changed ones are new – the original stays untouched."""
     doc = _doc(TextObject("{A}"), TextObject("fest"))
     filled = fill(doc, ["A"], ["1"])
     assert filled.objects[1] is doc.objects[1]
@@ -480,7 +480,7 @@ def test_table_next_to_the_label_is_saved_relative(tmp_path):
     assert json.loads(saved.read_text())["document"]["series"]["source"] == str(table)
 
 
-# --- Schlussreview ----------------------------------------------------------------------------
+# --- Final review ----------------------------------------------------------------------------
 def test_far_away_excel_rows_stop_early(tmp_path, monkeypatch):
     book = openpyxl.Workbook()
     sheet = book.active
@@ -535,11 +535,11 @@ def test_unnamed_columns_in_every_language(tmp_path):
     assert fill(doc, table.columns, table.rows[0]).objects[0].text == "24V 24V"
 
 
-# --- nur der Anfang (Vorschau im Dateidialog) --------------------------------------------------
+# --- only the beginning (preview in the file dialog) --------------------------------------------------
 @pytest.mark.parametrize("count, more", [(3, False), (4, True), (50, True)])
 def test_load_table_reads_only_the_first_rows(tmp_path, count, more):
     path = tmp_path / "t.csv"
-    path.write_text("A;B\n" + "".join(f"{i};x\n\n" for i in range(count)))   # leere Zeilen zählen nicht
+    path.write_text("A;B\n" + "".join(f"{i};x\n\n" for i in range(count)))   # empty rows do not count
     table = load_table(path, limit=3)
     assert table.columns == ["A", "B"] and [r[0] for r in table.rows] == ["0", "1", "2"][:count]
     assert table.more is more

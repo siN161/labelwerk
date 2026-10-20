@@ -3,12 +3,12 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def german(monkeypatch):
-    """Tests laufen auf Deutsch (ihre Erwartungen sind die deutschen Texte), auch wenn CLI/GUI die
-    Sprache des Systems nehmen (``LANGUAGE``); wer eine andere Sprache prüft, setzt sie selbst –
-    danach gilt wieder Deutsch."""
+    """Tests run in German (their expectations are the German texts), even if CLI/GUI take the
+    system language (``LANGUAGE``); whoever tests another language sets it themselves –
+    afterwards German applies again."""
     from labelwerk import i18n
     monkeypatch.setenv("LANGUAGE", "de")
-    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")      # Gebietsschema „C“ hieße sonst Englisch
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")      # locale “C” would mean English
     i18n.set_language("de")
     yield
     i18n.set_language("de")
@@ -16,33 +16,32 @@ def german(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def isolated_config(monkeypatch, tmp_path_factory):
-    """Kein Test liest oder schreibt die echten Einstellungen oder Daten (eigene Symbole) des
-    Nutzers."""
+    """No test reads or writes the user's real settings or data (own symbols)."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("config")))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path_factory.mktemp("data")))
 
 
 @pytest.fixture(autouse=True)
 def no_real_sysfs(monkeypatch, tmp_path_factory):
-    """Kein Test sieht echte Drucker in /sys (Erkennung über ``printers.usb_printers``)."""
+    """No test sees real printers in /sys (detection via ``printers.usb_printers``)."""
     monkeypatch.setattr("labelwerk.printers.SYS_ROOT", str(tmp_path_factory.mktemp("usbmisc")))
 
 
 @pytest.fixture(autouse=True)
 def no_real_cups(monkeypatch, tmp_path_factory):
-    """Kein Test ruft echte CUPS-Befehle (lpstat, lpoptions, lp) oder liest echte PPDs: ohne
-    eigenen Ersatz gibt es keine Warteschlangen."""
+    """No test calls real CUPS commands (lpstat, lpoptions, lp) or reads real PPDs: without
+    its own replacement there are no queues."""
     from labelwerk import cups
     monkeypatch.setattr(cups, "PPD_DIR", tmp_path_factory.mktemp("ppd"))
     monkeypatch.setattr(cups, "_run", lambda *args, **kw: "")
     monkeypatch.setattr(cups, "BACKGROUND", False)
-    cups.forget()                       # Gemerktes aus einem früheren Test gilt nicht
+    cups.forget()                       # anything remembered from an earlier test does not count
 
 
 @pytest.fixture(autouse=True)
 def no_leftover_rasterizer():
-    """Das Hauptfenster meldet die Qt-Raster-Funktion für Vektorbilder an – danach wieder ohne,
-    damit jeder Test im Kern-Zustand startet."""
+    """The main window registers the Qt rasteriser for vector images – afterwards reset to none,
+    so that every test starts in the core state."""
     yield
     from labelwerk.render import set_svg_rasterizer
     set_svg_rasterizer(None)
@@ -50,10 +49,10 @@ def no_leftover_rasterizer():
 
 @pytest.fixture(autouse=True)
 def no_real_hardware(monkeypatch):
-    """Sicherheitsnetz: Erreichen die echten Low-Level-Funktionen den Drucker, scheitert der Test.
+    """Safety net: if the real low-level functions reach the printer, the test fails.
 
-    Tests ersetzen höhere Funktionen (read_media, print_image) selbst; nur wenn dabei
-    doch `query_status` oder brother_qls `send` erreicht wird, schlägt das Netz an.
+    Tests replace higher-level functions (read_media, print_image) themselves; only if
+    `query_status` or brother_ql's `send` is reached after all does the net trigger.
     """
     calls = []
 

@@ -1,5 +1,5 @@
-"""Auflösung je Etikett (Drucker anderer Hersteller): Etiketten „BxHmm@dpi“, Rendern, Layout und
-Barcodes in der Auflösung des Druckers – dasselbe Etikett ist bei 203 und 300 dpi gleich groß."""
+"""Resolution per label (printers of other manufacturers): labels "BxHmm@dpi", rendering, layout and
+barcodes in the resolution of the printer – the same label has the same size at 203 and 300 dpi."""
 import pytest
 from PIL import Image
 
@@ -16,14 +16,14 @@ def _ink(img):
     return img.convert("L").point(lambda v: 255 if v < 128 else 0).getbbox()
 
 
-# --- Etiketten ----------------------------------------------------------------------------------
+# --- Labels -------------------------------------------------------------------------------------
 def test_sized_labels():
     label = get_label("54x25mm@300")
     assert (label.width, label.height, label.dpi, label.shape) == (638, 295, 300, "die_cut")
     assert label.description == "54 × 25 mm · 300 dpi"
     assert get_label(L203).width == round(57 * 203 / 25.4) == 456
     assert get_label("101.6x152.4mm@203").description == "101,6 × 152,4 mm · 203 dpi"
-    assert get_label("62").dpi == 300                         # Brother wie bisher
+    assert get_label("62").dpi == 300                         # Brother as before
     assert sized_id(101.6, 50.8, 203) == "101.6x50.8mm@203" and sized_id(54, 25, 300) == "54x25mm@300"
 
 
@@ -40,7 +40,7 @@ def test_sized_label_is_saved_and_opened():
     assert storage.from_dict(storage.to_dict(doc)).label_id == L203
 
 
-# --- Rendern ------------------------------------------------------------------------------------
+# --- Rendering ----------------------------------------------------------------------------------
 def test_label_image_has_the_printer_resolution():
     assert render_document(Document(L203, objects=[TextObject("A")])).size == (456, 256)
     assert render_document(Document(L300, objects=[TextObject("A")])).size == (673, 378)
@@ -84,14 +84,14 @@ def test_renderer_and_layout_rects_carry_the_resolution():
     assert (area.w, area.h) == (pytest.approx(57 - 2, abs=0.15), pytest.approx(32 - 2, abs=0.15))
 
 
-# --- Barcodes und Layout ------------------------------------------------------------------------
+# --- Barcodes and layout ------------------------------------------------------------------------
 def test_barcode_modules_are_printer_dots():
     obj = BarcodeObject(kind="code128", data="AB", module=2, h_mm=10, x_mm=2, y_mm=2)
     r = render_object(obj, Document(L203, objects=[obj]))
     assert r.w == barcodes.modules(obj) * 2 and r.h == round(10 * 203 / 25.4)
     assert layout.barcode_rect(obj, 203).w == pytest.approx(barcodes.modules(obj) * 2 * 25.4 / 203)
     wider = layout.set_frame(obj, layout.Rect(2, 2, layout.barcode_rect(obj, 203).w * 1.5, 10), r)
-    assert wider.module == 3                                  # 1,5 × 2 Punkte bei 203 dpi
+    assert wider.module == 3                                  # 1.5 × 2 dots at 203 dpi
 
 
 def test_fixed_size_text_keeps_its_look_at_203():
@@ -112,13 +112,13 @@ def test_new_barcode_on_a_203_label():
 
 
 def test_print_file_scales_to_the_resolution():
-    img = Image.new("L", (300, 150), 0)                     # 25,4 × 12,7 mm bei 300 dpi
+    img = Image.new("L", (300, 150), 0)                     # 25.4 × 12.7 mm at 300 dpi
     out = fit_to_label(img, L203)
     assert out.size == (456, 256)
     assert _ink(out.convert("RGB"))[2] - _ink(out.convert("RGB"))[0] == 203
 
 
-# --- Nach der Prüfung: Maße in mm statt fester Druckpunkte -------------------------------------
+# --- After the check: dimensions in mm instead of fixed dots -----------------------------------
 @pytest.mark.parametrize("label_id", ["057x32mm@203", "57.0x32mm@203", "57x32mm@0203"])
 def test_only_one_spelling_per_label(label_id):
     assert sized_label(label_id) is None
@@ -148,10 +148,10 @@ def test_storage_limit_counts_printer_dots():
     big = ImageObject.from_image(Image.new("RGB", (8, 8), "black"), 300, "x")
     big.w_mm = big.h_mm = 290
     data = storage.to_dict(Document("300x300mm@300", objects=[big]))
-    storage.from_dict(data)                                   # 11,7 Mio. Punkte: geht
+    storage.from_dict(data)                                   # 11.7 million dots: works
     many = storage.to_dict(Document("300x300mm@600", objects=[big] * 3))
     with pytest.raises(StorageError, match="Etikett zu groß"):
-        storage.from_dict(many)                               # 3 × 46,9 Mio. Punkte bei 600 dpi
+        storage.from_dict(many)                               # 3 × 46.9 million dots at 600 dpi
 
 
 def test_sizes_are_shown_with_a_comma():
@@ -162,7 +162,7 @@ def test_sizes_are_shown_with_a_comma():
 def test_pdf_is_loaded_in_the_printer_resolution(tmp_path):
     from labelwerk.files import load_file
     path = tmp_path / "a.png"
-    Image.new("L", (300, 300), 0).save(path, dpi=(300, 300))   # 25,4 mm
+    Image.new("L", (300, 300), 0).save(path, dpi=(300, 300))   # 25.4 mm
     assert load_file(path, dpi=203).size == (203, 203)
     sharp = fit_to_label(load_file(path, dpi=203), L203, dpi=203)
     assert _ink(sharp.convert("RGB"))[2] - _ink(sharp.convert("RGB"))[0] == 203

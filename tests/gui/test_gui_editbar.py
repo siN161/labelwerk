@@ -1,4 +1,4 @@
-"""Bearbeitungsleiste: Text anlegen, Zwischenablage, Rückgängig (Etappe 3d-1)."""
+"""Edit bar: create text, clipboard, undo (stage 3d-1)."""
 from importlib import resources
 
 import pytest
@@ -66,7 +66,7 @@ def _drag(canvas, start, end, modifiers=ALT):
 
 
 def _view_point(canvas, x_mm, y_mm):
-    """Punkt in mm in Leserichtung → Ansichtskoordinaten."""
+    """Point in mm in reading direction → view coordinates."""
     scene = canvas.sheet.mapToScene(QPointF(x_mm * MM, y_mm * MM))
     return canvas.viewportTransform().map(scene)
 
@@ -81,14 +81,14 @@ def _positions(window):
     return [(o.x_mm, o.y_mm) for o in window.doc.objects]
 
 
-# --- Leiste -----------------------------------------------------------------------
+# --- Bar -----------------------------------------------------------------------
 def test_edit_bar_holds_tools_clipboard_and_history(window):
     bar = window.edit_bar
     assert isinstance(bar, QToolBar) and bar.objectName() == "editBar"
     ids = [a.objectName() if not a.isSeparator() else "|" for a in bar.actions()]
     assert ids == ["tool.select", "tool.text", "|", "edit.cut", "edit.copy", "edit.paste",
                    "|", "edit.undo", "edit.redo"]
-    assert window.toolBarBreak(bar)                         # eigene Zeile unter den Werkzeugen
+    assert window.toolBarBreak(bar)                         # own row below the tools
     assert "Ctrl+Z" in window.shortcut_actions["edit.undo"].toolTip()
 
 
@@ -119,8 +119,8 @@ def test_edit_bar_icons_follow_theme(qtbot):
     win = _window(qtbot, settings=Settings(check_media_on_start=False, theme="rawblock"))
     icon = win.shortcut_actions["tool.select"].icon()
     assert _ink(icon) == {(0, 0, 0)}
-    assert _ink(icon, state=QIcon.State.On) == {(255, 255, 255)}      # gewählt: weiß auf schwarz
-    assert _ink(icon, QIcon.Mode.Active) == {(255, 255, 255)}         # darüber: weiß auf schwarz
+    assert _ink(icon, state=QIcon.State.On) == {(255, 255, 255)}      # selected: white on black
+    assert _ink(icon, QIcon.Mode.Active) == {(255, 255, 255)}         # hover: white on black
     win.settings = Settings(check_media_on_start=False, theme="classic")
     win.apply_theme_icons()
     icon = win.shortcut_actions["tool.select"].icon()
@@ -175,7 +175,7 @@ def test_clipboard_actions_follow_selection(window):
     assert window.shortcut_actions["edit.paste"].isEnabled()
 
 
-# --- Text anlegen -----------------------------------------------------------------
+# --- Create text -----------------------------------------------------------------
 @pytest.mark.parametrize("orientation", ["vertical", "horizontal"])
 def test_click_with_text_tool_creates_text_at_click_point(qtbot, orientation):
     win = _window(qtbot, _doc(orientation))
@@ -210,7 +210,7 @@ def test_new_text_with_automatic_size_setting_gets_19_pt(qtbot):
 def test_new_empty_text_is_selected_with_a_visible_frame(window):
     window.create_text(30, 12)
     rect = window.canvas.view_rect(2)
-    assert rect.width() > 0 and rect.height() > 0      # Platzhalter, bis Text da ist
+    assert rect.width() > 0 and rect.height() > 0      # placeholder until there is text
     point = _view_point(window.canvas, 30, 12)
     assert rect.topLeft().x() == pytest.approx(point.x(), abs=1)
     assert rect.topLeft().y() == pytest.approx(point.y(), abs=1)
@@ -249,7 +249,7 @@ def test_double_click_on_text_focuses_editor(window, qtbot):
     qtbot.waitUntil(lambda: window.panel("text").edit.hasFocus(), timeout=1000)
 
 
-# --- Zwischenablage ---------------------------------------------------------------
+# --- Clipboard ---------------------------------------------------------------
 def test_copy_paste_offsets_by_2_mm_each_time(window, qtbot):
     window.canvas.set_selection([1])
     _focus_canvas(window, qtbot)
@@ -261,7 +261,7 @@ def test_copy_paste_offsets_by_2_mm_each_time(window, qtbot):
     QTest.keyClick(window.canvas, Qt.Key.Key_V, CTRL)
     assert _positions(window)[3] == pytest.approx((8, 24))
     assert window.canvas.selection() == [3]
-    assert window.doc.objects[1].x_mm == 4                   # Original bleibt
+    assert window.doc.objects[1].x_mm == 4                   # original stays
 
 
 def test_paste_keeps_order_and_copies_are_independent(window):
@@ -309,7 +309,7 @@ def test_duplicate_leaves_clipboard_alone(window, qtbot):
     assert window.doc.objects[3].text == "Eins"
 
 
-# --- Rückgängig -------------------------------------------------------------------
+# --- Undo -------------------------------------------------------------------
 def _undo(window):
     window.shortcut_actions["edit.undo"].trigger()
 
@@ -326,7 +326,7 @@ def test_undo_redo_drag(window):
     _undo(window)
     assert window.doc.objects[0].x_mm == 4
     assert window.canvas.objects[0].frame_mm().x == pytest.approx(
-        window.canvas.objects[1].frame_mm().x)           # Arbeitsfläche folgt
+        window.canvas.objects[1].frame_mm().x)           # canvas follows
     _redo(window)
     assert window.doc.objects[0].x_mm == moved
 
@@ -355,7 +355,7 @@ def test_consecutive_nudges_are_one_step(window, qtbot):
 def test_undo_create_delete_paste_duplicate(window):
     steps = []
     window.create_text(30, 12)
-    window.panel("text").edit.setPlainText("Neu")            # Anlegen + Schreiben: ein Schritt
+    window.panel("text").edit.setPlainText("Neu")            # create + write: one step
     steps.append(3)
     window.canvas.set_selection([0])
     window.delete_selected()
@@ -391,11 +391,11 @@ def test_typing_is_one_step_when_editor_loses_focus(window, qtbot):
     editor.setFocus()
     qtbot.waitUntil(editor.hasFocus, timeout=1000)
     QTest.keyClicks(editor, " und mehr")
-    _focus_canvas(window, qtbot)                            # Fokus verlässt das Textfeld
+    _focus_canvas(window, qtbot)                            # focus leaves the text field
     assert window.doc.objects[0].text == "Eins und mehr"
     _undo(window)
     assert window.doc.objects[0].text == "Eins"
-    assert editor.toPlainText() == "Eins"                   # Panel folgt
+    assert editor.toPlainText() == "Eins"                   # panel follows
     _redo(window)
     assert editor.toPlainText() == "Eins und mehr"
 
@@ -403,7 +403,7 @@ def test_typing_is_one_step_when_editor_loses_focus(window, qtbot):
 def test_format_button_is_its_own_step(window):
     window.canvas.set_selection([0])
     panel = window.panel("text")
-    panel.edit.setPlainText("Eins!")                        # Tippen, noch nicht festgehalten
+    panel.edit.setPlainText("Eins!")                        # typing, not recorded yet
     panel.italic.click()
     _undo(window)
     assert window.doc.objects[0].text == "Eins!"
@@ -432,7 +432,7 @@ def test_paper_change_is_undoable(window):
 
 def test_ctrl_z_in_editor_uses_editor_undo(window, qtbot):
     window.canvas.set_selection([0])
-    window.canvas.nudge(1, 0)                               # Schritt im Dokument
+    window.canvas.nudge(1, 0)                               # step in the document
     editor = window.panel("text").edit
     window.activateWindow()
     editor.setFocus()
@@ -441,10 +441,10 @@ def test_ctrl_z_in_editor_uses_editor_undo(window, qtbot):
     QTest.keyClicks(editor, "X")
     assert window.doc.objects[0].text == "EinsX"
     QTest.keyClick(editor, Qt.Key.Key_Z, CTRL)
-    assert window.doc.objects[0].text == "Eins"             # Editor hat rückgängig gemacht
-    assert window.doc.objects[0].x_mm == pytest.approx(5)   # Dokument nicht
+    assert window.doc.objects[0].text == "Eins"             # editor has undone
+    assert window.doc.objects[0].x_mm == pytest.approx(5)   # document has not
     QTest.keyClick(editor, Qt.Key.Key_Z, CTRL)
-    assert editor.toPlainText() == "Eins"                   # Aufbau des Editors ist kein Schritt
+    assert editor.toPlainText() == "Eins"                   # building the editor is not a step
 
 
 def test_undo_restores_selection_of_the_state(window):
@@ -455,14 +455,14 @@ def test_undo_restores_selection_of_the_state(window):
     window.create_text(30, 12)
     assert window.canvas.selection() == [2]
     _undo(window)
-    assert window.canvas.selection() == [1]                 # Auswahl vor dem Anlegen
+    assert window.canvas.selection() == [1]                 # selection before creating
     window.canvas.set_selection([0])
     window.delete_selected()
     _undo(window)
-    assert window.canvas.selection() == [0]                 # Gelöschtes ist wieder gewählt
+    assert window.canvas.selection() == [0]                 # deleted object is selected again
 
 
-# --- Leere Textrahmen -------------------------------------------------------------
+# --- Empty text frames -------------------------------------------------------------
 def _empty_area(canvas):
     return canvas.view_rect(1).bottomRight() + QPointF(40, 40)
 
@@ -473,7 +473,7 @@ def test_empty_frame_is_removed_when_clicking_away(window):
     _click(window.canvas, _empty_area(window.canvas))
     assert [o.text for o in window.doc.objects] == ["Eins", "Zwei"]
     assert len(window.canvas.objects) == 2
-    assert not window.shortcut_actions["edit.undo"].isEnabled()       # kein leerer Schritt übrig
+    assert not window.shortcut_actions["edit.undo"].isEnabled()       # no empty step left
 
 
 def test_empty_frame_is_removed_when_selecting_another_object(window):
@@ -507,8 +507,8 @@ def test_frame_with_text_stays(window):
 def test_empty_frame_removed_while_pasting_is_part_of_the_paste_step(window):
     window.canvas.set_selection([0])
     window.copy_selected()
-    frame = TextObject.plain("", size_pt=14)                # gewählter leerer Rahmen außerhalb
-    frame.x_mm, frame.y_mm = 30, 12                         # des Schreibmodus (z. B. aus einer Datei)
+    frame = TextObject.plain("", size_pt=14)                # selected empty frame outside
+    frame.x_mm, frame.y_mm = 30, 12                         # of edit mode (e.g. from a file)
     window.doc.objects.append(frame)
     window.render_now()
     window.canvas.set_selection([2])
@@ -529,7 +529,7 @@ def test_empty_frame_does_not_lengthen_auto_label(qtbot):
     assert win.canvas.label_height() == length
 
 
-# --- Werkzeug folgt dem Panel -------------------------------------------------------
+# --- Tool follows the panel -------------------------------------------------------
 def test_text_panel_without_selection_activates_text_tool(window):
     _click(window.canvas, window.canvas.view_rect(0).center())
     assert window.panels.currentWidget() is window.panel("text")
@@ -558,14 +558,14 @@ def test_undo_and_redo_set_tool_by_restored_selection(window):
     _click(window.canvas, window.canvas.view_rect(0).center())
     window.shortcut_actions["edit.cut"].trigger()
     assert window.canvas.selection() == [] and window.canvas.tool() == "text"
-    _undo(window)                                            # Auswahl wieder [0]
+    _undo(window)                                            # selection [0] again
     assert window.canvas.selection() == [0] and window.canvas.tool() == "select"
-    _redo(window)                                            # Stand ohne Auswahl
+    _redo(window)                                            # state without selection
     assert window.canvas.selection() == [] and window.canvas.tool() == "text"
     assert window.panels.currentWidget() is window.panel("text")
 
 
-# --- Rückgängig: Kleinigkeiten ------------------------------------------------------
+# --- Undo: small things ------------------------------------------------------
 def test_nudges_back_to_start_leave_no_undo_step(window, qtbot):
     window.canvas.set_selection([1])
     _focus_canvas(window, qtbot)
@@ -591,8 +591,8 @@ def test_undo_on_paper_tab_stays_on_paper_tab(window, step):
 
 
 def test_black_icons_have_no_white_fill():
-    """Schwarze Symbole stehen auf hellem, grauem oder gesperrtem Grund: keine weiße Fläche,
-    die dort als Fleck erscheint (Verdecktes wird ausgespart statt weiß übermalt)."""
+    """Black symbols sit on a light, grey or disabled background: no white area
+    that would show up there as a blotch (covered parts are left out instead of painted white)."""
     folder = resources.files("labelwerk.gui") / "icons"
     for path in folder.iterdir():
         if not path.name.endswith("-black.svg"):

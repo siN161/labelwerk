@@ -1,12 +1,12 @@
-"""Rückgängig/Wiederherstellen über Dokument-Schnappschüsse (``copy.deepcopy``).
+"""Undo/redo via document snapshots (``copy.deepcopy``).
 
-Nach jeder abgeschlossenen Aktion hält das Hauptfenster den Stand mit ``push`` fest.
-Änderungen, die noch nicht festgehalten sind (z. B. eine laufende Bearbeitung im
-Schreibmodus), macht ``undo`` vorher selbst zu einem Schritt.
+After every completed action the main window records the state with ``push``.
+Changes that are not recorded yet (e.g. an ongoing edit in edit mode) are turned into a
+step by ``undo`` itself beforehand.
 
-Zu jedem Stand gehört die Auswahl (Indizes), die zuletzt dazu galt: Nach Rückgängig/
-Wiederherstellen zeigt ``selection`` sie, damit die Auswahl auf denselben Objekten liegt –
-auch wenn sich die Reihenfolge geändert hat.
+Each state has the selection (indices) that last applied to it: after undo/redo
+``selection`` shows it, so the selection lies on the same objects – even if the order
+has changed.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from PySide6.QtCore import QObject, Signal
 
 from ..document import Document
 
-LIMIT = 100   # höchstens so viele Schritte zurück
+LIMIT = 100   # at most this many steps back
 
 
 @dataclass
@@ -28,7 +28,7 @@ class _State:
 
 
 class History(QObject):
-    changed = Signal()   # Rückgängig/Wiederherstellen ggf. jetzt (nicht mehr) möglich
+    changed = Signal()   # undo/redo may now be (no longer) possible
 
     def __init__(self, doc: Document, limit: int = LIMIT):
         super().__init__()
@@ -36,35 +36,35 @@ class History(QObject):
         self.reset(doc)
 
     def reset(self, doc: Document) -> None:
-        """Neuer Ausgangsstand (z. B. neues oder geöffnetes Etikett) – ohne Schritte."""
+        """New baseline (e.g. new or opened label) – without steps."""
         self._states = [_State(copy.deepcopy(doc))]
         self._pos = 0
         self._merge: Hashable | None = None
         self.changed.emit()
 
     def current(self) -> Document:
-        """Kopie des aktuellen Stands (ohne noch nicht Festgehaltenes)."""
+        """Copy of the current state (without anything not yet recorded)."""
         return copy.deepcopy(self._states[self._pos].doc)
 
     @property
     def selection(self) -> list[int]:
-        """Auswahl, die zum aktuellen Stand gehört (Kopie)."""
+        """Selection belonging to the current state (copy)."""
         return list(self._states[self._pos].selection)
 
     def select(self, current: Document, selection: list[int]) -> None:
-        """Auswahl geändert (kein Schritt): gilt für den aktuellen Stand – nur wenn ``current``
-        ihm noch entspricht, sonst gehört sie zum nächsten ``push``."""
+        """Selection changed (not a step): applies to the current state – only if ``current``
+        still matches it, otherwise it belongs to the next ``push``."""
         if current == self._states[self._pos].doc:
             self._states[self._pos].selection = list(selection)
 
     def push(self, doc: Document, merge: Hashable | None = None,
              selection: list[int] = ()) -> bool:
-        """Stand nach einer Aktion festhalten; False, wenn sich nichts geändert hat.
+        """Record the state after an action; False if nothing has changed.
 
-        ``selection`` ist die Auswahl dazu – ohne Änderung am Dokument wird nur sie für den
-        aktuellen Stand übernommen. Aufeinanderfolgende Schritte mit gleichem ``merge``
-        (z. B. Pfeiltasten auf dieselbe Auswahl) werden zu einem Schritt zusammengefasst;
-        führt die Serie zurück zum Stand davor, entfällt der Schritt.
+        ``selection`` is the selection for it – without a change to the document only it is
+        taken over for the current state. Consecutive steps with the same ``merge``
+        (e.g. arrow keys on the same selection) are combined into one step;
+        if the run leads back to the previous state, the step is dropped.
         """
         state = _State(self._states[self._pos].doc, list(selection))
         if doc == state.doc:
@@ -77,7 +77,7 @@ class History(QObject):
             if self._drop_if_unchanged():
                 return True
         else:
-            del self._states[self._pos + 1:]        # Wiederherstellen verfällt
+            del self._states[self._pos + 1:]        # redo is discarded
             self._states.append(state)
             del self._states[:-(self.limit + 1)]
             self._pos = len(self._states) - 1
@@ -86,21 +86,21 @@ class History(QObject):
         return True
 
     def is_current(self, doc: Document) -> bool:
-        """``doc`` entspricht dem aktuellen Stand (nichts noch nicht Festgehaltenes)."""
+        """``doc`` matches the current state (nothing not yet recorded)."""
         return not self._pending(doc)
 
     def amend(self, doc: Document, selection: list[int] = ()) -> None:
-        """Aktuellen Stand ohne eigenen Schritt ersetzen (z. B. ein leerer Textrahmen entfällt).
+        """Replace the current state without a step of its own (e.g. an empty text frame is dropped).
 
-        Gleicht er danach dem Stand davor, entfällt der Schritt, der ihn erzeugt hat."""
+        If it then equals the previous state, the step that produced it is dropped."""
         self._states[self._pos] = _State(copy.deepcopy(doc), list(selection))
         if not self._drop_if_unchanged():
             self._merge = None
             self.changed.emit()
 
     def _drop_if_unchanged(self) -> bool:
-        """Aktuellen Stand verwerfen, wenn er dem vorigen gleicht (seine Auswahl gilt dann
-        dort); eine Serie mit ``merge`` beginnt danach neu."""
+        """Discard the current state if it equals the previous one (its selection then applies
+        there); a run with ``merge`` starts afresh afterwards."""
         if self._pos == 0 or self._states[self._pos].doc != self._states[self._pos - 1].doc:
             return False
         self._states[self._pos - 1].selection = self._states[self._pos].selection
@@ -117,18 +117,18 @@ class History(QObject):
         return self._pos < len(self._states) - 1 and not self._pending(current)
 
     def undo(self, current: Document, selection: list[int] = ()) -> Document | None:
-        """Stand vor dem letzten Schritt (Kopie) oder None; ``current`` = Dokument jetzt,
-        ``selection`` = Auswahl jetzt. Die Auswahl des neuen Stands steht in ``selection``."""
+        """State before the last step (copy) or None; ``current`` = document now,
+        ``selection`` = selection now. The selection of the new state is in ``selection``."""
         self.push(current, selection=selection)
         if self._pos == 0:
             return None
         return self._step(-1)
 
     def redo(self, current: Document, selection: list[int] = ()) -> Document | None:
-        """Rückgängig gemachten Schritt wiederholen (Kopie) oder None.
+        """Redo an undone step (copy) or None.
 
-        Hat sich ``current`` seitdem geändert, ist das ein neuer Schritt – nichts mehr zu
-        wiederholen."""
+        If ``current`` has changed since, that is a new step – nothing left to
+        redo."""
         self.push(current, selection=selection)
         if self._pos == len(self._states) - 1:
             return None
@@ -145,8 +145,9 @@ class History(QObject):
 
 
 def restore(target: Document, snapshot: Document) -> None:
-    """``target`` an Ort und Stelle auf den Stand von ``snapshot`` setzen.
+    """Set ``target`` to the state of ``snapshot`` in place.
 
-    Panels halten das Dokument-Objekt fest; es wird deshalb nicht ersetzt."""
+    Panels hold on to the document object; it is therefore not replaced."""
+
     for f in fields(Document):
         setattr(target, f.name, copy.deepcopy(getattr(snapshot, f.name)))

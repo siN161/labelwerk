@@ -1,10 +1,10 @@
-"""Panel des Reiters PAKET (Überschrift „Paketmarke“): Marke öffnen, Typ wählen (erkannt), Umwandlung ansehen, drucken oder als
-Etikett in den Editor holen; eigene Typen anlegen, umbenennen, löschen; Freiräume eigener Typen
-für diese Marke ändern (nicht gespeichert).
+"""Panel of the PARCEL tab (heading “Parcel label”): open a label, choose a type (detected), view the
+conversion, print or bring it into the editor as a label; create, rename and delete custom types;
+change the spaces of custom types for this label (not saved).
 
-Die Logik steckt in ``labelwerk.parcel``; das Panel hält nur die geladene Marke, den gewählten
-Typ und die Umwandlung für das Etikett des Hauptfensters (``set_target``). Die Arbeitsfläche zeigt
-die Umwandlung, solange dieses Panel zu sehen ist (``documents``/``current_document``).
+The logic lives in ``labelwerk.parcel``; the panel only holds the loaded label, the chosen
+type and the conversion for the label of the main window (``set_target``). The canvas shows
+the conversion as long as this panel is visible (``documents``/``current_document``).
 """
 from __future__ import annotations
 
@@ -21,19 +21,19 @@ from ...i18n import N_, _, pgettext
 from ..widgets import DoubleSpinBox
 from . import Panel
 
-OWN = "own"                                   # Eintrag „Eigene Typen“ in der Länderauswahl
+OWN = "own"                                   # entry “Own types” in the country choice
 UNVERIFIED = N_("unverified")
-TYPE_ROLE = Qt.ItemDataRole.UserRole          # Kennung des Typs an jedem Listeneintrag
+TYPE_ROLE = Qt.ItemDataRole.UserRole          # identifier of the type on every list entry
 
 
 class ParcelPanel(Panel):
-    view_changed = Signal()                   # Umwandlung neu (Arbeitsfläche zeigen)
-    print_requested = Signal(list)            # Etiketten (Document) drucken – ein Auftrag
-    editor_requested = Signal(object)         # Etikett (Document) im Editor öffnen
-    own_requested = Signal()                  # Fenster „Eigener Typ“ öffnen
-    rename_requested = Signal(str)            # eigener Typ (Kennung) umbenennen
-    remove_requested = Signal(str)            # eigener Typ (Kennung) löschen
-    open_requested = Signal()                 # MARKE ÖFFNEN … (Dateidialog im Hauptfenster)
+    view_changed = Signal()                   # conversion new (show on canvas)
+    print_requested = Signal(list)            # print labels (Document) – one job
+    editor_requested = Signal(object)         # open label (Document) in the editor
+    own_requested = Signal()                  # open the “New own parcel label type” window
+    rename_requested = Signal(str)            # rename custom type (identifier)
+    remove_requested = Signal(str)            # delete custom type (identifier)
+    open_requested = Signal()                 # OPEN PARCEL LABEL … (file dialog in the main window)
 
     def __init__(self, doc: Document):
         super().__init__(doc, _("Parcel label"))
@@ -42,13 +42,13 @@ class ParcelPanel(Panel):
         self.conversion: parcel.Conversion | None = None
         self._label_id = doc.label_id
         self._model = "QL-600"
-        self._current = 0                      # gezeigtes Etikett der Umwandlung
+        self._current = 0                      # shown label of the conversion
         self._error: str | None = None
-        self._scores: dict[str, float] = {}    # erkannte Typen → Punktzahl
-        self._tied: list[str] = []             # Gleichstand ohne geprüften Sieger: Nutzer wählt
-        self._top: list[str] = []              # Typen mit der höchsten Punktzahl (✓)
-        self._check_choice = False             # vorgewählt, aber andere gleich gut: prüfen
-        self._spaces_for: tuple | None = None  # Typ und seine Freiräume, die die Felder zeigen
+        self._scores: dict[str, float] = {}    # detected types → score
+        self._tied: list[str] = []             # tie without a tested winner: the user chooses
+        self._top: list[str] = []              # types with the highest score (✓)
+        self._check_choice = False             # preselected, but others equally good: check
+        self._spaces_for: tuple | None = None  # type and its spaces that the fields show
         self.setAcceptDrops(True)
 
         self.section(_("Country"))
@@ -71,13 +71,13 @@ class ParcelPanel(Panel):
 
         self.section(pgettext("parcel", "Type"))
         self.types = QListWidget()
-        rows = self.types.fontMetrics().lineSpacing() * 2 + 6    # Einträge brechen oft um
-        self.types.setMinimumHeight(max(220, 7 * rows // 2 * 2))       # etwa 7 Einträge
-        self.types.setWordWrap(True)                  # lange Typnamen brechen um
+        rows = self.types.fontMetrics().lineSpacing() * 2 + 6    # entries often wrap
+        self.types.setMinimumHeight(max(220, 7 * rows // 2 * 2))       # about 7 entries
+        self.types.setWordWrap(True)                  # long type names wrap
         self.types.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.types.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.layout_.addWidget(self.types)
-        own_row = QWidget()                            # nur bei gewähltem eigenem Typ
+        own_row = QWidget()                            # only with a custom type chosen
         own_layout = QHBoxLayout(own_row)
         own_layout.setContentsMargins(0, 0, 0, 0)
         self.rename_button = QPushButton(_("RENAME …"))
@@ -93,7 +93,7 @@ class ParcelPanel(Panel):
         self.layout_.addWidget(self.own_button)
 
         self.spaces_title = self.section(_("Space"))
-        self.spaces_box = QWidget()                    # je Freiraum des eigenen Typs ein Feld
+        self.spaces_box = QWidget()                    # one field per space of the custom type
         self._spaces_form = QFormLayout(self.spaces_box)
         self._spaces_form.setContentsMargins(0, 0, 0, 0)
         self.space_boxes: list[DoubleSpinBox] = []
@@ -147,18 +147,18 @@ class ParcelPanel(Panel):
         self._fill_types()
         self._update()
 
-    # --- Zustand ------------------------------------------------------------------------
+    # --- State --------------------------------------------------------------------------
     @property
     def country_code(self) -> str:
         return self.country.currentData()
 
     @property
     def error(self) -> str | None:
-        """Fehler beim Laden/Umwandeln (gezeigt im Panel), sonst None."""
+        """Error while loading/converting (shown in the panel), otherwise None."""
         return self._error
 
     def show_render_error(self, message: str) -> None:
-        """Die Umwandlung ließ sich nicht rendern: als Hinweis, nicht druckbar."""
+        """The conversion could not be rendered: as a note, not printable."""
         self.conversion, self._error = None, message
         self._update()
 
@@ -180,7 +180,7 @@ class ParcelPanel(Panel):
             return None
 
     def set_target(self, label_id: str, model: str) -> None:
-        """Etikett und Drucker des Hauptfensters: die Umwandlung gilt für sie (neu bei Wechsel)."""
+        """Label and printer of the main window: the conversion applies to them (new on change)."""
         if (label_id, model) == (self._label_id, self._model):
             return
         self._label_id, self._model = label_id, model
@@ -188,41 +188,41 @@ class ParcelPanel(Panel):
             self._detect(keep=True)
             self._convert()
 
-    # --- Laden --------------------------------------------------------------------------
+    # --- Loading ------------------------------------------------------------------------
     def load(self, path: str | Path) -> bool:
-        """Marke laden, Typ erkennen und umwandeln; Fehler als Hinweis (nichts geladen)."""
+        """Load the label, detect the type and convert; errors as a note (nothing loaded)."""
         try:
             source = parcel.load(path)
         except parcel.ParcelError as e:
             message = str(e)
-            if self.source is not None:            # die vorige Marke bleibt
+            if self.source is not None:            # the previous label stays
                 message = _("{error} – the previous parcel label stays loaded.").format(error=e)
             self._show_error(message)
             return False
         self.source, self.path = source, Path(path)
-        self._spaces_for = None                    # neue Marke: Freiräume wie im Typ
+        self._spaces_for = None                    # new label: spaces as in the type
         self._detect(keep=False)
         self._convert()
         return True
 
     def _detect(self, keep: bool) -> None:
-        """Typen erkennen (✓ an denen mit der höchsten Punktzahl); ``keep``: gewählten Typ
-        behalten – sonst den besten vorwählen, außer bei Gleichstand ohne geprüften Sieger oder
-        ohne Treffer (dann wählt der Nutzer)."""
+        """Detect types (✓ on those with the highest score); ``keep``: keep the chosen type –
+        otherwise preselect the best, except on a tie without a tested winner or
+        without a match (then the user chooses)."""
         chosen = self.chosen_type()
         country = None if self.country_code == OWN else self.country_code
         found = self._found(country)
         if keep and chosen is not None:
             wanted = chosen.id
         elif self._tied or not found:
-            wanted = None                       # gleich gut oder nicht erkannt: Nutzer wählt
+            wanted = None                       # equally good or not detected: the user chooses
         else:
             wanted = found[0][0].id
         self._check_choice = not keep and wanted is not None and len(self._top) > 1
         self._fill_types(wanted)
 
     def _found(self, country: str | None) -> list[tuple[parcel.ParcelType, float]]:
-        """Erkannte Typen (Punktzahl, Gleichstand) für die Quelle merken."""
+        """Remember the detected types (score, tie) for the source."""
         found = parcel.detect(self.source, country, self._label_id)
         if self.country_code == OWN:
             found = [(t, s) for t, s in found if t.own]
@@ -233,7 +233,7 @@ class ParcelPanel(Panel):
         return found
 
     def _convert(self) -> None:
-        """Umwandlung für das Etikett des Hauptfensters (Fehler: Hinweis, keine Umwandlung)."""
+        """Conversion for the label of the main window (error: note, no conversion)."""
         self.conversion, self._current, self._error = None, 0, None
         ptype = self.chosen_type()
         self._show_spaces(ptype)
@@ -248,14 +248,14 @@ class ParcelPanel(Panel):
         self.view_changed.emit()
 
     def _show_spaces(self, ptype: parcel.ParcelType | None) -> None:
-        """Felder für die Freiräume des gewählten Typs – vorbelegt aus dem Typ, wenn ein anderer
-        Typ oder eine neue Marke kommt; sonst bleiben die geänderten Werte."""
+        """Fields for the spaces of the chosen type – prefilled from the type when another
+        type or a new label arrives; otherwise the changed values stay."""
         key = (ptype.id, tuple(parcel.spaces(ptype))) if ptype is not None else None
         if key == self._spaces_for and key is not None:
             return
         self._spaces_for = key
-        while self._spaces_form.rowCount():           # takeRow + deleteLater: das Feld, dessen
-            row = self._spaces_form.takeRow(0)        # Signal gerade läuft, lebt bis danach
+        while self._spaces_form.rowCount():           # takeRow + deleteLater: the field whose
+            row = self._spaces_form.takeRow(0)        # signal is running lives until afterwards
             for item in (row.labelItem, row.fieldItem):
                 if item is not None and item.widget() is not None:
                     item.widget().hide()
@@ -266,7 +266,7 @@ class ParcelPanel(Panel):
             box.setRange(0, parcel.MAX_SPACE_MM)
             box.setDecimals(1)
             box.setSuffix(" mm")
-            box.setKeyboardTracking(False)            # erst nach der Eingabe neu umwandeln
+            box.setKeyboardTracking(False)            # convert again only after the input
             box.setValue(length)
             box.setToolTip(_("Blank tape for this parcel label – the type keeps its value"))
             box.valueChanged.connect(self._convert)
@@ -279,10 +279,10 @@ class ParcelPanel(Panel):
         self._error = message
         self._update()
 
-    # --- Typen --------------------------------------------------------------------------
+    # --- Types --------------------------------------------------------------------------
     def _fill_types(self, wanted: str | None = None) -> None:
-        """Liste nach Dienst gruppiert (Überschriften nicht wählbar), eigene Typen am Ende;
-        erkannte Typen vorn in ihrer Gruppe mit ✓, ungeprüfte gekennzeichnet."""
+        """List grouped by service (headings not selectable), custom types at the end;
+        detected types first in their group with ✓, untested ones marked."""
         self.types.blockSignals(True)
         try:
             self.types.clear()
@@ -324,7 +324,7 @@ class ParcelPanel(Panel):
             self.types.blockSignals(False)
 
     def refresh_types(self, wanted: str | None = None) -> None:
-        """Eigene Typen geändert (angelegt, umbenannt, gelöscht): Liste und Umwandlung neu."""
+        """Custom types changed (created, renamed, deleted): list and conversion anew."""
         current = self.chosen_type()
         if self.source is not None:
             country = None if self.country_code == OWN else self.country_code
@@ -340,7 +340,7 @@ class ParcelPanel(Panel):
         self._convert()
 
     def _type_chosen(self, *_args) -> None:
-        self._tied = []                         # gewählt: der Gleichstand ist entschieden
+        self._tied = []                         # chosen: the tie is decided
         self._check_choice = False
         self._convert()
 
@@ -370,7 +370,7 @@ class ParcelPanel(Panel):
     def _is_own(type_id: str) -> bool:
         return any(t.id == type_id for t in parcel.own_types())
 
-    # --- Ergebnis -----------------------------------------------------------------------
+    # --- Result -------------------------------------------------------------------------
     def _go_to(self, index: int) -> None:
         docs = self.documents()
         if docs and 0 <= index < len(docs):
@@ -389,7 +389,7 @@ class ParcelPanel(Panel):
             self.editor_requested.emit(doc)
 
     def _update(self) -> None:
-        """Anzeige nach dem Zustand: Datei, Hinweise, Etikett n/N, Knöpfe."""
+        """Display by state: file, notes, label n/N, buttons."""
         if self.path is not None:
             self.file_label.setText(self.path.name)
         notes = list(self.conversion.notes) if self.conversion is not None else []
@@ -408,7 +408,7 @@ class ParcelPanel(Panel):
                 notes.insert(0, _("Type not recognized – choose it in the list."))
             else:
                 notes.insert(0, _("Choose the type in the list."))
-        notes += parcel.own_warnings()          # beschädigte eigene Typen
+        notes += parcel.own_warnings()          # damaged custom types
         self.own_row.setVisible(self._chosen_own() is not None)
         self.notes.setText("\n".join(notes))
         self.notes.setVisible(bool(notes))
@@ -421,7 +421,7 @@ class ParcelPanel(Panel):
         self.editor_button.setEnabled(bool(docs))
         self.own_button.setEnabled(self.source is not None)
 
-    # --- Ablegen ------------------------------------------------------------------------
+    # --- Dropping -----------------------------------------------------------------------
     def dragEnterEvent(self, event) -> None:
         if _parcel_files(event.mimeData()):
             event.acceptProposedAction()
@@ -441,6 +441,6 @@ class ParcelPanel(Panel):
 
 
 def _parcel_files(mime) -> list[Path]:
-    """Lokale Dateien mit Endung einer Paketmarke."""
+    """Local files with the extension of a parcel label."""
     return [Path(url.toLocalFile()) for url in mime.urls()
             if url.isLocalFile() and Path(url.toLocalFile()).suffix.lower() in parcel.SUFFIXES]

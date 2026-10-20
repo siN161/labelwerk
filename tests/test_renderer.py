@@ -1,4 +1,4 @@
-"""Inkrementeller Renderer (``render.Renderer``): nur Geändertes neu, Druckbild = render_document."""
+"""Incremental renderer (``render.Renderer``): only what changed anew, print image = render_document."""
 import copy
 import random
 
@@ -17,7 +17,7 @@ def _doc(**kw) -> Document:
 
 @pytest.fixture
 def calls(monkeypatch):
-    """Zählt das Messen (``_prepare``) und Zeichnen (``_finish``) je Objekttext."""
+    """Counts measuring (``_prepare``) and drawing (``_finish``) per object text."""
     seen = []
     for name in ("_prepare", "_finish"):
         real = getattr(render, name)
@@ -52,7 +52,7 @@ def test_only_changed_object_is_rendered_again(calls):
     renderer, doc = Renderer(), _doc()
     renderer.render(doc, "QL-600")
     calls.clear()
-    doc.objects[1].x_mm = 10                       # in place geändert: Schnappschuss erkennt es
+    doc.objects[1].x_mm = 10                       # changed in place: snapshot detects it
     result = renderer.render(doc, "QL-600")
     assert calls == [("_prepare", "Zwei"), ("_finish", "Zwei")]
     assert result.image.tobytes() == render_document(doc).tobytes()
@@ -68,7 +68,7 @@ def test_replaced_object_is_rendered_again(calls):
 
 
 def test_object_replaced_by_equal_copy_is_rendered_again(calls):
-    """Gleicher Inhalt, aber ein anderes Objekt: neu messen (der Cache hält das alte fest)."""
+    """Same content but a different object: measure anew (the cache holds on to the old one)."""
     renderer, doc = Renderer(), _doc()
     renderer.render(doc, "QL-600")
     calls.clear()
@@ -85,7 +85,7 @@ def test_same_object_twice_in_list_renders_twice():
     result = renderer.render(doc, "QL-600")
     assert len(result.objects) == 3 and result.objects[2] == result.objects[0]
     assert result.image.tobytes() == render_document(doc).tobytes()
-    doc.objects[0].x_mm = 12                       # beide Einträge ändern sich mit
+    doc.objects[0].x_mm = 12                       # both entries change along
     result = renderer.render(doc, "QL-600")
     assert result.objects[2] == result.objects[0]
     assert result.image.tobytes() == render_document(doc).tobytes()
@@ -105,8 +105,8 @@ def test_context_change_renders_everything_again(calls):
 def test_growing_label_redraws_unpositioned_objects_without_measuring_again(calls):
     renderer = Renderer()
     doc = _doc()
-    doc.length_mm = None                           # automatische Länge: wächst mit
-    doc.objects.append(TextObject("Mitte"))        # ohne Position: hängt an der Etikettgröße
+    doc.length_mm = None                           # automatic length: grows along
+    doc.objects.append(TextObject("Mitte"))        # without position: depends on the label size
     before = renderer.render(doc, "QL-600")
     calls.clear()
     doc.objects[1].y_mm = 80
@@ -119,7 +119,7 @@ def test_growing_label_redraws_unpositioned_objects_without_measuring_again(call
 def test_failed_render_keeps_cache(calls):
     renderer, doc = Renderer(), _doc()
     renderer.render(doc, "QL-600")
-    doc.objects.append(TextObject("Viel zu groß", size_pt=200))   # ohne Position: zu groß
+    doc.objects.append(TextObject("Viel zu groß", size_pt=200))   # without position: too large
     with pytest.raises(ValueError):
         renderer.render(doc, "QL-600")
     del doc.objects[-1]
@@ -173,7 +173,7 @@ def test_random_documents_are_byte_identical_also_incrementally():
         assert result.image.tobytes() == expected.tobytes()
 
 
-# --- Bilder -------------------------------------------------------------------------
+# --- Images -------------------------------------------------------------------------
 def _with_images() -> Document:
     from PIL import Image
     doc = _doc()
@@ -186,7 +186,7 @@ def _with_images() -> Document:
 
 @pytest.fixture
 def finished(monkeypatch):
-    """Zählt das Zeichnen (``_finish``) je Objekt (Index in ``_with_images``)."""
+    """Counts drawing (``_finish``) per object (index in ``_with_images``)."""
     seen = []
     real = render._finish
 
