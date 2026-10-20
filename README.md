@@ -28,7 +28,7 @@
 <p align="center">
   <a href="https://github.com/siN161/labelwerk/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/siN161/labelwerk/actions/workflows/tests.yml/badge.svg"></a>
   <a href="https://github.com/siN161/labelwerk/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/siN161/labelwerk?include_prereleases"></a>
-  <a href="https://pypi.org/project/labelwerk/"><img alt="PyPI" src="https://img.shields.io/pypi/v/labelwerk"></a>
+  <a href="https://pypi.org/project/labelwerk/"><img alt="PyPI" src="https://img.shields.io/pypi/v/labelwerk?label=pypi"></a>
   <a href="LICENSE"><img alt="License GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB">
   <img alt="Platform Linux" src="https://img.shields.io/badge/platform-Linux-555555">
