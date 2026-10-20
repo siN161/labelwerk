@@ -9,6 +9,8 @@ Design and print labels on **Brother QL label printers under Linux** – no P-to
 - Prints PDFs and images 1:1 (e.g. postage stamps), also from the command line
 - English and German
 
+![labelwerk: a terminal label with text, QR code and frame on 62 mm tape](docs/screenshots/editor.png)
+
 ## Printers
 
 | Status | Printers |
@@ -55,6 +57,10 @@ Open a parcel label in the **PARCEL** tab (or `labelwerk parcel`): the type is r
 pieces and arranged on the tape – barcodes at full size. DHL domestic is tested on real labels; the other types are
 measured from sample sheets and marked *untested*. You can draw your own types on any label. Always check that the
 barcodes scan before shipping.
+
+![A return label converted for 62 mm tape](docs/screenshots/parcel.png)
+
+![Drawing your own parcel label type: areas, rotation, space](docs/screenshots/parcel-type.png)
 
 ## Translations
 
