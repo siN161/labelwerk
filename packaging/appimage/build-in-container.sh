@@ -26,4 +26,5 @@ ln -sf io.github.siN161.labelwerk.svg AppDir/.DirIcon
 install -m 755 /src/packaging/appimage/AppRun AppDir/AppRun
 ARCH=x86_64 ./appimagetool.AppImage --appimage-extract-and-run --no-appstream AppDir \
   "/out/labelwerk-$version-x86_64.AppImage" >/dev/null
+chown "${HOST_UID:-0}:${HOST_GID:-0}" "/out/labelwerk-$version-x86_64.AppImage"   # yours, not root's
 echo "/out/labelwerk-$version-x86_64.AppImage"
