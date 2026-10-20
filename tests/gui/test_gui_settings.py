@@ -141,10 +141,10 @@ def test_dialog_keeps_fractional_font_size(qtbot):
 
 
 def test_dialog_theme_roundtrip(qtbot):
-    dialog = SettingsDialog(Settings(theme="classic"))
+    dialog = SettingsDialog(Settings(theme="system"))
     qtbot.addWidget(dialog)
-    assert dialog.theme.currentText() == "Klassisch"
-    assert dialog.values().theme == "classic"
+    assert dialog.theme.currentText() == "System"
+    assert dialog.values().theme == "system"
     dialog.theme.setCurrentIndex(dialog.theme.findData("blackwerk"))
     assert dialog.values().theme == "blackwerk"
 
@@ -164,7 +164,7 @@ def test_apply_theme_sets_and_clears_stylesheet(qapp):
     try:
         apply_theme(qapp, "blackwerk")
         assert qapp.styleSheet() != ""
-        apply_theme(qapp, "classic")
+        apply_theme(qapp, "system")
         assert qapp.styleSheet() == ""
     finally:
         qapp.setStyleSheet("")
@@ -175,7 +175,7 @@ def test_saving_dialog_applies_theme_and_icons(qtbot, qapp, monkeypatch):
     qtbot.addWidget(win)
 
     def fake_exec(dialog):
-        dialog.theme.setCurrentIndex(dialog.theme.findData("classic"))
+        dialog.theme.setCurrentIndex(dialog.theme.findData("system"))
         dialog.accept()
         return QDialog.DialogCode.Accepted
     monkeypatch.setattr(SettingsDialog, "exec", fake_exec)
@@ -183,7 +183,7 @@ def test_saving_dialog_applies_theme_and_icons(qtbot, qapp, monkeypatch):
         qapp.setStyleSheet("QWidget { color: red; }")
         win.settings_action.trigger()
         assert qapp.styleSheet() == ""
-        assert win.settings.theme == "classic"
+        assert win.settings.theme == "system"
         assert win.panel("text").dark_checked_icons is False
     finally:
         qapp.setStyleSheet("")

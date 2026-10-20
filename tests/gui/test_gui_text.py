@@ -343,7 +343,7 @@ def test_style_buttons_show_their_style_without_stylesheet(qtbot):
     from labelwerk.gui.panels.text import TextPanel
     panel = TextPanel(Document())
     qtbot.addWidget(panel)
-    # classic theme (without style sheet): the button font shows the style itself
+    # system theme (without style sheet): the button font shows the style itself
     assert panel.bold.font().bold()
     assert panel.italic.font().italic()
     assert panel.underline.font().underline()

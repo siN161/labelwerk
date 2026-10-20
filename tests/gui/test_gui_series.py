@@ -329,7 +329,7 @@ def test_preview_row_is_selected_in_the_table(qtbot, tmp_path):
     assert panel.rows.currentRow() == 1
 
 
-@pytest.mark.parametrize("theme", ["blackwerk", "classic"])
+@pytest.mark.parametrize("theme", ["blackwerk", "system"])
 def test_series_panel_fits_its_width(qtbot, tmp_path, theme):
     from PySide6.QtWidgets import QApplication
     from labelwerk.gui.app import apply_theme
@@ -346,7 +346,7 @@ def test_series_panel_fits_its_width(qtbot, tmp_path, theme):
         assert panel.count_label.width() >= panel.count_label.sizeHint().width()
         assert not panel.rows.horizontalScrollBar().isVisible()
     finally:
-        apply_theme(QApplication.instance(), "classic")
+        apply_theme(QApplication.instance(), "system")
 
 
 # --- Improvements after the review --------------------------------------------------------------

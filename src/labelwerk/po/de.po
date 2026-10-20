@@ -455,10 +455,6 @@ msgid "Chosen printer {printer} not found – switch it on or specify it with -p
 msgstr "Gewählter Drucker {printer} nicht gefunden – einschalten oder mit -p angeben."
 
 #: src/labelwerk/gui/settings_dialog.py
-msgid "Classic"
-msgstr "Klassisch"
-
-#: src/labelwerk/gui/settings_dialog.py
 msgid "Click a row and press the new key combination. Esc cancels, ✕ in the field removes the shortcut. Esc, Enter and Tab cannot be assigned here (they operate the table)."
 msgstr "Zeile anklicken und die neue Tastenkombination drücken. Esc bricht ab, ✕ im Feld entfernt das Kürzel. Esc, Enter und Tab lassen sich hier nicht belegen (sie bedienen die Tabelle)."
 
@@ -2609,6 +2605,10 @@ msgstr "Symbol: {error}"
 msgid "Symbol: {name}"
 msgstr "Symbol: {name}"
 
+#: src/labelwerk/gui/settings_dialog.py
+msgid "System"
+msgstr "System"
+
 #: src/labelwerk/gui/panels/series.py
 msgid "TABLE …"
 msgstr "TABELLE …"
@@ -3835,6 +3835,9 @@ msgstr "keiner"
 msgctxt "text panel"
 msgid "Font"
 msgstr "Schrift"
+
+#~ msgid "Classic"
+#~ msgstr "Klassisch"
 
 #~ msgid "Type not recognized – choose it in the list."
 #~ msgstr "Typ nicht erkannt – in der Liste wählen."

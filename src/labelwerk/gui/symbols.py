@@ -1,7 +1,7 @@
 """Own line symbols (``gui/icons/<name>-black.svg`` / ``-white.svg``, 16 × 16).
 
 Black in the normal state; in the BlackWerk design white where the button has a black background
-(selected or on hover). In the classic design the button stays light, hence black.
+(selected or on hover). In the System design the button stays light, hence black.
 """
 from __future__ import annotations
 

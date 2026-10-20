@@ -119,7 +119,7 @@ def test_unrecognised_mark_asks_for_the_type(qtbot, tmp_path):
     win = _window(qtbot)
     panel = _open(win, make_pdf(tmp_path / "x.pdf", size_mm=(50, 50), texts=[(5, 5, "Hallo")]))
     assert panel.chosen_type() is None and panel.documents() == []
-    assert panel.notes.isVisibleTo(panel) and "nicht erkannt" in panel.notes.text()
+    assert panel.choose_note.isVisibleTo(panel) and "nicht erkannt" in panel.choose_note.text()
     assert win.canvas.read_only and win.canvas.objects == []    # empty, view only
 
 
@@ -336,14 +336,14 @@ def test_tie_between_unverified_types_lets_the_user_choose(qtbot, tmp_path):
     panel = _open(win, make_pdf(tmp_path / "h.pdf", texts=[(20, 20, "Hermes Paketschein")]))
     assert panel.chosen_type() is None and panel.documents() == []
     assert not panel.print_button.isEnabled()
-    text = panel.notes.text()
+    text = panel.choose_note.text()
     assert "gleich gut" in text
     assert parcel.find("hermes-2").name in text and parcel.find("hermes-3").name in text
     item = next(panel.types.item(i) for i in range(panel.types.count())
                 if panel.types.item(i).data(TYPE_ROLE) == "hermes-3")
     panel.types.setCurrentItem(item)
     assert panel.chosen_type().id == "hermes-3" and panel.documents()
-    assert "gleich gut" not in panel.notes.text()
+    assert "gleich gut" not in panel.choose_note.text()
 
 
 def test_image_of_unknown_shape_is_not_recognised(qtbot, tmp_path):
@@ -352,7 +352,7 @@ def test_image_of_unknown_shape_is_not_recognised(qtbot, tmp_path):
     win = _window(qtbot)
     panel = _open(win, tmp_path / "q.png")
     assert panel.chosen_type() is None and panel.documents() == []
-    assert "nicht erkannt" in panel.notes.text()
+    assert "nicht erkannt" in panel.choose_note.text()
     assert len(_type_ids(panel)) >= 19                          # list stays selectable
 
 
@@ -665,7 +665,7 @@ def test_overflow_button_is_highlighted_for_a_hidden_active_tab(qtbot):
 
 
 def test_overflow_highlight_shows_without_a_stylesheet(qtbot):
-    """Design “Classic” (no stylesheet): the overflow button is still recognisably marked."""
+    """Design “System” (no stylesheet): the overflow button is still recognisably marked."""
     from PySide6.QtWidgets import QToolButton
     assert QApplication.instance().styleSheet() == ""
     win = _window(qtbot)
@@ -884,5 +884,16 @@ def test_unrecognized_label_tells_both_ways(qtbot, tmp_path):
     panel = _open(win, make_pdf(tmp_path / "fremd.pdf", texts=[(20, 20, "Irgendwas")],
                                 size_mm=(150, 150)))
     assert panel.chosen_type() is None
-    text = panel.notes.text()
+    text = panel.choose_note.text()
     assert "nicht erkannt" in text and "EIGENER TYP" in text
+
+
+def test_unrecognized_note_is_red_and_separate(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "fremd.pdf", texts=[(20, 20, "Irgendwas")],
+                                size_mm=(150, 150)))
+    assert panel.choose_note.isVisible() and "nicht erkannt" in panel.choose_note.text()
+    assert "nicht erkannt" not in panel.notes.text()
+    assert panel.choose_note.palette().windowText().color().red() > 150
+    panel.types.setCurrentRow(1)                                      # chosen: note gone
+    assert not panel.choose_note.isVisible()

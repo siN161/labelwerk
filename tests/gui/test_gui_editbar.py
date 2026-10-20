@@ -121,7 +121,7 @@ def test_edit_bar_icons_follow_theme(qtbot):
     assert _ink(icon) == {(0, 0, 0)}
     assert _ink(icon, state=QIcon.State.On) == {(255, 255, 255)}      # selected: white on black
     assert _ink(icon, QIcon.Mode.Active) == {(255, 255, 255)}         # hover: white on black
-    win.settings = Settings(check_media_on_start=False, theme="classic")
+    win.settings = Settings(check_media_on_start=False, theme="system")
     win.apply_theme_icons()
     icon = win.shortcut_actions["tool.select"].icon()
     assert _ink(icon, state=QIcon.State.On) == {(0, 0, 0)}

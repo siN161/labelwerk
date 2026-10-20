@@ -446,10 +446,6 @@ msgid "Chosen printer {printer} not found – switch it on or specify it with -p
 msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
-msgid "Classic"
-msgstr ""
-
-#: src/labelwerk/gui/settings_dialog.py
 msgid "Click a row and press the new key combination. Esc cancels, ✕ in the field removes the shortcut. Esc, Enter and Tab cannot be assigned here (they operate the table)."
 msgstr ""
 
@@ -2586,6 +2582,10 @@ msgstr ""
 #: src/labelwerk/gui/image_import.py
 #, python-brace-format
 msgid "Symbol: {name}"
+msgstr ""
+
+#: src/labelwerk/gui/settings_dialog.py
+msgid "System"
 msgstr ""
 
 #: src/labelwerk/gui/panels/series.py

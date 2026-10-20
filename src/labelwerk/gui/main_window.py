@@ -527,7 +527,7 @@ class MainWindow(QMainWindow):
             ext.setProperty("active", hidden)
             ext.style().unpolish(ext)
             ext.style().polish(ext)
-            # visible even without a stylesheet (design “Classic”): bold and with a dot
+            # visible even without a stylesheet (design “System”): bold and with a dot
             ext.setText("» •" if hidden else "»")
             font = ext.font()
             font.setBold(hidden)

@@ -129,8 +129,8 @@ def test_font_family_is_stripped(tmp_path):
 def test_theme_default_and_roundtrip(tmp_path):
     assert Settings().theme == "blackwerk"
     path = tmp_path / "s.json"
-    save_settings(Settings(theme="classic"), path)
-    assert load_settings(path).theme == "classic"
+    save_settings(Settings(theme="system"), path)
+    assert load_settings(path).theme == "system"
 
 
 def test_invalid_theme_falls_back_with_warning(tmp_path):
@@ -462,11 +462,11 @@ def test_update_settings_keeps_what_another_instance_saved(tmp_path):
     path = tmp_path / "s.json"
     save_settings(Settings(theme="blackwerk"), path)
     a = load_settings(path)                                    # instance A starts
-    save_settings(Settings(theme="classic"), path)              # instance B saves
+    save_settings(Settings(theme="system"), path)              # instance B saves
     a.last_tool = "series"
     update_settings(path, last_tool=a.last_tool)
     s = load_settings(path)
-    assert (s.theme, s.last_tool) == ("classic", "series")
+    assert (s.theme, s.last_tool) == ("system", "series")
 
 
 def test_update_settings_keeps_unknown_and_replaces_invalid_entries(tmp_path):
@@ -474,19 +474,19 @@ def test_update_settings_keeps_unknown_and_replaces_invalid_entries(tmp_path):
     the default (without in-memory state) – the message on loading would otherwise come every time."""
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
-    path.write_text(json.dumps({"theme": "classic", "neu": [1, 2], "start_zoom": 9999}))
+    path.write_text(json.dumps({"theme": "system", "neu": [1, 2], "start_zoom": 9999}))
     update_settings(path, recent_files=["/a.labelwerk"])
     raw = json.loads(path.read_text())
-    assert raw == {"theme": "classic", "neu": [1, 2], "start_zoom": 200,
+    assert raw == {"theme": "system", "neu": [1, 2], "start_zoom": 200,
                    "recent_files": ["/a.labelwerk"]}
 
 
 def test_update_settings_without_file_writes_base(tmp_path):
     from labelwerk.settings import update_settings
     path = tmp_path / "neu" / "s.json"
-    update_settings(path, base=Settings(theme="classic"), last_tool="text")
+    update_settings(path, base=Settings(theme="system"), last_tool="text")
     s = load_settings(path)
-    assert (s.theme, s.last_tool) == ("classic", "text")
+    assert (s.theme, s.last_tool) == ("system", "text")
 
 
 def test_update_settings_with_unreadable_file_writes_base(tmp_path):
@@ -494,9 +494,9 @@ def test_update_settings_with_unreadable_file_writes_base(tmp_path):
     from labelwerk.settings import update_settings
     path = tmp_path / "s.json"
     path.write_text("{kaputt")
-    update_settings(path, base=Settings(theme="classic"), last_tool="text")
+    update_settings(path, base=Settings(theme="system"), last_tool="text")
     s = load_settings(path)
-    assert (s.theme, s.last_tool, s.warnings) == ("classic", "text", [])
+    assert (s.theme, s.last_tool, s.warnings) == ("system", "text", [])
 
 
 def test_update_settings_rejects_unknown_fields(tmp_path):
@@ -560,3 +560,10 @@ def test_old_theme_name_becomes_blackwerk_silently(tmp_path):
     from labelwerk.settings import update_settings
     update_settings(path, settings, last_tool="text")
     assert json.loads(path.read_text())["theme"] == "blackwerk"
+
+
+def test_old_classic_design_becomes_system_silently(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"theme": "classic"}))
+    settings = load_settings(path)
+    assert settings.theme == "system" and not settings.warnings

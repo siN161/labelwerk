@@ -31,6 +31,7 @@ NAME_ROLE = Qt.ItemDataRole.UserRole + 1      # shown name: without the carrier 
 DETAIL_ROLE = Qt.ItemDataRole.UserRole + 2    # second line: addition in brackets, status
 BEST_ROLE = Qt.ItemDataRole.UserRole + 3      # ✓: among the best recognized
 _PAD = 6                                      # type rows: padding in pixels
+CHOOSE_STYLE = "color: #C62828; font-weight: 600;"   # "choose a type": red in every design
 
 
 def split_name(name: str, carrier: str) -> tuple[str, str]:
@@ -195,6 +196,14 @@ class ParcelPanel(Panel):
         self.layout_.addWidget(self.spaces_box)
         self.spaces_title.hide()
         self.spaces_box.hide()
+
+        self.choose_note = QLabel()                    # no type chosen: what to do (red)
+        self.choose_note.setObjectName("chooseNote")
+        self.choose_note.setStyleSheet(CHOOSE_STYLE)
+        self.choose_note.setWordWrap(True)
+        self.choose_note.setTextFormat(Qt.TextFormat.PlainText)
+        self.choose_note.hide()
+        self.layout_.addWidget(self.choose_note)
 
         self.notes = QLabel()
         self.notes.setObjectName("hint")
@@ -497,16 +506,19 @@ class ParcelPanel(Panel):
             notes.insert(0, _("No layout for this label – the pieces were arranged anew."))
         if self._error:
             notes.insert(0, self._error)
-        elif self.source is not None and self.chosen_type() is None:
+        choose = ""
+        if not self._error and self.source is not None and self.chosen_type() is None:
             if self._tied:
                 names = ", ".join(parcel.find(type_id).name for type_id in self._tied)
-                notes.insert(0, _("Several types fit equally well ({types}) – choose one in the "
-                                  "list.").format(types=names))
+                choose = _("Several types fit equally well ({types}) – choose one in the "
+                           "list.").format(types=names)
             elif not self._scores:
-                notes.insert(0, _("Type not recognized – choose a type from the list or create "
-                                  "your own with NEW OWN TYPE …"))
+                choose = _("Type not recognized – choose a type from the list or create "
+                           "your own with NEW OWN TYPE …")
             else:
-                notes.insert(0, _("Choose the type in the list."))
+                choose = _("Choose the type in the list.")
+        self.choose_note.setText(choose)
+        self.choose_note.setVisible(bool(choose))
         notes += parcel.own_warnings()          # damaged custom types
         self.own_row.setVisible(self._chosen_own() is not None)
         self.notes.setText("\n".join(notes))

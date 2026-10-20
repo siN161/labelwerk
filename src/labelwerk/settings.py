@@ -23,8 +23,8 @@ from . import zpl
 from .printers import SUPPORTED_MODELS, NetworkEntry, effective_model, is_model
 from .storage import RECENT_FILES
 
-THEMES = ("blackwerk", "classic")
-OLD_THEMES = {"rawblock": "blackwerk"}      # renamed designs: old saved name → new one
+THEMES = ("blackwerk", "system")
+OLD_THEMES = {"rawblock": "blackwerk", "classic": "system"}   # renamed designs: old saved name → new one
 MAX_WINDOW_STATE = 20000                    # Base64 of QMainWindow.saveState (a few hundred bytes)
 RESTART_KEYS = ("language", "start_zoom", "start_tool", "system_file_dialog")   # only after a restart (hint)
 # tab at startup: "last" = last used, otherwise a tool key (gui/tools.py TOOLS)
@@ -51,7 +51,7 @@ class Settings:
     last_tool: str = ""                    # last used tab (saved silently)
     hidden_tools: list[str] = field(default_factory=list)   # hidden tabs (HIDEABLE_TOOLS)
     window_state: str = ""                 # side bar dock: place, width, detached (QMainWindow state, Base64)
-    theme: str = "blackwerk"               # "blackwerk" or "classic" (Qt system style)
+    theme: str = "blackwerk"               # "blackwerk" or "system" (Qt system style)
     system_file_dialog: bool = False       # desktop file dialog (portal) instead of our own with preview
     image_crop: bool = True                # crop images to their content when inserting
     image_rotate: bool = False             # rotate images if they only fit 1:1 when rotated

@@ -220,7 +220,7 @@ def test_canvas_frame_is_smoothed_and_reused(qtbot):
     assert win.canvas.frame_item.pixmap().cacheKey() == pixmap
 
 
-@pytest.mark.parametrize("theme", ["blackwerk", "classic"])
+@pytest.mark.parametrize("theme", ["blackwerk", "system"])
 def test_frame_fields_are_not_cut_off(qtbot, theme):
     apply_theme(QApplication.instance(), theme)
     try:
@@ -237,7 +237,7 @@ def test_frame_fields_are_not_cut_off(qtbot, theme):
         for label in paper.frame_labels:
             assert isinstance(label, QLabel) and label.width() >= label.sizeHint().width()
     finally:
-        apply_theme(QApplication.instance(), "classic")
+        apply_theme(QApplication.instance(), "system")
 
 
 def test_values_stay_when_switching_to_none_and_back(qtbot):

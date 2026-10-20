@@ -141,17 +141,17 @@ def test_last_tool_on_close_keeps_settings_saved_by_another_instance(qtbot):
     save_settings(Settings(theme="blackwerk"))
     win = _window(qtbot, theme="blackwerk")
     win.tool_actions["layout"].trigger()
-    save_settings(Settings(theme="classic"))                       # second instance
+    save_settings(Settings(theme="system"))                       # second instance
     win.close()
     s = load_settings()
-    assert (s.theme, s.last_tool) == ("classic", "layout")
+    assert (s.theme, s.last_tool) == ("system", "layout")
 
 
 def test_silent_saves_keep_settings_saved_by_another_instance(qtbot, tmp_path):
     """Silent saving (Recently opened, printer chosen) writes only its field."""
     from labelwerk.settings import save_settings
     win = _window(qtbot, theme="blackwerk")
-    save_settings(Settings(theme="classic"))                       # second instance
+    save_settings(Settings(theme="system"))                       # second instance
     win.choose_printer("tcp://192.0.2.1")
     s = load_settings()
-    assert (s.theme, s.printer) == ("classic", "tcp://192.0.2.1")
+    assert (s.theme, s.printer) == ("system", "tcp://192.0.2.1")

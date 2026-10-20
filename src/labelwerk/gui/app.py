@@ -25,7 +25,7 @@ def load_theme(name: str = "blackwerk") -> str:
 
 
 def apply_theme(app: QApplication, name: str) -> None:
-    """“blackwerk” = own stylesheet, “classic” = plain Qt system style (no stylesheet)."""
+    """“blackwerk” = own stylesheet, “system” = plain Qt system style (no stylesheet)."""
     app.setStyleSheet(load_theme() if name == "blackwerk" else "")
 
 

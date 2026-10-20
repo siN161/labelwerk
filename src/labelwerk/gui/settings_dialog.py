@@ -231,7 +231,7 @@ class SettingsDialog(QDialog):
         self._enable_start_tools()
         self.theme = QComboBox()
         self.theme.addItem("BlackWerk", "blackwerk")
-        self.theme.addItem(_("Classic"), "classic")
+        self.theme.addItem(_("System"), "system")
         self.theme.setCurrentIndex(max(0, self.theme.findData(settings.theme)))
         form.addRow(_("Theme"), self.theme)
         self.system_file_dialog = QCheckBox(_("Use the file dialog of the system"))
