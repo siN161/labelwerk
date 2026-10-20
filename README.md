@@ -5,7 +5,7 @@
 <h1 align="center">labelwerk</h1>
 
 <p align="center">
-  <b>Design and print labels on Brother QL label printers under Linux.</b><br>
+  <b>Design and print labels on Brother QL label printers under Linux.</b> *other printers work also<br>
   Text, images, symbols, barcodes and series on a label shown in real size – plus parcel labels
   converted for the label printer. No P-touch Editor, no Wine.
 </p>
