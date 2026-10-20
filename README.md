@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/siN161/labelwerk/releases/latest"><img alt="Linux AppImage" src="https://img.shields.io/badge/Linux-AppImage-E95420?style=for-the-badge&logo=linux&logoColor=white"></a>
   <a href="https://github.com/siN161/labelwerk/releases/latest"><img alt="Flatpak download" src="https://img.shields.io/badge/Flatpak-Download-4A90D9?style=for-the-badge&logo=flatpak&logoColor=white"></a>
-  <a href="#installation"><img alt="Install with pip" src="https://img.shields.io/badge/Python-pip%20install-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
+  <a href="https://pypi.org/project/labelwerk/"><img alt="Install with pip" src="https://img.shields.io/badge/PyPI-pip%20install-3776AB?style=for-the-badge&logo=python&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -28,6 +28,7 @@
 <p align="center">
   <a href="https://github.com/siN161/labelwerk/actions/workflows/tests.yml"><img alt="CI" src="https://github.com/siN161/labelwerk/actions/workflows/tests.yml/badge.svg"></a>
   <a href="https://github.com/siN161/labelwerk/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/siN161/labelwerk?include_prereleases"></a>
+  <a href="https://pypi.org/project/labelwerk/"><img alt="PyPI" src="https://img.shields.io/pypi/v/labelwerk"></a>
   <a href="LICENSE"><img alt="License GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB">
   <img alt="Platform Linux" src="https://img.shields.io/badge/platform-Linux-555555">
@@ -58,16 +59,25 @@ with model, label roll and result.
 
 ## Installation
 
-```bash
-git clone https://github.com/siN161/labelwerk.git
-cd labelwerk
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[gui]"
-labelwerk install-desktop          # adds labelwerk to the app launcher
-sudo usermod -aG lp "$USER"        # printer access without root, then log in again
-```
+Download from the [latest release](https://github.com/siN161/labelwerk/releases/latest):
 
-On the QL-600 the **Editor Lite LED must be off**, otherwise it shows up as a USB drive.
+- **AppImage** – one file, runs on any distribution with glibc 2.28 or newer:
+  ```bash
+  chmod +x labelwerk-*-x86_64.AppImage
+  ./labelwerk-*-x86_64.AppImage                 # the app
+  ./labelwerk-*-x86_64.AppImage cli printers    # the command line
+  ```
+- **Flatpak** – `flatpak install --user labelwerk-*-x86_64.flatpak`, then start it from the launcher
+  (needs the runtime `org.freedesktop.Platform//25.08` from Flathub).
+- **pip** – Python 3.10 or newer:
+  ```bash
+  pip install "labelwerk[gui]"
+  labelwerk install-desktop          # adds labelwerk to the app launcher
+  ```
+
+The printer needs access to `/dev/usb/lp*` – add yourself to the group `lp` once, then log in again:
+`sudo usermod -aG lp "$USER"`. On the QL-600 the **Editor Lite LED must be off**, otherwise it shows
+up as a USB drive.
 
 ## Usage
 
@@ -102,11 +112,14 @@ Translations are welcome – see [`src/labelwerk/po/README.md`](src/labelwerk/po
 ## Development
 
 ```bash
+git clone https://github.com/siN161/labelwerk.git && cd labelwerk
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 QT_QPA_PLATFORM=offscreen pytest -q
 ```
 
 Tests never talk to a printer. The core (`src/labelwerk/*.py`) has no Qt dependency; `gui/` only displays and edits.
+Packages: `packaging/appimage/build.sh` (Docker) and `packaging/flatpak/build.sh` (flatpak-builder).
 
 ## License
 

@@ -1,0 +1,48 @@
+# Flatpak of labelwerk – build: packaging/flatpak/build.sh (flatpak-builder from Flathub)
+app-id: io.github.siN161.labelwerk
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: labelwerk-gui
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=all          # USB label printers (/dev/usb/lp*): print and query the loaded roll
+  - --socket=cups         # CUPS queues: lp/lpstat/lpoptions talk to the cupsd of the system
+  - --share=network       # network printers (Brother, Zebra)
+  - --filesystem=home     # own file dialog with preview: label files, tables, images
+modules:
+  # CUPS command-line tools (lp, lpstat, lpoptions) – the runtime only has the library; same version
+  # as the libcups of the runtime (25.08: 2.4.12), only the programs are installed
+  - name: cups-client
+    buildsystem: simple
+    build-commands:
+      - ./configure --prefix=/app --with-components=libcups --disable-pam
+      - make -C cups -j${FLATPAK_BUILDER_N_JOBS}
+      - make -C systemv lp lpstat lpoptions
+      - install -Dm755 systemv/lp systemv/lpstat systemv/lpoptions -t /app/bin
+    sources:
+      - type: archive
+        url: https://github.com/OpenPrinting/cups/releases/download/v2.4.12/cups-2.4.12-source.tar.gz
+        sha256: b1dde191a4ae2760c47220c82ca6155a28c382701e6c1a0159d1054990231d59
+  - name: labelwerk
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network # pip fetches the wheels (PySide6-Essentials, Pillow, pypdfium2 …)
+    build-commands:
+      - pip3 install --prefix=/app --no-cache-dir --no-warn-script-location ".[gui]"
+      - python3 packaging/make_files.py /app labelwerk-gui
+      - rm -f /app/share/icons/hicolor/scalable/mimetypes/application-x-labelwerk.svg
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .venv
+          - .git
+          - .superpowers
+          - CLAUDE.md
+          - docs
+          - dist
+          - build

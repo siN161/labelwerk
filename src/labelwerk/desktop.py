@@ -13,7 +13,10 @@ from . import i18n
 from .i18n import N_, _
 
 APP_NAME = "labelwerk"  # displayed name (window, launcher, help) – renaming: CLAUDE.md, roadmap 7
-APP_ID = "labelwerk"    # technical ID; must match QGuiApplication.setDesktopFileName
+APP_ID = "io.github.siN161.labelwerk"   # technical ID (Flatpak, launcher, Wayland app id); must
+                                         # match QGuiApplication.setDesktopFileName
+OLD_IDS = ("labelwerk",)                 # IDs of older versions: their launcher files are removed
+ICON_FILE = "labelwerk.svg"              # app icon in the package (gui/icons)
 MIME_TYPE = "application/x-labelwerk"      # label file *.labelwerk
 MIME_ICON = MIME_TYPE.replace("/", "-")    # icon name per XDG (shared-mime-info derives it)
 # Texts for launcher and file type: English, plus each translation as its own entry (the files
@@ -72,7 +75,7 @@ def _entries(key: str, text: str) -> str:
 
 
 def icon_svg() -> str:
-    return (resources.files("labelwerk.gui") / "icons" / f"{APP_ID}.svg").read_text(encoding="utf-8")
+    return (resources.files("labelwerk.gui") / "icons" / ICON_FILE).read_text(encoding="utf-8")
 
 
 def _exec_arg(path: Path) -> str:
@@ -131,6 +134,7 @@ def install(gui_exe: Path, data: Path | None = None, which=None, run=None,
         raise ValueError(_("labelwerk-gui not found ({path}) – GUI installed? "
                            "pip install -e \".[gui]\"").format(path=gui_exe))
     data = data or data_home()
+    _remove_old(data)
     entry, icon, mime, mime_icon = _targets(data)
     contents = {entry: desktop_entry(gui_exe.resolve()), icon: icon_svg(), mime: mime_xml(),
                 mime_icon: icon_svg()}
@@ -142,10 +146,24 @@ def install(gui_exe: Path, data: Path | None = None, which=None, run=None,
     return list(contents)
 
 
-def uninstall(data: Path | None = None, which=None, run=None, update: bool = True) -> list[Path]:
-    """Remove launcher entry, icon and file type; returns the removed files."""
-    data = data or data_home()
+def _remove_old(data: Path) -> list[Path]:
+    """Launcher entry, icon and file type of older versions (other ID) – otherwise twice."""
     removed = []
+    icons = data / "icons" / "hicolor" / "scalable" / "apps"
+    for old in OLD_IDS:
+        for path in (data / "applications" / f"{old}.desktop", icons / f"{old}.svg",
+                     data / "mime" / "packages" / f"{old}.xml"):
+            if path.exists():
+                path.unlink()
+                removed.append(path)
+    return removed
+
+
+def uninstall(data: Path | None = None, which=None, run=None, update: bool = True) -> list[Path]:
+    """Remove launcher entry, icon and file type (also those of older versions); returns the
+    removed files."""
+    data = data or data_home()
+    removed = _remove_old(data)
     for path in _targets(data):
         if path.exists():
             path.unlink()

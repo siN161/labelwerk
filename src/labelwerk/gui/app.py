@@ -9,7 +9,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from .. import i18n
-from ..desktop import APP_ID, APP_NAME
+from ..desktop import APP_ID, APP_NAME, ICON_FILE
 from ..settings import configured_file_dialog, configured_language
 
 from . import file_dialog
@@ -33,7 +33,7 @@ def apply_identity(app: QApplication) -> None:
     """Set name, app ID (Wayland: link to the launcher entry) and window icon."""
     app.setApplicationName(APP_NAME)
     app.setDesktopFileName(APP_ID)
-    icon = resources.files("labelwerk.gui") / "icons" / f"{APP_ID}.svg"
+    icon = resources.files("labelwerk.gui") / "icons" / ICON_FILE
     app.setWindowIcon(QIcon(str(icon)))
 
 

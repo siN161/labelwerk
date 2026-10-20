@@ -1,0 +1,19 @@
+name: release
+# Tag v* → build sdist and wheel, publish them to PyPI (trusted publishing: no token in the repo;
+# the publisher is registered once on pypi.org for this repository, workflow and environment "pypi")
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install build && python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1

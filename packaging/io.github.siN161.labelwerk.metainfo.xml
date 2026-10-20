@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata (software centres, Flatpak, AppImage). Check: appstreamcli validate -->
+<component type="desktop-application">
+  <id>io.github.siN161.labelwerk</id>
+  <name>labelwerk</name>
+  <summary>Design and print labels on Brother QL printers</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later AND MIT AND CC0-1.0</project_license>
+  <developer id="io.github.sin161">
+    <name>Tobias</name>
+  </developer>
+  <description>
+    <p>
+      labelwerk designs and prints labels on Brother QL label printers under Linux – without
+      the P-touch Editor and without Wine.
+    </p>
+    <ul>
+      <li>Text with per-character formatting, images, symbols, barcodes and QR codes, decorative frames</li>
+      <li>Labels shown in real size, objects placed freely with snapping</li>
+      <li>Series from CSV/Excel or numbering, favourites, label files</li>
+      <li>Parcel labels (DHL, Hermes, Amazon returns) converted for 62 mm tape or 4×6" labels</li>
+      <li>PDFs and images printed 1:1, also from the command line</li>
+    </ul>
+    <p>
+      Tested with the QL-600; other QL models, Zebra printers (ZPL) and CUPS label printers should
+      work but are untested.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.siN161.labelwerk.desktop</launchable>
+  <url type="homepage">https://github.com/siN161/labelwerk</url>
+  <url type="bugtracker">https://github.com/siN161/labelwerk/issues</url>
+  <url type="vcs-browser">https://github.com/siN161/labelwerk</url>
+  <url type="translate">https://github.com/siN161/labelwerk/tree/main/src/labelwerk/po</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>A terminal label with text, QR code and frame</caption>
+      <image>https://raw.githubusercontent.com/siN161/labelwerk/main/docs/screenshots/editor.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A return label converted for 62 mm tape</caption>
+      <image>https://raw.githubusercontent.com/siN161/labelwerk/main/docs/screenshots/parcel.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Drawing an own parcel label type</caption>
+      <image>https://raw.githubusercontent.com/siN161/labelwerk/main/docs/screenshots/parcel-type.png</image>
+    </screenshot>
+  </screenshots>
+  <categories>
+    <category>Office</category>
+  </categories>
+  <keywords>
+    <keyword>label</keyword>
+    <keyword>Brother</keyword>
+    <keyword>QL</keyword>
+    <keyword>printer</keyword>
+    <keyword>barcode</keyword>
+    <keyword>parcel</keyword>
+  </keywords>
+  <provides>
+    <binary>labelwerk</binary>
+    <binary>labelwerk-gui</binary>
+    <mediatype>application/x-labelwerk</mediatype>
+  </provides>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.9.0" date="2026-10-20">
+      <description>
+        <p>First public release: label editor, series, barcodes, symbols, parcel label converter,
+        printer detection for the Brother QL family, Zebra (ZPL) and CUPS.</p>
+      </description>
+    </release>
+  </releases>
+</component>

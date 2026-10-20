@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "labelwerk"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Design and print labels on Brother QL printers under Linux"
 readme = "README.md"
 # Program GPL; bundled symbols: Tabler Icons MIT, own drawings CC0, Commons public domain/CC0
@@ -24,14 +24,25 @@ dependencies = [
 
 [project.optional-dependencies]
 # PySide6 6.12.0 loses references to None/True/False under Python < 3.12 → crash (6.11.2 ok)
-gui = ["PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'"]
+# only the Essentials (Core, Gui, Widgets, Svg, DBus, Test) – the Addons (WebEngine, 3D …) are not used
+gui = ["PySide6-Essentials>=6.6,!=6.12.0; python_version < '3.12'",
+       "PySide6-Essentials>=6.6; python_version >= '3.12'"]
 # zxing-cpp (Apache-2.0) reads the printed barcodes in tests; wheels only from Python 3.12
-dev = ["pytest>=8", "pytest-qt>=4", "PySide6>=6.6,!=6.12.0; python_version < '3.12'", "PySide6>=6.6; python_version >= '3.12'",
+dev = ["pytest>=8", "pytest-qt>=4", "PySide6-Essentials>=6.6,!=6.12.0; python_version < '3.12'",
+       "PySide6-Essentials>=6.6; python_version >= '3.12'",
        "zxing-cpp>=2.2; python_version >= '3.12'"]
 
 [project.scripts]
 labelwerk = "labelwerk.cli:main"
 labelwerk-gui = "labelwerk.gui.app:main"
+
+[tool.hatch.build.targets.sdist]
+# only what belongs to the project – never local notes next to it
+include = ["/src", "/tests", "/tools", "/packaging", "/docs/screenshots", "/.github", "/README.md",
+           "/LICENSE", "/pyproject.toml", "/.gitignore"]
+
+[tool.hatch.version]
+path = "src/labelwerk/__init__.py"           # single place for the version
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/labelwerk"]

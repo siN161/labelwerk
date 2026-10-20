@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import desktop, i18n, parcel
+from . import __version__, desktop, i18n, parcel
 from . import printer as prn
 from . import printers
 from .detect import BUSY_MESSAGE, PRINTER_NOT_FOUND, brother_busy, find_brother_lp, find_brother_usb
@@ -99,6 +99,7 @@ def _language(argv: list[str]) -> str:
 
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog=desktop.APP_NAME)
+    p.add_argument("--version", action="version", version=f"labelwerk {__version__}")
     p.add_argument("--lang", choices=i18n.available(),
                    help=_("language of the output (default: setting, otherwise the system)"))
     p.add_argument("-m", "--model", default="auto",

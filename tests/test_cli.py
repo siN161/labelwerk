@@ -156,10 +156,10 @@ def test_install_desktop_uses_xdg_data_home(tmp_path, monkeypatch, capsys):
                         lambda *a, **k: pytest.fail("externes Programm gestartet"))
     rc = main(["install-desktop"])
     assert rc == 0
-    assert (tmp_path / "applications" / "labelwerk.desktop").exists()
-    assert "labelwerk.desktop" in capsys.readouterr().out
+    assert (tmp_path / "applications" / "io.github.siN161.labelwerk.desktop").exists()
+    assert "io.github.siN161.labelwerk.desktop" in capsys.readouterr().out
     assert main(["install-desktop", "--remove"]) == 0
-    assert not (tmp_path / "applications" / "labelwerk.desktop").exists()
+    assert not (tmp_path / "applications" / "io.github.siN161.labelwerk.desktop").exists()
 
 
 def _write_settings(**values):
@@ -675,3 +675,12 @@ def test_argparse_texts_are_translated(capsys):
         main(["print"])
     err = capsys.readouterr().err
     assert "Aufruf: labelwerk print" in err and "Fehler: diese Angaben fehlen: text" in err
+
+
+def test_version_is_printed(capsys):
+    from labelwerk import __version__
+    with pytest.raises(SystemExit) as stop:
+        main(["--version"])
+    assert stop.value.code == 0
+    assert capsys.readouterr().out.strip() == f"labelwerk {__version__}"
+    assert __version__ == "0.9.0"

@@ -270,7 +270,7 @@ def test_busy_printer_message(window, qtbot, monkeypatch):
 def test_app_identity_sets_icon_and_desktop_name(qapp):
     from labelwerk.gui.app import apply_identity
     apply_identity(qapp)
-    assert qapp.desktopFileName() == "labelwerk"
+    assert qapp.desktopFileName() == "io.github.siN161.labelwerk"
     assert not qapp.windowIcon().isNull()
 
 

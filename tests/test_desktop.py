@@ -20,13 +20,13 @@ def gui_exe(tmp_path):
 def test_install_writes_desktop_entry_and_icon(tmp_path, gui_exe):
     data = tmp_path / "share"
     paths = install(gui_exe, data)
-    entry = data / "applications" / "labelwerk.desktop"
-    icon = data / "icons" / "hicolor" / "scalable" / "apps" / "labelwerk.svg"
+    entry = data / "applications" / "io.github.siN161.labelwerk.desktop"
+    icon = data / "icons" / "hicolor" / "scalable" / "apps" / "io.github.siN161.labelwerk.svg"
     assert {entry, icon} <= set(paths)
     text = entry.read_text()
     assert f'Exec="{gui_exe}" %f\n' in text
-    assert "Icon=labelwerk\n" in text
-    assert "StartupWMClass=labelwerk\n" in text
+    assert "Icon=io.github.siN161.labelwerk\n" in text
+    assert "StartupWMClass=io.github.siN161.labelwerk\n" in text
     assert icon.read_text().lstrip().startswith("<svg")
 
 
@@ -74,12 +74,12 @@ def test_install_registers_the_file_type(tmp_path, gui_exe):
     data = tmp_path / "share"
     runner = Runner()
     paths = desktop.install(gui_exe, data, which=runner.which, run=runner.run)
-    mime = data / "mime" / "packages" / "labelwerk.xml"
+    mime = data / "mime" / "packages" / "io.github.siN161.labelwerk.xml"
     mime_icon = data / "icons" / "hicolor" / "scalable" / "mimetypes" / "application-x-labelwerk.svg"
     assert mime in paths and mime_icon in paths
     xml = mime.read_text()
     assert 'type="application/x-labelwerk"' in xml and 'pattern="*.labelwerk"' in xml
-    entry = (data / "applications" / "labelwerk.desktop").read_text()
+    entry = (data / "applications" / "io.github.siN161.labelwerk.desktop").read_text()
     assert f'Exec="{gui_exe}" %f\n' in entry and "MimeType=application/x-labelwerk;\n" in entry
     assert runner.calls == [["/usr/bin/update-mime-database", str(data / "mime")],
                             ["/usr/bin/update-desktop-database", str(data / "applications")]]
@@ -97,8 +97,8 @@ def test_uninstall_removes_the_file_type(tmp_path, gui_exe):
     desktop.install(gui_exe, data, which=runner.which, run=runner.run)
     runner.calls.clear()
     removed = desktop.uninstall(data, which=runner.which, run=runner.run)
-    assert data / "mime" / "packages" / "labelwerk.xml" in removed
-    assert not (data / "mime" / "packages" / "labelwerk.xml").exists()
+    assert data / "mime" / "packages" / "io.github.siN161.labelwerk.xml" in removed
+    assert not (data / "mime" / "packages" / "io.github.siN161.labelwerk.xml").exists()
     assert ["/usr/bin/update-mime-database", str(data / "mime")] in runner.calls
 
 
@@ -150,3 +150,17 @@ def test_mime_comment_has_english_fallback_and_german(tmp_path):
     xml = desktop.mime_xml()
     assert "<comment>labelwerk label</comment>" in xml
     assert '<comment xml:lang="de">labelwerk-Etikett</comment>' in xml
+
+
+def test_install_removes_the_entry_of_older_versions(tmp_path, gui_exe):
+    """Before 0.9 the ID was "labelwerk" – otherwise the launcher would show labelwerk twice."""
+    data = tmp_path / "share"
+    old = [data / "applications" / "labelwerk.desktop",
+           data / "icons" / "hicolor" / "scalable" / "apps" / "labelwerk.svg",
+           data / "mime" / "packages" / "labelwerk.xml"]
+    for path in old:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("old")
+    install(gui_exe, data)
+    assert not any(path.exists() for path in old)
+    assert (data / "applications" / "io.github.siN161.labelwerk.desktop").exists()

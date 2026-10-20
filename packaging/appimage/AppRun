@@ -1,0 +1,11 @@
+#!/bin/sh
+# labelwerk AppImage: without arguments (or with a file) the window, "cli …" the command line,
+# e.g.  ./labelwerk-x86_64.AppImage cli printers
+HERE="$(dirname "$(readlink -f "$0")")"
+export PATH="$HERE/usr/bin:$PATH"
+PYTHON="$HERE/usr/bin/python3.12"
+if [ "$1" = "cli" ]; then
+    shift
+    exec "$PYTHON" -s -c "import sys; from labelwerk.cli import main; sys.exit(main())" "$@"
+fi
+exec "$PYTHON" -s -c "import sys; from labelwerk.gui.app import main; sys.exit(main())" "$@"
