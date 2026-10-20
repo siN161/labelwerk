@@ -829,3 +829,60 @@ def test_type_without_space_shows_no_space_section(qtbot, tmp_path):
                                 rects=[(15, 15, 100, 50)]))
     assert panel.chosen_type().own
     assert not panel.spaces_title.isVisible()
+
+
+# --- Order of the areas in the editor -------------------------------------------------------------
+def _three_areas(qtbot, tmp_path):
+    editor = _editor(qtbot, tmp_path)
+    editor.add_area((10, 10, 60, 40))                        # 1
+    editor.add_area((10, 100, 60, 130), barcode=True)        # 2
+    editor.add_area((100, 100, 130, 200), rotation=90)       # 3
+    return editor
+
+
+def _srcs(editor):
+    return [round(p["src"][1]) for p in editor.pieces()]
+
+
+def test_editor_moves_an_area_with_the_buttons(qtbot, tmp_path):
+    editor = _three_areas(qtbot, tmp_path)
+    editor.list.setCurrentRow(2)
+    editor.up_button.click()
+    assert _srcs(editor) == [10, 100, 100] and editor.pieces()[1]["rotation"] == 90
+    assert editor.list.currentRow() == 1 and editor.list.item(1).text().startswith("2:")
+    editor.list.setCurrentRow(0)
+    editor.down_button.click()
+    assert [p["rotation"] for p in editor.pieces()] == [90, 0, 0]
+    assert not editor.up_button.isEnabled() or editor.list.currentRow() > 0
+
+
+def test_editor_moves_an_area_with_the_keyboard(qtbot, tmp_path):
+    editor = _three_areas(qtbot, tmp_path)
+    editor.list.setCurrentRow(0)
+    editor.list.setFocus()
+    qtbot.keyClick(editor.list, Qt.Key.Key_Down, Qt.KeyboardModifier.ControlModifier)
+    assert [p.get("kind") for p in editor.pieces()] == ["barcode", "text", "text"]
+    assert editor.list.currentRow() == 1
+
+
+def test_editor_follows_a_dragged_row(qtbot, tmp_path):
+    from PySide6.QtCore import QModelIndex
+    editor = _three_areas(qtbot, tmp_path)
+    editor.list.setCurrentRow(0)
+    editor.space.setValue(12)                                 # space stays with its area
+    assert editor.list.dragDropMode() == editor.list.DragDropMode.InternalMove
+    assert editor.list.model().moveRow(QModelIndex(), 0, QModelIndex(), 3)   # first → last
+    pieces = editor.pieces()
+    assert [round(p["src"][1]) for p in pieces] == [100, 100, 10]
+    assert pieces[2].get("space_after_mm") is None            # the last one has no space …
+    editor.list.setCurrentRow(2)
+    assert editor.space.value() == 12                         # … but keeps its value
+
+
+def test_unrecognized_label_tells_both_ways(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, make_pdf(tmp_path / "fremd.pdf", texts=[(20, 20, "Irgendwas")],
+                                size_mm=(150, 150)))
+    assert panel.chosen_type() is None
+    text = panel.notes.text()
+    assert "nicht erkannt" in text and "EIGENER TYP" in text

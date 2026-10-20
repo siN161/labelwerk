@@ -503,7 +503,8 @@ class ParcelPanel(Panel):
                 notes.insert(0, _("Several types fit equally well ({types}) – choose one in the "
                                   "list.").format(types=names))
             elif not self._scores:
-                notes.insert(0, _("Type not recognized – choose it in the list."))
+                notes.insert(0, _("Type not recognized – choose a type from the list or create "
+                                  "your own with NEW OWN TYPE …"))
             else:
                 notes.insert(0, _("Choose the type in the list."))
         notes += parcel.own_warnings()          # damaged custom types

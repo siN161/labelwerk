@@ -7,13 +7,13 @@ area). The preview shows the result on the label of the main window.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
                                QGraphicsItem, QGraphicsRectItem, QGraphicsScene,
                                QGraphicsSimpleTextItem, QGraphicsView, QHBoxLayout, QLabel,
-                               QLineEdit, QListWidget, QSpinBox, QSplitter, QVBoxLayout,
-                               QWidget)
+                               QLineEdit, QListWidget, QSpinBox, QSplitter, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from .. import parcel
 from ..i18n import _, language, number, pgettext
@@ -158,6 +158,18 @@ class ParcelTypeEditor(QDialog):
                                 "the type when opening (several words: separate with commas)"))
         self.list = QListWidget()
         self.list.currentRowChanged.connect(self._row_chosen)
+        # order on the tape: drag a row, ▲/▼ or Ctrl+↑/↓ (a space stays with its area)
+        self.list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+        self.list.model().rowsMoved.connect(self._rows_dragged)
+        self.list.installEventFilter(self)
+        self.up_button = QToolButton()
+        self.up_button.setText("▲")
+        self.up_button.setToolTip(_("Earlier on the tape (Ctrl+↑)"))
+        self.up_button.clicked.connect(lambda: self.move_area(-1))
+        self.down_button = QToolButton()
+        self.down_button.setText("▼")
+        self.down_button.setToolTip(_("Later on the tape (Ctrl+↓)"))
+        self.down_button.clicked.connect(lambda: self.move_area(1))
         self.rotation = QComboBox()
         for degrees in ROTATIONS:
             self.rotation.addItem(_("{degrees}° clockwise").format(degrees=degrees), degrees)
@@ -195,7 +207,16 @@ class ParcelTypeEditor(QDialog):
         hint.setWordWrap(True)
         hint.setObjectName("note")
         form.addRow(hint)
-        form.addRow(_("Areas"), self.list)
+        order = QWidget()
+        order_layout = QHBoxLayout(order)
+        order_layout.setContentsMargins(0, 0, 0, 0)
+        order_layout.addWidget(self.list, 1)
+        buttons = QVBoxLayout()
+        buttons.addWidget(self.up_button)
+        buttons.addWidget(self.down_button)
+        buttons.addStretch(1)
+        order_layout.addLayout(buttons)
+        form.addRow(_("Areas"), order)
         form.addRow(_("Rotation"), self.rotation)
         form.addRow(self.barcode)
         form.addRow(_("Space after"), self.space)
@@ -280,6 +301,41 @@ class ParcelTypeEditor(QDialog):
         self._fill_list()
         self._update()
 
+    def move_area(self, step: int) -> None:
+        """Chosen area one place earlier (-1) or later (+1) on the tape (within its page)."""
+        areas = self._areas.get(self._page, [])
+        row = self.list.currentRow()
+        target = row + step
+        if not (0 <= row < len(areas) and 0 <= target < len(areas)):
+            return
+        areas.insert(target, areas.pop(row))
+        self._reordered(target)
+
+    def _rows_dragged(self, _parent, start: int, _end: int, _dest, row: int) -> None:
+        """A row was dragged in the list: same order for the areas (Qt counts the target before
+        the move)."""
+        areas = self._areas.get(self._page, [])
+        if not 0 <= start < len(areas):
+            return
+        target = row - 1 if row > start else row
+        areas.insert(target, areas.pop(start))
+        QTimer.singleShot(0, self, lambda: self._reordered(target))   # after Qt finished the move
+
+    def _reordered(self, row: int) -> None:
+        for index, area in enumerate(self._areas.get(self._page, [])):
+            area.set_number(self._number(index))
+        self._fill_list()
+        self.list.setCurrentRow(row)
+        self._update()
+
+    def eventFilter(self, watched, event) -> bool:
+        if (watched is self.list and event.type() == QEvent.Type.KeyPress
+                and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+                and event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down)):
+            self.move_area(-1 if event.key() == Qt.Key.Key_Up else 1)
+            return True
+        return super().eventFilter(watched, event)
+
     def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace) and not self.name.hasFocus() \
                 and not self.words.hasFocus():
@@ -300,6 +356,12 @@ class ParcelTypeEditor(QDialog):
                 text += " · " + _("space {length} mm").format(length=number(area.space))
             self.list.addItem(text)
         self.list.blockSignals(False)
+        self._update_order_buttons()
+
+    def _update_order_buttons(self) -> None:
+        row = self.list.currentRow()
+        self.up_button.setEnabled(row > 0)
+        self.down_button.setEnabled(0 <= row < self.list.count() - 1)
 
     def _mm(self, area: _Area) -> tuple[float, float, float, float]:
         """Area in mm on its page – limited to the page size (rounding at the edge)."""
@@ -325,6 +387,7 @@ class ParcelTypeEditor(QDialog):
 
     def _row_chosen(self, row: int) -> None:
         area = self._current_area()
+        self._update_order_buttons()
         for widget in (self.rotation, self.barcode):
             widget.setEnabled(area is not None)
         last = area is not None and self._is_last(area)

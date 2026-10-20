@@ -743,6 +743,10 @@ msgstr "Abgelegtes Bild"
 msgid "Duplicate"
 msgstr "Duplizieren"
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Earlier on the tape (Ctrl+↑)"
+msgstr "Früher auf dem Band (Strg+↑)"
+
 #: src/labelwerk/gui/main_window.py
 msgid "Edit"
 msgstr "Bearbeiten"
@@ -1292,6 +1296,10 @@ msgstr "Schrift größer"
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Last used"
 msgstr "Zuletzt benutzter"
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Later on the tape (Ctrl+↓)"
+msgstr "Später auf dem Band (Strg+↓)"
 
 #: src/labelwerk/gui/panels/layout.py
 #: src/labelwerk/gui/tools.py
@@ -2761,8 +2769,8 @@ msgid "Type"
 msgstr "Art"
 
 #: src/labelwerk/gui/panels/parcel.py
-msgid "Type not recognized – choose it in the list."
-msgstr "Typ nicht erkannt – in der Liste wählen."
+msgid "Type not recognized – choose a type from the list or create your own with NEW OWN TYPE …"
+msgstr "Typ nicht erkannt – wähle einen Typ aus der Liste oder lege mit EIGENER TYP … einen eigenen an"
 
 #: src/labelwerk/gui/panels/barcode.py
 msgid "Type of barcode – for the selected one or the next one"
@@ -3827,6 +3835,9 @@ msgstr "keiner"
 msgctxt "text panel"
 msgid "Font"
 msgstr "Schrift"
+
+#~ msgid "Type not recognized – choose it in the list."
+#~ msgstr "Typ nicht erkannt – in der Liste wählen."
 
 #~ msgid "Space between the pieces: set it per area when you create your own type (NEW OWN TYPE …)."
 #~ msgstr "Freiraum zwischen den Stücken: beim Anlegen eines eigenen Typs je Bereich festlegen (EIGENER TYP …)."

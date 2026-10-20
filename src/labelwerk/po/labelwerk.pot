@@ -734,6 +734,10 @@ msgstr ""
 msgid "Duplicate"
 msgstr ""
 
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Earlier on the tape (Ctrl+↑)"
+msgstr ""
+
 #: src/labelwerk/gui/main_window.py
 msgid "Edit"
 msgstr ""
@@ -1282,6 +1286,10 @@ msgstr ""
 
 #: src/labelwerk/gui/settings_dialog.py
 msgid "Last used"
+msgstr ""
+
+#: src/labelwerk/gui/parcel_editor.py
+msgid "Later on the tape (Ctrl+↓)"
 msgstr ""
 
 #: src/labelwerk/gui/panels/layout.py
@@ -2740,7 +2748,7 @@ msgid "Type"
 msgstr ""
 
 #: src/labelwerk/gui/panels/parcel.py
-msgid "Type not recognized – choose it in the list."
+msgid "Type not recognized – choose a type from the list or create your own with NEW OWN TYPE …"
 msgstr ""
 
 #: src/labelwerk/gui/panels/barcode.py
