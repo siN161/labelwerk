@@ -9,10 +9,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import QMimeData, QSignalBlocker, Qt, QThreadPool, QTimer
+from PySide6.QtCore import QByteArray, QMimeData, QSignalBlocker, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon
-from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFrame,
-                               QHBoxLayout, QInputDialog, QLineEdit,
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QDockWidget, QFrame,
+                               QInputDialog, QLineEdit,
                                QLabel, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSizePolicy, QStackedWidget, QToolBar, QToolButton,
                                QWidget)
@@ -161,12 +161,13 @@ class MainWindow(QMainWindow):
 
         # Tool bar + panels from the registry
         toolbar = QToolBar(_("Tools"))
+        toolbar.setObjectName("toolBar")            # name: part of the saved window state
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
         self.addToolBar(toolbar)
         self.panels = QStackedWidget()
         self.panels.setObjectName("panels")
-        self.panels.setFixedWidth(PANEL_WIDTH)
+        self.panels.setMinimumWidth(PANEL_WIDTH)      # wider by dragging the dock edge
         self.tool_actions: dict[str, QAction] = {}
         self._panel_by_key = {}
         group = QActionGroup(self)
@@ -241,10 +242,6 @@ class MainWindow(QMainWindow):
             panel.use_actions(self.shortcut_actions)
         self.apply_theme_icons()
         self.apply_font_list()
-        central = QWidget()
-        layout = QHBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
         scroll = QScrollArea()                  # small screens: panel scrolls, window stays
         scroll.setObjectName("panelScroll")
         # A click on a free panel area takes focus from nobody (edit mode keeps typing)
@@ -253,10 +250,22 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setFixedWidth(PANEL_WIDTH + scroll.verticalScrollBar().sizeHint().width())
-        layout.addWidget(scroll)
-        layout.addWidget(self.canvas, 1)
-        self.setCentralWidget(central)
+        scroll.setMinimumWidth(PANEL_WIDTH + scroll.verticalScrollBar().sizeHint().width())
+        # Side bar as a dock: left or right, wider by dragging, detachable – never closed
+        self.panel_dock = QDockWidget(_("Properties"), self)
+        self.panel_dock.setObjectName("panelDock")
+        self.panel_dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable
+                                    | QDockWidget.DockWidgetFeature.DockWidgetFloatable)
+        self.panel_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea
+                                        | Qt.DockWidgetArea.RightDockWidgetArea)
+        self.panel_dock.setWidget(scroll)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.panel_dock)
+        self.setCentralWidget(self.canvas)
+        if self.settings.window_state:              # place and width as last time
+            self.restoreState(QByteArray.fromBase64(self.settings.window_state.encode("ascii")))
+        else:                                       # first start: as narrow as the panels allow
+            self.resizeDocks([self.panel_dock], [scroll.minimumWidth()], Qt.Orientation.Horizontal)
+        self._stored_state = self.settings.window_state
 
         # Status bar: printer (button with choice), result, zoom
         self.printer_status = QToolButton()
@@ -2022,10 +2031,15 @@ class MainWindow(QMainWindow):
         self._shot_pending = False                  # no selection and no inserting any more
         if self._shooting:
             self._end_shooting()
-        if self.settings.last_tool != self._stored_tool:   # last used tab, silently
+        self.settings.window_state = bytes(self.saveState().toBase64()).decode("ascii")
+        changed = {key: getattr(self.settings, key) for key, stored in
+                   (("last_tool", self._stored_tool), ("window_state", self._stored_state))
+                   if getattr(self.settings, key) != stored}
+        if changed:                                 # last used tab, side bar: silently
             try:
-                update_settings(base=self.settings, last_tool=self.settings.last_tool)
-                self._stored_tool = self.settings.last_tool
+                update_settings(base=self.settings, **changed)
+                self._stored_tool, self._stored_state = (self.settings.last_tool,
+                                                         self.settings.window_state)
             except OSError:
                 pass                                # on quitting: nothing more to report
         super().closeEvent(event)

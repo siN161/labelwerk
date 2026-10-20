@@ -794,3 +794,36 @@ def test_panel_keeps_changed_spaces_for_another_label(qtbot, tmp_path):
     panel.space_boxes[0].setValue(40)
     panel.set_target("102", "QL-1100")
     assert [b.value() for b in panel.space_boxes] == [40]
+
+
+# --- Calmer type list, space hint (polish 2026-10-20) -----------------------------------------
+def _type_item(panel, type_id):
+    return next(panel.types.item(i) for i in range(panel.types.count())
+                if panel.types.item(i).data(TYPE_ROLE) == type_id)
+
+
+def test_type_rows_are_two_even_lines_without_wrapping(qtbot):
+    from labelwerk.gui.panels.parcel import DETAIL_ROLE, NAME_ROLE
+    win = _window(qtbot)
+    panel = win.panel("parcel")
+    assert not panel.types.wordWrap()
+    item = _type_item(panel, "dhl-privat-1")
+    assert item.data(NAME_ROLE) == "National"                      # without the carrier heading
+    assert "dhl.de, Post-Shop, eBay" in item.data(DETAIL_ROLE) and "geprüft" in item.data(DETAIL_ROLE)
+    untested = _type_item(panel, "hermes-2")
+    assert untested.data(NAME_ROLE) == "Paketschein" and "V4.2 · ungeprüft" == untested.data(DETAIL_ROLE)
+    from PySide6.QtWidgets import QStyleOptionViewItem
+    delegate = panel.types.itemDelegate()
+    option = QStyleOptionViewItem()
+    option.initFrom(panel.types)
+    heights = {delegate.sizeHint(option, panel.types.indexFromItem(panel.types.item(i))).height()
+               for i in range(panel.types.count()) if panel.types.item(i).data(TYPE_ROLE)}
+    assert len(heights) == 1                                         # every type row equally high
+    assert item.toolTip().startswith("DHL national")                 # full name in the tooltip
+
+
+def test_space_hint_for_types_without_space(qtbot, tmp_path):
+    win = _window(qtbot)
+    panel = _open(win, _dhl(tmp_path))
+    assert panel.chosen_type() is not None and not panel.space_boxes
+    assert panel.spaces_hint.isVisible() and "eigenen Typ" in panel.spaces_hint.text()

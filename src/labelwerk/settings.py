@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -24,14 +25,16 @@ from .storage import RECENT_FILES
 
 THEMES = ("blackwerk", "classic")
 OLD_THEMES = {"rawblock": "blackwerk"}      # renamed designs: old saved name → new one
+MAX_WINDOW_STATE = 20000                    # Base64 of QMainWindow.saveState (a few hundred bytes)
 RESTART_KEYS = ("language", "start_zoom", "start_tool", "system_file_dialog")   # only after a restart (hint)
 # tab at startup: "last" = last used, otherwise a tool key (gui/tools.py TOOLS)
 START_TOOLS = ("last", "file", "paper", "text", "image", "barcode", "layout", "series", "parcel")
 # tabs that can be hidden (FILE and PAPER always stay – the label is chosen there)
 HIDEABLE_TOOLS = tuple(key for key in START_TOOLS[1:] if key not in ("file", "paper"))
 SYMBOL_LISTS = ("symbols_recent", "symbols_favorites")
-# invalid → default without a hint: only remembered (last_tool) or only show/hide (hidden_tools)
-QUIET_KEYS = ("last_tool", "hidden_tools")
+# invalid → default without a hint: only remembered (last_tool, window_state) or only show/hide
+# (hidden_tools)
+QUIET_KEYS = ("last_tool", "hidden_tools", "window_state")
 
 
 @dataclass
@@ -47,6 +50,7 @@ class Settings:
     start_tool: str = "paper"              # tab at startup (START_TOOLS; "last" = last used)
     last_tool: str = ""                    # last used tab (saved silently)
     hidden_tools: list[str] = field(default_factory=list)   # hidden tabs (HIDEABLE_TOOLS)
+    window_state: str = ""                 # side bar dock: place, width, detached (QMainWindow state, Base64)
     theme: str = "blackwerk"               # "blackwerk" or "classic" (Qt system style)
     system_file_dialog: bool = False       # desktop file dialog (portal) instead of our own with preview
     image_crop: bool = True                # crop images to their content when inserting
@@ -96,6 +100,8 @@ def _rules(model: str | None = None) -> dict:
         "start_tool": lambda v: v in START_TOOLS,
         "last_tool": lambda v: v == "" or (v in START_TOOLS and v != "last"),
         "hidden_tools": lambda v: isinstance(v, list),
+        "window_state": lambda v: isinstance(v, str) and len(v) <= MAX_WINDOW_STATE
+                                  and re.fullmatch(r"[A-Za-z0-9+/]*={0,2}", v) is not None,
         "symbols_recent": lambda v: isinstance(v, list),
         "symbols_favorites": lambda v: isinstance(v, list),
         "recent_files": lambda v: isinstance(v, list),

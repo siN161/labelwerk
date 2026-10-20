@@ -10,10 +10,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+import re
+
+from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPalette, QPen
 from PySide6.QtWidgets import (QComboBox, QFormLayout, QHBoxLayout, QLabel, QListWidget,
-                               QListWidgetItem, QMenu, QPushButton, QToolButton, QWidget)
+                               QListWidgetItem, QMenu, QPushButton, QStyle, QStyledItemDelegate,
+                               QToolButton, QWidget)
 
 from ... import parcel
 from ...document import Document
@@ -24,6 +27,90 @@ from . import Panel
 OWN = "own"                                   # entry “Own types” in the country choice
 UNVERIFIED = N_("unverified")
 TYPE_ROLE = Qt.ItemDataRole.UserRole          # identifier of the type on every list entry
+NAME_ROLE = Qt.ItemDataRole.UserRole + 1      # shown name: without the carrier of the group
+DETAIL_ROLE = Qt.ItemDataRole.UserRole + 2    # second line: addition in brackets, status
+BEST_ROLE = Qt.ItemDataRole.UserRole + 3      # ✓: among the best recognized
+_PAD = 6                                      # type rows: padding in pixels
+_SEPARATOR = QColor("#DDDDDD")                # subtle line between the type rows
+_DETAIL = QColor("#777777")
+
+
+def split_name(name: str, carrier: str) -> tuple[str, str]:
+    """Name for the list: without the carrier heading in front, an addition in brackets at the end
+    becomes the second line ("DHL national (dhl.de, eBay)" under DHL → "National", "dhl.de, eBay")."""
+    extra = ""
+    match = re.fullmatch(r"(.*\S)\s*\(([^()]*)\)", name)
+    if match:
+        name, extra = match.group(1), match.group(2)
+    if carrier and name.lower().startswith(carrier.lower() + " "):
+        name = name[len(carrier) + 1:]
+        name = name[:1].upper() + name[1:]
+    return name, extra
+
+
+class TypeDelegate(QStyledItemDelegate):
+    """Type rows always two lines, never wrapped (too long: "…", full name in the tooltip): name
+    on top (✓ in front of the best), below small and grey the addition and the status; a subtle
+    line between the rows; carrier headings bold with some space above."""
+
+    def _fonts(self, option) -> tuple[QFont, QFont, QFont]:
+        name = QFont(option.font)
+        detail = QFont(option.font)
+        if option.font.pixelSize() > 0:                     # stylesheets set pixels, not points
+            detail.setPixelSize(max(9, round(option.font.pixelSize() * 0.85)))
+        else:
+            detail.setPointSizeF(max(7.0, option.font.pointSizeF() * 0.85))
+        head = QFont(option.font)
+        head.setBold(True)
+        return name, detail, head
+
+    def sizeHint(self, option, index) -> QSize:
+        name, detail, head = self._fonts(option)
+        if index.data(TYPE_ROLE):
+            height = QFontMetrics(name).height() + QFontMetrics(detail).height() + 2 * _PAD
+        else:
+            height = QFontMetrics(head).height() + 3 * _PAD
+        return QSize(option.rect.width(), height)
+
+    def paint(self, painter, option, index) -> None:
+        name_font, detail_font, head_font = self._fonts(option)
+        painter.save()
+        rect = option.rect
+        if not index.data(TYPE_ROLE):                       # carrier heading
+            painter.setFont(head_font)                      # not selectable, but not greyed
+            painter.setPen(option.palette.color(QPalette.ColorGroup.Active, QPalette.ColorRole.Text))
+            painter.drawText(rect.adjusted(_PAD, 2 * _PAD, -_PAD, -_PAD // 2),
+                             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom,
+                             index.data(Qt.ItemDataRole.DisplayRole))
+            painter.restore()
+            return
+        style = option.widget.style() if option.widget is not None else None
+        if style is not None:                               # selection like the theme draws it
+            style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter,
+                                option.widget)
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        text = option.palette.highlightedText().color() if selected else option.palette.text().color()
+        inner = rect.adjusted(_PAD, _PAD, -_PAD, -_PAD)
+        name = index.data(NAME_ROLE) or ""
+        if index.data(BEST_ROLE):
+            name = "✓ " + name
+        painter.setFont(name_font)
+        painter.setPen(text)
+        line = painter.fontMetrics().height()
+        painter.drawText(QRect(inner.left(), inner.top(), inner.width(), line),
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         painter.fontMetrics().elidedText(name, Qt.TextElideMode.ElideRight,
+                                                          inner.width()))
+        painter.setFont(detail_font)
+        painter.setPen(text if selected else _DETAIL)
+        painter.drawText(QRect(inner.left(), inner.top() + line, inner.width(),
+                               painter.fontMetrics().height()),
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                         painter.fontMetrics().elidedText(index.data(DETAIL_ROLE) or "",
+                                                          Qt.TextElideMode.ElideRight, inner.width()))
+        painter.setPen(QPen(_SEPARATOR, 1))
+        painter.drawLine(rect.left() + _PAD, rect.bottom(), rect.right() - _PAD, rect.bottom())
+        painter.restore()
 
 
 class ParcelPanel(Panel):
@@ -71,9 +158,11 @@ class ParcelPanel(Panel):
 
         self.section(pgettext("parcel", "Type"))
         self.types = QListWidget()
-        rows = self.types.fontMetrics().lineSpacing() * 2 + 6    # entries often wrap
+        rows = self.types.fontMetrics().lineSpacing() * 2 + 2 * _PAD   # two lines per type
         self.types.setMinimumHeight(max(220, 7 * rows // 2 * 2))       # about 7 entries
-        self.types.setWordWrap(True)                  # long type names wrap
+        self.types.setWordWrap(False)                 # rows are drawn by TypeDelegate (elided)
+        self.types.setItemDelegate(TypeDelegate(self.types))
+        self.types.setObjectName("parcelTypes")
         self.types.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.types.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.layout_.addWidget(self.types)
@@ -98,8 +187,13 @@ class ParcelPanel(Panel):
         self._spaces_form.setContentsMargins(0, 0, 0, 0)
         self.space_boxes: list[DoubleSpinBox] = []
         self.layout_.addWidget(self.spaces_box)
-        self.spaces_title.hide()
-        self.spaces_box.hide()
+        self.spaces_hint = QLabel(_("Space between the pieces: set it per area when you create "
+                                    "your own type (NEW OWN TYPE …)."))
+        self.spaces_hint.setObjectName("note")
+        self.spaces_hint.setWordWrap(True)
+        self.layout_.addWidget(self.spaces_hint)
+        for widget in (self.spaces_title, self.spaces_box, self.spaces_hint):
+            widget.hide()
 
         self.notes = QLabel()
         self.notes.setObjectName("hint")
@@ -272,8 +366,9 @@ class ParcelPanel(Panel):
             box.valueChanged.connect(self._convert)
             self._spaces_form.addRow(_("After area {number}").format(number=index + 1), box)
             self.space_boxes.append(box)
-        self.spaces_title.setVisible(bool(self.space_boxes))
+        self.spaces_title.setVisible(ptype is not None)
         self.spaces_box.setVisible(bool(self.space_boxes))
+        self.spaces_hint.setVisible(ptype is not None and not self.space_boxes)
 
     def _show_error(self, message: str) -> None:
         self._error = message
@@ -300,9 +395,6 @@ class ParcelPanel(Panel):
             for name, members in groups:
                 head = QListWidgetItem(name.upper())
                 head.setFlags(Qt.ItemFlag.NoItemFlags)
-                font = QFont(head.font())
-                font.setBold(True)
-                head.setFont(font)
                 self.types.addItem(head)
                 members = sorted(members, key=lambda t: -self._scores.get(t.id, -1e9))
                 for ptype in members:
@@ -313,7 +405,13 @@ class ParcelPanel(Panel):
                         text = _("{name} · {unverified}").format(name=text, unverified=_(UNVERIFIED))
                     item = QListWidgetItem(text)
                     item.setData(TYPE_ROLE, ptype.id)
-                    item.setToolTip(ptype.name)
+                    shown, extra = split_name(ptype.name, "" if ptype.own else name)
+                    status = (_("own type") if ptype.own else _("tested") if ptype.verified
+                              else _(UNVERIFIED))
+                    item.setData(NAME_ROLE, shown)
+                    item.setData(DETAIL_ROLE, " · ".join(p for p in (extra, status) if p))
+                    item.setData(BEST_ROLE, ptype.id in self._top)
+                    item.setToolTip(_("{name} · {status}").format(name=ptype.name, status=status))
                     self.types.addItem(item)
                     if ptype.id == wanted:
                         select = item

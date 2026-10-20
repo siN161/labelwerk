@@ -2022,6 +2022,10 @@ msgstr ""
 msgid "Printing … {done} of {total}"
 msgstr ""
 
+#: src/labelwerk/gui/main_window.py
+msgid "Properties"
+msgstr ""
+
 #: src/labelwerk/gui/panels/barcode.py
 msgid "Q – 25%"
 msgstr ""
@@ -2499,6 +2503,10 @@ msgstr ""
 
 #: src/labelwerk/gui/parcel_editor.py
 msgid "Space after"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Space between the pieces: set it per area when you create your own type (NEW OWN TYPE …)."
 msgstr ""
 
 #: src/labelwerk/gui/panels/series.py
@@ -3220,6 +3228,10 @@ msgstr ""
 msgid "own"
 msgstr ""
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "own type"
+msgstr ""
+
 #: src/labelwerk/parcel.py
 msgid "page sizes"
 msgstr ""
@@ -3276,6 +3288,7 @@ msgid "space {length} mm"
 msgstr ""
 
 #: src/labelwerk/cli.py
+#: src/labelwerk/gui/panels/parcel.py
 msgid "tested"
 msgstr ""
 
@@ -3425,6 +3438,11 @@ msgstr ""
 #: src/labelwerk/printers.py
 #, python-brace-format
 msgid "{name} · Network"
+msgstr ""
+
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "{name} · {status}"
 msgstr ""
 
 #: src/labelwerk/gui/panels/parcel.py

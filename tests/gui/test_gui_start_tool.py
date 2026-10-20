@@ -46,7 +46,7 @@ def test_last_used_without_a_value_starts_with_paper(qtbot):
 def test_switching_tabs_remembers_the_last_tool_and_saves_it_on_close(qtbot, monkeypatch):
     from labelwerk.gui import main_window as mw
     saved = []
-    monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f["last_tool"]))
+    monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f))
     win = _window(qtbot)
     win.tool_actions["series"].trigger()
     assert win.settings.last_tool == "series"
@@ -54,18 +54,18 @@ def test_switching_tabs_remembers_the_last_tool_and_saves_it_on_close(qtbot, mon
     assert win.settings.last_tool == "barcode"
     assert saved == [] and win.result.text() == ""                    # in memory, silently
     win.close()
-    assert saved == ["barcode"]                                       # when closing, once
+    assert [f["last_tool"] for f in saved] == ["barcode"]             # when closing, once
 
 
 def test_last_tool_is_not_saved_on_close_when_unchanged(qtbot, monkeypatch):
     from labelwerk.gui import main_window as mw
     saved = []
-    monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f["last_tool"]))
+    monkeypatch.setattr(mw, "update_settings", lambda *a, **f: saved.append(f))
     win = _window(qtbot, start_tool="last", last_tool="image")
     win.tool_actions["text"].trigger()
     win.tool_actions["image"].trigger()                               # again as at startup
     win.close()
-    assert saved == []
+    assert not any("last_tool" in f for f in saved)       # the side bar state may be saved
 
 
 def test_last_tool_reaches_the_file_on_close(qtbot):

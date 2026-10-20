@@ -2043,6 +2043,10 @@ msgstr "Drucke …"
 msgid "Printing … {done} of {total}"
 msgstr "Drucke … {done} von {total}"
 
+#: src/labelwerk/gui/main_window.py
+msgid "Properties"
+msgstr "Eigenschaften"
+
 #: src/labelwerk/gui/panels/barcode.py
 msgid "Q – 25%"
 msgstr "Q – 25 %"
@@ -2521,6 +2525,10 @@ msgstr "Freiraum"
 #: src/labelwerk/gui/parcel_editor.py
 msgid "Space after"
 msgstr "Freiraum danach"
+
+#: src/labelwerk/gui/panels/parcel.py
+msgid "Space between the pieces: set it per area when you create your own type (NEW OWN TYPE …)."
+msgstr "Freiraum zwischen den Stücken: beim Anlegen eines eigenen Typs je Bereich festlegen (EIGENER TYP …)."
 
 #: src/labelwerk/gui/panels/series.py
 msgid "Start"
@@ -3241,6 +3249,10 @@ msgstr "freiwillig, z. B. ein Firmenname auf der Marke"
 msgid "own"
 msgstr "eigener"
 
+#: src/labelwerk/gui/panels/parcel.py
+msgid "own type"
+msgstr "eigener Typ"
+
 #: src/labelwerk/parcel.py
 msgid "page sizes"
 msgstr "Seitengrößen"
@@ -3297,6 +3309,7 @@ msgid "space {length} mm"
 msgstr "Freiraum {length} mm"
 
 #: src/labelwerk/cli.py
+#: src/labelwerk/gui/panels/parcel.py
 msgid "tested"
 msgstr "geprüft"
 
@@ -3447,6 +3460,11 @@ msgstr "{name} wurde nicht gespeichert: ungültige Zahlen im Etikett"
 #, python-brace-format
 msgid "{name} · Network"
 msgstr "{name} · Netzwerk"
+
+#: src/labelwerk/gui/panels/parcel.py
+#, python-brace-format
+msgid "{name} · {status}"
+msgstr "{name} · {status}"
 
 #: src/labelwerk/gui/panels/parcel.py
 #, python-brace-format

@@ -44,7 +44,17 @@ QToolBar QToolButton:disabled, QToolBar QToolButton#print:disabled {
     border-color: #CCCCCC;
 }
 
-#panelScroll { border: none; border-right: 3px solid #000000; }
+#panelScroll { border: none; }
+/* Side bar dock: the edge to the canvas is the black resize handle (left or right) */
+QMainWindow::separator { background: #000000; width: 3px; height: 3px; }
+QMainWindow::separator:hover { background: #555555; }
+QDockWidget#panelDock::title {
+    text-align: left;
+    padding: 4px 8px;
+    background: #FFFFFF;
+    border-bottom: 1px solid #CCCCCC;
+}
+QLabel#note { color: #666666; }
 QLabel#panelTitle { font-size: 22px; font-weight: 900; padding: 4px 0 8px 0; }
 QLabel[role="section"] { font-weight: 900; letter-spacing: 1px; padding-top: 10px; }
 QLabel#fixedSize { font-family: "Space Mono", "DejaVu Sans Mono", monospace; }
@@ -183,4 +193,5 @@ QListWidget#symbolGroups, QListView#symbolGrid {
     selection-color: #FFFFFF;
 }
 QListWidget#symbolGroups::item { padding: 4px 6px; }
+QListWidget#parcelTypes::item:selected { background: #000000; color: #FFFFFF; }
 QListWidget#symbolGroups::item:selected, QListView#symbolGrid::item:selected { background: #000000; color: #FFFFFF; }
